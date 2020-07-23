@@ -86,8 +86,16 @@ var Environment = function (goldenContainer) {
     this.updating        = false;
     this.openCascade     = openCascade;
   
+    this.loader = new THREE.TextureLoader();
+    this.loader.setCrossOrigin ('');
+    this.matcap = this.loader.load ('./textures/dullFrontLitMetal.png');
+    this.matcapMaterial = new THREE.MeshMatcapMaterial( {
+      //color: THREE.API.color,
+      matcap: this.matcap
+    } );
+
     this.boxGeometry = new THREE.BoxBufferGeometry(100, 100, 100);
-    this.white       = new THREE.MeshLambertMaterial({ color: 0x888888 });
+    //this.white       = new THREE.MeshLambertMaterial({ color: 0x888888 });
     this.mainObject;
 
     this.updateShape = async (shape) => {
@@ -97,13 +105,13 @@ var Environment = function (goldenContainer) {
       const tot_triangle_count                              = facelist.reduce((a,b) => a + b.number_of_triangles, 0);
       const [vertices, faces]                               = await openCascadeHelper.generateGeometry(
                                                                 tot_triangle_count, locVertexcoord, locNormalcoord, locTriIndices);
-      const objectMat   = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.7, 0.7, 0.7) });
+      //const objectMat   = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.7, 0.7, 0.7) });
       const geometry    = new THREE.Geometry();
       geometry.vertices = vertices;
       geometry.faces    = faces;
       
       this.environment.scene.remove(this.mainObject);
-      this.mainObject   = new THREE.Mesh(geometry, objectMat);
+      this.mainObject   = new THREE.Mesh(geometry, this.matcapMaterial);
       this.mainObject.name       = "shape";
       this.mainObject.rotation.x = -Math.PI / 2;
       this.environment.scene.add(this.mainObject);
