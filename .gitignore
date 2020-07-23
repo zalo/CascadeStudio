@@ -81,6 +81,13 @@ node_modules/**/*
 !node_modules/controlkit/bin/
 !node_modules/controlkit/bin/*
 
+# opencascade.js Bin
+!node_modules/opencascade.js/
+!node_modules/opencascade.js/*/
+!node_modules/opencascade.js/dist/
+!node_modules/opencascade.js/dist/*
+node_modules/opencascade.js/dist/opencascade.js
+# Add the above line for now, can take it out if necessary
 
 jspm_packages/
 
