@@ -18,15 +18,19 @@ var Environment = function (goldenContainer) {
       var light = new THREE.HemisphereLight(0xffffff, 0x444444);
       light.position.set(0, 200, 0);
       this.light2 = new THREE.DirectionalLight(0xbbbbbb);
-      this.light2.position.set(0, 200, 100);
+      this.light2.position.set(6, 50, -12);
       this.light2.castShadow = true;
-      this.light2.shadow.camera.top = 180;
-      this.light2.shadow.camera.bottom = - 100;
-      this.light2.shadow.camera.left = - 120;
-      this.light2.shadow.camera.right = 120;
+      this.light2.shadow.camera.top      =  100;
+      this.light2.shadow.camera.bottom   = -100;
+      this.light2.shadow.camera.left     = -100;
+      this.light2.shadow.camera.right    =  100;
+      //this.light2.shadow.radius          =  32;
+      this.light2.shadow.mapSize.width  =  64;
+      this.light2.shadow.mapSize.height =  64;
+
       this.scene.add(light);
       this.scene.add(this.light2);
-      //scene.add(new THREE.CameraHelper(light.shadow.camera));
+      //this.scene.add(new THREE.CameraHelper(this.light2.shadow.camera));
       this.groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000),
                                        new THREE.MeshPhongMaterial  ({ color: 0x999999, depthWrite: false }));
       this.groundMesh.rotation.x = - Math.PI / 2;
@@ -47,6 +51,7 @@ var Environment = function (goldenContainer) {
       let parentHeight = this.goldenContainer.height;
       this.renderer.setSize(parentWidth, parentHeight);
       this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMapType = THREE.PCFSoftShadowMap;
       this.camera.aspect = parentWidth / parentHeight;
       this.camera.updateProjectionMatrix();
 
@@ -112,7 +117,8 @@ var Environment = function (goldenContainer) {
       
       this.environment.scene.remove(this.mainObject);
       this.mainObject   = new THREE.Mesh(geometry, this.matcapMaterial);
-      this.mainObject.name       = "shape";
+      this.mainObject.name = "shape";
+      this.mainObject.castShadow = true;
       this.mainObject.rotation.x = -Math.PI / 2;
       this.environment.scene.add(this.mainObject);
     }
