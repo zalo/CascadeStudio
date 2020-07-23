@@ -12,11 +12,9 @@ GUIState['width'     ] =  0.5;
 GUIState['widthRange'] = [0.1, 1];
 
 gui.addPanel({label: 'Cascade Control Panel'})
-   //.addStringInput(GUIState,          'name', { label: 'IP Addr'  } )
    .addButton     ('Recompile Model' ,                          () => { recompileModel(); } )
    .addSlider     (GUIState, 'width', 'widthRange', { onFinish: () => { recompileModel(); }} );
 
-function printName     () { console.log(GUIState['name']); }
 function recompileModel() { console.log("Model Recompiling!"); }
 `;
 
