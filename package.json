@@ -1,0 +1,23 @@
+{
+	"name": "cascadestudio",
+	"productName": "CascadeStudio",
+	"description": "BRep SCAD in your browser.",
+	"homepage": "https://zalo.github.io/CascadeStudio",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/zalo/CascadeStudio.git"
+	},
+	"author": {
+		"name": "Johnathon Selstad"
+	},
+	"license": "MIT",
+	"bundleDependencies": false,
+	"dependencies": {
+		"controlkit": "^0.1.9",
+		"golden-layout": "^1.5.9",
+		"jquery": "^3.5.1",
+		"monaco-editor": "^0.20.0",
+		"opencascade.js": "^0.1.13",
+		"three": "^0.118.3"
+	}
+}

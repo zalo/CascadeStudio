@@ -1,0 +1,35 @@
+
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <meta http-equiv="CACHE-CONTROL" CONTENT="NO-CACHE">
+        <meta http-equiv="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">
+
+        <script type="text/javascript" src="./node_modules/three/build/three.js"></script>
+        <script type="text/javascript" src="./node_modules/three/examples/js/controls/DragControls.js"></script>
+        <script type="text/javascript" src="./node_modules/three/examples/js/controls/OrbitControls.js"></script>
+
+        <script type="text/javascript" src="./node_modules/controlkit/bin/controlKit.js"></script>
+
+        <script type="text/javascript" src="./node_modules/jquery/dist/jquery.min.js"></script>
+        <script type="text/javascript" src="./node_modules/golden-layout/dist/goldenlayout.min.js"></script>
+        <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-base.css" />
+        <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-dark-theme.css" />
+
+        <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">
+        <script>var require = { paths: { 'vs': 'node_modules/monaco-editor/min/vs' } };</script>
+        <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/loader.js"></script>
+        <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
+        <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
+
+        <!-- Need to figure out the full way of importing the library... 
+             TODO: Add this to the .gitignore too!!  -->
+        <script type="text/javascript" src="./node_modules/opencascade.js/dist/opencascade.wasm.js"></script>
+
+        <script type="text/javascript" src="./js/CascadeView.js"></script>
+    </head>
+
+    <body onload="initialize();">
+        <script type="text/javascript" src="./js/index.js"></script>
+    </body>
+</html>
