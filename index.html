@@ -1,6 +1,7 @@
 
 <html>
     <head>
+        <title>Cascade Studio</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
         <meta http-equiv="CACHE-CONTROL" CONTENT="NO-CACHE">
         <meta http-equiv="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">
@@ -22,14 +23,26 @@
         <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
         <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
 
-        <!-- Need to figure out the full way of importing the library... 
-             TODO: Add this to the .gitignore too!!  -->
+        <!-- Import OpenCascade.js-->
         <script type="text/javascript" src="./node_modules/opencascade.js/dist/opencascade.wasm.js"></script>
+        <script>
+            const initOpenCascade = () => {
+                return new opencascade({
+                    locateFile(path) {
+                        if(path.endsWith('.wasm')) {
+                            return "./node_modules/opencascade.js/dist/opencascade.wasm.wasm";
+                        }
+                        return path;
+                    }
+                });
+            };
+        </script>
 
+        <script type="text/javascript" src="./js/openCascadeHelper.js"></script>
         <script type="text/javascript" src="./js/CascadeView.js"></script>
     </head>
 
-    <body onload="initialize();">
+    <body onload="initOpenCascade().then((openCascade) => initialize(openCascade));">
         <script type="text/javascript" src="./js/index.js"></script>
     </body>
 </html>

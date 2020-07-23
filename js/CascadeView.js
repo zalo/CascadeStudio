@@ -67,6 +67,7 @@ var Environment = function (goldenContainer) {
         //this.dragControls.addEventListener('dragend', (data) => { this.controls.enabled = true; data.object._isDragging = false; });
       //}
       //this.dragControls.addEventListener('drag', () => this.viewDirty = true);
+      this.goldenContainer.layoutManager.eventHub.emit('Start');
     }
 
     this.onWindowResize = function () {
@@ -79,18 +80,33 @@ var Environment = function (goldenContainer) {
     this.initEnvironment();
   }
   
-  var CascadeEnvironment = function (goldenContainer) {
+  var CascadeEnvironment = function (goldenContainer, openCascade) {
     this.goldenContainer = goldenContainer;
-    this.environment = new Environment(this.goldenContainer);
-    this.updating = false;
+    this.environment     = new Environment(this.goldenContainer);
+    this.updating        = false;
+    this.openCascade     = openCascade;
   
     this.boxGeometry = new THREE.BoxBufferGeometry(100, 100, 100);
     this.white       = new THREE.MeshLambertMaterial({ color: 0x888888 });
-  
-    this.initArm = function () {
+    this.mainObject;
 
-      this.goldenContainer.layoutManager.eventHub.on('poseUpdate', (data) => this.setArmAngles(data));
-      this.goldenContainer.layoutManager.eventHub.emit('Start');
+    this.updateShape = async (shape) => {
+      openCascadeHelper.setOpenCascade(this.openCascade);
+      const facelist                                        = await openCascadeHelper.tessellate(shape);
+      const [locVertexcoord, locNormalcoord, locTriIndices] = await openCascadeHelper.joinPrimitives(facelist);
+      const tot_triangle_count                              = facelist.reduce((a,b) => a + b.number_of_triangles, 0);
+      const [vertices, faces]                               = await openCascadeHelper.generateGeometry(
+                                                                tot_triangle_count, locVertexcoord, locNormalcoord, locTriIndices);
+      const objectMat   = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.7, 0.7, 0.7) });
+      const geometry    = new THREE.Geometry();
+      geometry.vertices = vertices;
+      geometry.faces    = faces;
+      
+      this.environment.scene.remove(this.mainObject);
+      this.mainObject   = new THREE.Mesh(geometry, objectMat);
+      this.mainObject.name       = "shape";
+      this.mainObject.rotation.x = -Math.PI / 2;
+      this.environment.scene.add(this.mainObject);
     }
   
     this.animate = function animatethis() {
@@ -99,7 +115,6 @@ var Environment = function (goldenContainer) {
       this.environment.renderer.render(this.environment.scene, this.environment.camera);
     };
   
-    this.initArm();
     this.animate();
     // Initialize the view in-case we're lazy rendering...
     this.environment.renderer.render(this.environment.scene, this.environment.camera);

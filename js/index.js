@@ -1,30 +1,68 @@
-var myLayout, monacoEditor, loadedState, 
-cascadeViewport, consoleContainer, gui, 
-GUIState, count = 0, focused = true;
+var myLayout, monacoEditor, loadedState,
+    cascadeViewport, consoleContainer, gui,
+    GUIState, count = 0, focused = true, mainPart = null,
+    oc = null;
 
 let starterCode = 
 `// Welcome to Cascade Studio!
-// This code is saved to your localStorage, so don't be afraid to leave and come back!
 // GUI uses https://github.com/automat/controlkit.js
 
 // Define GUI State Variables here
-GUIState['width'     ] =  0.5; 
-GUIState['widthRange'] = [0.1, 1];
+GUIState['radius'     ] =  0.5; 
+GUIState['radiusRange'] = [0.1, 1];
+GUIState['Fillet?'    ] = true;
 
 gui.addPanel({label: 'Cascade Control Panel'})
-   .addButton     ('Recompile Model' ,                          () => { recompileModel(); } )
-   .addSlider     (GUIState, 'width', 'widthRange', { onFinish: () => { recompileModel(); }} );
+   .addButton     ('Generate Model' ,                             () => { recompileModel(); }  )
+   .addSlider     (GUIState, 'radius', 'radiusRange', { onFinish: () => { recompileModel(); }} )
+   .addCheckbox   (GUIState, 'Fillet?',               { onChange: () => { recompileModel(); }} );
 
-function recompileModel() { console.log("Model Recompiling!"); }
+function recompileModel() {
+    console.log("Model Compiling...");
+
+    // Create a Cylinder
+    let origin           = new oc.gp_Pnt(0, 0, 0);
+    let cylinderPlane    = new oc.gp_Ax2(origin, oc.gp.prototype.DZ());
+    mainPart             = new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, 30.0, 70.0);
+
+    // Fillet the Edges of the Cylinder
+    if(GUIState['Fillet?']){
+        let filletedCylinder = new oc.BRepFilletAPI_MakeFillet(mainPart.Shape());
+        let anEdgeExplorer   = new oc.TopExp_Explorer(mainPart.Shape(), oc.TopAbs_EDGE);
+        while(anEdgeExplorer.More()) {
+            let anEdge = oc.TopoDS.prototype.Edge(anEdgeExplorer.Current());
+            // Add edge to fillet algorithm
+            filletedCylinder.Add(200. / 12., anEdge);
+            anEdgeExplorer.Next();
+        }
+        mainPart = filletedCylinder;
+    }
+
+    // Create a Sphere
+    let spherePlane      = new oc.gp_Ax2(new oc.gp_Pnt(15, 0, 70.), oc.gp.prototype.DZ());
+    let sphere           = new oc.BRepPrimAPI_MakeSphere(spherePlane, 50.0 * GUIState['radius']);
+
+    // Cut the Sphere from the Cylinder
+    mainPart             = new oc.BRepAlgoAPI_Cut(mainPart.Shape(), sphere.Shape());
+
+    // Convert to a mesh
+    mainPart = mainPart.Shape();
+    console.log("Compilation Complete! Converting to Mesh...");
+    cascadeViewport.updateShape(mainPart);
+    console.log("Generation Complete!");
+}
 `;
 
 // Functions to be overwritten by the editor window
 //function Update(){}
 
-function initialize(){
+function initialize(opencascade) {
+    oc = opencascade;
+
     // Set up the Windowing System  ---------------------------------------
     loadedState = localStorage.getItem( 'savedState' );
-    if( loadedState !== null ) {
+    if (loadedState !== null) {
+        console.log(loadedState);
         myLayout = new GoldenLayout( JSON.parse( loadedState ) );
     } else {
         myLayout = new GoldenLayout( {
@@ -34,7 +72,7 @@ function initialize(){
                     type: 'component',
                     componentName: 'cascadeView',
                     title:'CAD View',
-                    //componentState: { ip: '192.168.1.142:3000' },
+                    componentState: { ip: '192.168.1.142:3000' },
                     isClosable: false
                 },{
                     type: 'column',
@@ -83,6 +121,13 @@ function initialize(){
                 });
             }).catch(error => console.log(error.message));
 
+            // Add Symbols from opencascade.js...
+            fetch("/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
+                response.text().then(function (text) {
+                    monaco.languages.typescript.javascriptDefaults.addExtraLib(text, 'file:///node_modules/opencascade.js/dist/oc.d.ts');
+                });
+            }).catch(error => console.log(error.message));
+
             // Three.js Typescript definitions...
             fetch("/node_modules/three/build/three.d.ts").then((response) => {
                 response.text().then(function (text) {
@@ -128,6 +173,7 @@ function initialize(){
             }, 2000);
 
             window.eval(state.code); 
+            recompileModel();
         }, 1);
     });
 
@@ -141,7 +187,7 @@ function initialize(){
             floatingGUIContainer.id = "cascadeViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
             gui             = new ControlKit({parentDomElementId: "cascadeViewportContainer"});
-            cascadeViewport = new CascadeEnvironment(container); 
+            cascadeViewport = new CascadeEnvironment(container, oc); 
         }, 1.3);
     });
 
