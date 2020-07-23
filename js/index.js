@@ -23,30 +23,29 @@ function recompileModel() {
     // Create a Cylinder
     let origin           = new oc.gp_Pnt(0, 0, 0);
     let cylinderPlane    = new oc.gp_Ax2(origin, oc.gp.prototype.DZ());
-    mainPart             = new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, 30.0, 70.0);
+    mainPart             = new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, 30.0, 70.0).Shape();
 
     // Fillet the Edges of the Cylinder
     if(GUIState['Fillet?']){
-        let filletedCylinder = new oc.BRepFilletAPI_MakeFillet(mainPart.Shape());
-        let anEdgeExplorer   = new oc.TopExp_Explorer(mainPart.Shape(), oc.TopAbs_EDGE);
+        let filletedCylinder = new oc.BRepFilletAPI_MakeFillet(mainPart);
+        let anEdgeExplorer   = new oc.TopExp_Explorer(mainPart, oc.TopAbs_EDGE);
         while(anEdgeExplorer.More()) {
             let anEdge = oc.TopoDS.prototype.Edge(anEdgeExplorer.Current());
             // Add edge to fillet algorithm
             filletedCylinder.Add(200. / 12., anEdge);
             anEdgeExplorer.Next();
         }
-        mainPart = filletedCylinder;
+        mainPart = filletedCylinder.Shape();
     }
 
     // Create a Sphere
     let spherePlane      = new oc.gp_Ax2(new oc.gp_Pnt(15, 0, 70.), oc.gp.prototype.DZ());
-    let sphere           = new oc.BRepPrimAPI_MakeSphere(spherePlane, 50.0 * GUIState['radius']);
+    let sphere           = new oc.BRepPrimAPI_MakeSphere(spherePlane, 50.0 * GUIState['radius']).Shape();
 
     // Cut the Sphere from the Cylinder
-    mainPart             = new oc.BRepAlgoAPI_Cut(mainPart.Shape(), sphere.Shape());
+    mainPart             = new oc.BRepAlgoAPI_Cut(mainPart, sphere).Shape();
 
     // Convert to a mesh
-    mainPart = mainPart.Shape();
     console.log("Compilation Complete! Converting to Mesh...");
     cascadeViewport.updateShape(mainPart);
     console.log("Generation Complete!");

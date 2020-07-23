@@ -39,6 +39,7 @@ build/Release
 
 # Dependency directories
 node_modules/**/*
+CascadeStudio/
 
 # Three.js Build
 !node_modules/three/

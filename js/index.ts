@@ -1,5 +1,6 @@
 var myLayout : GoldenLayout.GoldenLayout;
-var gui      : ControlKit.ControlKit;
+var gui: ControlKit.ControlKit;
+var mainPart: oc.TopoDS_Shape;
 
 interface Environment {
     constructor(goldenContainer: any);
@@ -20,11 +21,10 @@ interface Environment {
 interface CascadeEnvironment {
     constructor(goldenContainer: any);
 
-    environment : Environment;
-    updating    : Boolean;
-    //boxGeometry : THREE.BoxBufferGeometry;
-    white       : THREE.MeshLambertMaterial;
-    part        : THREE.Group;
+    environment    : Environment;
+    updating       : Boolean;
+    matcapMaterial : THREE.MeshMatcapMaterial;
+    mainObject     : THREE.Object3D;
 
     animate() : void;
 }
