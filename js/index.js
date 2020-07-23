@@ -70,17 +70,17 @@ function initialize(opencascade) {
                 type: 'row',
                 content:[{
                     type: 'component',
-                    componentName: 'cascadeView',
-                    title:'CAD View',
-                    componentState: { ip: '192.168.1.142:3000' },
+                    componentName: 'codeEditor',
+                    title:'Code Editor',
+                    componentState: { code: starterCode },
                     isClosable: false
                 },{
                     type: 'column',
                     content:[{
                         type: 'component',
-                        componentName: 'codeEditor',
-                        title:'Code Editor',
-                        componentState: { code: starterCode },
+                        componentName: 'cascadeView',
+                        title:'CAD View',
+                        componentState: { ip: '192.168.1.142:3000' },
                         isClosable: false
                     },{
                         type: 'component',
@@ -174,7 +174,7 @@ function initialize(opencascade) {
 
             window.eval(state.code); 
             recompileModel();
-        }, 1);
+        }, 300);
     });
 
     // Set up the 3D Viewport into the CAD Model
@@ -188,13 +188,12 @@ function initialize(opencascade) {
             container.getElement().get(0).appendChild(floatingGUIContainer);
             gui             = new ControlKit({parentDomElementId: "cascadeViewportContainer"});
             cascadeViewport = new CascadeEnvironment(container, oc); 
-        }, 1.3);
+        }, 100);
     });
 
     // Set up the Error and Status Reporting Console
     myLayout.registerComponent('console', function(container){
         consoleContainer = document.createElement("div");
-        consoleContainer.style.color = "white";
         container.getElement().get(0).appendChild(consoleContainer);
         container.getElement().get(0).style.overflow  = 'auto';
         container.getElement().get(0).style.boxShadow = "inset 0px 0px 3px rgba(0,0,0,0.75)";
@@ -211,9 +210,13 @@ function initialize(opencascade) {
           };
 
         // Overwrite the existing logging/error behaviour
+        let alternatingColor = true;
         let realConsoleLog = console.log;
         console.log = function(message) {
             let newline = document.createElement("div");
+            newline.style.fontFamily = "monospace";
+            newline.style.color = (alternatingColor = !alternatingColor) ? "LightGray" : "white";
+            newline.style.fontSize = "1.2em";
             newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer());
             consoleContainer.appendChild(newline);
             consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
@@ -222,6 +225,8 @@ function initialize(opencascade) {
         window.onerror = function(error, url, line) {
             let newline = document.createElement("div");
             newline.style.color = "red";
+            newline.style.fontFamily = "monospace";
+            newline.style.fontSize = "1.2em";
             newline.innerHTML = "Line : "+line + " " + JSON.stringify(error, getCircularReplacer());
             consoleContainer.appendChild(newline);
             consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;

@@ -12,8 +12,8 @@ var Environment = function (goldenContainer) {
       this.camera.position.set(50, 100, 150);
       this.camera.lookAt(0, 45, 0);
       this.scene = new THREE.Scene();
-      this.scene.background = new THREE.Color(0xffffff);//0xa0a0a0
-      this.scene.fog = new THREE.Fog(0xffffff, 200, 600);//0xa0a0a0
+      this.scene.background = new THREE.Color(0x222222);//0xa0a0a0
+      this.scene.fog = new THREE.Fog(0x222222, 200, 600);//0xa0a0a0
   
       var light = new THREE.HemisphereLight(0xffffff, 0x444444);
       light.position.set(0, 200, 0);
@@ -32,11 +32,11 @@ var Environment = function (goldenContainer) {
       this.scene.add(this.light2);
       //this.scene.add(new THREE.CameraHelper(this.light2.shadow.camera));
       this.groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000),
-                                       new THREE.MeshPhongMaterial  ({ color: 0x999999, depthWrite: false }));
+                                       new THREE.MeshPhongMaterial  ({ color: 0x080808, depthWrite: false }));
       this.groundMesh.rotation.x = - Math.PI / 2;
       this.groundMesh.receiveShadow = true;
       this.scene.add(this.groundMesh);
-      var grid = new THREE.GridHelper(2000, 20, 0x000000, 0x000000);
+      var grid = new THREE.GridHelper(2000, 20, 0xcccccc, 0xcccccc);
       grid.material.opacity = 0.3;
       grid.material.transparent = true;
       this.scene.add(grid);
