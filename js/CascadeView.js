@@ -115,6 +115,8 @@ var Environment = function (goldenContainer) {
       this.mainObject.rotation.x = -Math.PI / 2;
 
       // Tesellate the OpenCascade Object
+      //const edgelist = openCascadeHelper.enumerateEdges(shape, maxDeviation);
+
       const facelist = await openCascadeHelper.tessellate(shape, maxDeviation);
       facelist.forEach((face) => {
         // Sort Vertices into three.js Vector3 List

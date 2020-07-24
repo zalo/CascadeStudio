@@ -71,5 +71,38 @@ const openCascadeHelper = {
       facelist.push(this_face);
     }
     return facelist;
+  },
+  enumerateEdges(shape, maxDeviation) {
+    const edgeList = [];
+    
+    new this.openCascade.BRepMesh_IncrementalMesh(shape, maxDeviation);
+    const anEdgeExplorer = new this.openCascade.TopExp_Explorer(shape, this.openCascade.TopAbs_EDGE);
+    for(anEdgeExplorer.Init(shape, this.openCascade.TopAbs_EDGE); anEdgeExplorer.More(); anEdgeExplorer.Next()) {
+      const myEdge = this.openCascade.TopoDS.prototype.Edge(anEdgeExplorer.Current());
+
+      const aLocation = new this.openCascade.TopLoc_Location();
+      const myP = this.openCascade.BRep_Tool.prototype.Polygon3D(myEdge, aLocation); // need PolygonOnTriangulation !
+      if (myP.IsNull()) {
+        //console.log("This polygonization was null, sir.  Was Edge null?: " + myEdge.IsNull());
+        continue;
+      }
+
+      console.log("Num Nodes in this edge: "+ myP.get().NbNodes());
+
+      const Nodes = myP.get().Nodes();
+
+      // write vertex buffer
+      let this_edge = new Array(Nodes.Length() * 3);
+      for(let i = 0; i < Nodes.Length(); i++) {
+        const p = Nodes.Value(i + 1).Transformed(aLocation.Transformation());
+        this_edge.vertex_coord[(i * 3) + 0] = p.X();
+        this_edge.vertex_coord[(i * 3) + 1] = p.Y();
+        this_edge.vertex_coord[(i * 3) + 2] = p.Z();
+        console.log("Vertex at: " + p.X() + ", " + p.Y() + ", " + p.Z());
+      }
+
+      edgeList.push(this_edge);
+    }
+    return edgeList;
   }
 }

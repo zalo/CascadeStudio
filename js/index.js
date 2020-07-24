@@ -282,13 +282,20 @@ function loadSTEPorIGES() {
     let extFiles = {};
     let files = document.getElementById("step-file").files;
     for (let i = 0; i < files.length; i++) {
+        var lastImportedShape = null;
         loadFileAsync(files[i]).then(async (fileText) => {
             const fileName = files[i].name;
-            importSTEPorIGES(fileName, fileText);
+            lastImportedShape = importSTEPorIGES(fileName, fileText);
             extFiles[fileName] = { content: fileText };
+        }).then(async () => {
+            if (i === files.length - 1) {
+                if (lastImportedShape) {
+                    cascadeViewport.updateShape(lastImportedShape, GUIState["Res"]);
+                }
+            }
+            consoleGolden.setState(extFiles);
         });
     };
-    consoleGolden.setState(extFiles);
 }
 
 function importSTEPorIGES(fileName, fileText) {
@@ -315,8 +322,11 @@ function importSTEPorIGES(fileName, fileText) {
       
       // Remove the file when we're done (otherwise we run into errors on reupload)
       oc.FS.unlink("/" + fileName);
+      
+      return externalShapes[fileName];
     } else {
       console.error("Something in OCCT went wrong trying to read " + fileName);
+      return null;
     }
 }
 
