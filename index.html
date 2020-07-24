@@ -40,9 +40,51 @@
 
         <script type="text/javascript" src="./js/openCascadeHelper.js"></script>
         <script type="text/javascript" src="./js/CascadeView.js"></script>
+        <style>/* Add a black background color to the top navigation */
+            .topnav {
+              background-color: #111;
+              overflow: hidden;
+            }
+            
+            /* Style the links inside the navigation bar */
+            .topnav a, label {
+              float: left;
+              color: #f2f2f2;
+              text-align: center;
+              padding: 4px 16px;
+              text-decoration: none;
+              font-size: 14px;
+              font-family: Consolas;
+            }
+            
+            /* Change the color of links on hover */
+            .topnav a:hover, label:hover {
+              background-color: #aaa;
+              color: black;
+            }
+            
+            /* Add a color to the active/current link */
+            .topnav a.active, label.active {
+              background-color: #4CAF50;
+              color: white;
+            }</style>
     </head>
 
-    <body onload="initOpenCascade().then((openCascade) => initialize(openCascade));">
-        <script type="text/javascript" src="./js/index.js"></script>
+    <body onload="initOpenCascade().then((openCascade) => initialize(openCascade));" style="margin:0px;">
+            <div class="topnav">
+                <a href="#">Cascade Studio 0.0.1</a>
+                <a href="#" title="Save Project to .json" onmouseup="saveProject();"   >Save Project</a>
+                <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="loadProject();"/>
+                <label for="project-file" title="Load Project from .json">Load Project</label>
+                <a href="#">Save STEP (coming soon)</a>
+                <input id="step-file" name="step-file" type="file" multiple accept=".iges,.step,.igs,.stp" style="display:none;" oninput="loadSTEPorIGES();"/>
+                <label for="step-file" title="Import STEP from File">Import STEP/IGES</label>
+                <a href="#" onmouseup="saveSTL();">Save STL (coming soon)</a>
+                <a href="#" title="Clears the external step/iges files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
+            </div>
+            <div id="appbody" style="height:auto">
+                <script type="text/javascript" src="./js/index.js"></script>
+            </div>
+
     </body>
 </html>

@@ -1,55 +1,46 @@
 var myLayout, monacoEditor, loadedState,
-    cascadeViewport, consoleContainer, gui,
+    cascadeViewport, consoleContainer, consoleGolden, gui,
     GUIState, count = 0, focused = true, mainPart = null,
-    oc = null;
+    oc = null, externalShapes = {};
 
 let starterCode = 
-`// Welcome to Cascade Studio!
-// GUI uses https://github.com/automat/controlkit.js
-
-// Define GUI State Variables here
-GUIState['radius'     ] =  0.5; 
-GUIState['radiusRange'] = [0.1, 1];
-GUIState['Fillet?'    ] = true;
-
-gui.addPanel({label: 'Cascade Control Panel'})
-   .addButton     ('Generate Model' ,                             () => { recompileModel(); }  )
-   .addSlider     (GUIState, 'radius', 'radiusRange', { onFinish: () => { recompileModel(); }} )
-   .addCheckbox   (GUIState, 'Fillet?',               { onChange: () => { recompileModel(); }} );
-
-function recompileModel() {
+`function CompileModel() {
     console.log("Model Compiling...");
 
-    // Create a Cylinder
-    let origin           = new oc.gp_Pnt(0, 0, 0);
-    let cylinderPlane    = new oc.gp_Ax2(origin, oc.gp.prototype.DZ());
-    mainPart             = new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, 30.0, 70.0).Shape();
-
-    // Fillet the Edges of the Cylinder
-    if(GUIState['Fillet?']){
-        let filletedCylinder = new oc.BRepFilletAPI_MakeFillet(mainPart);
-        let anEdgeExplorer   = new oc.TopExp_Explorer(mainPart, oc.TopAbs_EDGE);
-        while(anEdgeExplorer.More()) {
-            let anEdge = oc.TopoDS.prototype.Edge(anEdgeExplorer.Current());
-            // Add edge to fillet algorithm
-            filletedCylinder.Add(200. / 12., anEdge);
-            anEdgeExplorer.Next();
-        }
-        mainPart = filletedCylinder.Shape();
-    }
-
     // Create a Sphere
-    let spherePlane      = new oc.gp_Ax2(new oc.gp_Pnt(15, 0, 70.), oc.gp.prototype.DZ());
-    let sphere           = new oc.BRepPrimAPI_MakeSphere(spherePlane, 50.0 * GUIState['radius']).Shape();
+    let spherePlane    = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 50.), oc.gp.prototype.DZ());
+    let sphere         = new oc.BRepPrimAPI_MakeSphere(spherePlane, 50.0).Shape();
 
-    // Cut the Sphere from the Cylinder
-    mainPart             = new oc.BRepAlgoAPI_Cut(mainPart, sphere).Shape();
+    // Create Cylinders to Subtract
+    let xCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(-100, 0, 50), new oc.gp_Dir(1, 0, 0));
+    let yCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, -100, 50), new oc.gp_Dir(0, 1, 0));
+    let zCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0,    0,-50), new oc.gp_Dir(0, 0, 1));
+    let xCylinder      = new oc.BRepPrimAPI_MakeCylinder(xCylinderPlane, 60.0 * GUIState['Radius'], 200.0).Shape();
+    let yCylinder      = new oc.BRepPrimAPI_MakeCylinder(yCylinderPlane, 60.0 * GUIState['Radius'], 200.0).Shape();
+    let zCylinder      = new oc.BRepPrimAPI_MakeCylinder(zCylinderPlane, 60.0 * GUIState['Radius'], 200.0).Shape();
+
+    // Cut the Cylinders from the Sphere
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, xCylinder).Shape();
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, yCylinder).Shape();
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, zCylinder).Shape();
 
     // Convert to a mesh
     console.log("Compilation Complete! Converting to Mesh...");
-    cascadeViewport.updateShape(mainPart);
+    cascadeViewport.updateShape(sphere, GUIState["Res"]);
     console.log("Generation Complete!");
 }
+
+
+// Define GUI State Variables here
+Object.assign(GUIState, {
+    "Res"    : 0.1, "ResRange"    : [0.01, 1.00],
+    "Radius" : 0.5, "RadiusRange" : [0.45, 0.58] });
+
+// GUI uses https://github.com/automat/controlkit.js
+gui.addPanel({label: 'Cascade Control Panel'})
+   .addButton     ('Generate Model' ,                             () => { CompileModel(); }  )
+   .addSlider     (GUIState, 'Res',       'ResRange', { onFinish: () => { CompileModel(); }} )
+   .addSlider     (GUIState, 'Radius', 'RadiusRange', { onFinish: () => { CompileModel(); }} );
 `;
 
 // Functions to be overwritten by the editor window
@@ -59,10 +50,10 @@ function initialize(opencascade) {
     oc = opencascade;
 
     // Set up the Windowing System  ---------------------------------------
-    loadedState = localStorage.getItem( 'savedState' );
+    loadedState = window.localStorage.getItem( 'savedState' );
     if (loadedState !== null) {
         console.log(loadedState);
-        myLayout = new GoldenLayout( JSON.parse( loadedState ) );
+        myLayout = new GoldenLayout( JSON.parse( loadedState ));
     } else {
         myLayout = new GoldenLayout( {
             content: [{
@@ -72,6 +63,7 @@ function initialize(opencascade) {
                     componentName: 'codeEditor',
                     title:'Code Editor',
                     componentState: { code: starterCode },
+                    width: 60.0,
                     isClosable: false
                 },{
                     type: 'column',
@@ -79,12 +71,13 @@ function initialize(opencascade) {
                         type: 'component',
                         componentName: 'cascadeView',
                         title:'CAD View',
-                        componentState: { ip: '192.168.1.142:3000' },
+                        componentState: { },
                         isClosable: false
                     },{
                         type: 'component',
                         componentName: 'console',
                         title:'Console',
+                        componentState: { externalFiles: { } },
                         height: 20.0,
                         isClosable: false
                     }]
@@ -95,12 +88,12 @@ function initialize(opencascade) {
                 showMaximiseIcon: false,
                 showCloseIcon:    false
             }
-        } );
+        });
     }
 
     // Set up saving code changes to the localStorage
     myLayout.on( 'stateChanged', function(){
-        localStorage.setItem( 'savedState', JSON.stringify( myLayout.toConfig()));
+        window.localStorage.setItem( 'savedState', JSON.stringify( myLayout.toConfig()));
     });
 
     // Set up the Monaco Code Editor
@@ -172,7 +165,7 @@ function initialize(opencascade) {
             }, 2000);
 
             window.eval(state.code); 
-            recompileModel();
+            CompileModel();
         }, 300);
     });
 
@@ -191,7 +184,8 @@ function initialize(opencascade) {
     });
 
     // Set up the Error and Status Reporting Console
-    myLayout.registerComponent('console', function(container){
+    myLayout.registerComponent('console', function (container) {
+        consoleGolden = container;
         consoleContainer = document.createElement("div");
         container.getElement().get(0).appendChild(consoleContainer);
         container.getElement().get(0).style.overflow  = 'auto';
@@ -249,4 +243,78 @@ function initialize(opencascade) {
     document.onblur = window.onblur; document.onfocus = window.onfocus;
 
     myLayout.init();
+    myLayout.updateSize(window.innerWidth, window.innerHeight-25); // Compensate for Status Bar
+}
+
+function saveProject () {
+    let link = document.createElement("a");
+    link.download = "CascadeStudioProject.json";
+    link.href = "data:application/json;utf8," + 
+                  encodeURIComponent(JSON.stringify(myLayout.toConfig(), null, ' '));
+    link.click();
+}
+
+const loadFileAsync = async (file) => {
+    return new Promise((resolve, reject) => {
+      let reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    })
+}
+function loadProject () {
+    // Get Project .json
+    loadFileAsync(document.getElementById("project-file").files[0]).then((jsonFile) => {
+        console.log(jsonFile);
+        window.localStorage.setItem('savedState', JSON.parse(jsonFile));
+        location.reload();
+    });
+}
+
+function loadSTEPorIGES() {
+    let extFiles = {};
+    let files = document.getElementById("step-file").files;
+    for (let i = 0; i < files.length; i++) {
+        loadFileAsync(files[i]).then(async (fileText) => {
+            const fileName = files[i].name;
+            let stepOrIges = importSTEPorIGES(fileName, fileText);
+            extFiles[fileName] = { content: fileText };
+        });
+    };
+    consoleGolden.setState(extFiles);
+}
+
+function importSTEPorIGES(fileName, fileText) {
+    // Writes the uploaded file to Emscripten's Virtual Filesystem
+    oc.FS.createDataFile("/", fileName, fileText, true, true);
+
+    // Choose the correct OpenCascade file parsers to read the CAD file
+    var reader = null, fileType = false;
+    if (fileName.endsWith(".step") || fileName.endsWith(".stp")) {
+      reader = new oc.STEPControl_Reader();
+    } else if (fileName.endsWith(".iges") || fileName.endsWith(".igs")) {
+      reader = new oc.IGESControl_Reader();
+    } else { console.error("opencascade.js can't parse this extension! (yet)"); }
+
+    const readResult = reader.ReadFile(fileName);            // Read the file
+    if (readResult === 1) {
+      console.log(fileName + " loaded successfully!     Converting to OCC now...");
+      const numRootsTransferred = reader.TransferRoots();    // Translate all transferable roots to OpenCascade
+      const stepShape           = reader.OneShape();         // Obtain the results of translation in one OCCT shape
+      
+      // Add to the externalShapes dictionary
+      externalShapes[fileName] = stepShape;
+      console.log("Shape Import complete!  It is accessible from: externalShapes['"+fileName+"']");
+      
+      // Remove the file when we're done (otherwise we run into errors on reupload)
+      oc.FS.unlink("/" + fileName);
+    } else {
+      console.error("Something in OCCT went wrong trying to read " + fileName);
+    }
+}
+
+// Remove the externally imported shapes from the project
+function clearExternalFiles () {
+    externalShapes = {};
+    consoleGolden.setState({});
 }

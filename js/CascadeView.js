@@ -76,6 +76,7 @@ var Environment = function (goldenContainer) {
     }
 
     this.onWindowResize = function () {
+        this.goldenContainer.layoutManager.updateSize(window.innerWidth, window.innerHeight-25);
         this.camera.aspect  = this.goldenContainer.width / this.goldenContainer.height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(this.goldenContainer.width, this.goldenContainer.height);
@@ -90,41 +91,88 @@ var Environment = function (goldenContainer) {
     this.environment     = new Environment(this.goldenContainer);
     this.updating        = false;
     this.openCascade     = openCascade;
+    this.raycaster       = new THREE.Raycaster();
+    this.highlightedObj = null;
   
     this.loader = new THREE.TextureLoader();
     this.loader.setCrossOrigin ('');
     this.matcap = this.loader.load ('./textures/dullFrontLitMetal.png');
-    this.matcapMaterial = new THREE.MeshMatcapMaterial( {
-      //color: THREE.API.color,
-      matcap: this.matcap
-    } );
+    //this.matcapMaterial = ;
 
-    this.boxGeometry = new THREE.BoxBufferGeometry(100, 100, 100);
-    //this.white       = new THREE.MeshLambertMaterial({ color: 0x888888 });
-    this.mainObject;
+    this.mouse = { x: 0, y: 0 };
+    this.goldenContainer.getElement().get(0).addEventListener('mousemove', (event) => {
+      this.mouse.x =   ( event.offsetX / this.goldenContainer.width  ) * 2 - 1;
+      this.mouse.y = - ( event.offsetY / this.goldenContainer.height ) * 2 + 1;
+    }, false );
 
-    this.updateShape = async (shape) => {
+    this.updateShape = async (shape, maxDeviation) => {
       openCascadeHelper.setOpenCascade(this.openCascade);
-      const facelist                                        = await openCascadeHelper.tessellate(shape);
-      const [locVertexcoord, locNormalcoord, locTriIndices] = await openCascadeHelper.joinPrimitives(facelist);
-      const tot_triangle_count                              = facelist.reduce((a,b) => a + b.number_of_triangles, 0);
-      const [vertices, faces]                               = await openCascadeHelper.generateGeometry(
-                                                                tot_triangle_count, locVertexcoord, locNormalcoord, locTriIndices);
-      //const objectMat   = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.7, 0.7, 0.7) });
-      const geometry    = new THREE.Geometry();
-      geometry.vertices = vertices;
-      geometry.faces    = faces;
-      
+
       this.environment.scene.remove(this.mainObject);
-      this.mainObject   = new THREE.Mesh(geometry, this.matcapMaterial);
-      this.mainObject.name = "shape";
-      this.mainObject.castShadow = true;
+      //this.mainObject.remove(...this.mainObject.children);
+      this.mainObject            = new THREE.Group();
+      this.mainObject.name       = "shape";
       this.mainObject.rotation.x = -Math.PI / 2;
+
+      // Tesellate the OpenCascade Object
+      const facelist = await openCascadeHelper.tessellate(shape, maxDeviation);
+      facelist.forEach((face) => {
+        // Sort Vertices into three.js Vector3 List
+        let vertices = [];
+        for (let i = 0; i < face.vertex_coord.length; i += 3) {
+          vertices.push(new THREE.Vector3(face.vertex_coord[i    ],
+                                          face.vertex_coord[i + 1],
+                                          face.vertex_coord[i + 2]));
+        }
+        // Sort Triangles into a three.js Face List
+        let triangles = [];
+        for (let i = 0; i < face.tri_indexes.length; i += 3) {
+          triangles.push(new THREE.Face3(face.tri_indexes[i],face.tri_indexes[i + 1], face.tri_indexes[i + 2], 
+                        [new THREE.Vector3(face.normal_coord[(face.tri_indexes[i     ] * 3)    ], 
+                                           face.normal_coord[(face.tri_indexes[i     ] * 3) + 1], 
+                                           face.normal_coord[(face.tri_indexes[i     ] * 3) + 2]),
+                         new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 1 ] * 3)    ], 
+                                           face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 1], 
+                                           face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 2]),
+                         new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 2 ] * 3)    ], 
+                                           face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 1], 
+                                           face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 2])]
+          ));
+        }
+
+        // Slots the lists into the Geometry
+        let geometry               = new THREE.Geometry();
+            geometry.vertices      = vertices;
+            geometry.faces         = triangles;
+        let currentFace = new THREE.Mesh(geometry, new THREE.MeshMatcapMaterial(
+          { color: new THREE.Color(0xeeeeee), matcap: this.matcap }));
+            currentFace.castShadow = true;
+        this.mainObject.add(currentFace);
+      });
+
       this.environment.scene.add(this.mainObject);
     }
   
     this.animate = function animatethis() {
       requestAnimationFrame(() => this.animate());
+
+      // Lightly Highlight the faces of the object
+      if (this.mainObject) {
+        this.raycaster.setFromCamera(this.mouse, this.environment.camera);
+        let intersects = this.raycaster.intersectObjects(this.mainObject.children);
+        if (intersects.length > 0) {
+          if (this.highlightedObj != intersects[0].object) {
+            if (this.highlightedObj) this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
+            this.highlightedObj = intersects[0].object;
+            this.highlightedObj.currentHex = this.highlightedObj.material.color.getHex();
+            this.highlightedObj.material.color.setHex(0xffffff);
+          }
+        } else {
+          if (this.highlightedObj) this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
+          this.highlightedObj = null;
+        }
+      }
+
       this.goldenContainer.layoutManager.eventHub.emit('Update');
       this.environment.renderer.render(this.environment.scene, this.environment.camera);
     };
