@@ -1,6 +1,6 @@
-var myLayout, monacoEditor, loadedState,
+var myLayout, monacoEditor,
     cascadeViewport, consoleContainer, consoleGolden, gui,
-    GUIState, count = 0, focused = true, mainPart = null,
+    GUIState, count = 0, focused = true,
     oc = null, externalShapes = {};
 
 let starterCode = 
@@ -15,9 +15,9 @@ let starterCode =
     let xCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(-100, 0, 50), new oc.gp_Dir(1, 0, 0));
     let yCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, -100, 50), new oc.gp_Dir(0, 1, 0));
     let zCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0,    0,-50), new oc.gp_Dir(0, 0, 1));
-    let xCylinder      = new oc.BRepPrimAPI_MakeCylinder(xCylinderPlane, 60.0 * GUIState['Radius'], 200.0).Shape();
-    let yCylinder      = new oc.BRepPrimAPI_MakeCylinder(yCylinderPlane, 60.0 * GUIState['Radius'], 200.0).Shape();
-    let zCylinder      = new oc.BRepPrimAPI_MakeCylinder(zCylinderPlane, 60.0 * GUIState['Radius'], 200.0).Shape();
+    let xCylinder      = new oc.BRepPrimAPI_MakeCylinder(xCylinderPlane, GUIState['Radius'], 200.0).Shape();
+    let yCylinder      = new oc.BRepPrimAPI_MakeCylinder(yCylinderPlane, GUIState['Radius'], 200.0).Shape();
+    let zCylinder      = new oc.BRepPrimAPI_MakeCylinder(zCylinderPlane, GUIState['Radius'], 200.0).Shape();
 
     // Cut the Cylinders from the Sphere
     sphere             = new oc.BRepAlgoAPI_Cut(sphere, xCylinder).Shape();
@@ -33,8 +33,8 @@ let starterCode =
 
 // Define GUI State Variables here
 Object.assign(GUIState, {
-    "Res"    : 0.1, "ResRange"    : [0.01, 1.00],
-    "Radius" : 0.5, "RadiusRange" : [0.45, 0.58] });
+    "Res"    : 0.1,  "ResRange"    : [0.01, 1.00],
+    "Radius" : 30.0, "RadiusRange" : [27.0, 35.0] });
 
 // GUI uses https://github.com/automat/controlkit.js
 gui.addPanel({label: 'Cascade Control Panel'})
@@ -50,11 +50,8 @@ function initialize(opencascade) {
     oc = opencascade;
 
     // Set up the Windowing System  ---------------------------------------
-    loadedState = window.localStorage.getItem( 'savedState' );
-    if (loadedState !== null) {
-        console.log(loadedState);
-        myLayout = new GoldenLayout( JSON.parse( loadedState ));
-    } else {
+    let loadedState = window.localStorage.getItem('studioState');
+    if (loadedState === null) {
         myLayout = new GoldenLayout( {
             content: [{
                 type: 'row',
@@ -63,7 +60,7 @@ function initialize(opencascade) {
                     componentName: 'codeEditor',
                     title:'Code Editor',
                     componentState: { code: starterCode },
-                    width: 60.0,
+                    width: 50.0,
                     isClosable: false
                 },{
                     type: 'column',
@@ -77,7 +74,7 @@ function initialize(opencascade) {
                         type: 'component',
                         componentName: 'console',
                         title:'Console',
-                        componentState: { externalFiles: { } },
+                        componentState: { },
                         height: 20.0,
                         isClosable: false
                     }]
@@ -89,11 +86,15 @@ function initialize(opencascade) {
                 showCloseIcon:    false
             }
         });
+    } else {
+        myLayout = new GoldenLayout( JSON.parse( loadedState ));
     }
 
     // Set up saving code changes to the localStorage
-    myLayout.on( 'stateChanged', function(){
-        window.localStorage.setItem( 'savedState', JSON.stringify( myLayout.toConfig()));
+    myLayout.on('stateChanged', function () {
+        if (myLayout.toConfig() !== null) {
+            window.localStorage.setItem('studioState', JSON.stringify(myLayout.toConfig()));
+        }
     });
 
     // Set up the Monaco Code Editor
@@ -145,7 +146,8 @@ function initialize(opencascade) {
                 value: state.code,
                 language: "javascript",
                 theme: "vs-dark",
-                automaticLayout: true//,
+                automaticLayout: true,
+                minimap: { enabled: false}//,
                 //model: null
             });
 
@@ -234,6 +236,12 @@ function initialize(opencascade) {
                 severity: monaco.MarkerSeverity.Error
             }]);
         };
+
+        // Reimport any imported STEP/IGES Files
+        let prexistingExternalFiles = consoleGolden.getState();
+        for (let key in prexistingExternalFiles) {
+            importSTEPorIGES(key, prexistingExternalFiles[key].content);
+        }; 
     });
 
     // Doesn't get triggered in time to do any good
@@ -265,8 +273,7 @@ const loadFileAsync = async (file) => {
 function loadProject () {
     // Get Project .json
     loadFileAsync(document.getElementById("project-file").files[0]).then((jsonFile) => {
-        console.log(jsonFile);
-        window.localStorage.setItem('savedState', JSON.parse(jsonFile));
+        window.localStorage.setItem('studioState', jsonFile);
         location.reload();
     });
 }
@@ -277,7 +284,7 @@ function loadSTEPorIGES() {
     for (let i = 0; i < files.length; i++) {
         loadFileAsync(files[i]).then(async (fileText) => {
             const fileName = files[i].name;
-            let stepOrIges = importSTEPorIGES(fileName, fileText);
+            importSTEPorIGES(fileName, fileText);
             extFiles[fileName] = { content: fileText };
         });
     };

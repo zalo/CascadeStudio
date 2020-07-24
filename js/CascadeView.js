@@ -92,7 +92,8 @@ var Environment = function (goldenContainer) {
     this.updating        = false;
     this.openCascade     = openCascade;
     this.raycaster       = new THREE.Raycaster();
-    this.highlightedObj = null;
+    this.highlightedObj  = null;
+    this.stlExporter     = new THREE.STLExporter();
   
     this.loader = new THREE.TextureLoader();
     this.loader.setCrossOrigin ('');
@@ -151,6 +152,15 @@ var Environment = function (goldenContainer) {
       });
 
       this.environment.scene.add(this.mainObject);
+    }
+
+    // Save the current shape to .stl
+    this.saveShapeSTL = (filename = "CascadeStudioPart.stl") => {
+      let result = this.stlExporter.parse(this.mainObject);
+      let link = document.createElement("a");
+      link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
+			link.download = filename;
+			link.click();
     }
   
     this.animate = function animatethis() {

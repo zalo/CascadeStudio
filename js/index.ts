@@ -1,6 +1,5 @@
 var myLayout : GoldenLayout.GoldenLayout;
 var gui: ControlKit.ControlKit;
-var mainPart: oc.TopoDS_Shape;
 
 interface Environment {
     constructor(goldenContainer: any);
@@ -25,6 +24,8 @@ interface CascadeEnvironment {
     updating       : Boolean;
     matcapMaterial : THREE.MeshMatcapMaterial;
     mainObject     : THREE.Object3D;
+    
+    updateShape (shape : oc.TopoDS_Shape, maxDeviation:Number) : void;
 
     animate() : void;
 }
