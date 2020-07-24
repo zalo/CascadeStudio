@@ -94,6 +94,7 @@ var Environment = function (goldenContainer) {
     this.raycaster       = new THREE.Raycaster();
     this.highlightedObj  = null;
     this.stlExporter     = new THREE.STLExporter();
+    this.objExporter     = new THREE.OBJExporter();
   
     this.loader = new THREE.TextureLoader();
     this.loader.setCrossOrigin ('');
@@ -157,6 +158,15 @@ var Environment = function (goldenContainer) {
     // Save the current shape to .stl
     this.saveShapeSTL = (filename = "CascadeStudioPart.stl") => {
       let result = this.stlExporter.parse(this.mainObject);
+      let link = document.createElement("a");
+      link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
+			link.download = filename;
+			link.click();
+    }
+
+    // Save the current shape to .obj
+    this.saveShapeOBJ = (filename = "CascadeStudioPart.obj") => {
+      let result = this.objExporter.parse(this.mainObject);
       let link = document.createElement("a");
       link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
 			link.download = filename;

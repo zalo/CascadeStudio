@@ -10,6 +10,7 @@
         <script type="text/javascript" src="./node_modules/three/examples/js/controls/DragControls.js"></script>
         <script type="text/javascript" src="./node_modules/three/examples/js/controls/OrbitControls.js"></script>
         <script type="text/javascript" src="./node_modules/three/examples/js/exporters/STLExporter.js"></script>
+        <script type="text/javascript" src="./node_modules/three/examples/js/exporters/OBJExporter.js"></script>
 
         <script type="text/javascript" src="./node_modules/controlkit/bin/controlKit.js"></script>
 
@@ -79,6 +80,7 @@
                 <label for="project-file" title="Load Project from .json">Load Project</label>
                 <a href="#">Save STEP (coming soon)</a>
                 <a href="#" onmouseup="cascadeViewport.saveShapeSTL();">Save STL</a>
+                <a href="#" onmouseup="cascadeViewport.saveShapeOBJ();">Save OBJ</a>
                 <input id="step-file" name="step-file" type="file" multiple accept=".iges,.step,.igs,.stp" style="display:none;" oninput="loadSTEPorIGES();"/>
                 <label for="step-file" title="Import STEP from File">Import STEP/IGES</label>
                 <a href="#" title="Clears the external step/iges files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>

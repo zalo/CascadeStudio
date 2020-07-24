@@ -51,6 +51,8 @@ CascadeStudio/
 !node_modules/three/examples/js/*/
 !node_modules/three/examples/js/controls/
 !node_modules/three/examples/js/controls/*
+!node_modules/three/examples/js/exporters/
+!node_modules/three/examples/js/exporters/*
 
 # Golden-Layout Scripts
 !node_modules/golden-layout/
