@@ -76,6 +76,10 @@ const openCascadeHelper = {
       for(anEdgeExplorer.Init(shape, this.openCascade.TopAbs_EDGE); anEdgeExplorer.More(); anEdgeExplorer.Next()) {
         const myEdge = this.openCascade.TopoDS.prototype.Edge(anEdgeExplorer.Current());
 
+        // Solid objects always double cover each edge
+        // TODO: Make this better for open faces and lines
+        if(myEdge.Orientation() > 0) continue;
+
         const aLocation = new this.openCascade.TopLoc_Location();
         const adaptorCurve = new this.openCascade.BRepAdaptor_Curve(myEdge);
         const tangDef = new this.openCascade.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.1);
