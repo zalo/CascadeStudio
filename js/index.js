@@ -9,20 +9,20 @@ let starterCode =
 
     // Create a Sphere
     let spherePlane    = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 50.), oc.gp.prototype.DZ());
-    let sphere         = new oc.BRepPrimAPI_MakeSphere(spherePlane, 50.0).Shape();
+    let sphere         = new oc.BRepPrimAPI_MakeSphere(spherePlane, 50.0).Solid();
 
     // Create Cylinders to Subtract
     let xCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(-100, 0, 50), new oc.gp_Dir(1, 0, 0));
     let yCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, -100, 50), new oc.gp_Dir(0, 1, 0));
     let zCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0,    0,-50), new oc.gp_Dir(0, 0, 1));
-    let xCylinder      = new oc.BRepPrimAPI_MakeCylinder(xCylinderPlane, GUIState['Radius'], 200.0).Shape();
-    let yCylinder      = new oc.BRepPrimAPI_MakeCylinder(yCylinderPlane, GUIState['Radius'], 200.0).Shape();
-    let zCylinder      = new oc.BRepPrimAPI_MakeCylinder(zCylinderPlane, GUIState['Radius'], 200.0).Shape();
+    let xCylinder      = new oc.BRepPrimAPI_MakeCylinder(xCylinderPlane, GUIState['Radius'], 200.0).Solid();
+    let yCylinder      = new oc.BRepPrimAPI_MakeCylinder(yCylinderPlane, GUIState['Radius'], 200.0).Solid();
+    let zCylinder      = new oc.BRepPrimAPI_MakeCylinder(zCylinderPlane, GUIState['Radius'], 200.0).Solid();
 
     // Cut the Cylinders from the Sphere
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, xCylinder).Shape();
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, yCylinder).Shape();
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, zCylinder).Shape();
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, xCylinder).Solid();
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, yCylinder).Solid();
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, zCylinder).Solid();
 
     // Convert to a mesh
     console.log("Compilation Complete! Converting to Mesh...");
