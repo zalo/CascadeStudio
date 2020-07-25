@@ -249,9 +249,14 @@ function initialize(opencascade) {
     window.onblur   = function (){ focused = false; }
     window.onfocus  = function (){ focused = true;  }
     document.onblur = window.onblur; document.onfocus = window.onfocus;
+    window.onorientationchange = function(event) { 
+        myLayout.updateSize(window.innerWidth, window.innerHeight -
+            document.getElementsByClassName('topNav')[0].offsetHeight);
+    };
 
     myLayout.init();
-    myLayout.updateSize(window.innerWidth, window.innerHeight-25); // Compensate for Status Bar
+    myLayout.updateSize(window.innerWidth, window.innerHeight -
+        document.getElementsByClassName('topNav')[0].offsetHeight);
 }
 
 function saveProject () {

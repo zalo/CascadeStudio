@@ -17,7 +17,7 @@
 		"golden-layout": "^1.5.9",
 		"jquery": "^3.5.1",
 		"monaco-editor": "^0.20.0",
-		"opencascade.js": "^0.1.13",
+		"opencascade.js": "^0.1.15",
 		"three": "^0.118.3"
 	}
 }
