@@ -117,9 +117,7 @@ var Environment = function (goldenContainer) {
       this.mainObject.rotation.x = -Math.PI / 2;
 
       // Tesellate the OpenCascade Object
-      //const edgelist = openCascadeHelper.enumerateEdges(shape, maxDeviation);
-
-      const facelist = await openCascadeHelper.tessellate(this.currentShape, maxDeviation);
+      const [facelist, edgelist] = await openCascadeHelper.tessellate(this.currentShape, maxDeviation);
       facelist.forEach((face) => {
         // Sort Vertices into three.js Vector3 List
         let vertices = [];
@@ -152,6 +150,20 @@ var Environment = function (goldenContainer) {
           { color: new THREE.Color(0xeeeeee), matcap: this.matcap }));
             currentFace.castShadow = true;
         this.mainObject.add(currentFace);
+      });
+
+      // Draw Edges of Object
+      edgelist.forEach((edge)=>{
+        let vertices = [];
+        for (let i = 0; i < edge.length; i += 3) {
+          vertices.push(new THREE.Vector3(edge[i    ],
+                                          edge[i + 1],
+                                          edge[i + 2]));
+        }
+        let linegeometry = new THREE.BufferGeometry().setFromPoints( vertices );
+        let linematerial = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 5 } );
+        let line         = new THREE.Line( linegeometry, linematerial );
+        this.mainObject.add(line);
       });
 
       this.environment.scene.add(this.mainObject);

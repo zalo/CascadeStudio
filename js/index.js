@@ -217,24 +217,26 @@ function initialize(opencascade) {
             consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
             realConsoleLog.apply(console, arguments);
         };
-        window.onerror = function(error, url, line) {
+        window.onerror = function(err, url, line, colno, errorObj) {
             let newline = document.createElement("div");
             newline.style.color = "red";
             newline.style.fontFamily = "monospace";
             newline.style.fontSize = "1.2em";
-            newline.innerHTML = "Line : "+line + " " + JSON.stringify(error, getCircularReplacer());
+            newline.innerHTML = "Line : "+line + " " + JSON.stringify(err, getCircularReplacer());
             consoleContainer.appendChild(newline);
             consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
 
             // Highlight the error'd code in the editor
-            monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', [{
-                startLineNumber: line,
-                startColumn: 1,
-                endLineNumber: line,
-                endColumn: 1000,
-                message: JSON.stringify(error, getCircularReplacer()),
-                severity: monaco.MarkerSeverity.Error
-            }]);
+            if(!errorObj.stack.includes("wasm-function")){
+                monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', [{
+                    startLineNumber: line,
+                    startColumn: colno,
+                    endLineNumber: line,
+                    endColumn: 1000,
+                    message: JSON.stringify(err, getCircularReplacer()),
+                    severity: monaco.MarkerSeverity.Error
+                }]);
+            }
         };
 
         // Reimport any imported STEP/IGES Files
