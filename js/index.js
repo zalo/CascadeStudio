@@ -20,9 +20,9 @@ let starterCode =
     let zCylinder      = new oc.BRepPrimAPI_MakeCylinder(zCylinderPlane, GUIState['Radius'], 200.0).Solid();
 
     // Cut the Cylinders from the Sphere
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, xCylinder).Solid();
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, yCylinder).Solid();
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, zCylinder).Solid();
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, xCylinder).Shape();
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, yCylinder).Shape();
+    sphere             = new oc.BRepAlgoAPI_Cut(sphere, zCylinder).Shape();
 
     // Convert to a mesh
     console.log("Compilation Complete! Converting to Mesh...");
