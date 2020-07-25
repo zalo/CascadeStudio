@@ -78,7 +78,7 @@
                 <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
                 <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="loadProject();"/>
                 <label for="project-file" title="Load Project from .json">Load Project</label>
-                <a href="#">Save STEP (coming soon)</a>
+                <a href="#" onmouseup="cascadeViewport.saveShapeSTEP();">Save STEP</a>
                 <a href="#" onmouseup="cascadeViewport.saveShapeSTL();">Save STL</a>
                 <a href="#" onmouseup="cascadeViewport.saveShapeOBJ();">Save OBJ</a>
                 <input id="step-file" name="step-file" type="file" multiple accept=".iges,.step,.igs,.stp" style="display:none;" oninput="loadSTEPorIGES();"/>

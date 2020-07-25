@@ -108,6 +108,7 @@ var Environment = function (goldenContainer) {
 
     this.updateShape = async (shape, maxDeviation) => {
       openCascadeHelper.setOpenCascade(this.openCascade);
+      this.currentShape = shape;
 
       this.environment.scene.remove(this.mainObject);
       //this.mainObject.remove(...this.mainObject.children);
@@ -118,7 +119,7 @@ var Environment = function (goldenContainer) {
       // Tesellate the OpenCascade Object
       //const edgelist = openCascadeHelper.enumerateEdges(shape, maxDeviation);
 
-      const facelist = await openCascadeHelper.tessellate(shape, maxDeviation);
+      const facelist = await openCascadeHelper.tessellate(this.currentShape, maxDeviation);
       facelist.forEach((face) => {
         // Sort Vertices into three.js Vector3 List
         let vertices = [];
@@ -154,6 +155,30 @@ var Environment = function (goldenContainer) {
       });
 
       this.environment.scene.add(this.mainObject);
+    }
+
+    // Save the current shape to .stl
+    this.saveShapeSTEP = (filename = "CascadeStudioPart.step") => {
+      this.writer = new oc.STEPControl_Writer();
+      let transferResult = this.writer.Transfer(this.currentShape, 0);
+      if(transferResult === 1){
+        let writeResult = this.writer.Write(filename);
+        if(writeResult === 1){
+          let stepFileText = oc.FS.readFile("/" + filename, { encoding:"utf8" });
+          console.log(stepFileText);
+
+          let link = document.createElement("a");
+          link.href = URL.createObjectURL( new Blob([stepFileText], { type: 'text/plain' }) );
+          link.download = filename;
+          link.click();
+
+          oc.FS.unlink("/" + filename);
+        }else{
+          console.error("WRITE STEP FILE FAILED.");
+        }
+      }else{
+        console.error("TRANSFER TO STEP WRITER FAILED.");
+      }
     }
 
     // Save the current shape to .stl
