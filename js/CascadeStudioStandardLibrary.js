@@ -27,24 +27,23 @@ function Cone(radius1, radius2, height) {
 }
 
 function Translate(offset = [0, 0, 0], ...args) {
-  //console.error("Translate Not Implementable Yet!"); return args[0];
-
-  let translation = new oc.TopLoc_Location(new oc.gp_Trsf().SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2])));
+  let transformation = new oc.gp_Trsf();
+  transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
+  let translation = new oc.TopLoc_Location(transformation);
   if (args.length === 1) {      // Do the normal translation
-    let MovedShape = args[0].Moved(translation);
-    sceneShapes = Remove(sceneShapes, args[0]);
-    sceneShapes.push(MovedShape);
-    return MovedShape;
+    args[0].Move(translation);
+    return args[0];
   } else if (args.length > 1) { // Combine them somehow for a multitranslation
     console.error("Multi Translate Not Implemented Yet!");
   }
 }
 
-function Rotate(axis = [0, 0, 1], radians = 0, ...args) {
-  //console.error("Rotate Not Implementable Yet!"); return args[0];
-
-  let rotation = new oc.TopLoc_Location(new oc.gp_Trsf().SetRotation(
-    new oc.gp_Ax1(new oc.gp_Pnt(), new oc.gp_Dir(new oc.gp_Vec(axis[0], axis[1], axis[2]))), radians));
+function Rotate(axis = [0, 1, 0], radians = 0, ...args) {
+  let transformation = new oc.gp_Trsf();
+  transformation.SetRotation(
+    new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), new oc.gp_Dir(
+      new oc.gp_Vec(axis[0], axis[1], axis[2]))), radians);
+  let rotation = new oc.TopLoc_Location(transformation);
   if (args.length === 1) {      // Do the normal rotation
     args[0].Move(rotation);
     return args[0];
@@ -54,9 +53,9 @@ function Rotate(axis = [0, 0, 1], radians = 0, ...args) {
 }
 
 function Scale(scale = 1, ...args) {
-  //console.error("Scale Not Implementable Yet!"); return args[0];
-
-  let scaleTrans = new oc.TopLoc_Location(new oc.gp_Trsf().SetScaleFactor(scale));
+  let transformation = new oc.gp_Trsf();
+  transformation.SetScaleFactor(scale);
+  let scaleTrans = new oc.TopLoc_Location(transformation);
   if (args.length === 1) {      // Do the normal scaling
     args[0].Move(scaleTrans);
     return args[0];
