@@ -8,7 +8,7 @@ let starterCode =
 Slider("Radius", 25 , 10 , 50);
 
 let sphere   = Sphere(GUIState["Radius"]);
-let cylinder = Cylinder(50, 50, centered=false);
+let cylinder = Cylinder(50, 50, false);
 
 Difference(cylinder, [sphere]);
 `;
@@ -70,51 +70,51 @@ function initialize(opencascade) {
     // Set up the Monaco Code Editor
     myLayout.registerComponent('codeEditor', function (container, state) {
         setTimeout(() => {
-            monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+            monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
                 allowNonTsExtensions: true,
-                allowJs: true,
+                //allowJs: true,
                 moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs
             });
-            monaco.languages.typescript.javascriptDefaults.setEagerModelSync(true);
+            monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
 
             // Golden Layout Typescript definitions...
             fetch("/CascadeStudio/node_modules/golden-layout/index.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.languages.typescript.javascriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts');
+                    monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts');
                 });
             }).catch(error => console.log(error.message));
 
             // Add Symbols from opencascade.js...
             fetch("/CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.languages.typescript.javascriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts');
+                    monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts');
                 });
             }).catch(error => console.log(error.message));
 
             // Three.js Typescript definitions...
             fetch("/CascadeStudio/node_modules/three/build/three.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.languages.typescript.javascriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/three/build/three.d.ts');
+                    monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/three/build/three.d.ts');
                 });
             }).catch(error => console.log(error.message));
 
             // Add Symbols from ControlKit.js...
             fetch("/CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.languages.typescript.javascriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts');
+                    monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts');
                 });
             }).catch(error => console.log(error.message));
 
             // Add Symbols from this file...
             fetch("/CascadeStudio/js/index.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.editor.createModel(text, "javascript");
+                    monaco.editor.createModel(text, "typescript");
                 });
             }).catch(error => console.log(error.message));
 
             monacoEditor = monaco.editor.create(container.getElement().get(0), {
                 value: state.code,
-                language: "javascript",
+                language: "typescript",
                 theme: "vs-dark",
                 automaticLayout: true,
                 minimap: { enabled: false}//,

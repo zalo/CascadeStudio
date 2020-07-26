@@ -82,7 +82,7 @@ const openCascadeHelper = {
 
         const aLocation = new this.openCascade.TopLoc_Location();
         const adaptorCurve = new this.openCascade.BRepAdaptor_Curve(myEdge);
-        const tangDef = new this.openCascade.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.1);
+        const tangDef = new this.openCascade.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.5);
 
         // write vertex buffer
         let this_edge = new Array(tangDef.NbPoints() * 3);
