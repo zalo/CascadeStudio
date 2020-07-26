@@ -1,46 +1,16 @@
 var myLayout, monacoEditor,
     cascadeViewport, consoleContainer, consoleGolden, gui,
-    GUIState, count = 0, focused = true,
-    oc = null, externalShapes = {};
+    guiPanel, GUIState, count = 0, focused = true,
+    oc = null, externalShapes = {}, sceneShapes = [];
 
 let starterCode = 
-`function CompileModel() {
-    console.log("Model Compiling...");
+`Slider("Res"   , 0.1, 0.01, 1);
+Slider("Radius", 25 , 10 , 50);
 
-    // Create a Sphere
-    let spherePlane    = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 50.), oc.gp.prototype.DZ());
-    let sphere         = new oc.BRepPrimAPI_MakeSphere(spherePlane, 50.0).Solid();
+let sphere   = Sphere(GUIState["Radius"]);
+let cylinder = Cylinder(50, 50, centered=false);
 
-    // Create Cylinders to Subtract
-    let xCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(-100, 0, 50), new oc.gp_Dir(1, 0, 0));
-    let yCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, -100, 50), new oc.gp_Dir(0, 1, 0));
-    let zCylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0,    0,-50), new oc.gp_Dir(0, 0, 1));
-    let xCylinder      = new oc.BRepPrimAPI_MakeCylinder(xCylinderPlane, GUIState['Radius'], 200.0).Solid();
-    let yCylinder      = new oc.BRepPrimAPI_MakeCylinder(yCylinderPlane, GUIState['Radius'], 200.0).Solid();
-    let zCylinder      = new oc.BRepPrimAPI_MakeCylinder(zCylinderPlane, GUIState['Radius'], 200.0).Solid();
-
-    // Cut the Cylinders from the Sphere
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, xCylinder).Shape();
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, yCylinder).Shape();
-    sphere             = new oc.BRepAlgoAPI_Cut(sphere, zCylinder).Shape();
-
-    // Convert to a mesh
-    console.log("Compilation Complete! Converting to Mesh...");
-    cascadeViewport.updateShape(sphere, GUIState["Res"]);
-    console.log("Generation Complete!");
-}
-
-
-// Define GUI State Variables here
-Object.assign(GUIState, {
-    "Res"    : 0.1,  "ResRange"    : [0.01, 1.00],
-    "Radius" : 30.0, "RadiusRange" : [27.0, 35.0] });
-
-// GUI uses https://github.com/automat/controlkit.js
-gui.addPanel({label: 'Cascade Control Panel'})
-   .addButton     ('Generate Model' ,                             () => { CompileModel(); }  )
-   .addSlider     (GUIState, 'Res',       'ResRange', { onFinish: () => { CompileModel(); }} )
-   .addSlider     (GUIState, 'Radius', 'RadiusRange', { onFinish: () => { CompileModel(); }} );
+Difference(cylinder, [sphere]);
 `;
 
 // Functions to be overwritten by the editor window
@@ -152,22 +122,40 @@ function initialize(opencascade) {
             });
 
             // Refresh the code once every couple seconds if necessary
-            setInterval(()=>{ 
+            monacoEditor.evaluateCode = () => {
                 let newCode = monacoEditor.getValue();
-                if(newCode !== container.getState().code){
-                    // Clear Errors
-                    monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', []);
-                    consoleContainer.innerHTML = "";
 
-                    gui.clearPanels();
+                // Clear Errors
+                monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', []);
 
-                    window.eval(newCode); 
+                gui.clearPanels();
+                guiPanel = gui.addPanel({ label: 'Cascade Control Panel' }).addButton('Evaluate', () => { monacoEditor.evaluateCode(); });
+
+                sceneShapes = [];
+                window.eval(newCode); // Evaluates the code in the editor
+
+                // This assembles all of the objects in the "workspace" and begins saving them out
+                let scene        = new oc.TopoDS_Compound();
+                let sceneBuilder = new oc.BRep_Builder();
+                sceneBuilder.MakeCompound(scene);
+                sceneShapes.forEach((curShape) => {
+                    sceneBuilder.Add(scene, curShape);
+                });
+                cascadeViewport.updateShape(scene, GUIState["Res"]);
+
+                container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
+                console.log("Generation Complete! Model Checkpoint Saved...");
+            }
+            // Allow F5 to refresh the model
+            document.onkeydown = function (e) {
+                if ((e.which || e.keyCode) == 116) {
+                    monacoEditor.evaluateCode();
+                    return false;
                 }
-                container.setState({ code: newCode });
-            }, 2000);
+                return true;  
+            };
 
-            window.eval(state.code); 
-            CompileModel();
+            monacoEditor.evaluateCode();
         }, 300);
     });
 
@@ -239,6 +227,8 @@ function initialize(opencascade) {
             }
         };
 
+        console.log("Welcome to Cascade Studio!");
+
         // Reimport any imported STEP/IGES Files
         let prexistingExternalFiles = consoleGolden.getState();
         for (let key in prexistingExternalFiles) {
@@ -297,7 +287,7 @@ function loadSTEPorIGES() {
         }).then(async () => {
             if (i === files.length - 1) {
                 if (lastImportedShape) {
-                    cascadeViewport.updateShape(lastImportedShape, GUIState["Res"]);
+                    cascadeViewport.updateShape(lastImportedShape, 0.1);
                 }
             }
             consoleGolden.setState(extFiles);

@@ -177,7 +177,6 @@ var Environment = function (goldenContainer) {
         let writeResult = this.writer.Write(filename);
         if(writeResult === 1){
           let stepFileText = oc.FS.readFile("/" + filename, { encoding:"utf8" });
-          console.log(stepFileText);
 
           let link = document.createElement("a");
           link.href = URL.createObjectURL( new Blob([stepFileText], { type: 'text/plain' }) );
