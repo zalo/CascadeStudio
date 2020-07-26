@@ -1,5 +1,5 @@
 function Box (x, y, z, centered = false) {
-  let curBox = new oc.BRepPrimAPI_MakeBox(x, y, z).Solid();
+  let curBox = new oc.BRepPrimAPI_MakeBox(x, y, z).Shape();
   if (centered) { Translate([-x / 2, -y / 2, -z / 2], curBox); }
   sceneShapes.push(curBox);
   return curBox;
@@ -7,41 +7,43 @@ function Box (x, y, z, centered = false) {
 
 function Sphere (radius) {
   let spherePlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0), oc.gp.prototype.DZ());
-  let curSphere = new oc.BRepPrimAPI_MakeSphere(spherePlane, radius).Solid();
+  let curSphere = new oc.BRepPrimAPI_MakeSphere(spherePlane, radius).Shape();
   sceneShapes.push(curSphere);
   return curSphere;
 }
 
 function Cylinder (radius, height, centered=false) {
   let cylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, centered ? -height / 2:0), new oc.gp_Dir(0, 0, 1));
-  let curCylinder = new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, radius, height).Solid();
+  let curCylinder = new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, radius, height).Shape();
   sceneShapes.push(curCylinder);
   return curCylinder;
 }
 
 function Cone(radius1, radius2, height) {
-  console.error("Cone Not Implementable Yet!"); return;
-  let curCone = new oc.BRepPrimAPI_MakeCone(radius1, radius2, height).Solid();
+  //console.error("Cone Not Implementable Yet!"); return;
+  let curCone = new oc.BRepPrimAPI_MakeCone(radius1, radius2, height).Shape();
   sceneShapes.push(curCone);
   return curCone;
 }
 
 function Translate(offset = [0, 0, 0], ...args) {
-  console.error("Translate Not Implementable Yet!"); return args[0];
+  //console.error("Translate Not Implementable Yet!"); return args[0];
 
-  let translation = new oc.Top_Loc(new oc.gp_Trsf().SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2])));
+  let translation = new oc.TopLoc_Location(new oc.gp_Trsf().SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2])));
   if (args.length === 1) {      // Do the normal translation
-    args[0].Move(translation);
-    return args[0];
+    let MovedShape = args[0].Moved(translation);
+    sceneShapes = Remove(sceneShapes, args[0]);
+    sceneShapes.push(MovedShape);
+    return MovedShape;
   } else if (args.length > 1) { // Combine them somehow for a multitranslation
     console.error("Multi Translate Not Implemented Yet!");
   }
 }
 
 function Rotate(axis = [0, 0, 1], radians = 0, ...args) {
-  console.error("Rotate Not Implementable Yet!"); return args[0];
+  //console.error("Rotate Not Implementable Yet!"); return args[0];
 
-  let rotation = new oc.Top_Loc(new oc.gp_Trsf().SetRotation(
+  let rotation = new oc.TopLoc_Location(new oc.gp_Trsf().SetRotation(
     new oc.gp_Ax1(new oc.gp_Pnt(), new oc.gp_Dir(new oc.gp_Vec(axis[0], axis[1], axis[2]))), radians));
   if (args.length === 1) {      // Do the normal rotation
     args[0].Move(rotation);
@@ -52,9 +54,9 @@ function Rotate(axis = [0, 0, 1], radians = 0, ...args) {
 }
 
 function Scale(scale = 1, ...args) {
-  console.error("Scale Not Implementable Yet!"); return args[0];
+  //console.error("Scale Not Implementable Yet!"); return args[0];
 
-  let scaleTrans = new oc.Top_Loc(new oc.gp_Trsf().SetScaleFactor(scale));
+  let scaleTrans = new oc.TopLoc_Location(new oc.gp_Trsf().SetScaleFactor(scale));
   if (args.length === 1) {      // Do the normal scaling
     args[0].Move(scaleTrans);
     return args[0];

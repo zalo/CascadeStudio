@@ -4,10 +4,7 @@ var myLayout, monacoEditor,
     oc = null, externalShapes = {}, sceneShapes = [];
 
 let starterCode = 
-`Slider("Res"   , 0.1, 0.01, 1);
-Slider("Radius", 25 , 10 , 50);
-
-let sphere   = Sphere(GUIState["Radius"]);
+`let sphere   = Sphere(Slider("Radius", 25 , 10 , 50));
 let cylinder = Cylinder(50, 50, false);
 
 Difference(cylinder, [sphere]);
@@ -129,7 +126,9 @@ function initialize(opencascade) {
                 monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', []);
 
                 gui.clearPanels();
-                guiPanel = gui.addPanel({ label: 'Cascade Control Panel' }).addButton('Evaluate', () => { monacoEditor.evaluateCode(); });
+                guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
+                    .addButton('Evaluate', () => { monacoEditor.evaluateCode(); });
+                Slider("MeshRes", 0.1, 0.01, 1);
 
                 sceneShapes = [];
                 window.eval(newCode); // Evaluates the code in the editor
@@ -141,7 +140,7 @@ function initialize(opencascade) {
                 sceneShapes.forEach((curShape) => {
                     sceneBuilder.Add(scene, curShape);
                 });
-                cascadeViewport.updateShape(scene, GUIState["Res"]);
+                cascadeViewport.updateShape(scene, GUIState["MeshRes"]);
 
                 container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
                 console.log("Generation Complete! Model Checkpoint Saved...");
@@ -287,7 +286,7 @@ function loadSTEPorIGES() {
         }).then(async () => {
             if (i === files.length - 1) {
                 if (lastImportedShape) {
-                    cascadeViewport.updateShape(lastImportedShape, 0.1);
+                    cascadeViewport.updateShape(lastImportedShape, GUIState["MeshRes"]);
                 }
             }
             consoleGolden.setState(extFiles);
