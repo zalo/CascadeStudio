@@ -4,11 +4,14 @@ var myLayout, monacoEditor,
     oc = null, externalShapes = {}, sceneShapes = [];
 
 let starterCode = 
-`let sphere   = Sphere(Slider("Radius", 25 , 10 , 50));
-let cylinder = Cylinder(50, 50, false);
+`let holeRadius = Slider("Radius", 30 , 20 , 40);
 
-Difference(cylinder, [sphere]);
-`;
+let sphere     = Sphere(50);
+let cylinder1  = Cylinder(holeRadius, 200, true);
+let cylinder2  = Rotate([1,0,0], 90, Cylinder(holeRadius, 200, true));
+let cylinder3  = Rotate([0,1,0], 90, Cylinder(holeRadius, 200, true));
+
+Translate([0, 0, 50], Difference(sphere, [cylinder1, cylinder2, cylinder3]));`;
 
 // Functions to be overwritten by the editor window
 //function Update(){}
@@ -74,38 +77,46 @@ function initialize(opencascade) {
             });
             monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
 
+            var extraLibs = [];
+
             // Golden Layout Typescript definitions...
             fetch("/CascadeStudio/node_modules/golden-layout/index.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts');
+                    //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts');
+                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Add Symbols from opencascade.js...
             fetch("/CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts');
+                    //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts');
+                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Three.js Typescript definitions...
             fetch("/CascadeStudio/node_modules/three/build/three.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/three/build/three.d.ts');
+                    //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/three/build/three.d.ts');
+                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/three/build/three.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Add Symbols from ControlKit.js...
             fetch("/CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts');
+                    //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts');
+                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Add Symbols from this file...
             fetch("/CascadeStudio/js/index.ts").then((response) => {
                 response.text().then(function (text) {
+                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/js/index.d.ts' });
                     monaco.editor.createModel(text, "typescript");
+                    monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 });
             }).catch(error => console.log(error.message));
 
@@ -120,6 +131,9 @@ function initialize(opencascade) {
 
             // Refresh the code once every couple seconds if necessary
             monacoEditor.evaluateCode = () => {
+                // Refresh these every so often to ensure we're always getting intellisense
+                monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
+
                 let newCode = monacoEditor.getValue();
 
                 // Clear Errors

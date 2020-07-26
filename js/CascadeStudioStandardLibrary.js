@@ -38,11 +38,11 @@ function Translate(offset = [0, 0, 0], ...args) {
   }
 }
 
-function Rotate(axis = [0, 1, 0], radians = 0, ...args) {
+function Rotate(axis = [0, 1, 0], degrees = 0, ...args) {
   let transformation = new oc.gp_Trsf();
   transformation.SetRotation(
     new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), new oc.gp_Dir(
-      new oc.gp_Vec(axis[0], axis[1], axis[2]))), radians);
+      new oc.gp_Vec(axis[0], axis[1], axis[2]))), degrees*0.0174533);
   let rotation = new oc.TopLoc_Location(transformation);
   if (args.length === 1) {      // Do the normal rotation
     args[0].Move(rotation);

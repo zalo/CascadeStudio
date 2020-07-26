@@ -19,12 +19,6 @@
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-base.css" />
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-dark-theme.css" />
 
-        <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">
-        <script>var require = { paths: { 'vs': 'node_modules/monaco-editor/min/vs' } };</script>
-        <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/loader.js"></script>
-        <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
-        <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
-
         <!-- Import OpenCascade.js-->
         <script type="text/javascript" src="./node_modules/opencascade.js/dist/opencascade.wasm.js"></script>
         <script>
@@ -87,6 +81,11 @@
                 <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear();">Reset Project</a>
             </div>
             <div id="appbody" style="height:auto">
+                <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">
+                <script>var require = { paths: { 'vs': 'node_modules/monaco-editor/min/vs' } };</script>
+                <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/loader.js"></script>
+                <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
+                <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
                 <script type="text/javascript" src="./js/index.js"></script>
             </div>
 

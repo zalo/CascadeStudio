@@ -49,5 +49,5 @@ function Button(name: String, callback?: Function);
 function Checkbox(name: String, defaultValue: Boolean, callback?: Function): Boolean;
 
 function Translate(offset: Number[], ...args: oc.TopoDS_Shape) : oc.TopoDS_Shape;
-function Rotate(axis: Number[], radians: Number, ...args: oc.TopoDS_Shape) : oc.TopoDS_Shape;
+function Rotate(axis: Number[], degrees: Number, ...args: oc.TopoDS_Shape) : oc.TopoDS_Shape;
 function Scale(scale: Number, ...args: oc.TopoDS_Shape) : oc.TopoDS_Shape;
