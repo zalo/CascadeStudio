@@ -122,5 +122,7 @@ function ForEachWire(shape: oc.TopoDS_Shape, callback: (wire: oc.TopoDS_Shape) =
 function ForEachEdge(shape: oc.TopoDS_Shape, callback: (index: Number, edge: oc.TopoDS_Shape) => void): {[edgeHash:Number] : Number}[];
 /** Iterate over all the vertices in this shape, calling `callback` on each one. */
 function ForEachVertex(shape: oc.TopoDS_Shape, callback: (vertex: oc.TopoDS_Shape) => void): void;
-/** Fillet the edges on this shape with a radius. */
-function FilletEdges(shape: oc.TopoDS_Shape, radius : Number, edgeSelector?: (edge:oc.TopoDS_Shape) => void): oc.TopoDS_Shape;
+/** Attempt to Fillet all selected edges on this shape with a radius. 
+ * Use the EdgeSelector callback to control which edges to apply the fillet to. 
+ * @example ```FilletEdges(shape, 1, (index) => {return [0,1,2,7].includes(index);});``` @beta */
+function FilletEdges(shape: oc.TopoDS_Shape, radius : Number, edgeSelector?: (index:Number, edge:oc.TopoDS_Shape) => void): oc.TopoDS_Shape;

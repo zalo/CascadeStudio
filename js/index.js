@@ -5,18 +5,18 @@ var myLayout, monacoEditor,
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
-//  Box(), Sphere(), Cylinder(), Cone(), FilletEdges(), Polygon(), Extrude()
 //  Translate(), Rotate(), Scale(), Union(), Difference(), Intersection()
+//  Box(), Sphere(), Cylinder(), Cone(), Polygon(), Extrude(), FilletEdges()
 //  Slider(), Button(), Checkbox()
 
-let HoleRadius = Slider("Radius", 30 , 20 , 40);
+let holeRadius = Slider("Radius", 30 , 20 , 40);
 
 let sphere     = Sphere(50);
-let cylinder1  = Cylinder(HoleRadius, 200, true);
-let cylinder2  = Rotate([1,0,0], 90, Cylinder(HoleRadius, 200, true));
-let cylinder3  = Rotate([0,1,0], 90, Cylinder(HoleRadius, 200, true));
+let cylinderZ  =                     Cylinder(holeRadius, 200, true);
+let cylinderY  = Rotate([0,1,0], 90, Cylinder(holeRadius, 200, true));
+let cylinderX  = Rotate([1,0,0], 90, Cylinder(holeRadius, 200, true));
 
-Translate([0, 0, 50], Difference(sphere, [cylinder1, cylinder2, cylinder3]));
+Translate([0, 0, 50], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
 
 
 // Don't forget to push custom oc-defined shapes into sceneShapes for rendering!`;
