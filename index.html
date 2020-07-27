@@ -75,7 +75,7 @@
                 <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
                 <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
                 <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
-                <input id="step-file" name="step-file" type="file" multiple accept=".iges,.step,.igs,.stp" style="display:none;" oninput="loadSTEPorIGES();"/>
+                <input id="step-file" name="step-file" type="file" accept=".iges,.step,.igs,.stp" style="display:none;" oninput="loadSTEPorIGES();"/> <!--multiple-->
                 <label for="step-file" title="Import STEP from File">Import STEP/IGES</label>
                 <a href="#" title="Clears the external step/iges files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
                 <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear();">Reset Project</a>

@@ -1,5 +1,11 @@
-/** The scene that stores all of the OpenCascade shapes for rendering.  Add to this when doing custom operations. */
+/** The list that stores all of the OpenCascade shapes for rendering.  
+ * Add to this when using imported files or doing custom operations. 
+ * @example```sceneShapes.push(externalShapes['myStep.step']);``` */
 var sceneShapes: oc.TopoDS_Shape[];
+
+/** The dictionary that stores all of your imported STEP and IGES files.  Push to sceneShapes to render in the view! 
+ * @example```sceneShapes.push(externalShapes['myStep.step']);``` */
+var externalShapes: { [filename: string]: oc.TopoDS_Shape };
 
 /** The base generic 3D Rendering Viewport implementation. */
 interface Environment {
@@ -119,7 +125,7 @@ function ForEachFace(shape: oc.TopoDS_Shape, callback: (index: Number, face: oc.
 /** Iterate over all the wires in this shape, calling `callback` on each one. */
 function ForEachWire(shape: oc.TopoDS_Shape, callback: (wire: oc.TopoDS_Shape) => void): void;
 /** Iterate over all the UNIQUE indices and edges in this shape, calling `callback` on each one. */
-function ForEachEdge(shape: oc.TopoDS_Shape, callback: (index: Number, edge: oc.TopoDS_Shape) => void): {[edgeHash:Number] : Number}[];
+function ForEachEdge(shape: oc.TopoDS_Shape, callback: (index: Number, edge: oc.TopoDS_Shape) => void): {[edgeHash:number] : Number}[];
 /** Iterate over all the vertices in this shape, calling `callback` on each one. */
 function ForEachVertex(shape: oc.TopoDS_Shape, callback: (vertex: oc.TopoDS_Shape) => void): void;
 /** Attempt to Fillet all selected edges on this shape with a radius. 

@@ -19,7 +19,7 @@ let cylinderX  = Rotate([1,0,0], 90, Cylinder(holeRadius, 200, true));
 Translate([0, 0, 50], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
 
 
-// Don't forget to push custom oc-defined shapes into sceneShapes for rendering!`;
+// Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
 // Functions to be overwritten by the editor window
 //function Update(){}
@@ -339,7 +339,7 @@ function importSTEPorIGES(fileName, fileText) {
       
       // Add to the externalShapes dictionary
       externalShapes[fileName] = stepShape;
-      console.log("Shape Import complete!  It is accessible from: externalShapes['"+fileName+"']");
+      console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to see it!");
       
       // Remove the file when we're done (otherwise we run into errors on reupload)
       oc.FS.unlink("/" + fileName);
