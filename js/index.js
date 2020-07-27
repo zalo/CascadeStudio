@@ -28,7 +28,7 @@ function initialize(opencascade) {
     oc = opencascade;
 
     // Set up the Windowing System  ---------------------------------------
-    let loadedState = window.localStorage.getItem('studioState');
+    let loadedState = window.localStorage.getItem('studioState-0.0.3');
     if (loadedState === null) {
         myLayout = new GoldenLayout( {
             content: [{
@@ -71,7 +71,7 @@ function initialize(opencascade) {
     // Set up saving code changes to the localStorage
     myLayout.on('stateChanged', function () {
         if (myLayout.toConfig() !== null) {
-            window.localStorage.setItem('studioState', JSON.stringify(myLayout.toConfig()));
+            window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
         }
     });
 
@@ -294,7 +294,7 @@ const loadFileAsync = async (file) => {
 function loadProject () {
     // Get Project .json
     loadFileAsync(document.getElementById("project-file").files[0]).then((jsonFile) => {
-        window.localStorage.setItem('studioState', jsonFile);
+        window.localStorage.setItem('studioState-0.0.3', jsonFile);
         location.reload();
     });
 }
