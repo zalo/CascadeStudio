@@ -26,42 +26,116 @@ function Cone(radius1, radius2, height) {
   return curCone;
 }
 
-function Translate(offset = [0, 0, 0], ...args) {
-  let transformation = new oc.gp_Trsf();
-  transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
-  let translation = new oc.TopLoc_Location(transformation);
-  if (args.length === 1) {      // Do the normal translation
-    args[0].Move(translation);
-    return args[0];
-  } else if (args.length > 1) { // Combine them somehow for a multitranslation
-    console.error("Multi Translate Not Implemented Yet!");
+function Polygon(points) {
+  let gpPoints = [];
+  for(let ind = 0; ind < points.length; ind++){
+    gpPoints.push(new oc.gp_Pnt(points[ind  ][0], points[ind  ][1], points[ind  ][2]));
+  }
+
+  let wire = new oc.BRepBuilderAPI_MakeWire();
+  for(let ind = 0; ind < points.length-1; ind++){
+    let seg  = new oc.GC_MakeSegment(gpPoints[ind], gpPoints[ind+1]).Value();
+    let edge = new oc.BRepBuilderAPI_MakeEdge(seg).Edge();
+    let innerWire = new oc.BRepBuilderAPI_MakeWire(edge).Wire();
+    wire.Add(innerWire);
+  }
+  let seg2  = new oc.GC_MakeSegment(gpPoints[points.length-1], gpPoints[0]).Value();
+  let edge2 = new oc.BRepBuilderAPI_MakeEdge(seg2).Edge();
+  let innerWire2 = new oc.BRepBuilderAPI_MakeWire(edge2).Wire();
+  wire.Add(innerWire2);
+
+  let polygon = new oc.BRepBuilderAPI_MakeFace(wire.Wire(), true).Face();
+  sceneShapes.push(polygon);
+  return polygon;
+}
+
+function ForEachFace(shape, callback) {
+  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_FACE);
+  for (anExplorer.Init(shape, oc.TopAbs_FACE); anExplorer.More(); anExplorer.Next()) {
+    callback(oc.TopoDS.prototype.Face(anExplorer.Current()));
   }
 }
 
-function Rotate(axis = [0, 1, 0], degrees = 0, ...args) {
+function ForEachWire(shape, callback) {
+  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_WIRE);
+  for (anExplorer.Init(shape, oc.TopAbs_WIRE); anExplorer.More(); anExplorer.Next()) {
+    callback(oc.TopoDS.prototype.Wire(anExplorer.Current()));
+  }
+}
+
+function ForEachEdge(shape, callback) {
+  let edgeHashes = {};
+  let edgeIndex = 0;
+  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_EDGE);
+  for (anExplorer.Init(shape, oc.TopAbs_EDGE); anExplorer.More(); anExplorer.Next()) {
+    let edge = oc.TopoDS.prototype.Edge(anExplorer.Current());
+    let edgeHash = edge.HashCode(100000000);
+    if(!edgeHashes.hasOwnProperty(edgeHash)){
+      edgeHashes[edgeHash] = edgeIndex;
+      callback(edgeIndex++, edge);
+    }
+  }
+  return edgeHashes;
+}
+
+function ForEachVertex(shape, callback) {
+  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_VERTEX);
+  for (anExplorer.Init(shape, oc.TopAbs_VERTEX); anExplorer.More(); anExplorer.Next()) {
+    callback(oc.TopoDS.prototype.Vertex(anExplorer.Current()));
+  }
+}
+
+function FilletEdges(shape, radius, edgeSelector = (index, edge) => true) { 
+  let mkFillet = new oc.BRepFilletAPI_MakeFillet(shape);
+  ForEachEdge(shape, (index, edge) => {
+    if (edgeSelector(index, edge)) { mkFillet.Add(radius, edge); }
+  });
+  sceneShapes.push(mkFillet.Shape());
+  sceneShapes = Remove(sceneShapes, shape);
+}
+
+function Translate(offset = [0, 0, 0], shapes) {
+  let transformation = new oc.gp_Trsf();
+  transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
+  let translation = new oc.TopLoc_Location(transformation);
+  if (!isArrayLike(shapes)) {
+    shapes.Move(translation);
+  } else if (shapes.length === 1) {
+    for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++){
+      shapes[shapeIndex].Move(translation);
+    }
+  }
+  return shapes;
+}
+
+function Rotate(axis = [0, 1, 0], degrees = 0, shapes) {
   let transformation = new oc.gp_Trsf();
   transformation.SetRotation(
     new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), new oc.gp_Dir(
       new oc.gp_Vec(axis[0], axis[1], axis[2]))), degrees*0.0174533);
   let rotation = new oc.TopLoc_Location(transformation);
-  if (args.length === 1) {      // Do the normal rotation
-    args[0].Move(rotation);
-    return args[0];
-  } else if (args.length > 1) { // Combine them somehow for a multirotation
-    console.error("Multi Rotate Not Implemented Yet!");
+  if (!isArrayLike(shapes)) {
+    shapes.Move(rotation);
+  } else if (shapes.length === 1) {      // Do the normal rotation
+    for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++){
+      shapes[shapeIndex].Move(rotation);
+    }
   }
+  return shapes;
 }
 
-function Scale(scale = 1, ...args) {
+function Scale(scale = 1, shapes) {
   let transformation = new oc.gp_Trsf();
   transformation.SetScaleFactor(scale);
   let scaleTrans = new oc.TopLoc_Location(transformation);
-  if (args.length === 1) {      // Do the normal scaling
-    args[0].Move(scaleTrans);
-    return args[0];
-  } else if (args.length > 1) { // Combine them somehow for a multiscale
-    console.error("Multi Scale Not Implemented Yet!");
+  if (!isArrayLike(shapes)) {
+    shapes.Move(scaleTrans);
+  } else if (shapes.length === 1) {      // Do the normal scaling
+    for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++){
+      shapes[shapeIndex].Move(scaleTrans);
+    }
   }
+  return shapes;
 }
 
 function Union(objectsToJoin = [], keepObjects = false) {
@@ -101,6 +175,17 @@ function Intersection(objectsToIntersect = [], keepObjects = false) {
   return intersected;
 }
 
+function Extrude(face, direction, keepFace = false) {
+  if (face.ShapeType() !== 4) {
+    throw new Error("Extrude was expecting a Face (Type Number 4)!  Was Type Number: " + face.ShapeType());
+  }
+  let extruded = new oc.BRepPrimAPI_MakePrism(face,
+    new oc.gp_Vec(direction[0], direction[1], direction[2])).Shape();
+  if (!keepFace) { sceneShapes = Remove(sceneShapes, face); }
+  sceneShapes.push(extruded);
+  return extruded;
+}
+
 function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, callback = monacoEditor.evaluateCode, realTime=false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   GUIState[name + "Range"] = [min, max];
@@ -117,6 +202,20 @@ function Checkbox(name = "Toggle", defaultValue = false, callback = monacoEditor
   guiPanel.addButton(GUIState, name, { onChange: () => { callback(); } });
 }
 
+// Random Javascript Utilities
 function Remove(inputArray, objectToRemove) {
   return inputArray.filter((el) => { return el !== objectToRemove; });
+}
+
+function isArrayLike(item) {
+  return (
+      Array.isArray(item) || 
+      (!!item &&
+        typeof item === "object" &&
+        item.hasOwnProperty("length") && 
+        typeof item.length === "number" && 
+        item.length > 0 && 
+        (item.length - 1) in item
+      )
+  );
 }

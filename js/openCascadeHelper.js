@@ -1,19 +1,22 @@
 const openCascadeHelper = {
   setOpenCascade (openCascade) {
-    this.openCascade = openCascade;
+    oc = openCascade;
   },
   tessellate (shape, maxDeviation) {
     const facelist = [], edgeList = [];
-    try{
-      new this.openCascade.BRepMesh_IncrementalMesh(shape, maxDeviation);
-      const ExpFace = new this.openCascade.TopExp_Explorer();
-      for(ExpFace.Init(shape, this.openCascade.TopAbs_FACE); ExpFace.More(); ExpFace.Next()) {
-        const myFace = this.openCascade.TopoDS.prototype.Face(ExpFace.Current());
-        const aLocation = new this.openCascade.TopLoc_Location();
-        const myT = this.openCascade.BRep_Tool.prototype.Triangulation(myFace, aLocation);
-        if(myT.IsNull()) {
-          continue;
-        }
+    try {
+      // Set up the Incremental Mesh builder, with a precision
+      new oc.BRepMesh_IncrementalMesh(shape, maxDeviation);
+
+      // Construct the edge hashes to assign proper indices to the edges
+      let fullShapeEdgeHashes  = ForEachEdge(shape, (index, edge) => { });
+      let fullShapeEdgeHashes2 = {};
+
+      // Iterate through the faces and triangulate each one
+      ForEachFace(shape, (myFace) => {
+        const aLocation = new oc.TopLoc_Location();
+        const myT = oc.BRep_Tool.prototype.Triangulation(myFace, aLocation);
+        if (myT.IsNull()) { console.error("Encountered Null Face!"); return; }
 
         const this_face = {
           vertex_coord: [],
@@ -22,7 +25,7 @@ const openCascadeHelper = {
           number_of_triangles: 0,
         };
 
-        const pc = new this.openCascade.Poly_Connect(myT);
+        const pc = new oc.Poly_Connect(myT);
         const Nodes = myT.get().Nodes();
 
         // write vertex buffer
@@ -35,8 +38,8 @@ const openCascadeHelper = {
         }
 
         // write normal buffer
-        const myNormal = new this.openCascade.TColgp_Array1OfDir(Nodes.Lower(), Nodes.Upper());
-        const SST = new this.openCascade.StdPrs_ToolTriangulatedShape();
+        const myNormal = new oc.TColgp_Array1OfDir(Nodes.Lower(), Nodes.Upper());
+        const SST = new oc.StdPrs_ToolTriangulatedShape();
         SST.Normal(myFace, pc, myNormal);
         this_face.normal_coord = new Array(myNormal.Length() * 3);
         for(let i = 0; i < myNormal.Length(); i++) {
@@ -56,7 +59,7 @@ const openCascadeHelper = {
           let n1 = t.Value(1);
           let n2 = t.Value(2);
           let n3 = t.Value(3);
-          if(orient !== this.openCascade.TopAbs_FORWARD) {
+          if(orient !== oc.TopAbs_FORWARD) {
             let tmp = n1;
             n1 = n2;
             n2 = tmp;
@@ -70,31 +73,44 @@ const openCascadeHelper = {
         }
         this_face.number_of_triangles = validFaceTriCount;
         facelist.push(this_face);
-      }
 
-      const anEdgeExplorer = new this.openCascade.TopExp_Explorer(shape, this.openCascade.TopAbs_EDGE);
-      for(anEdgeExplorer.Init(shape, this.openCascade.TopAbs_EDGE); anEdgeExplorer.More(); anEdgeExplorer.Next()) {
-        const myEdge = this.openCascade.TopoDS.prototype.Edge(anEdgeExplorer.Current());
+        ForEachEdge(myFace, (index, myEdge) => {
+          /*const myP = oc.BRep_Tool.prototype.PolygonOnTriangulation(myEdge, myT.get(), aLocation);
+          let edgeNodes = myP.get().Nodes();
+          // write vertex buffer
+          let this_edge = new Array(edgeNodes.Length() * 3);
+          console.log(edgeNodes.Length());
+          for(let j = 0; j < edgeNodes.Length(); j++) {
+            let vertexIndex = edgeNodes.Value(j);
+            this_edge[(j * 3) + 0] = this_face.vertex_coord[((vertexIndex-1) * 3) + 0];
+            this_edge[(j * 3) + 1] = this_face.vertex_coord[((vertexIndex-1) * 3) + 1];
+            this_edge[(j * 3) + 2] = this_face.vertex_coord[((vertexIndex-1) * 3) + 2];
+          }*/
+          let edgeHash = myEdge.HashCode(100000000);
+          if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {//myEdge.Orientation() === 0) {
+            const aLocation = new oc.TopLoc_Location();
+            const adaptorCurve = new oc.BRepAdaptor_Curve(myEdge);
+            const tangDef = new oc.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.5);
+  
+            // write vertex buffer
+            let this_edge = new Array(tangDef.NbPoints() * 3);
+            for (let i = 0; i < tangDef.NbPoints(); i++) {
+              const p = tangDef.Value(i + 1).Transformed(aLocation.Transformation());
+              this_edge[(i * 3) + 0] = p.X();
+              this_edge[(i * 3) + 1] = p.Y();
+              this_edge[(i * 3) + 2] = (p.Z() > 1000.0 || p.Z() < -1000) ? 0 : p.Z();
+              //console.log("Vertex: " + p.X() +", "+ p.Y() +", "+ p.Z());
+            }
+  
+            fullShapeEdgeHashes2[edgeHash] = edgeHash;
+  
+            edgeList.push(this_edge);
+          }
+        });
 
-        // Solid objects always double cover each edge
-        // TODO: Make this better for open faces and lines
-        if(myEdge.Orientation() > 0) continue;
+      });
 
-        const aLocation = new this.openCascade.TopLoc_Location();
-        const adaptorCurve = new this.openCascade.BRepAdaptor_Curve(myEdge);
-        const tangDef = new this.openCascade.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.5);
 
-        // write vertex buffer
-        let this_edge = new Array(tangDef.NbPoints() * 3);
-        for(let i = 0; i < tangDef.NbPoints(); i++) {
-          const p = tangDef.Value(i + 1).Transformed(aLocation.Transformation());
-          this_edge[(i * 3) + 0] = p.X();
-          this_edge[(i * 3) + 1] = p.Y();
-          this_edge[(i * 3) + 2] = p.Z();
-        }
-
-        edgeList.push(this_edge);
-      }
     } catch(err) {
       setTimeout(() => {
         err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;

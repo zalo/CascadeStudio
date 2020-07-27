@@ -1,17 +1,25 @@
 var myLayout, monacoEditor,
-    cascadeViewport, consoleContainer, consoleGolden, gui,
+    threejsViewport, consoleContainer, consoleGolden, gui,
     guiPanel, GUIState, count = 0, focused = true,
     oc = null, externalShapes = {}, sceneShapes = [];
 
 let starterCode = 
-`let holeRadius = Slider("Radius", 30 , 20 , 40);
+`// Welcome to Cascade Studio!   Here are some useful functions:
+//  Box(), Sphere(), Cylinder(), Cone(), FilletEdges(), Polygon(), Extrude()
+//  Translate(), Rotate(), Scale(), Union(), Difference(), Intersection()
+//  Slider(), Button(), Checkbox()
+
+let HoleRadius = Slider("Radius", 30 , 20 , 40);
 
 let sphere     = Sphere(50);
-let cylinder1  = Cylinder(holeRadius, 200, true);
-let cylinder2  = Rotate([1,0,0], 90, Cylinder(holeRadius, 200, true));
-let cylinder3  = Rotate([0,1,0], 90, Cylinder(holeRadius, 200, true));
+let cylinder1  = Cylinder(HoleRadius, 200, true);
+let cylinder2  = Rotate([1,0,0], 90, Cylinder(HoleRadius, 200, true));
+let cylinder3  = Rotate([0,1,0], 90, Cylinder(HoleRadius, 200, true));
 
-Translate([0, 0, 50], Difference(sphere, [cylinder1, cylinder2, cylinder3]));`;
+Translate([0, 0, 50], Difference(sphere, [cylinder1, cylinder2, cylinder3]));
+
+
+// Don't forget to push custom oc-defined shapes into sceneShapes for rendering!`;
 
 // Functions to be overwritten by the editor window
 //function Update(){}
@@ -72,20 +80,19 @@ function initialize(opencascade) {
         setTimeout(() => {
             monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
                 allowNonTsExtensions: true,
-                //allowJs: true,
-                moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs
+                moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
             });
             monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
 
             var extraLibs = [];
 
             // Golden Layout Typescript definitions...
-            fetch("/CascadeStudio/node_modules/golden-layout/index.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts');
-                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts' });
-                });
-            }).catch(error => console.log(error.message));
+            //fetch("/CascadeStudio/node_modules/golden-layout/index.d.ts").then((response) => {
+            //    response.text().then(function (text) {
+            //        //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts');
+            //        extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts' });
+            //    });
+            //}).catch(error => console.log(error.message));
 
             // Add Symbols from opencascade.js...
             fetch("/CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
@@ -104,18 +111,18 @@ function initialize(opencascade) {
             }).catch(error => console.log(error.message));
 
             // Add Symbols from ControlKit.js...
-            fetch("/CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts');
-                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts' });
-                });
-            }).catch(error => console.log(error.message));
+            //fetch("/CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts").then((response) => {
+            //    response.text().then(function (text) {
+            //        //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts');
+            //        extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts' });
+            //    });
+            //}).catch(error => console.log(error.message));
 
             // Add Symbols from this file...
             fetch("/CascadeStudio/js/index.ts").then((response) => {
                 response.text().then(function (text) {
                     extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/js/index.d.ts' });
-                    monaco.editor.createModel(text, "typescript");
+                    monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 });
             }).catch(error => console.log(error.message));
@@ -148,16 +155,20 @@ function initialize(opencascade) {
                 window.eval(newCode); // Evaluates the code in the editor
 
                 // This assembles all of the objects in the "workspace" and begins saving them out
-                let scene        = new oc.TopoDS_Compound();
-                let sceneBuilder = new oc.BRep_Builder();
-                sceneBuilder.MakeCompound(scene);
-                sceneShapes.forEach((curShape) => {
-                    sceneBuilder.Add(scene, curShape);
-                });
-                cascadeViewport.updateShape(scene, GUIState["MeshRes"]);
+                if (sceneShapes.length > 0) {
+                    let scene = new oc.TopoDS_Compound();
+                    let sceneBuilder = new oc.BRep_Builder();
+                    sceneBuilder.MakeCompound(scene);
+                    sceneShapes.forEach((curShape) => {
+                        sceneBuilder.Add(scene, curShape);
+                    });
+                    threejsViewport.updateShape(scene, GUIState["MeshRes"]);
 
-                container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
-                console.log("Generation Complete! Model Checkpoint Saved...");
+                    container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
+                    console.log("Generation Complete! Model Checkpoint Saved...");
+                } else {
+                    console.log("sceneShapes doesn't have any shapes in it!  Nothing was generated!");
+                }
             }
             // Allow F5 to refresh the model
             document.onkeydown = function (e) {
@@ -179,10 +190,10 @@ function initialize(opencascade) {
         setTimeout(()=> { 
             let floatingGUIContainer = document.createElement("div");
             floatingGUIContainer.style.position = 'absolute';
-            floatingGUIContainer.id = "cascadeViewportContainer";
+            floatingGUIContainer.id = "threejsViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
-            gui             = new ControlKit({parentDomElementId: "cascadeViewportContainer"});
-            cascadeViewport = new CascadeEnvironment(container, oc); 
+            gui             = new ControlKit({parentDomElementId: "threejsViewportContainer"});
+            threejsViewport = new CascadeEnvironment(container, oc); 
         }, 100);
     });
 
@@ -300,7 +311,7 @@ function loadSTEPorIGES() {
         }).then(async () => {
             if (i === files.length - 1) {
                 if (lastImportedShape) {
-                    cascadeViewport.updateShape(lastImportedShape, GUIState["MeshRes"]);
+                    threejsViewport.updateShape(lastImportedShape, GUIState["MeshRes"]);
                 }
             }
             consoleGolden.setState(extFiles);
