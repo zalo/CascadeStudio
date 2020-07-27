@@ -81,7 +81,7 @@ function Extrude(face: oc.TopoDS_Shape, direction: Number[], keepFace?: Boolean)
  * 
  * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)
 */
-function Slider(name: String, defaultValue: Number, min: Number, max: Number, callback?: CallableFunction, realTime?:Boolean): Number;
+function Slider(name: String, defaultValue: Number, min: Number, max: Number, realTime?:Boolean, callback?: CallableFunction): Number;
 /** Creates a button that will trigger `callback` when clicked.
  * @example```Button("Yell", ()=>{ console.log("Help!  I've been clicked!"); });```
 */

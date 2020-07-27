@@ -187,7 +187,7 @@ function Extrude(face, direction, keepFace = false) {
   return extruded;
 }
 
-function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, callback = monacoEditor.evaluateCode, realTime=false) {
+function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false, callback = monacoEditor.evaluateCode) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   GUIState[name + "Range"] = [min, max];
   guiPanel.addSlider(GUIState, name, name + 'Range', { onFinish: () => { callback(); }, onChange: () => { if (realTime) { callback(); } } });
