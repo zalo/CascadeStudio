@@ -148,21 +148,23 @@ var Environment = function (goldenContainer) {
             geometry.faces         = triangles;
         let currentFace = new THREE.Mesh(geometry, new THREE.MeshMatcapMaterial(
           { color: new THREE.Color(0xeeeeee), matcap: this.matcap }));
-            currentFace.castShadow = true;
+        currentFace.castShadow = true;
+        currentFace.shapeIndex = face.face_index;
         this.mainObject.add(currentFace);
       });
 
       // Draw Edges of Object
       edgelist.forEach((edge)=>{
         let vertices = [];
-        for (let i = 0; i < edge.length; i += 3) {
-          vertices.push(new THREE.Vector3(edge[i    ],
-                                          edge[i + 1],
-                                          edge[i + 2]));
+        for (let i = 0; i < edge.vertex_coord.length; i += 3) {
+          vertices.push(new THREE.Vector3(edge.vertex_coord[i    ],
+                                          edge.vertex_coord[i + 1],
+                                          edge.vertex_coord[i + 2]));
         }
         let linegeometry = new THREE.BufferGeometry().setFromPoints( vertices );
         let linematerial = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 5 } );
-        let line         = new THREE.Line( linegeometry, linematerial );
+        let line = new THREE.Line(linegeometry, linematerial);
+        line.shapeIndex = edge.edge_index;
         this.mainObject.add(line);
       });
 
@@ -226,9 +228,15 @@ var Environment = function (goldenContainer) {
             this.highlightedObj.currentHex = this.highlightedObj.material.color.getHex();
             this.highlightedObj.material.color.setHex(0xffffff);
           }
+          if (this.highlightedObj.hasOwnProperty("shapeIndex")) {
+            let is_line = "computeLineDistances" in this.highlightedObj;
+            let indexHelper = (is_line ? "Edge" : "Face")+ " Index: " + this.highlightedObj.shapeIndex;
+            this.goldenContainer.getElement().get(0).title = indexHelper;
+          }
         } else {
           if (this.highlightedObj) this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
           this.highlightedObj = null;
+          this.goldenContainer.getElement().get(0).title = "";
         }
       }
 

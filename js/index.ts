@@ -115,7 +115,7 @@ function Scale(scale: Number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
 function Scale(scale: Number, shapes: oc.TopoDS_Shape[]): oc.TopoDS_Shape[];
 
 /** Iterate over all the faces in this shape, calling `callback` on each one. */
-function ForEachFace(shape: oc.TopoDS_Shape, callback: (face: oc.TopoDS_Shape) => void): void;
+function ForEachFace(shape: oc.TopoDS_Shape, callback: (index: Number, face: oc.TopoDS_Shape) => void): void;
 /** Iterate over all the wires in this shape, calling `callback` on each one. */
 function ForEachWire(shape: oc.TopoDS_Shape, callback: (wire: oc.TopoDS_Shape) => void): void;
 /** Iterate over all the UNIQUE indices and edges in this shape, calling `callback` on each one. */
@@ -123,6 +123,6 @@ function ForEachEdge(shape: oc.TopoDS_Shape, callback: (index: Number, edge: oc.
 /** Iterate over all the vertices in this shape, calling `callback` on each one. */
 function ForEachVertex(shape: oc.TopoDS_Shape, callback: (vertex: oc.TopoDS_Shape) => void): void;
 /** Attempt to Fillet all selected edges on this shape with a radius. 
- * Use the EdgeSelector callback to control which edges to apply the fillet to. 
- * @example ```FilletEdges(shape, 1, (index) => {return [0,1,2,7].includes(index);});``` @beta */
+ * Hover over the edges you'd like to select and use those indices as shown below:
+ * ```FilletEdges(shape, 1, (index) => {return [0,1,2,7].includes(index);});``` */
 function FilletEdges(shape: oc.TopoDS_Shape, radius : Number, edgeSelector?: (index:Number, edge:oc.TopoDS_Shape) => void): oc.TopoDS_Shape;

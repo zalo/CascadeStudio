@@ -13,7 +13,7 @@ const openCascadeHelper = {
       let fullShapeEdgeHashes2 = {};
 
       // Iterate through the faces and triangulate each one
-      ForEachFace(shape, (myFace) => {
+      ForEachFace(shape, (faceIndex, myFace) => {
         const aLocation = new oc.TopLoc_Location();
         const myT = oc.BRep_Tool.prototype.Triangulation(myFace, aLocation);
         if (myT.IsNull()) { console.error("Encountered Null Face!"); return; }
@@ -23,6 +23,7 @@ const openCascadeHelper = {
           normal_coord: [],
           tri_indexes: [],
           number_of_triangles: 0,
+          face_index: faceIndex
         };
 
         const pc = new oc.Poly_Connect(myT);
@@ -75,6 +76,7 @@ const openCascadeHelper = {
         facelist.push(this_face);
 
         ForEachEdge(myFace, (index, myEdge) => {
+          // Hrm, if I could get this working, then the outlines would line up!
           /*const myP = oc.BRep_Tool.prototype.PolygonOnTriangulation(myEdge, myT.get(), aLocation);
           let edgeNodes = myP.get().Nodes();
           // write vertex buffer
@@ -92,18 +94,24 @@ const openCascadeHelper = {
             const adaptorCurve = new oc.BRepAdaptor_Curve(myEdge);
             const tangDef = new oc.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.5);
   
+            const this_edge = {
+              vertex_coord: [],
+              edge_index: -1
+            };
+
             // write vertex buffer
-            let this_edge = new Array(tangDef.NbPoints() * 3);
+            this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
             for (let i = 0; i < tangDef.NbPoints(); i++) {
               const p = tangDef.Value(i + 1).Transformed(aLocation.Transformation());
-              this_edge[(i * 3) + 0] = p.X();
-              this_edge[(i * 3) + 1] = p.Y();
-              this_edge[(i * 3) + 2] = (p.Z() > 1000.0 || p.Z() < -1000) ? 0 : p.Z();
+              this_edge.vertex_coord[(i * 3) + 0] = p.X();
+              this_edge.vertex_coord[(i * 3) + 1] = p.Y();
+              this_edge.vertex_coord[(i * 3) + 2] = p.Z();
               //console.log("Vertex: " + p.X() +", "+ p.Y() +", "+ p.Z());
             }
-  
+
+            this_edge.edge_index = fullShapeEdgeHashes[edgeHash];
             fullShapeEdgeHashes2[edgeHash] = edgeHash;
-  
+
             edgeList.push(this_edge);
           }
         });

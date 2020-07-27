@@ -124,6 +124,7 @@ function initialize(opencascade) {
                     extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/js/index.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
+                    monacoEditor.evaluateCode();
                 });
             }).catch(error => console.log(error.message));
 
@@ -173,13 +174,12 @@ function initialize(opencascade) {
             // Allow F5 to refresh the model
             document.onkeydown = function (e) {
                 if ((e.which || e.keyCode) == 116) {
+                    e.preventDefault();
                     monacoEditor.evaluateCode();
                     return false;
                 }
                 return true;  
             };
-
-            monacoEditor.evaluateCode();
         }, 300);
     });
 
