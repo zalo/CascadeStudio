@@ -14,7 +14,7 @@ const openCascadeHelper = {
 
       // Iterate through the faces and triangulate each one
       ForEachFace(shape, (faceIndex, myFace) => {
-        const aLocation = new oc.TopLoc_Location();
+        let aLocation = new oc.TopLoc_Location();
         const myT = oc.BRep_Tool.prototype.Triangulation(myFace, aLocation);
         if (myT.IsNull()) { console.error("Encountered Null Face!"); return; }
 
@@ -76,37 +76,23 @@ const openCascadeHelper = {
         facelist.push(this_face);
 
         ForEachEdge(myFace, (index, myEdge) => {
-          // Hrm, if I could get this working, then the outlines would line up!
-          /*const myP = oc.BRep_Tool.prototype.PolygonOnTriangulation(myEdge, myT.get(), aLocation);
-          let edgeNodes = myP.get().Nodes();
-          // write vertex buffer
-          let this_edge = new Array(edgeNodes.Length() * 3);
-          console.log(edgeNodes.Length());
-          for(let j = 0; j < edgeNodes.Length(); j++) {
-            let vertexIndex = edgeNodes.Value(j);
-            this_edge[(j * 3) + 0] = this_face.vertex_coord[((vertexIndex-1) * 3) + 0];
-            this_edge[(j * 3) + 1] = this_face.vertex_coord[((vertexIndex-1) * 3) + 1];
-            this_edge[(j * 3) + 2] = this_face.vertex_coord[((vertexIndex-1) * 3) + 2];
-          }*/
           let edgeHash = myEdge.HashCode(100000000);
-          if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {//myEdge.Orientation() === 0) {
-            const aLocation = new oc.TopLoc_Location();
-            const adaptorCurve = new oc.BRepAdaptor_Curve(myEdge);
-            const tangDef = new oc.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.5);
-  
+          if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
             const this_edge = {
               vertex_coord: [],
               edge_index: -1
             };
 
+            const myP = oc.BRep_Tool.prototype.PolygonOnTriangulation(myEdge, myT, aLocation);
+            let edgeNodes = myP.get().Nodes();
+
             // write vertex buffer
-            this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
-            for (let i = 0; i < tangDef.NbPoints(); i++) {
-              const p = tangDef.Value(i + 1).Transformed(aLocation.Transformation());
-              this_edge.vertex_coord[(i * 3) + 0] = p.X();
-              this_edge.vertex_coord[(i * 3) + 1] = p.Y();
-              this_edge.vertex_coord[(i * 3) + 2] = p.Z();
-              //console.log("Vertex: " + p.X() +", "+ p.Y() +", "+ p.Z());
+            this_edge.vertex_coord = new Array(edgeNodes.Length() * 3);
+            for(let j = 0; j < edgeNodes.Length(); j++) {
+              let vertexIndex = edgeNodes.Value(j+1);
+              this_edge.vertex_coord[(j * 3) + 0] = this_face.vertex_coord[((vertexIndex-1) * 3) + 0];
+              this_edge.vertex_coord[(j * 3) + 1] = this_face.vertex_coord[((vertexIndex-1) * 3) + 1];
+              this_edge.vertex_coord[(j * 3) + 2] = this_face.vertex_coord[((vertexIndex-1) * 3) + 2];
             }
 
             this_edge.edge_index = fullShapeEdgeHashes[edgeHash];
