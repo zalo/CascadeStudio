@@ -162,7 +162,7 @@ var Environment = function (goldenContainer) {
                                           edge.vertex_coord[i + 2]));
         }
         let linegeometry = new THREE.BufferGeometry().setFromPoints( vertices );
-        let linematerial = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 5 } );
+        let linematerial = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 2.5 } );
         let line = new THREE.Line(linegeometry, linematerial);
         line.shapeIndex = edge.edge_index;
         this.mainObject.add(line);
