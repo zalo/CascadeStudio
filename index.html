@@ -18,24 +18,6 @@
         <script type="text/javascript" src="./node_modules/golden-layout/dist/goldenlayout.min.js"></script>
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-base.css" />
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-dark-theme.css" />
-
-        <!-- Import OpenCascade.js-->
-        <script type="text/javascript" src="./node_modules/opencascade.js/dist/opencascade.wasm.js"></script>
-        <script>
-            const initOpenCascade = () => {
-                return new opencascade({
-                    locateFile(path) {
-                        if(path.endsWith('.wasm')) {
-                            return "./node_modules/opencascade.js/dist/opencascade.wasm.wasm";
-                        }
-                        return path;
-                    }
-                });
-            };
-        </script>
-        <script type="text/javascript" src="./js/CascadeStudioStandardLibrary.js"></script>
-        <script type="text/javascript" src="./js/openCascadeHelper.js"></script>
-        <script type="text/javascript" src="./js/CascadeView.js"></script>
         <style>/* Add a black background color to the top navigation */
             .topnav {
               background-color: #111;
@@ -63,12 +45,35 @@
             .topnav a.active, label.active {
               background-color: #4CAF50;
               color: white;
-            }</style>
+            }
+        </style>
+
+        <script type="text/javascript" src="./js/rawdeflate.js"></script>
+        <script type="text/javascript" src="./js/rawinflate.js"></script>
+        <script type="text/javascript" src="./js/CascadeStudioStandardLibrary.js"></script>
+        <script type="text/javascript" src="./js/openCascadeHelper.js"></script>
+        <script type="text/javascript" src="./js/CascadeView.js"></script>
+
+        <!-- Import OpenCascade.js-->
+        <script type="text/javascript" src="./node_modules/opencascade.js/dist/opencascade.wasm.js"></script>
+        <script>
+            const initOpenCascade = () => {
+                return new opencascade({
+                    locateFile(path) {
+                        if(path.endsWith('.wasm')) {
+                            return "./node_modules/opencascade.js/dist/opencascade.wasm.wasm";
+                        }
+                        return path;
+                    }
+                });
+            };
+        </script>
     </head>
 
     <body onload="initOpenCascade().then((openCascade) => initialize(openCascade));" style="margin:0px;">
             <div class="topnav">
                 <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.3</a>
+                <a href="#" id="main-proj-button" title="Sets this project to save in local storage." onmouseup="makeMainProject();">Make Main Project</a>
                 <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
                 <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="loadProject();"/>
                 <label for="project-file" title="Load Project from .json">Load Project</label>
@@ -78,7 +83,7 @@
                 <input id="step-file" name="step-file" type="file" accept=".iges,.step,.igs,.stp" style="display:none;" oninput="loadSTEPorIGES();"/> <!--multiple-->
                 <label for="step-file" title="Import STEP from File">Import STEP/IGES</label>
                 <a href="#" title="Clears the external step/iges files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
-                <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear();">Reset Project</a>
+                <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear(); window.history.replaceState({}, 'Cascade Studio','?');">Reset Project</a>
             </div>
             <div id="appbody" style="height:auto">
                 <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">

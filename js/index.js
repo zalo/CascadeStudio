@@ -1,7 +1,7 @@
 var myLayout, monacoEditor,
     threejsViewport, consoleContainer, consoleGolden, gui,
     guiPanel, GUIState, count = 0, focused = true,
-    oc = null, externalShapes = {}, sceneShapes = [];
+    oc = null, externalShapes = {}, sceneShapes = [], mainProject = false;
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -27,9 +27,20 @@ Translate([0, 0, 50], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
 function initialize(opencascade) {
     oc = opencascade;
 
+    this.searchParams = new URLSearchParams(window.location.search);
+
     // Set up the Windowing System  ---------------------------------------
     let loadedState = window.localStorage.getItem('studioState-0.0.3');
-    if (loadedState === null) {
+    if (loadedState === null || this.searchParams.has("code")) {
+        let codeStr = starterCode;
+        GUIState = {};
+        if (this.searchParams.has("code")) {
+            codeStr = decode(this.searchParams.get("code"));
+            GUIState = JSON.parse(decode(this.searchParams.get("gui")));
+            mainProject = false;
+        } else { makeMainProject(); }
+        mainProject = !this.searchParams.has("code");
+
         myLayout = new GoldenLayout( {
             content: [{
                 type: 'row',
@@ -37,7 +48,7 @@ function initialize(opencascade) {
                     type: 'component',
                     componentName: 'codeEditor',
                     title:'Code Editor',
-                    componentState: { code: starterCode },
+                    componentState: { code: codeStr },
                     width: 50.0,
                     isClosable: false
                 },{
@@ -46,7 +57,7 @@ function initialize(opencascade) {
                         type: 'component',
                         componentName: 'cascadeView',
                         title:'CAD View',
-                        componentState: { },
+                        componentState: GUIState,
                         isClosable: false
                     },{
                         type: 'component',
@@ -70,7 +81,7 @@ function initialize(opencascade) {
 
     // Set up saving code changes to the localStorage
     myLayout.on('stateChanged', function () {
-        if (myLayout.toConfig() !== null) {
+        if (myLayout.toConfig() !== null && mainProject) {
             window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
         }
     });
@@ -138,7 +149,7 @@ function initialize(opencascade) {
             });
 
             // Refresh the code once every couple seconds if necessary
-            monacoEditor.evaluateCode = () => {
+            monacoEditor.evaluateCode = (saveToURL = false) => {
                 // Refresh these every so often to ensure we're always getting intellisense
                 monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
 
@@ -149,7 +160,7 @@ function initialize(opencascade) {
 
                 gui.clearPanels();
                 guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
-                    .addButton('Evaluate', () => { monacoEditor.evaluateCode(); });
+                    .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
                 Slider("MeshRes", 0.1, 0.01, 1);
 
                 sceneShapes = [];
@@ -165,8 +176,16 @@ function initialize(opencascade) {
                     });
                     threejsViewport.updateShape(scene, GUIState["MeshRes"]);
 
-                    container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
-                    console.log("Generation Complete! Model Checkpoint Saved...");
+                    if (mainProject && saveToURL) {
+                        container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
+                        console.log("Generation Complete! Saved to local storage and URL!");
+                    } else {
+                        console.log("Generation Complete!" + (saveToURL?" Saved to URL!": ""));
+                    }
+                    if (saveToURL) {
+                        window.history.replaceState({}, 'Cascade Studio',
+                            "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
+                    }
                 } else {
                     console.log("sceneShapes doesn't have any shapes in it!  Nothing was generated!");
                 }
@@ -175,7 +194,7 @@ function initialize(opencascade) {
             document.onkeydown = function (e) {
                 if ((e.which || e.keyCode) == 116) {
                     e.preventDefault();
-                    monacoEditor.evaluateCode();
+                    monacoEditor.evaluateCode(true);
                     return false;
                 }
                 return true;  
@@ -355,4 +374,20 @@ function importSTEPorIGES(fileName, fileText) {
 function clearExternalFiles () {
     externalShapes = {};
     consoleGolden.setState({});
+}
+
+function decode(string) {
+	return RawDeflate.inflate(window.atob(decodeURIComponent(string)));
+}
+
+function encode(string) {
+	return encodeURIComponent(window.btoa(RawDeflate.deflate(string)));
+}
+
+function makeMainProject() {
+    mainProject = true;
+    document.getElementById("main-proj-button").remove();
+    if (myLayout && mainProject) {
+        window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
+    }
 }
