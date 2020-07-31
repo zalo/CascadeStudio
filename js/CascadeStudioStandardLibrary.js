@@ -64,6 +64,14 @@ function BSpline(inPoints, closed = false){
   return new oc.GeomAPI_PointsToBSpline(ptList).Curve();
 }
 
+function ForEachShell(shape, callback) {
+  let shell_index = 0;
+  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SHELL);
+  for (anExplorer.Init(shape, oc.TopAbs_SHELL); anExplorer.More(); anExplorer.Next()) {
+    callback(shell_index++, oc.TopoDS.prototype.Face(anExplorer.Current()));
+  }
+}
+
 function ForEachFace(shape, callback) {
   let face_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_FACE);

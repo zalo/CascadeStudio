@@ -125,6 +125,8 @@ function Scale(scale: number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
 */
 function Scale(scale: number, shapes: oc.TopoDS_Shape[]): oc.TopoDS_Shape[];
 
+/** Iterate over all the shells in this shape, calling `callback` on each one. */
+function ForEachShell(shape: oc.TopoDS_Shape, callback: (index: Number, shell: oc.TopoDS_Shell) => void): void;
 /** Iterate over all the faces in this shape, calling `callback` on each one. */
 function ForEachFace(shape: oc.TopoDS_Shape, callback: (index: number, face: oc.TopoDS_Face) => void): void;
 /** Iterate over all the wires in this shape, calling `callback` on each one. */
