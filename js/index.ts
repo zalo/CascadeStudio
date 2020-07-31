@@ -56,7 +56,12 @@ function Cylinder(radius: Number, height: Number, centered?: Boolean): oc.TopoDS
 function Cone(radius1: Number, radius2: Number, height: Number): oc.TopoDS_Shape;
 /** Creates a polygon from a list of 3-component lists (points) and adds it to `sceneShapes` for rendering. 
  * @example```let triangle = Polygon([[0, 0, 0], [50, 0, 0], [25, 50, 0]]);```*/
-function Polygon(points:Number[][]) : oc.TopoDS_Shape;
+function Polygon(points:Number[][], wire?:Boolean) : oc.TopoDS_Shape;
+/** Creates a bspline from a list of 3-component lists (points). 
+ * This can be converted into an edge -> wire -> face via the respective BRepBuilderAPI functions.
+ * Or used directly with BRepPrimAPI_MakeRevolution()
+ * @example```let bspline = BSpline([[0,0,0], [40, 0, 50], [50, 0, 50]], true);```*/
+function BSpline(points:Number[][], closed?:Boolean) : oc.Handle_Geom_BSplineCurve;
 
 /** Joins a list of shapes into a single solid.
  * The original shapes are removed unless `keepObjects` is true.
