@@ -56,7 +56,12 @@ function Cylinder(radius: number, height: number, centered?: boolean): oc.TopoDS
 function Cone(radius1: number, radius2: number, height: number): oc.TopoDS_Shape;
 /** Creates a polygon from a list of 3-component lists (points) and adds it to `sceneShapes` for rendering. 
  * @example```let triangle = Polygon([[0, 0, 0], [50, 0, 0], [25, 50, 0]]);```*/
-function Polygon(points:number[][]) : oc.TopoDS_Shape;
+function Polygon(points:number[][], wire?:boolean) : oc.TopoDS_Shape;
+/** Creates a bspline from a list of 3-component lists (points). 
+ * This can be converted into an edge -> wire -> face via the respective BRepBuilderAPI functions.
+ * Or used directly with BRepPrimAPI_MakeRevolution()
+ * @example```let bspline = BSpline([[0,0,0], [40, 0, 50], [50, 0, 50]], true);```*/
+function BSpline(points:number[][], closed?:boolean) : oc.Handle_Geom_BSplineCurve;
 
 /** Joins a list of shapes into a single solid.
  * The original shapes are removed unless `keepObjects` is true.
@@ -121,13 +126,13 @@ function Scale(scale: number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
 function Scale(scale: number, shapes: oc.TopoDS_Shape[]): oc.TopoDS_Shape[];
 
 /** Iterate over all the faces in this shape, calling `callback` on each one. */
-function ForEachFace(shape: oc.TopoDS_Shape, callback: (index: number, face: oc.TopoDS_Shape) => void): void;
+function ForEachFace(shape: oc.TopoDS_Shape, callback: (index: number, face: oc.TopoDS_Face) => void): void;
 /** Iterate over all the wires in this shape, calling `callback` on each one. */
-function ForEachWire(shape: oc.TopoDS_Shape, callback: (wire: oc.TopoDS_Shape) => void): void;
+function ForEachWire(shape: oc.TopoDS_Shape, callback: (wire: oc.TopoDS_Wire) => void): void;
 /** Iterate over all the UNIQUE indices and edges in this shape, calling `callback` on each one. */
-function ForEachEdge(shape: oc.TopoDS_Shape, callback: (index: number, edge: oc.TopoDS_Shape) => void): {[edgeHash: number]: number}[];
+function ForEachEdge(shape: oc.TopoDS_Shape, callback: (index: number, edge: oc.TopoDS_Edge) => void): {[edgeHash:number] : Number}[];
 /** Iterate over all the vertices in this shape, calling `callback` on each one. */
-function ForEachVertex(shape: oc.TopoDS_Shape, callback: (vertex: oc.TopoDS_Shape) => void): void;
+function ForEachVertex(shape: oc.TopoDS_Shape, callback: (vertex: oc.TopoDS_Vertex) => void): void;
 /** Attempt to Fillet all selected edges on this shape with a radius. 
  * Hover over the edges you'd like to select and use those indices as shown below:
  * ```FilletEdges(shape, 1, (index) => {return [0,1,2,7].includes(index);});``` */

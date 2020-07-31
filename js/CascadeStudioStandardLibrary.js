@@ -26,27 +26,42 @@ function Cone(radius1, radius2, height) {
   return curCone;
 }
 
-function Polygon(points) {
+function Polygon(points, wire = false) {
   let gpPoints = [];
   for(let ind = 0; ind < points.length; ind++){
     gpPoints.push(new oc.gp_Pnt(points[ind  ][0], points[ind  ][1], points[ind  ][2]));
   }
 
-  let wire = new oc.BRepBuilderAPI_MakeWire();
+  let polygonWire = new oc.BRepBuilderAPI_MakeWire();
   for(let ind = 0; ind < points.length-1; ind++){
     let seg  = new oc.GC_MakeSegment(gpPoints[ind], gpPoints[ind+1]).Value();
     let edge = new oc.BRepBuilderAPI_MakeEdge(seg).Edge();
     let innerWire = new oc.BRepBuilderAPI_MakeWire(edge).Wire();
-    wire.Add(innerWire);
+    polygonWire.Add(innerWire);
   }
   let seg2  = new oc.GC_MakeSegment(gpPoints[points.length-1], gpPoints[0]).Value();
   let edge2 = new oc.BRepBuilderAPI_MakeEdge(seg2).Edge();
   let innerWire2 = new oc.BRepBuilderAPI_MakeWire(edge2).Wire();
-  wire.Add(innerWire2);
+  polygonWire.Add(innerWire2);
+  let finalWire = polygonWire.Wire();
 
-  let polygon = new oc.BRepBuilderAPI_MakeFace(wire.Wire(), true).Face();
+  if (wire) { sceneShapes.push(finalWire); return finalWire; }
+
+  let polygon = new oc.BRepBuilderAPI_MakeFace(polygonWire.Wire(), true).Face();
   sceneShapes.push(polygon);
   return polygon;
+}
+
+function BSpline(inPoints, closed = false){
+  let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed?1:0));
+  for(let pIndex = 1; pIndex <= inPoints.length; pIndex++){
+      ptList.SetValue(pIndex, new oc.gp_Pnt(
+          inPoints[pIndex-1][0], 
+          inPoints[pIndex-1][1], 
+          inPoints[pIndex-1][2]));
+  }
+  if (closed) { ptList.SetValue(inPoints.length + 1, ptList.Value(1)); }
+  return new oc.GeomAPI_PointsToBSpline(ptList).Curve();
 }
 
 function ForEachFace(shape, callback) {

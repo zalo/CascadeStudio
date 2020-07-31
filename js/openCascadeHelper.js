@@ -104,6 +104,34 @@ const openCascadeHelper = {
 
       });
 
+      // Get the free edges that aren't on any triangulated face/surface
+      ForEachEdge(shape, (index, myEdge) => {
+        let edgeHash = myEdge.HashCode(100000000);
+        if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
+          const this_edge = {
+            vertex_coord: [],
+            edge_index: -1
+          };
+
+          let aLocation = new oc.TopLoc_Location();
+          let adaptorCurve = new oc.BRepAdaptor_Curve(myEdge);
+          let tangDef = new oc.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.1);
+
+          // write vertex buffer
+          this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
+          for(let j = 0; j < tangDef.NbPoints(); j++) {
+            let vertex = tangDef.Value(j+1).Transformed(aLocation.Transformation());
+            this_edge.vertex_coord[(j * 3) + 0] = vertex.X();
+            this_edge.vertex_coord[(j * 3) + 1] = vertex.Y();
+            this_edge.vertex_coord[(j * 3) + 2] = vertex.Z();
+          }
+
+          this_edge.edge_index = fullShapeEdgeHashes[edgeHash];
+          fullShapeEdgeHashes2[edgeHash] = edgeHash;
+
+          edgeList.push(this_edge);
+        }
+      });
 
     } catch(err) {
       setTimeout(() => {
