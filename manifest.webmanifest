@@ -1,0 +1,26 @@
+{
+  "name": "Cascade Studio",
+  "short_name": "CascadeStudio",
+  "start_url": ".",
+  "display": "standalone",
+  "description": "A fully integrated Scripted CAD Kernel for the browser.",
+  "related_applications": [{
+    "platform": "github",
+    "url": "https://github.com/zalo/CascadeStudio"
+  }],
+  "icons": [
+    {
+      "src": "/icon/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "theme_color": "#222222",
+  "background_color": "#111111"
+}

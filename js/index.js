@@ -98,43 +98,40 @@ function initialize(opencascade) {
             monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
 
             var extraLibs = [];
+            let prefix = window.location.origin.includes("zalo.github.io") ? "/CascadeStudio" : "";
 
             // Golden Layout Typescript definitions...
-            //fetch("/CascadeStudio/node_modules/golden-layout/index.d.ts").then((response) => {
+            //fetch(prefix+"node_modules/golden-layout/index.d.ts").then((response) => {
             //    response.text().then(function (text) {
-            //        //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts');
-            //        extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/golden-layout/index.d.ts' });
+            //        extraLibs.push({ content: text, filePath: 'file://'+prefix+'/node_modules/golden-layout/index.d.ts' });
             //    });
             //}).catch(error => console.log(error.message));
 
             // Add Symbols from opencascade.js...
-            fetch("/CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
+            fetch(prefix+"/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts');
-                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/opencascade.js/dist/oc.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://'+prefix+'/node_modules/opencascade.js/dist/oc.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Three.js Typescript definitions...
-            fetch("/CascadeStudio/node_modules/three/build/three.d.ts").then((response) => {
+            fetch(prefix+"/node_modules/three/build/three.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/three/build/three.d.ts');
-                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/three/build/three.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://'+prefix+'/node_modules/three/build/three.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Add Symbols from ControlKit.js...
-            //fetch("/CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts").then((response) => {
+            //fetch(prefix+"/node_modules/controlkit/bin/controlkit.d.ts").then((response) => {
             //    response.text().then(function (text) {
-            //        //monaco.languages.typescript.typescriptDefaults.addExtraLib(text, 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts');
-            //        extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/node_modules/controlkit/bin/controlkit.d.ts' });
+            //        extraLibs.push({ content: text, filePath: 'file://'+prefix+'/node_modules/controlkit/bin/controlkit.d.ts' });
             //    });
             //}).catch(error => console.log(error.message));
 
             // Add Symbols from this file...
-            fetch("/CascadeStudio/js/index.ts").then((response) => {
+            fetch(prefix+"/js/index.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file:///CascadeStudio/js/index.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://'+prefix+'/js/index.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                     monacoEditor.evaluateCode();
