@@ -77,7 +77,7 @@ const openCascadeHelper = {
 
         ForEachEdge(myFace, (index, myEdge) => {
           let edgeHash = myEdge.HashCode(100000000);
-          if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
+          if (fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
             const this_edge = {
               vertex_coord: [],
               edge_index: -1
@@ -96,9 +96,10 @@ const openCascadeHelper = {
             }
 
             this_edge.edge_index = fullShapeEdgeHashes[edgeHash];
-            fullShapeEdgeHashes2[edgeHash] = edgeHash;
 
             edgeList.push(this_edge);
+          } else {
+            fullShapeEdgeHashes2[edgeHash] = edgeHash;
           }
         });
 

@@ -223,7 +223,8 @@ function Button(name = "Action", callback = monacoEditor.evaluateCode) {
 
 function Checkbox(name = "Toggle", defaultValue = false, callback = monacoEditor.evaluateCode) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
-  guiPanel.addButton(GUIState, name, { onChange: () => { callback(); } });
+  guiPanel.addCheckbox(GUIState, name, { onChange: () => { callback(); } });
+  return GUIState[name];
 }
 
 // Random Javascript Utilities
