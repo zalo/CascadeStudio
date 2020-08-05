@@ -6,7 +6,7 @@ const openCascadeHelper = {
     const facelist = [], edgeList = [];
     try {
       // Set up the Incremental Mesh builder, with a precision
-      new oc.BRepMesh_IncrementalMesh(shape, maxDeviation);
+      new oc.BRepMesh_IncrementalMesh(shape, maxDeviation, false, maxDeviation * 5);
 
       // Construct the edge hashes to assign proper indices to the edges
       let fullShapeEdgeHashes  = ForEachEdge(shape, (index, edge) => { });

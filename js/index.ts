@@ -66,6 +66,8 @@ function BSpline(points:number[][], closed?:boolean) : oc.Handle_Geom_BSplineCur
  * Note that all the characters share a singular face. 
  * 
  * Defaults: size:36, height:0.15, fontURL: './fonts/Consolas.ttf'
+ * 
+ * Try './fonts/Roboto-Black.ttf' for an alternative typeface.
  * @example```let myText = Text3D("Hello!");```*/
 function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0.15, fontURL?: string = "'./fonts/Consolas.ttf'") : oc.TopoDS_Shape;
 

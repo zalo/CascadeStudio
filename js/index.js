@@ -7,7 +7,7 @@ var myLayout, monacoEditor,
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
 //  Translate(), Rotate(), Scale(), Union(), Difference(), Intersection()
-//  Box(), Sphere(), Cylinder(), Cone(), Polygon(), Extrude(), FilletEdges()
+//  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon(), Extrude(), FilletEdges()
 //  Slider(), Button(), Checkbox()
 
 let holeRadius = Slider("Radius", 30 , 20 , 40);
@@ -163,7 +163,7 @@ function initialize(opencascade) {
                 gui.clearPanels();
                 guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                     .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
-                Slider("MeshRes", 0.1, 0.01, 1);
+                Slider("MeshRes", 0.1, 0.01, 2);
 
                 sceneShapes = [];
                 window.eval(newCode); // Evaluates the code in the editor
