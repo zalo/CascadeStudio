@@ -77,7 +77,7 @@ var Environment = function (goldenContainer) {
 
     this.onWindowResize = function () {
         this.goldenContainer.layoutManager.updateSize(window.innerWidth, window.innerHeight -
-          document.getElementsByClassName('topNav')[0].offsetHeight);
+          document.getElementsByClassName('topnav')[0].offsetHeight);
         this.camera.aspect  = this.goldenContainer.width / this.goldenContainer.height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(this.goldenContainer.width, this.goldenContainer.height);

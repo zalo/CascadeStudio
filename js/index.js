@@ -288,12 +288,12 @@ function initialize(opencascade) {
     document.onblur = window.onblur; document.onfocus = window.onfocus;
     window.onorientationchange = function(event) { 
         myLayout.updateSize(window.innerWidth, window.innerHeight -
-            document.getElementsByClassName('topNav')[0].offsetHeight);
+            document.getElementsByClassName('topnav')[0].offsetHeight);
     };
 
     myLayout.init();
     myLayout.updateSize(window.innerWidth, window.innerHeight -
-        document.getElementsByClassName('topNav')[0].offsetHeight);
+        document.getElementById('topnav').offsetHeight);
 }
 
 opentype.load(curFontURL, function (err, font) { //'./fonts/Roboto-Black.ttf' './fonts/Papyrus.ttf' './fonts/Consolas.ttf'
