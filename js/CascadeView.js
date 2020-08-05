@@ -147,7 +147,13 @@ var Environment = function (goldenContainer) {
             geometry.vertices      = vertices;
             geometry.faces         = triangles;
         let currentFace = new THREE.Mesh(geometry, new THREE.MeshMatcapMaterial(
-          { color: new THREE.Color(0xeeeeee), matcap: this.matcap }));
+          {
+            color: new THREE.Color(0xeeeeee),
+            matcap: this.matcap,
+            polygonOffset: true, // Push the mesh back for line drawing
+            polygonOffsetFactor: 1.0,
+            polygonOffsetUnits: 1.0
+          }));
         currentFace.castShadow = true;
         currentFace.shapeIndex = face.face_index;
         this.mainObject.add(currentFace);
@@ -164,10 +170,7 @@ var Environment = function (goldenContainer) {
         let linegeometry = new THREE.BufferGeometry().setFromPoints( vertices );
         let linematerial = new THREE.LineBasicMaterial({
           color: 0x000000,
-          linewidth: 2.5,
-          polygonOffset: true, // This may be ineffective on lines
-          polygonOffsetFactor: -1.0,
-          polygonOffsetUnits: -4.0
+          linewidth: 2.5
         });
         let line = new THREE.Line(linegeometry, linematerial);
         line.shapeIndex = edge.edge_index;
