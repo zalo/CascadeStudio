@@ -72,11 +72,17 @@ CascadeStudio/
 !node_modules/monaco-editor/min/
 !node_modules/monaco-editor/min/**
 
-# Monaco Editor Scripts
+# JQuery Scripts
 !node_modules/jquery/
 !node_modules/jquery/*/
 !node_modules/jquery/dist/
 !node_modules/jquery/dist/*
+
+# OpenType.js Scripts
+!node_modules/opentype.js/
+!node_modules/opentype.js/*/
+!node_modules/opentype.js/dist/
+!node_modules/opentype.js/dist/*
 
 # ControlKit Bin
 !node_modules/controlkit/

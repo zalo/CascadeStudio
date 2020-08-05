@@ -1,7 +1,8 @@
 var myLayout, monacoEditor,
     threejsViewport, consoleContainer, consoleGolden, gui,
     guiPanel, GUIState, count = 0, focused = true,
-    oc = null, externalShapes = {}, sceneShapes = [], mainProject = false;
+    oc = null, externalShapes = {}, sceneShapes = [], mainProject = false,
+    robotoFont = null, curFontURL = './fonts/Consolas.ttf';
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -18,6 +19,7 @@ let cylinderX  = Rotate([1,0,0], 90, Cylinder(holeRadius, 200, true));
 
 Translate([0, 0, 50], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
 
+Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
@@ -293,6 +295,11 @@ function initialize(opencascade) {
     myLayout.updateSize(window.innerWidth, window.innerHeight -
         document.getElementsByClassName('topNav')[0].offsetHeight);
 }
+
+opentype.load(curFontURL, function (err, font) { //'./fonts/Roboto-Black.ttf' './fonts/Papyrus.ttf' './fonts/Consolas.ttf'
+    if (err) { console.log(err); }
+    robotoFont = font;
+});
 
 function saveProject () {
     let link = document.createElement("a");

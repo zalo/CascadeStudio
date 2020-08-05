@@ -62,6 +62,13 @@ function Polygon(points:number[][], wire?:boolean) : oc.TopoDS_Shape;
  * Or used directly with BRepPrimAPI_MakeRevolution()
  * @example```let bspline = BSpline([[0,0,0], [40, 0, 50], [50, 0, 50]], true);```*/
 function BSpline(points:number[][], closed?:boolean) : oc.Handle_Geom_BSplineCurve;
+/** Creates set of glyph solids from a string and a font-file and adds it to sceneShapes.
+ * Note that all the characters share a singular face. 
+ * 
+ * Defaults: size:36, height:0.15, fontURL: './fonts/Consolas.ttf'
+ * @example```let myText = Text3D("Hello!");```*/
+function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0.15, fontURL?: string = "'./fonts/Consolas.ttf'") : oc.TopoDS_Shape;
+
 
 /** Joins a list of shapes into a single solid.
  * The original shapes are removed unless `keepObjects` is true.
