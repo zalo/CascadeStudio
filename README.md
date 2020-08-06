@@ -1,12 +1,11 @@
 <p align="center">
   <a href="https://zalo.github.io/CascadeStudio/"><img src="https://zalo.github.io/CascadeStudio/icon/CascadeStudioBanner-1257x519.png" href></a>
+
+  ![Github Pages Deployment](https://img.shields.io/github/deployments/zalo/CascadeStudio/github-pages?label=Github%20Pages%20Deployment)
+  ![Vercel Deployment](https://img.shields.io/github/deployments/zalo/CascadeStudio/Production?label=Vercel%20Deployment)
+  ![Last Commit Date](https://img.shields.io/github/last-commit/zalo/CascadeStudio)
+  ![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-brightgreen)
 </p>
-
-![Github Pages Deployment](https://img.shields.io/github/deployments/zalo/CascadeStudio/github-pages?label=Github%20Pages%20Deployment)
-![Vercel Deployment](https://img.shields.io/github/deployments/zalo/CascadeStudio/Production?label=Vercel%20Deployment)
-![Last Commit Date](https://img.shields.io/github/last-commit/zalo/CascadeStudio)
-![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-brightgreen)
-
 
 ## A Full Live-Scripted CAD Kernel and IDE in the Browser.
 
@@ -22,15 +21,15 @@ Save your completed models to .step, .stl. or .obj, or copy the url and share it
   <a href="https://zalo.github.io/CascadeStudio/"><img src="https://zalo.github.io/CascadeStudio/icon/CascadeStudioScreenshot.png" href></a>
 </p>
 
-## Community
+## [Community](https://github.com/zalo/CascadeStudio/issues)
 
 Model code is saved to the URL upon every successful evaluation, so you can copy and paste that link to others to view your model.  Use the "Issues" tab to share your creations and examples, as well as to report bugs and comments.
 
 ## Contributing
 
-Cascade Studio is written entirely as static assets and vanilla javascript, so running it locally is as simple as running a server from the root directory (such as the [VS Code Live Server](https://github.com/ritwickdey/vscode-live-server), [Python live-server](https://pypi.org/project/live-server/), or [Node live-server](https://www.npmjs.com/package/live-server) ).
+Cascade Studio is entirely static assets and vanilla javascript, so running it locally is as simple as running a server from the root directory (such as the [VS Code Live Server](https://github.com/ritwickdey/vscode-live-server), [Python live-server](https://pypi.org/project/live-server/), or [Node live-server](https://www.npmjs.com/package/live-server) ).
 
-Pull Requests to this repo are automatically hosted to Vercel instances, so everyone will be able to test and benefit from your modifications immediately.
+Pull Requests to this repo are automatically hosted to Vercel instances, so other users will be able to test and benefit from your modifications as soon as the PR is submitted.
 
 ## Credits
 
