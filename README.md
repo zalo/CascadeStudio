@@ -1,10 +1,15 @@
 <p align="center">
   <a href="https://zalo.github.io/CascadeStudio/"><img src="https://zalo.github.io/CascadeStudio/icon/CascadeStudioBanner-1257x519.png" href></a>
-
-  ![Github Pages Deployment](https://img.shields.io/github/deployments/zalo/CascadeStudio/github-pages?label=Github%20Pages%20Deployment)
-  ![Vercel Deployment](https://img.shields.io/github/deployments/zalo/CascadeStudio/Production?label=Vercel%20Deployment)
-  ![Last Commit Date](https://img.shields.io/github/last-commit/zalo/CascadeStudio)
-  ![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-brightgreen)
+</p>
+<p align="center">
+  <a href="https://github.com/zalo/CascadeStudio/deployments/activity_log?environment=github-pages">
+      <img src="https://img.shields.io/github/deployments/zalo/CascadeStudio/github-pages?label=Github%20Pages%20Deployment" title="Github Pages Deployment"></a>
+  <a href="https://github.com/zalo/CascadeStudio/deployments/activity_log?environment=Production">
+      <img src="https://img.shields.io/github/deployments/zalo/CascadeStudio/Production?label=Vercel%20Deployment" title="Vercel Deployment"></a>
+  <a href="https://github.com/zalo/CascadeStudio/commits/master">
+      <img src="https://img.shields.io/github/last-commit/zalo/CascadeStudio" title="Last Commit Date"></a>
+  <a href="https://github.com/zalo/CascadeStudio/blob/master/LICENSE">
+      <img src="https://img.shields.io/badge/license-GPL%20v3-brightgreen" title="License: GPL v3"></a>
 </p>
 
 ## A Full Live-Scripted CAD Kernel and IDE in the Browser.
