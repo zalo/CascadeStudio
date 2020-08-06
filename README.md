@@ -1,7 +1,6 @@
 <p align="center">
   <a href="https://zalo.github.io/CascadeStudio/"><img src="https://zalo.github.io/CascadeStudio/icon/CascadeStudioBanner-1257x519.png" href></a>
 </p>
-
 ![Github Pages Deployment](https://img.shields.io/github/deployments/zalo/CascadeStudio/github-pages?label=Github%20Pages%20Deployment)
 ![Vercel Deployment](https://img.shields.io/github/deployments/zalo/CascadeStudio/Production?label=Vercel%20Deployment)
 ![Last Commit Date](https://img.shields.io/github/last-commit/zalo/CascadeStudio)
