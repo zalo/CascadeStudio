@@ -8,15 +8,17 @@ Use code to create 3D Models with features ranging from simple primitives + CSG 
 
 Save your completed models to .step, .stl. or .obj, or copy the url and share it with the community.
 
+## [Examples](https://github.com/zalo/CascadeStudio/issues/5)
+
 ### Screenshot
 
 <p align="center">
   <a href="https://zalo.github.io/CascadeStudio/"><img src="https://zalo.github.io/CascadeStudio/icon/CascadeStudioScreenshot.png" href></a>
 </p>
 
-### [Examples](https://github.com/zalo/CascadeStudio/issues/5)
+### Community
 
-Use the "Issues" tab to share your creations and examples with the community, as well as to report bugs and comments.
+Model code is saved to the URL upon every successful evaluation, so you can copy and paste that link to others to view your model.  Use the "Issues" tab to share your creations and examples, as well as to report bugs and comments.
 
 ### Contributing
 
