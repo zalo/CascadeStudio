@@ -6,6 +6,8 @@
       <img src="https://img.shields.io/github/deployments/zalo/CascadeStudio/github-pages?label=Github%20Pages%20Deployment" title="Github Pages Deployment"></a>
   <a href="https://github.com/zalo/CascadeStudio/deployments/activity_log?environment=Production">
       <img src="https://img.shields.io/github/deployments/zalo/CascadeStudio/Production?label=Vercel%20Deployment" title="Vercel Deployment"></a>
+  <a href="https://lgtm.com/projects/g/zalo/CascadeStudio/context:javascript">
+      <img alt="Language grade: JavaScript" src="https://img.shields.io/lgtm/grade/javascript/g/zalo/CascadeStudio.svg?logo=lgtm&logoWidth=18"/></a>
   <a href="https://github.com/zalo/CascadeStudio/commits/master">
       <img src="https://img.shields.io/github/last-commit/zalo/CascadeStudio" title="Last Commit Date"></a>
   <a href="https://github.com/zalo/CascadeStudio/blob/master/LICENSE">
