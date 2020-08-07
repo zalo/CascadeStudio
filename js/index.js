@@ -27,7 +27,6 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 //function Update(){}
 
 function initialize(opencascade) {
-    console.log("This is a test!");
     oc = opencascade;
 
     this.searchParams = new URLSearchParams(window.location.search);

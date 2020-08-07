@@ -11,7 +11,7 @@ var version = 'v0.0.4.1::';
    then the service worker won't be installed either. */
 var offlineFundamentals = [
   '',
-  //'service-worker.js',
+  'service-worker.js',
   "node_modules/three/build/three.min.js",
   "node_modules/three/examples/js/controls/DragControls.js",
   "node_modules/three/examples/js/controls/OrbitControls.js",
