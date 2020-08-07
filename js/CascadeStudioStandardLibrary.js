@@ -80,27 +80,22 @@ function Text3D(text = "Hello!", size = 36, height = 0.15, fontURL = curFontURL)
   for(let idx = 0; idx < commands.length; idx++) {
       if (commands[idx].type === "M") {
           // Start a new Glyph
-          //console.log(commands[idx]);
           var firstPoint = new oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
-          //let derp = new oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
           var lastPoint = firstPoint;
           var currentWire = new oc.BRepBuilderAPI_MakeWire();
       } else if(commands[idx].type === "Z"){
           // End the current Glyph and Finish the Path
-          //console.log(commands[idx]);
 
           let faceBuilder = null;
           if(textFaces.length > 0){
               faceBuilder = new oc.BRepBuilderAPI_MakeFace(
                   textFaces[textFaces.length-1], currentWire.Wire());
-              //console.log(faceBuilder.Error()); // This always succeeds D:
           }else{
               faceBuilder = new oc.BRepBuilderAPI_MakeFace(currentWire.Wire());
           }
 
           textFaces.push(faceBuilder.Face());
       } else if(commands[idx].type === "L") {
-          //console.log(commands[idx]);
           let nextPoint = new oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
           if(lastPoint.X() === nextPoint.X() && lastPoint.Y() === nextPoint.Y()){ continue; }
           let lineSegment = new oc.GC_MakeSegment(lastPoint, nextPoint).Value();
@@ -108,7 +103,6 @@ function Text3D(text = "Hello!", size = 36, height = 0.15, fontURL = curFontURL)
           currentWire.Add(  new oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
           lastPoint = nextPoint;
       } else if(commands[idx].type === "Q") {
-          //console.log(commands[idx]);
           let controlPoint = new oc.gp_Pnt(commands[idx].x1, commands[idx].y1, 0);
           let nextPoint = new oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
 
@@ -122,7 +116,6 @@ function Text3D(text = "Hello!", size = 36, height = 0.15, fontURL = curFontURL)
 
           lastPoint = nextPoint;
       } else if(commands[idx].type === "C") {
-          //console.log(commands[idx]);
           let controlPoint1 = new oc.gp_Pnt(commands[idx].x1, commands[idx].y1, 0);
           let controlPoint2 = new oc.gp_Pnt(commands[idx].x2, commands[idx].y2, 0);
           let nextPoint = new oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
@@ -147,7 +140,7 @@ function ForEachShell(shape, callback) {
   let shell_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SHELL);
   for (anExplorer.Init(shape, oc.TopAbs_SHELL); anExplorer.More(); anExplorer.Next()) {
-    callback(shell_index++, oc.TopoDS.prototype.Face(anExplorer.Current()));
+    callback(shell_index++, oc.TopoDS.prototype.Shell(anExplorer.Current()));
   }
 }
 
