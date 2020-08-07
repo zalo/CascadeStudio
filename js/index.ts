@@ -9,7 +9,7 @@ var externalShapes: { [filename: string]: oc.TopoDS_Shape };
 
 /** The base generic 3D Rendering Viewport implementation. */
 interface Environment {
-    constructor(goldenContainer: any);
+    //constructor(goldenContainer: any);
 
     time      : THREE.Clock;
     lastTimeRendered : number;
@@ -26,7 +26,7 @@ interface Environment {
 
 /** The Cascade Studio specific 3D Rendering Viewport; mainOnbject contains all the faces and edges. */
 interface CascadeEnvironment {
-    constructor(goldenContainer: any);
+    //constructor(goldenContainer: any);
 
     environment    : Environment;
     updating       : boolean;

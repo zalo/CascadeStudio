@@ -41,12 +41,12 @@ var zip_HASH_BITS = 13;
 // for BIG_MEM
 // var zip_LIT_BUFSIZE = 0x8000;
 // var zip_HASH_BITS = 15;
-if(zip_LIT_BUFSIZE > zip_INBUFSIZ)
-    alert("error: zip_INBUFSIZ is too small");
+//if(zip_LIT_BUFSIZE > zip_INBUFSIZ)
+//    alert("error: zip_INBUFSIZ is too small");
 if((zip_WSIZE<<1) > (1<<zip_BITS))
     alert("error: zip_WSIZE is too large");
-if(zip_HASH_BITS > zip_BITS-1)
-    alert("error: zip_HASH_BITS is too large");
+//if(zip_HASH_BITS > zip_BITS-1)
+//    alert("error: zip_HASH_BITS is too large");
 if(zip_HASH_BITS < 8 || zip_MAX_MATCH != 258)
     alert("error: Code too clever");
 var zip_DIST_BUFSIZE = zip_LIT_BUFSIZE;
@@ -240,7 +240,7 @@ var zip_deflate_start = function(level) {
     zip_flag_buf = new Array(parseInt(zip_LIT_BUFSIZE / 8));
 }
 
-var zip_deflate_end = function() {
+/*var zip_deflate_end = function() {
     zip_free_queue = zip_qhead = zip_qtail = null;
     zip_outbuf = null;
     zip_window = null;
@@ -263,7 +263,7 @@ var zip_deflate_end = function() {
     zip_base_length = null;
     zip_base_dist = null;
     zip_flag_buf = null;
-}
+}*/
 
 var zip_reuse_queue = function(p) {
     p.next = zip_free_queue;

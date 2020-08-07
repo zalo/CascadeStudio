@@ -19,21 +19,21 @@
 /* constant parameters */
 var zip_WSIZE = 32768;		// Sliding Window size
 var zip_STORED_BLOCK = 0;
-var zip_STATIC_TREES = 1;
-var zip_DYN_TREES    = 2;
+//var zip_STATIC_TREES = 1;
+//var zip_DYN_TREES    = 2;
 
 /* for inflate */
 var zip_lbits = 9; 		// bits in base literal/length lookup table
 var zip_dbits = 6; 		// bits in base distance lookup table
-var zip_INBUFSIZ = 32768;	// Input buffer size
-var zip_INBUF_EXTRA = 64;	// Extra buffer
+//var zip_INBUFSIZ = 32768;	// Input buffer size
+//var zip_INBUF_EXTRA = 64;	// Extra buffer
 
 /* variables (inflate) */
 var zip_slide;
 var zip_wp;			// current position in slide
 var zip_fixed_tl = null;	// inflate static
 var zip_fixed_td;		// inflate static
-var zip_fixed_bl, fixed_bd;	// inflate static
+var zip_fixed_bl;//, fixed_bd;	// inflate static
 var zip_bit_buf;		// bit buffer
 var zip_bit_len;		// bits in bit buffer
 var zip_method;
@@ -628,7 +628,7 @@ var zip_inflate_dynamic = function(buff, off, size) {
 }
 
 var zip_inflate_start = function() {
-    var i;
+    //var i;
 
     if(zip_slide == null)
 	zip_slide = new Array(2 * zip_WSIZE);
