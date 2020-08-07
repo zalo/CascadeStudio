@@ -16,7 +16,7 @@
         <!--<meta http-equiv="CACHE-CONTROL" CONTENT="NO-CACHE">
         <meta http-equiv="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">-->
 
-        <script type="text/javascript" src="./node_modules/three/build/three.js"></script>
+        <script type="text/javascript" src="./node_modules/three/build/three.min.js"></script>
         <script type="text/javascript" src="./node_modules/three/examples/js/controls/DragControls.js"></script>
         <script type="text/javascript" src="./node_modules/three/examples/js/controls/OrbitControls.js"></script>
         <script type="text/javascript" src="./node_modules/three/examples/js/exporters/STLExporter.js"></script>
@@ -79,11 +79,24 @@
                 });
             };
         </script>
+
+        <script>
+            // Install Cascade Studio as a Progressive Web App for Offline Access
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('service-worker.js').then(function(registration) {
+                    registration.update(); // Always update the registration for the latest assets
+                }, function() {
+                    console.log('Could not register Cascade Studio for offline use!');
+                });
+            } else {
+                console.log('Browser does not support offline access!');
+            }
+        </script>
     </head>
 
     <body onload="initOpenCascade().then((openCascade) => initialize(openCascade));" style="margin:0px;">
             <div id="topnav" class="topnav">
-                <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.3</a>
+                <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.4</a>
                 <a href="#" id="main-proj-button" title="Sets this project to save in local storage." onmouseup="makeMainProject();">Make Main Project</a>
                 <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
                 <label for="project-file" title="Load Project from .json">Load Project
