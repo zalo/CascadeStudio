@@ -71,6 +71,8 @@ CascadeStudio/
 !node_modules/monaco-editor/*
 !node_modules/monaco-editor/min/
 !node_modules/monaco-editor/min/**
+!node_modules/monaco-editor/min-maps/
+!node_modules/monaco-editor/min-maps/**
 
 # JQuery Scripts
 !node_modules/jquery/

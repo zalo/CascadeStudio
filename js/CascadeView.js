@@ -51,7 +51,7 @@ var Environment = function (goldenContainer) {
       let parentHeight = this.goldenContainer.height;
       this.renderer.setSize(parentWidth, parentHeight);
       this.renderer.shadowMap.enabled = true;
-      this.renderer.shadowMapType = THREE.PCFSoftShadowMap;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       this.camera.aspect = parentWidth / parentHeight;
       this.camera.updateProjectionMatrix();
 

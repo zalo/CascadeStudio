@@ -90,7 +90,7 @@ function initialize(opencascade) {
 
     // Set up the Monaco Code Editor
     myLayout.registerComponent('codeEditor', function (container, state) {
-        setTimeout(() => {
+        myLayout.on("initialised", () => {
             monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
                 allowNonTsExtensions: true,
                 moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
@@ -198,21 +198,21 @@ function initialize(opencascade) {
                 }
                 return true;  
             };
-        }, 300);
+        });
     });
 
     // Set up the 3D Viewport into the CAD Model
     myLayout.registerComponent('cascadeView', function(container, state){
         GUIState = state;
         container.setState(GUIState);
-        setTimeout(()=> { 
+        myLayout.on("initialised", () => {
             let floatingGUIContainer = document.createElement("div");
             floatingGUIContainer.style.position = 'absolute';
             floatingGUIContainer.id = "threejsViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
             gui             = new ControlKit({parentDomElementId: "threejsViewportContainer"});
             threejsViewport = new CascadeEnvironment(container, oc); 
-        }, 100);
+        });
     });
 
     // Set up the Error and Status Reporting Console
@@ -279,7 +279,7 @@ function initialize(opencascade) {
     });
 
     // Doesn't get triggered in time to do any good
-    window.onbeforeunload = function () {}
+    //window.onbeforeunload = function () {}
     window.onblur   = function (){ focused = false; }
     window.onfocus  = function (){ focused = true;  }
     document.onblur = window.onblur; document.onfocus = window.onfocus;
