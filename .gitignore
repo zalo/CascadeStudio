@@ -80,6 +80,10 @@ CascadeStudio/
 !node_modules/jquery/dist/
 !node_modules/jquery/dist/*
 
+# Raw Inflate and Deflate
+!node_modules/rawflate/
+!node_modules/rawflate/*
+
 # OpenType.js Scripts
 !node_modules/opentype.js/
 !node_modules/opentype.js/*/
