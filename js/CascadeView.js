@@ -230,7 +230,7 @@ var Environment = function (goldenContainer) {
       if (this.mainObject) {
         this.raycaster.setFromCamera(this.mouse, this.environment.camera);
         let intersects = this.raycaster.intersectObjects(this.mainObject.children);
-        if (intersects.length > 0) {
+        if (this.environment.controls.state < 0 && intersects.length > 0) {
           if (this.highlightedObj != intersects[0].object) {
             if (this.highlightedObj) this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
             this.highlightedObj = intersects[0].object;
