@@ -11,7 +11,7 @@ var version = 'v0.0.4.1::';
    then the service worker won't be installed either. */
 var offlineFundamentals = [
   '',
-  //'index.html',
+  //'service-worker.js',
   "node_modules/three/build/three.min.js",
   "node_modules/three/examples/js/controls/DragControls.js",
   "node_modules/three/examples/js/controls/OrbitControls.js",
@@ -34,6 +34,8 @@ var offlineFundamentals = [
   "node_modules/monaco-editor/min/vs/loader.js",
   "node_modules/monaco-editor/min/vs/editor/editor.main.nls.js",
   "node_modules/monaco-editor/min/vs/editor/editor.main.js",
+  "node_modules/monaco-editor/min/vs/basic-languages/javascript/javascript.js",
+  "node_modules/monaco-editor/min/vs/basic-languages/typescript/typescript.js",
   "js/index.js",
   "node_modules/opencascade.js/dist/oc.d.ts",
   "node_modules/three/build/three.d.ts",
