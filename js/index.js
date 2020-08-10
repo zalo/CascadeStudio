@@ -378,15 +378,15 @@ function importSTEPorIGES(fileName, fileText) {
       reader = new oc.IGESControl_Reader();
     } else { console.error("opencascade.js can't parse this extension! (yet)"); }
 
-    const readResult = reader.ReadFile(fileName);            // Read the file
+    let readResult = reader.ReadFile(fileName);            // Read the file
     if (readResult === 1) {
       console.log(fileName + " loaded successfully!     Converting to OCC now...");
-      const numRootsTransferred = reader.TransferRoots();    // Translate all transferable roots to OpenCascade
-      const stepShape           = reader.OneShape();         // Obtain the results of translation in one OCCT shape
+      let numRootsTransferred = reader.TransferRoots();    // Translate all transferable roots to OpenCascade
+      let stepShape           = reader.OneShape();         // Obtain the results of translation in one OCCT shape
       
       // Add to the externalShapes dictionary
-      externalShapes[fileName] = stepShape;
-      console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to see it!");
+      externalShapes[fileName] = new oc.TopoDS_Shape(stepShape);
+      console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to add it to the scene!");
       
       // Remove the file when we're done (otherwise we run into errors on reupload)
       oc.FS.unlink("/" + fileName);
