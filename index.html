@@ -105,8 +105,11 @@
                 <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
                 <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
                 <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
-                <label for="step-file" title="Import STEP from File">Import STEP/IGES
+                <label for="step-file" title="Import STEP or IGES from File">Import STEP/IGES
                     <input id="step-file" name="step-file" type="file" accept=".iges,.step,.igs,.stp" style="display:none;" oninput="loadSTEPorIGES();"/> <!--multiple-->
+                </label>
+                <label for="stl-file" title="Import (Small, ASCII) STL from File">Import STL
+                    <input id="stl-file" name="stl-file" type="file" accept=".stl" style="display:none;" oninput="loadSTL();"/> <!--multiple-->
                 </label>
                 <a href="#" title="Clears the external step/iges files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
                 <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear(); window.history.replaceState({}, 'Cascade Studio','?');">Reset Project</a>

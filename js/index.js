@@ -274,7 +274,11 @@ function initialize(opencascade) {
         // Reimport any imported STEP/IGES Files
         let prexistingExternalFiles = consoleGolden.getState();
         for (let key in prexistingExternalFiles) {
-            importSTEPorIGES(key, prexistingExternalFiles[key].content);
+            if (key.includes(".stl")) {
+                importSTL(key, prexistingExternalFiles[key].content);
+            } else {
+                importSTEPorIGES(key, prexistingExternalFiles[key].content);
+            }
         }; 
     });
 
@@ -342,12 +346,32 @@ function loadSTEPorIGES() {
     };
 }
 
+function loadSTL() {
+    let extFiles = {};
+    let files = document.getElementById("stl-file").files;
+    for (let i = 0; i < files.length; i++) {
+        var lastImportedShape = null;
+        loadFileAsync(files[i]).then(async (fileText) => {
+            const fileName = files[i].name;
+            lastImportedShape = importSTL(fileName, fileText);
+            extFiles[fileName] = { content: fileText };
+        }).then(async () => {
+            if (i === files.length - 1) {
+                if (lastImportedShape) {
+                    threejsViewport.updateShape(lastImportedShape, GUIState["MeshRes"]);
+                }
+            }
+            consoleGolden.setState(extFiles);
+        });
+    };
+}
+
 function importSTEPorIGES(fileName, fileText) {
     // Writes the uploaded file to Emscripten's Virtual Filesystem
     oc.FS.createDataFile("/", fileName, fileText, true, true);
 
     // Choose the correct OpenCascade file parsers to read the CAD file
-    var reader = null, fileType = false;
+    var reader = null;
     if (fileName.endsWith(".step") || fileName.endsWith(".stp")) {
       reader = new oc.STEPControl_Reader();
     } else if (fileName.endsWith(".iges") || fileName.endsWith(".igs")) {
@@ -370,6 +394,32 @@ function importSTEPorIGES(fileName, fileText) {
       return externalShapes[fileName];
     } else {
       console.error("Something in OCCT went wrong trying to read " + fileName);
+      return null;
+    }
+}
+
+function importSTL(fileName, fileText) {
+    // Writes the uploaded file to Emscripten's Virtual Filesystem
+    oc.FS.createDataFile("/", fileName, fileText, true, true);
+
+    // Choose the correct OpenCascade file parsers to read the STL file
+    var reader    = new oc.StlAPI_Reader();
+    let readShape = new oc.TopoDS_Shape();
+
+    if (reader.Read(readShape, fileName)) {
+      console.log(fileName + " loaded successfully!     Converting to OCC now...");
+      
+      // Add to the externalShapes dictionary
+      externalShapes[fileName] = readShape;
+      console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to see it!");
+      
+      // Remove the file when we're done (otherwise we run into errors on reupload)
+      oc.FS.unlink("/" + fileName);
+      
+      return externalShapes[fileName];
+    } else {
+        console.log("Something in OCCT went wrong trying to read " + fileName + ".  \n"+
+      "Cascade Studio only imports small ASCII stl files for now!");
       return null;
     }
 }
