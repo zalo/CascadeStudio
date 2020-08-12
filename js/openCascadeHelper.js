@@ -2,14 +2,13 @@ const openCascadeHelper = {
   setOpenCascade (openCascade) {
     oc = openCascade;
   },
-  tessellate (shape, maxDeviation) {
+  tessellate (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
     const facelist = [], edgeList = [];
     try {
       // Set up the Incremental Mesh builder, with a precision
       new oc.BRepMesh_IncrementalMesh(shape, maxDeviation, false, maxDeviation * 5);
 
       // Construct the edge hashes to assign proper indices to the edges
-      let fullShapeEdgeHashes  = ForEachEdge(shape, (index, edge) => { });
       let fullShapeEdgeHashes2 = {};
 
       // Iterate through the faces and triangulate each one
@@ -23,7 +22,7 @@ const openCascadeHelper = {
           normal_coord: [],
           tri_indexes: [],
           number_of_triangles: 0,
-          face_index: faceIndex
+          face_index: fullShapeFaceHashes[myFace.HashCode(100000000)]
         };
 
         const pc = new oc.Poly_Connect(myT);

@@ -2,7 +2,7 @@ var myLayout, monacoEditor,
     threejsViewport, consoleContainer, consoleGolden, gui,
     guiPanel, GUIState, count = 0, focused = true,
     oc = null, externalShapes = {}, sceneShapes = [], mainProject = false,
-    robotoFont = null, curFontURL = './fonts/Consolas.ttf';
+    robotoFont = null, curFontURL = './fonts/Consolas.ttf', fullShapeEdgeHashes = {}, fullShapeFaceHashes = {};
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -167,13 +167,21 @@ function initialize(opencascade) {
 
                 // This assembles all of the objects in the "workspace" and begins saving them out
                 if (sceneShapes.length > 0) {
-                    let scene = new oc.TopoDS_Compound();
+                    let scene        = new oc.TopoDS_Compound();
                     let sceneBuilder = new oc.BRep_Builder();
                     sceneBuilder.MakeCompound(scene);
+                    fullShapeEdgeHashes = {};
+                    fullShapeFaceHashes = {};
                     sceneShapes.forEach((curShape) => {
+                        // Scan the edges and faces and add to the edge list
+                        Object.assign(fullShapeEdgeHashes, ForEachEdge(curShape, (index, edge) => { }));
+                        ForEachFace(curShape, (index, face) => {
+                            fullShapeFaceHashes[face.HashCode(100000000)] = index;
+                        });
+
                         sceneBuilder.Add(scene, curShape);
                     });
-                    threejsViewport.updateShape(scene, GUIState["MeshRes"]);
+                    threejsViewport.updateShape(scene, GUIState["MeshRes"], fullShapeEdgeHashes, fullShapeFaceHashes);
 
                     if (mainProject && saveToURL) {
                         container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
@@ -338,7 +346,7 @@ function loadSTEPorIGES() {
         }).then(async () => {
             if (i === files.length - 1) {
                 if (lastImportedShape) {
-                    threejsViewport.updateShape(lastImportedShape, GUIState["MeshRes"]);
+                    threejsViewport.updateShape(lastImportedShape, GUIState["MeshRes"], fullShapeEdgeHashes, fullShapeFaceHashes);
                 }
             }
             consoleGolden.setState(extFiles);
@@ -358,7 +366,7 @@ function loadSTL() {
         }).then(async () => {
             if (i === files.length - 1) {
                 if (lastImportedShape) {
-                    threejsViewport.updateShape(lastImportedShape, GUIState["MeshRes"]);
+                    threejsViewport.updateShape(lastImportedShape, GUIState["MeshRes"], fullShapeEdgeHashes, fullShapeFaceHashes);
                 }
             }
             consoleGolden.setState(extFiles);

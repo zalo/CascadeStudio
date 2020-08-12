@@ -106,7 +106,7 @@ var Environment = function (goldenContainer) {
       this.mouse.y = - ( event.offsetY / this.goldenContainer.height ) * 2 + 1;
     }, false );
 
-    this.updateShape = async (shape, maxDeviation) => {
+    this.updateShape = async (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) => {
       openCascadeHelper.setOpenCascade(this.openCascade);
       this.currentShape = shape;
 
@@ -117,7 +117,7 @@ var Environment = function (goldenContainer) {
       this.mainObject.rotation.x = -Math.PI / 2;
 
       // Tesellate the OpenCascade Object
-      const [facelist, edgelist] = await openCascadeHelper.tessellate(this.currentShape, maxDeviation);
+      const [facelist, edgelist] = await openCascadeHelper.tessellate(this.currentShape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes);
       facelist.forEach((face) => {
         // Sort Vertices into three.js Vector3 List
         let vertices = [];
