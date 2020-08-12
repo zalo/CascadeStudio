@@ -338,38 +338,19 @@ function loadProject () {
     });
 }
 
-function loadSTEPorIGES() {
+function loadFiles(fileElementID = "files") {
     let extFiles = {};
-    let files = document.getElementById("step-file").files;
+    let files = document.getElementById(fileElementID).files;
     let shapesToRender = [];
     for (let i = 0; i < files.length; i++) {
         var lastImportedShape = null;
         loadFileAsync(files[i]).then(async (fileText) => {
             const fileName = files[i].name;
-            lastImportedShape = importSTEPorIGES(fileName, fileText);
-            extFiles[fileName] = { content: fileText };
-        }).then(async () => {
-            if (lastImportedShape) {
-                shapesToRender.push(lastImportedShape);
+            if (fileName.includes(".stl")) {
+                lastImportedShape = importSTL(fileName, fileText);
+            } else {
+                lastImportedShape = importSTEPorIGES(fileName, fileText);
             }
-            if (i === files.length - 1) {
-                if (lastImportedShape) {
-                    combineAndRenderShapes(shapesToRender);
-                }
-            }
-            consoleGolden.setState(extFiles);
-        });
-    };
-}
-
-function loadSTL() {
-    let extFiles = {};
-    let files = document.getElementById("stl-file").files;
-    for (let i = 0; i < files.length; i++) {
-        var lastImportedShape = null;
-        loadFileAsync(files[i]).then(async (fileText) => {
-            const fileName = files[i].name;
-            lastImportedShape = importSTL(fileName, fileText);
             extFiles[fileName] = { content: fileText };
         }).then(async () => {
             if (lastImportedShape) {
