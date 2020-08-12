@@ -88,6 +88,10 @@ function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boole
  * The original face is removed unless `keepFace` is true.
  * @example```let tallTriangle = Extrude(Polygon([[0, 0, 0], [50, 0, 0], [25, 50, 0]]), [0, 0, 50]);```*/
 function Extrude(face: oc.TopoDS_Shape, direction: number[], keepFace?: boolean);
+/** Extrudes and twists a flat *wire* upwards along the z-axis (see the optional argument for Polygon).
+ * The original wire is removed unless `keepWire` is true.
+ * @example```let twistyTriangle = RotatedExtrude(Polygon([[-25, -15, 0], [25, -15, 0], [0, 35, 0]], true), 50, 90);```*/
+function RotatedExtrude(wire: oc.TopoDS_Shape, height: number, rotation: number, keepWire?: boolean);
 
 /** Creates a labeled slider with specified defaults, mins, and max ranges.
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40);```
@@ -110,11 +114,11 @@ function Checkbox(name: string, defaultValue: boolean, callback?: CallableFuncti
 /** Translate a shape along the x, y, and z axes (using an array of 3 numbers).
  * @example```let upwardSphere = Translate([0, 0, 50], Sphere(50));```
 */
-function Translate(offset: number[], shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
+function Translate(offset: number[], shape: oc.TopoDS_Shape, copy?: boolean): oc.TopoDS_Shape;
 /** Translate a list of shapes along the x, y, and z axes (using an array of 3 numbers).
  * @example```let upwardBoxSphere = Translate([0, 0, 50], [Sphere(38), Box(50, 50, 50)]);```
 */
-function Translate(offset: number[], shapes: oc.TopoDS_Shape[]): oc.TopoDS_Shape[];
+function Translate(offset: number[], shapes: oc.TopoDS_Shape[], copy?: boolean): oc.TopoDS_Shape[];
 
 /** Rotate a shape degrees about a 3-coordinate axis.
  * @example```let leaningCylinder = Rotate([0, 1, 0], 45, Cylinder(25, 50));```
@@ -144,7 +148,7 @@ function ForEachWire(shape: oc.TopoDS_Shape, callback: (wire: oc.TopoDS_Wire) =>
 function ForEachEdge(shape: oc.TopoDS_Shape, callback: (index: number, edge: oc.TopoDS_Edge) => void): {[edgeHash:number] : Number}[];
 /** Iterate over all the vertices in this shape, calling `callback` on each one. */
 function ForEachVertex(shape: oc.TopoDS_Shape, callback: (vertex: oc.TopoDS_Vertex) => void): void;
-/** Attempt to Fillet all selected edges on this shape with a radius. 
+/** Attempt to Fillet all selected edge indices in "edgeList" with a radius. 
  * Hover over the edges you'd like to select and use those indices as shown below:
- * ```FilletEdges(shape, 1, (index) => {return [0,1,2,7].includes(index);});``` */
-function FilletEdges(shape: oc.TopoDS_Shape, radius: number, edgeSelector?: (index: number, edge:oc.TopoDS_Shape) => void): oc.TopoDS_Shape;
+ * @example```FilletEdges(shape, 1, [0,1,2,7]);``` */
+function FilletEdges(shape: oc.TopoDS_Shape, radius: number, edgeList: number[]): oc.TopoDS_Shape;

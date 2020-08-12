@@ -7,7 +7,8 @@ var myLayout, monacoEditor,
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
 //  Translate(), Rotate(), Scale(), Union(), Difference(), Intersection()
-//  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon(), Extrude(), FilletEdges()
+//  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon()
+//  Extrude(), FilletEdges(), RotatedExtrude()
 //  Slider(), Button(), Checkbox()
 
 let holeRadius = Slider("Radius", 30 , 20 , 40);

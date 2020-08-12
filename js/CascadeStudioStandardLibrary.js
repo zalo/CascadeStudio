@@ -181,24 +181,36 @@ function ForEachVertex(shape, callback) {
   }
 }
 
-function FilletEdges(shape, radius, edgeSelector = (index, edge) => true) { 
+function FilletEdges(shape, radius, edgeList) { 
   let mkFillet = new oc.BRepFilletAPI_MakeFillet(shape);
   ForEachEdge(shape, (index, edge) => {
-    if (edgeSelector(index, edge)) { mkFillet.Add(radius, edge); }
+    if (edgeList.includes(index)) { mkFillet.Add(radius, edge); }
   });
-  sceneShapes.push(mkFillet.Shape());
+  let filletedShape = new oc.TopoDS_Solid(mkFillet.Shape());
+  sceneShapes.push(filletedShape);
   sceneShapes = Remove(sceneShapes, shape);
+  return filletedShape;
 }
 
-function Translate(offset = [0, 0, 0], shapes) {
+function Translate(offset = [0, 0, 0], shapes, copy=false) {
   let transformation = new oc.gp_Trsf();
   transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
   let translation = new oc.TopLoc_Location(transformation);
   if (!isArrayLike(shapes)) {
-    shapes.Move(translation);
+    if (copy) {
+      shapes = shapes.Moved(translation);
+      sceneShapes.push(shapes);
+    } else {
+      shapes.Move(translation);
+    }
   } else if (shapes.length === 1) {
     for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++){
-      shapes[shapeIndex].Move(translation);
+      if (copy) {
+        shapes[shapeIndex] = shapes[shapeIndex].Moved(translation)
+        sceneShapes.push(shapes[shapeIndex]);
+      } else {
+        shapes[shapeIndex].Move(translation);
+      }
     }
   }
   return shapes;
@@ -280,6 +292,47 @@ function Extrude(face, direction, keepFace = false) {
   if (!keepFace) { sceneShapes = Remove(sceneShapes, face); }
   sceneShapes.push(extruded);
   return extruded;
+}
+
+function RotatedExtrude(wire, height, rotation, keepFace = false){
+  let upperPolygon = Rotate([0,0,1], rotation, Translate([0,0,height], wire, true));
+  if (!keepFace) { sceneShapes = Remove(sceneShapes, wire); }
+  sceneShapes = Remove(sceneShapes, upperPolygon);
+
+  // Define the straight spine going up the middle of the sweep
+  let spine  = BSpline([
+      [0, 0,        0], 
+      [0, 0, height  ]], false);
+  let spineEdge    = new oc.BRepBuilderAPI_MakeEdge(spine).Edge();
+  let spineWire    = new oc.BRepBuilderAPI_MakeWire(spineEdge).Wire();
+  //sceneShapes.push(spineEdge);
+
+  // Define the guiding auxiliary spine which controls the rotation
+  let steps = 100;
+  let aspinePoints = [];
+  for(let i = 0; i <= steps; i++){
+      let alpha = i/steps;
+      aspinePoints.push([
+          20 * Math.sin(alpha * rotation * 0.0174533), 
+          20 * Math.cos(alpha * rotation * 0.0174533), 
+          height*alpha])
+  }
+
+  let aspine = BSpline(aspinePoints, false);
+  let aspineEdge   = new oc.BRepBuilderAPI_MakeEdge(aspine).Edge();
+  let aspineWire   = new oc.BRepBuilderAPI_MakeWire(aspineEdge).Wire();
+  //sceneShapes.push(aspineEdge);
+
+  // Sweep the face wires along the spine to create the extrusion
+  let pipe = new oc.BRepOffsetAPI_MakePipeShell(spineWire);
+  pipe.SetMode(aspineWire, true);
+  pipe.Add(wire);
+  pipe.Add(upperPolygon);
+  pipe.Build();
+  pipe.MakeSolid();
+  let solid = new oc.TopoDS_Solid(pipe.Shape());
+  sceneShapes.push(solid);
+  return solid;
 }
 
 function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false, callback = monacoEditor.evaluateCode) {
