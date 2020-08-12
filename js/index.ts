@@ -87,11 +87,13 @@ function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boole
 /** Extrudes a flat face along direction, a 3-component vector.
  * The original face is removed unless `keepFace` is true.
  * @example```let tallTriangle = Extrude(Polygon([[0, 0, 0], [50, 0, 0], [25, 50, 0]]), [0, 0, 50]);```*/
-function Extrude(face: oc.TopoDS_Shape, direction: number[], keepFace?: boolean);
+function Extrude(face: oc.TopoDS_Shape, direction: number[], keepFace?: boolean) : oc.TopoDS_Shape;
 /** Extrudes and twists a flat *wire* upwards along the z-axis (see the optional argument for Polygon).
  * The original wire is removed unless `keepWire` is true.
  * @example```let twistyTriangle = RotatedExtrude(Polygon([[-25, -15, 0], [25, -15, 0], [0, 35, 0]], true), 50, 90);```*/
-function RotatedExtrude(wire: oc.TopoDS_Shape, height: number, rotation: number, keepWire?: boolean);
+function RotatedExtrude(wire: oc.TopoDS_Shape, height: number, rotation: number, keepWire?: boolean) : oc.TopoDS_Shape;
+/** Lofts a solid through the sections defined by an array of 2 or more closed wires.*/
+function Loft(wires: oc.TopoDS_Shape[], keepWires?: boolean) : oc.TopoDS_Shape;
 
 /** Creates a labeled slider with specified defaults, mins, and max ranges.
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40);```

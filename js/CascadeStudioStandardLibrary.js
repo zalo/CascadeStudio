@@ -294,9 +294,9 @@ function Extrude(face, direction, keepFace = false) {
   return extruded;
 }
 
-function RotatedExtrude(wire, height, rotation, keepFace = false){
+function RotatedExtrude(wire, height, rotation, keepWire = false){
   let upperPolygon = Rotate([0,0,1], rotation, Translate([0,0,height], wire, true));
-  if (!keepFace) { sceneShapes = Remove(sceneShapes, wire); }
+  if (!keepWire) { sceneShapes = Remove(sceneShapes, wire); }
   sceneShapes = Remove(sceneShapes, upperPolygon);
 
   // Define the straight spine going up the middle of the sweep
@@ -330,6 +330,21 @@ function RotatedExtrude(wire, height, rotation, keepFace = false){
   pipe.Add(upperPolygon);
   pipe.Build();
   pipe.MakeSolid();
+  let solid = new oc.TopoDS_Solid(pipe.Shape());
+  sceneShapes.push(solid);
+  return solid;
+}
+
+function Loft(wires, keepWires = false){
+  let pipe = new oc.BRepOffsetAPI_ThruSections(true);
+
+  // Construct a Loft that passes through the wires
+  wires.forEach((wire)=>{
+    pipe.AddWire(wire);
+    if (!keepWires) { sceneShapes = Remove(sceneShapes, wire); }
+  });
+
+  pipe.Build();
   let solid = new oc.TopoDS_Solid(pipe.Shape());
   sceneShapes.push(solid);
   return solid;
