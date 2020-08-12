@@ -1,4 +1,17 @@
-function Box (x, y, z, centered = false) {
+// Cascade Studio Standard Library
+// Adding new standard library features and functions:
+// 1. Research the OpenCascade API: https://www.opencascade.com/doc/occt-7.4.0/refman/html/annotated.html
+// 2. Write your new function inside of Cascade Studio, using "oc." to refer to the raw OpenCascade API.
+// 3. Add your new convenience function to this file
+// 4. Add typescript annotations to index.ts in this same directory
+// 5. Submit a PR to the main repository! https://github.com/zalo/CascadeStudio/pulls
+// -
+// (Optional) If base functions appear to be missing, fork opencascade.js and add them to this file: 
+//  - https://github.com/donalffons/opencascade.js/blob/master/opencascade.idl
+//  - Upon push, Github Actions will build a new version of the library and commit it back to the repo
+//  - From there, you can graft those into CascadeStudio/node_modules/opencascade.js/dist (following its existing conventions)
+
+function Box(x, y, z, centered = false) {
   let curBox = new oc.BRepPrimAPI_MakeBox(x, y, z).Shape();
   if (centered) { Translate([-x / 2, -y / 2, -z / 2], curBox); }
   sceneShapes.push(curBox);
