@@ -52,6 +52,18 @@ function Polygon(points, wire = false) {
   return polygon;
 }
 
+function Circle(radius, wire = false) {
+  let circle     = new oc.GC_MakeCircle(new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0), 
+                                        new oc.gp_Dir(0, 0, 1)), radius).Value();
+  let edge       = new oc.BRepBuilderAPI_MakeEdge(circle).Edge();
+  let circleWire = new oc.BRepBuilderAPI_MakeWire(edge).Wire();
+  if (wire) { sceneShapes.push(circleWire); return circleWire; }
+
+  let circleFace = new oc.BRepBuilderAPI_MakeFace(circleWire, true).Face();
+  sceneShapes.push(circleFace);
+  return circleFace;
+}
+
 function BSpline(inPoints, closed = false){
   let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed?1:0));
   for(let pIndex = 1; pIndex <= inPoints.length; pIndex++){
@@ -307,7 +319,7 @@ function RotatedExtrude(wire, height, rotation, keepWire = false){
   let spineWire    = new oc.BRepBuilderAPI_MakeWire(spineEdge).Wire();
   //sceneShapes.push(spineEdge);
 
-  // Define the guiding auxiliary spine which controls the rotation
+  // Define the guiding helical auxiliary spine (which controls the rotation)
   let steps = 100;
   let aspinePoints = [];
   for(let i = 0; i <= steps; i++){
