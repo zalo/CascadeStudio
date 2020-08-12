@@ -167,21 +167,7 @@ function initialize(opencascade) {
 
                 // This assembles all of the objects in the "workspace" and begins saving them out
                 if (sceneShapes.length > 0) {
-                    let scene        = new oc.TopoDS_Compound();
-                    let sceneBuilder = new oc.BRep_Builder();
-                    sceneBuilder.MakeCompound(scene);
-                    fullShapeEdgeHashes = {};
-                    fullShapeFaceHashes = {};
-                    sceneShapes.forEach((curShape) => {
-                        // Scan the edges and faces and add to the edge list
-                        Object.assign(fullShapeEdgeHashes, ForEachEdge(curShape, (index, edge) => { }));
-                        ForEachFace(curShape, (index, face) => {
-                            fullShapeFaceHashes[face.HashCode(100000000)] = index;
-                        });
-
-                        sceneBuilder.Add(scene, curShape);
-                    });
-                    threejsViewport.updateShape(scene, GUIState["MeshRes"], fullShapeEdgeHashes, fullShapeFaceHashes);
+                    combineAndRenderShapes(sceneShapes);
 
                     if (mainProject && saveToURL) {
                         container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
@@ -305,6 +291,24 @@ function initialize(opencascade) {
         document.getElementById('topnav').offsetHeight);
 }
 
+function combineAndRenderShapes(shapes) {
+    let scene        = new oc.TopoDS_Compound();
+    let sceneBuilder = new oc.BRep_Builder();
+    sceneBuilder.MakeCompound(scene);
+    fullShapeEdgeHashes = {};
+    fullShapeFaceHashes = {};
+    shapes.forEach((curShape) => {
+        // Scan the edges and faces and add to the edge list
+        Object.assign(fullShapeEdgeHashes, ForEachEdge(curShape, (index, edge) => { }));
+        ForEachFace(curShape, (index, face) => {
+            fullShapeFaceHashes[face.HashCode(100000000)] = index;
+        });
+
+        sceneBuilder.Add(scene, curShape);
+    });
+    threejsViewport.updateShape(scene, GUIState["MeshRes"], fullShapeEdgeHashes, fullShapeFaceHashes);
+}
+
 opentype.load(curFontURL, function (err, font) { //'./fonts/Roboto-Black.ttf' './fonts/Papyrus.ttf' './fonts/Consolas.ttf'
     if (err) { console.log(err); }
     robotoFont = font;
@@ -337,6 +341,7 @@ function loadProject () {
 function loadSTEPorIGES() {
     let extFiles = {};
     let files = document.getElementById("step-file").files;
+    let shapesToRender = [];
     for (let i = 0; i < files.length; i++) {
         var lastImportedShape = null;
         loadFileAsync(files[i]).then(async (fileText) => {
@@ -344,9 +349,12 @@ function loadSTEPorIGES() {
             lastImportedShape = importSTEPorIGES(fileName, fileText);
             extFiles[fileName] = { content: fileText };
         }).then(async () => {
+            if (lastImportedShape) {
+                shapesToRender.push(lastImportedShape);
+            }
             if (i === files.length - 1) {
                 if (lastImportedShape) {
-                    threejsViewport.updateShape(lastImportedShape, GUIState["MeshRes"], fullShapeEdgeHashes, fullShapeFaceHashes);
+                    combineAndRenderShapes(shapesToRender);
                 }
             }
             consoleGolden.setState(extFiles);
@@ -364,9 +372,12 @@ function loadSTL() {
             lastImportedShape = importSTL(fileName, fileText);
             extFiles[fileName] = { content: fileText };
         }).then(async () => {
+            if (lastImportedShape) {
+                shapesToRender.push(lastImportedShape);
+            }
             if (i === files.length - 1) {
                 if (lastImportedShape) {
-                    threejsViewport.updateShape(lastImportedShape, GUIState["MeshRes"], fullShapeEdgeHashes, fullShapeFaceHashes);
+                    combineAndRenderShapes(shapesToRender);
                 }
             }
             consoleGolden.setState(extFiles);
