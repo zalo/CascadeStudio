@@ -70,7 +70,7 @@ function Text3D(text = "Hello!", size = 36, height = 0.15, fontURL = curFontURL)
     opentype.load(curFontURL, function (err, font) {
       if (err) { console.log(err); }
       robotoFont = font;
-      console.log("New Font Loaded!  Please refresh your model to see changes...")
+      console.log("New Font Loaded!  Please re-evaluate your model to see changes...");
     });
   }
 
