@@ -58,11 +58,14 @@ function Polygon(points, wire = false) {
   polygonWire.Add(innerWire2);
   let finalWire = polygonWire.Wire();
 
-  if (wire) { sceneShapes.push(finalWire); return finalWire; }
-
-  let polygon = new oc.BRepBuilderAPI_MakeFace(polygonWire.Wire(), true).Face();
-  sceneShapes.push(polygon);
-  return polygon;
+  if (wire) {
+    sceneShapes.push(finalWire);
+    return finalWire;
+  } else {
+    let polygon = new oc.BRepBuilderAPI_MakeFace(finalWire).Face();
+    sceneShapes.push(polygon);
+    return polygon;
+  }
 }
 
 function Circle(radius, wire = false) {
@@ -309,14 +312,30 @@ function Intersection(objectsToIntersect = [], keepObjects = false) {
 }
 
 function Extrude(face, direction, keepFace = false) {
-  if (face.ShapeType() !== 4) {
-    throw new Error("Extrude was expecting a Face (Type Number 4)!  Was Type Number: " + face.ShapeType());
-  }
   let extruded = new oc.BRepPrimAPI_MakePrism(face,
     new oc.gp_Vec(direction[0], direction[1], direction[2])).Shape();
   if (!keepFace) { sceneShapes = Remove(sceneShapes, face); }
   sceneShapes.push(extruded);
   return extruded;
+}
+
+function Revolve(shape, degrees = 360.0, direction = [0, 0, 1], keepShape = false, copy = false) {
+  let revolution = null;
+  if (degrees >= 360.0) {
+    revolution = new oc.BRepPrimAPI_MakeRevol(shape,
+      new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), 
+      new oc.gp_Dir(direction[0], direction[1], direction[2])),
+      copy).Shape();
+  } else {
+    revolution = new oc.BRepPrimAPI_MakeRevol(shape,
+      new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), 
+      new oc.gp_Dir(direction[0], direction[1], direction[2])),
+      degrees * 0.0174533, copy).Shape();
+  }
+  
+  if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
+  sceneShapes.push(revolution);
+  return revolution;
 }
 
 function RotatedExtrude(wire, height, rotation, keepWire = false){

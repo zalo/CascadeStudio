@@ -98,7 +98,7 @@ function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shap
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let roundedBox = Intersection([Box(50, 50, 50, true), Sphere(38)]);```*/
 function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean) : oc.TopoDS_Shape;
-/** Extrudes a flat face along direction, a 3-component vector.
+/** Extrudes a shape along direction, a 3-component vector. Edges form faces, Wires form shells, Faces form solids, etc.
  * The original face is removed unless `keepFace` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let tallTriangle = Extrude(Polygon([[0, 0, 0], [50, 0, 0], [25, 50, 0]]), [0, 0, 50]);```*/
@@ -110,7 +110,11 @@ function Extrude(face: oc.TopoDS_Shape, direction: number[], keepFace?: boolean)
 function RotatedExtrude(wire: oc.TopoDS_Shape, height: number, rotation: number, keepWire?: boolean) : oc.TopoDS_Shape;
 /** Lofts a solid through the sections defined by an array of 2 or more closed wires.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js) */
-function Loft(wireSections: oc.TopoDS_Shape[], keepWires?: boolean) : oc.TopoDS_Shape;
+function Loft(wireSections: oc.TopoDS_Shape[], keepWires?: boolean): oc.TopoDS_Shape;
+/** Revolves this shape "degrees" about "axis" (a 3-component array).  Edges form faces, Wires form shells, Faces form solids, etc.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js) 
+ * @example```let cone = Revolve(Polygon([[0, 0, 0], [0, 0, 50], [50, 0, 0]]));```*/
+function Revolve(shape: oc.TopoDS_Shape, degrees?: number, axis?: number[], keepShape?: boolean, copy?: boolean) : oc.TopoDS_Shape;
 
 /** Creates a labeled slider with specified defaults, mins, and max ranges.
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40);```
