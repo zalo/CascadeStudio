@@ -71,7 +71,7 @@ function Circle(radius:number, wire?:boolean) : oc.TopoDS_Shape;
  * Or used directly with BRepPrimAPI_MakeRevolution()
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let bspline = BSpline([[0,0,0], [40, 0, 50], [50, 0, 50]], true);```*/
-function BSpline(points:number[][], closed?:boolean) : oc.Handle_Geom_BSplineCurve;
+function BSpline(points:number[][], closed?:boolean, wire?:boolean) : oc.Handle_Geom_BSplineCurve | oc.TopoDS_Shape;
 /** Creates set of glyph solids from a string and a font-file and adds it to sceneShapes.
  * Note that all the characters share a singular face. 
  * 
@@ -114,58 +114,59 @@ function Loft(wireSections: oc.TopoDS_Shape[], keepWires?: boolean): oc.TopoDS_S
 /** Revolves this shape "degrees" about "axis" (a 3-component array).  Edges form faces, Wires form shells, Faces form solids, etc.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js) 
  * @example```let cone = Revolve(Polygon([[0, 0, 0], [0, 0, 50], [50, 0, 0]]));```*/
-function Revolve(shape: oc.TopoDS_Shape, degrees?: number, axis?: number[], keepShape?: boolean, copy?: boolean) : oc.TopoDS_Shape;
+function Revolve(shape: oc.TopoDS_Shape, degrees?: number, axis?: number[], keepShape?: boolean, copy?: boolean): oc.TopoDS_Shape;
+/** Sweeps this shape along a path wire.
+ * The original shapes are removed unless `keepObjects` is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js) 
+ * @example```let pipe = Pipe(Circle(20), BSpline([[0,0,0],[0,0,50],[20,0,100]], false, true));```*/
+function Pipe(shape: oc.TopoDS_Shape, wirePath: oc.TopoDS_Shape, keepInputs?: boolean): oc.TopoDS_Shape;
+/** Offsets the faces of a shape by offsetDistance
+ * The original shape is removed unless `keepShape` is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
+ * @example```let roundedCube = Offset(Box(10,10,10), 10);```*/
+function Offset(shape: oc.TopoDS_Shape, offsetDistance: number, tolerance?: number, keepShape?: boolean) : oc.TopoDS_Shape;
 
 /** Creates a labeled slider with specified defaults, mins, and max ranges.
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40);```
  * `name` needs to be unique!
  * 
- * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)
-*/
+ * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)*/
 function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean, callback?: CallableFunction): number;
 /** Creates a button that will trigger `callback` when clicked.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
- * @example```Button("Yell", ()=>{ console.log("Help!  I've been clicked!"); });```
-*/
+ * @example```Button("Yell", ()=>{ console.log("Help!  I've been clicked!"); });```*/
 function Button(name: string, callback?: CallableFunction) : void;
 /** Creates a checkbox that returns true or false.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let currentCheckboxValue = Checkbox("Check?", true);```
  * 
- * `callback` triggers when the button is clicked.
-*/
+ * `callback` triggers when the button is clicked.*/
 function Checkbox(name: string, defaultValue: boolean, callback?: CallableFunction): boolean;
 
 /** Translate a shape along the x, y, and z axes (using an array of 3 numbers).
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
- * @example```let upwardSphere = Translate([0, 0, 50], Sphere(50));```
-*/
+ * @example```let upwardSphere = Translate([0, 0, 50], Sphere(50));```*/
 function Translate(offset: number[], shape: oc.TopoDS_Shape, copy?: boolean): oc.TopoDS_Shape;
 /** Translate a list of shapes along the x, y, and z axes (using an array of 3 numbers).
- * @example```let upwardBoxSphere = Translate([0, 0, 50], [Sphere(38), Box(50, 50, 50)]);```
-*/
+ * @example```let upwardBoxSphere = Translate([0, 0, 50], [Sphere(38), Box(50, 50, 50)]);```*/
 function Translate(offset: number[], shapes: oc.TopoDS_Shape[], copy?: boolean): oc.TopoDS_Shape[];
 
 /** Rotate a shape degrees about a 3-coordinate axis.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
- * @example```let leaningCylinder = Rotate([0, 1, 0], 45, Cylinder(25, 50));```
-*/
+ * @example```let leaningCylinder = Rotate([0, 1, 0], 45, Cylinder(25, 50));```*/
 function Rotate(axis: number[], degrees: number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
 /** Rotate a list of shapes degrees about a 3-coordinate axis.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
- * @example```let leaningCylinder = Rotate([0, 1, 0], 45, [Cylinder(25, 50), Cylinder(15, 70)]);```
-*/
+ * @example```let leaningCylinder = Rotate([0, 1, 0], 45, [Cylinder(25, 50), Cylinder(15, 70)]);```*/
 function Rotate(axis: number[], degrees: number, shapes: oc.TopoDS_Shape[]): oc.TopoDS_Shape[];
 
 /** Scale a shape to be `scale` times its current size.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
- * @example```let scaledCylinder = Scale(50, Cylinder(0.5, 1));```
-*/
+ * @example```let scaledCylinder = Scale(50, Cylinder(0.5, 1));```*/
 function Scale(scale: number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
 /** Scale a list of shapes to be `scale` times their current size.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
- * @example```let scaledCylinder = Scale(50, [Cylinder(0.5, 1), Cylinder(0.25, 2)]);```
-*/
+ * @example```let scaledCylinder = Scale(50, [Cylinder(0.5, 1), Cylinder(0.25, 2)]);```*/
 function Scale(scale: number, shapes: oc.TopoDS_Shape[]): oc.TopoDS_Shape[];
 
 /** Iterate over all the shells in this shape, calling `callback` on each one. */
@@ -182,4 +183,9 @@ function ForEachVertex(shape: oc.TopoDS_Shape, callback: (vertex: oc.TopoDS_Vert
  * Hover over the edges you'd like to select and use those indices as in the example.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```FilletEdges(shape, 1, [0,1,2,7]);``` */
-function FilletEdges(shape: oc.TopoDS_Shape, radius: number, edgeList: number[]): oc.TopoDS_Shape;
+function FilletEdges(shape: oc.TopoDS_Shape, radius: number, edgeList: number[], keepOriginal?:boolean): oc.TopoDS_Shape;
+/** Attempt to Chamfer all selected edge indices in "edgeList" symmetrically by distance. 
+ * Hover over the edges you'd like to select and use those indices in the edgeList array.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
+ * @example```ChamferEdges(shape, 1, [0,1,2,7]);``` */
+function ChamferEdges(shape: oc.TopoDS_Shape, distance: number, edgeList: number[], keepOriginal?:boolean): oc.TopoDS_Shape;

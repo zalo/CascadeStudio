@@ -8,7 +8,8 @@ let starterCode =
 `// Welcome to Cascade Studio!   Here are some useful functions:
 //  Translate(), Rotate(), Scale(), Union(), Difference(), Intersection()
 //  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon()
-//  FilletEdges(), Extrude(), RotatedExtrude(), Revolve(), Loft()
+//  Offset(), Extrude(), RotatedExtrude(), Revolve(), Pipe(), Loft(), 
+//  FilletEdges(), ChamferEdges(),
 //  Slider(), Button(), Checkbox()
 
 let holeRadius = Slider("Radius", 30 , 20 , 40);

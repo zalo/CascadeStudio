@@ -75,12 +75,12 @@ function Circle(radius, wire = false) {
   let circleWire = new oc.BRepBuilderAPI_MakeWire(edge).Wire();
   if (wire) { sceneShapes.push(circleWire); return circleWire; }
 
-  let circleFace = new oc.BRepBuilderAPI_MakeFace(circleWire, true).Face();
+  let circleFace = new oc.BRepBuilderAPI_MakeFace(circleWire).Face();
   sceneShapes.push(circleFace);
   return circleFace;
 }
 
-function BSpline(inPoints, closed = false){
+function BSpline(inPoints, closed = false, wire = false){
   let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed?1:0));
   for(let pIndex = 1; pIndex <= inPoints.length; pIndex++){
       ptList.SetValue(pIndex, new oc.gp_Pnt(
@@ -89,7 +89,14 @@ function BSpline(inPoints, closed = false){
           inPoints[pIndex-1][2]));
   }
   if (closed) { ptList.SetValue(inPoints.length + 1, ptList.Value(1)); }
-  return new oc.GeomAPI_PointsToBSpline(ptList).Curve();
+
+  let geomCurveHandle = new oc.GeomAPI_PointsToBSpline(ptList).Curve();
+  if (wire) {
+    let edge = new oc.BRepBuilderAPI_MakeEdge(geomCurveHandle).Edge();
+    return new oc.BRepBuilderAPI_MakeWire(edge).Wire();
+  } else {
+    return geomCurveHandle;
+  }
 }
 
 function Text3D(text = "Hello!", size = 36, height = 0.15, fontURL = curFontURL) {
@@ -209,15 +216,26 @@ function ForEachVertex(shape, callback) {
   }
 }
 
-function FilletEdges(shape, radius, edgeList) { 
+function FilletEdges(shape, radius, edgeList, keepOriginal = false) { 
   let mkFillet = new oc.BRepFilletAPI_MakeFillet(shape);
   ForEachEdge(shape, (index, edge) => {
     if (edgeList.includes(index)) { mkFillet.Add(radius, edge); }
   });
   let filletedShape = new oc.TopoDS_Solid(mkFillet.Shape());
   sceneShapes.push(filletedShape);
-  sceneShapes = Remove(sceneShapes, shape);
+  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shape); }
   return filletedShape;
+}
+
+function ChamferEdges(shape, distance, edgeList, keepOriginal = false) { 
+  let mkChamfer = new oc.BRepFilletAPI_MakeChamfer(shape);
+  ForEachEdge(shape, (index, edge) => {
+    if (edgeList.includes(index)) { mkChamfer.Add(distance, edge); }
+  });
+  let chamferedShape = new oc.TopoDS_Solid(mkChamfer.Shape());
+  sceneShapes.push(chamferedShape);
+  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shape); }
+  return chamferedShape;
 }
 
 function Translate(offset = [0, 0, 0], shapes, copy=false) {
@@ -319,6 +337,17 @@ function Extrude(face, direction, keepFace = false) {
   return extruded;
 }
 
+function Offset(shape, offsetDistance, tolerance = 0.1, keepShape = false) {
+  if (offsetDistance === 0.0) { return shape; }
+  let offset = new oc.BRepOffsetAPI_MakeOffsetShape();
+  offset.PerformByJoin(shape, offsetDistance, tolerance);
+  let offsetShape = offset.Shape();
+  
+  if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
+  sceneShapes.push(offsetShape);
+  return offsetShape;
+}
+
 function Revolve(shape, degrees = 360.0, direction = [0, 0, 1], keepShape = false, copy = false) {
   let revolution = null;
   if (degrees >= 360.0) {
@@ -390,6 +419,18 @@ function Loft(wires, keepWires = false){
 
   pipe.Build();
   let solid = new oc.TopoDS_Solid(pipe.Shape());
+  sceneShapes.push(solid);
+  return solid;
+}
+
+function Pipe(shape, wirePath, keepInputs = false) {
+  let pipe = new oc.BRepOffsetAPI_MakePipe(wirePath, shape);
+  pipe.Build();
+  let solid = new oc.TopoDS_Solid(pipe.Shape());
+  if (!keepInputs) {
+    sceneShapes = Remove(sceneShapes, shape);
+    sceneShapes = Remove(sceneShapes, wirePath);
+  }
   sceneShapes.push(solid);
   return solid;
 }
