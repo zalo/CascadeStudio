@@ -485,9 +485,19 @@ function isArrayLike(item) {
 // Mega Brittle Line Number Finding algorithm for back propagation; may only work in Chrome?!?
 function getCallingLocation() {
   let errorStack = (new Error).stack;
-  let lineAndColumn = errorStack.split("\n")[3].split(", <anonymous>:")[1].split(':');
+  //console.log(errorStack);
+  let lineAndColumn = [0, 0];
+  if (navigator.userAgent.includes("Chrom")) {
+    lineAndColumn = errorStack.split("\n")[3].split(", <anonymous>:")[1].split(':');
+  }else if (navigator.userAgent.includes("Moz")) {
+    lineAndColumn = errorStack.split("\n")[2].split("eval:")[1].split(':');
+  } else {
+    lineAndColumn[0] = "-1";
+    lineAndColumn[1] = "-1";
+  }
   lineAndColumn[0] = parseFloat(lineAndColumn[0]);
   lineAndColumn[1] = parseFloat(lineAndColumn[1]);
+
   return lineAndColumn;
 }
 

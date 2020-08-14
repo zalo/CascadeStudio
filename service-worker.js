@@ -2,7 +2,7 @@
 
 /* A version number is useful when updating the worker logic,
    allowing you to remove outdated cache entries during the update. */
-var version = 'v0.0.5.1::';
+var version = 'v0.0.5.3::';
 
 /* These resources will be downloaded and cached by the service worker
    during the installation process. If any resource fails to be downloaded,
@@ -121,7 +121,7 @@ self.addEventListener("fetch", function(event) {
     let cachePolicy = request.url.includes("service-worker.js") ? "no-cache" : "default";
     return fetch(request, { cache: cachePolicy })
       .then(function (response) {
-        console.log("Using network for: " + request.url);
+        //console.log("Using network for: " + request.url);
         let cacheCopy = response.clone();
         caches
           .open(version + 'pages')
@@ -138,8 +138,8 @@ self.addEventListener("fetch", function(event) {
   
   // Default to Cache, Fallback to Network
   event.respondWith(
-    useCache(event.request, useNetwork)
-    //useNetwork(event.request, useCache)//
+    //useCache(event.request, useNetwork)
+    useNetwork(event.request, useCache)
   );
 });
 

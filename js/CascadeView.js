@@ -49,7 +49,7 @@ var Environment = function (goldenContainer) {
       //curCanvas.id = canvasId;
       //document.currentScript.parentNode.insertBefore(curCanvas, document.currentScript.nextSibling);
       goldenContainer.getElement().get(0).appendChild(curCanvas);
-      this.renderer = new THREE.WebGLRenderer({ canvas: curCanvas, antialias: true });
+      this.renderer = new THREE.WebGLRenderer({ canvas: curCanvas, antialias: true, webgl2: false });
       this.renderer.setPixelRatio(1);
       var parentWidth  = this.goldenContainer.width;
       let parentHeight = this.goldenContainer.height;
@@ -224,6 +224,9 @@ var Environment = function (goldenContainer) {
     }
 
     this.createTransformHandle = (position, rotation, scale, lineAndColumn) => {
+      if (lineAndColumn[0] <= 0) {
+        console.error("Transform Gizmo not supported in this browser!  Use Chrome or Firefox!"); return null;
+      }
       let handle = new THREE.TransformControls(this.environment.camera,
                                                this.environment.renderer.domElement);
       handle.setTranslationSnap( 1 );
@@ -291,7 +294,8 @@ var Environment = function (goldenContainer) {
       handle.attach(emptyObject);
 
       this.handles.push(handle);
-      this.environment.scene.add( handle );
+      this.environment.scene.add(handle);
+      return handle;
     }
     this.clearTransformHandles = () => {
       this.handles.forEach((handle) => {
