@@ -42,7 +42,7 @@ function Cone(radius1, radius2, height) {
 function Polygon(points, wire = false) {
   let gpPoints = [];
   for(let ind = 0; ind < points.length; ind++){
-    gpPoints.push(new oc.gp_Pnt(points[ind  ][0], points[ind  ][1], points[ind  ][2]));
+    gpPoints.push(convertToPnt(points[ind  ]));
   }
 
   let polygonWire = new oc.BRepBuilderAPI_MakeWire();
@@ -82,11 +82,8 @@ function Circle(radius, wire = false) {
 
 function BSpline(inPoints, closed = false, wire = false){
   let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed?1:0));
-  for(let pIndex = 1; pIndex <= inPoints.length; pIndex++){
-      ptList.SetValue(pIndex, new oc.gp_Pnt(
-          inPoints[pIndex-1][0], 
-          inPoints[pIndex-1][1], 
-          inPoints[pIndex-1][2]));
+  for (let pIndex = 1; pIndex <= inPoints.length; pIndex++){
+    ptList.SetValue(pIndex, convertToPnt(inPoints[pIndex - 1]));
   }
   if (closed) { ptList.SetValue(inPoints.length + 1, ptList.Value(1)); }
 
@@ -265,7 +262,7 @@ function Translate(offset, shapes, copy = false) {
   } else if (shapes.length >= 1) {
     for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++){
       if (copy) {
-        shapes[shapeIndex] = shapes[shapeIndex].Moved(translation)
+        shapes[shapeIndex] = shapes[shapeIndex].Moved(translation);
         sceneShapes.push(shapes[shapeIndex]);
       } else {
         shapes[shapeIndex].Move(translation);
@@ -399,11 +396,11 @@ function RotatedExtrude(wire, height, rotation, keepWire = false){
   let steps = 100;
   let aspinePoints = [];
   for(let i = 0; i <= steps; i++){
-      let alpha = i/steps;
-      aspinePoints.push([
-          20 * Math.sin(alpha * rotation * 0.0174533), 
-          20 * Math.cos(alpha * rotation * 0.0174533), 
-          height*alpha])
+    let alpha = i/steps;
+    aspinePoints.push([
+      20 * Math.sin(alpha * rotation * 0.0174533),
+      20 * Math.cos(alpha * rotation * 0.0174533),
+      height * alpha]);
   }
 
   let aspine = BSpline(aspinePoints, false);
@@ -492,4 +489,12 @@ function getCallingLocation() {
   lineAndColumn[0] = parseFloat(lineAndColumn[0]);
   lineAndColumn[1] = parseFloat(lineAndColumn[1]);
   return lineAndColumn;
+}
+
+function convertToPnt(pnt) {
+  let point = pnt; // Accept raw gp_Points if we got 'em
+  if (point.length) {
+    point = new oc.gp_Pnt(point[0], point[1], point[2]);
+  }
+  return point;
 }

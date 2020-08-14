@@ -1,17 +1,17 @@
 "use strict";
 
-//console.log('WORKER: executing.');
-
 /* A version number is useful when updating the worker logic,
    allowing you to remove outdated cache entries during the update. */
-var version = 'v0.0.4.1::';
+var version = 'v0.0.5.1::';
 
 /* These resources will be downloaded and cached by the service worker
    during the installation process. If any resource fails to be downloaded,
    then the service worker won't be installed either. */
+// TODO: Build this automatically by crawling the main files...
 var offlineFundamentals = [
   '',
   //'service-worker.js',
+  "node_modules/three/build/three.d.ts",
   "node_modules/three/build/three.min.js",
   "node_modules/three/examples/js/controls/DragControls.js",
   "node_modules/three/examples/js/controls/OrbitControls.js",
@@ -26,9 +26,6 @@ var offlineFundamentals = [
   "node_modules/golden-layout/src/css/goldenlayout-dark-theme.css",
   "node_modules/rawflate/rawdeflate.js",
   "node_modules/rawflate/rawinflate.js",
-  "js/CascadeStudioStandardLibrary.js",
-  "js/openCascadeHelper.js",
-  "js/CascadeView.js",
   "node_modules/opencascade.js/dist/opencascade.wasm.js",
   "node_modules/opencascade.js/dist/opencascade.wasm.wasm",
   "node_modules/monaco-editor/min/vs/editor/editor.main.css",
@@ -37,13 +34,23 @@ var offlineFundamentals = [
   "node_modules/monaco-editor/min/vs/editor/editor.main.js",
   "node_modules/monaco-editor/min/vs/basic-languages/javascript/javascript.js",
   "node_modules/monaco-editor/min/vs/basic-languages/typescript/typescript.js",
-  "js/index.js",
+  "node_modules/monaco-editor/min/vs/language/typescript/tsMode.js",
+  "node_modules/monaco-editor/min/vs/language/typescript/tsWorker.js",
+  "node_modules/monaco-editor/min/vs/base/worker/workerMain.js",
+  "node_modules/monaco-editor/min/vs/base/browser/ui/codiconLabel/codicon/codicon.ttf",
   "node_modules/opencascade.js/dist/oc.d.ts",
-  "node_modules/three/build/three.d.ts",
+  "js/CascadeStudioStandardLibrary.js",
+  "js/openCascadeHelper.js",
+  "js/CascadeView.js",
+  "js/index.js",
   "js/index.ts",
   "fonts/Roboto-Black.ttf",
   "fonts/Consolas.ttf",
-  "fonts/Papyrus.ttf"
+  "fonts/Papyrus.ttf",
+  "textures/dullFrontLitMetal.png",
+  "icon/favicon.ico",
+  "manifest.webmanifest",
+  "icon/android-chrome-192x192.png"
 ];
 
 /* The install event fires when the service worker is first installed.
@@ -78,49 +85,61 @@ self.addEventListener("install", function(event) {
    comprehends even the request for the HTML page on first load, as well as JS and
    CSS resources, fonts, any images, etc.*/
 self.addEventListener("fetch", function(event) {
-  //console.log('WORKER: fetch event in progress.');
-
   if (event.request.method !== 'GET') {
     console.log('Non GET fetch event ignored...', event.request.method, event.request.url);
     return;
   }
 
-  function useCache(request) {
+  // Return this if both the cache and network fail
+  function failureResponse() {
+    console.error(request.url + " not found in Cache!  "+
+      "Was it included at the top of service-worker.js ? ");
+    return new Response('<h1>Service Unavailable</h1>', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: new Headers({
+        'Content-Type': 'text/html'
+      })
+    });
+  }
+
+  // Try to acquire the resource from the cache
+  function useCache(request, failureCallback) {
     return caches.match(request, { ignoreSearch: true })
     .then(function (cached) {
-      if (cached) {
+      if (cached && !request.url.includes("service-worker.js")) {
+        //console.log("Using cache for: " + request.url);
         return cached;
       } else {
-        console.error(request.url + " not found in Cache!  "+
-          "Was it included at the top of service-worker.js ? ");
-        return new Response('<h1>Service Unavailable</h1>', {
-          status: 503,
-          statusText: 'Service Unavailable',
-          headers: new Headers({
-            'Content-Type': 'text/html'
-          })
-        });
+        return failureCallback(request, failureResponse);
       }
     });
   }
-  
 
-  event.respondWith(
-    fetch(event.request, {cache: "default"})
+  // Try to acquire the resource from the network
+  function useNetwork(request, failureCallback) {
+    let cachePolicy = request.url.includes("service-worker.js") ? "no-cache" : "default";
+    return fetch(request, { cache: cachePolicy })
       .then(function (response) {
-           let cacheCopy = response.clone();
-           caches
-             .open(version + 'pages')
-             .then(function add(cache) {
-               return cache.put(event.request, cacheCopy);
-             });
-           return response;
+        console.log("Using network for: " + request.url);
+        let cacheCopy = response.clone();
+        caches
+          .open(version + 'pages')
+          .then(function add(cache) {
+            return cache.put(request, cacheCopy);
+          });
+        return response;
       }, function (rejected) {
-          return useCache(event.request);
-      })
-      .catch(function (err) {
-        return useCache(event.request);
-      })
+        return failureCallback(event.request, failureResponse);
+      }).catch(function (error) {
+        return failureCallback(event.request, failureResponse);
+      });
+  }
+  
+  // Default to Cache, Fallback to Network
+  event.respondWith(
+    useCache(event.request, useNetwork)
+    //useNetwork(event.request, useCache)//
   );
 });
 

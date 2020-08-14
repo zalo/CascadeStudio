@@ -32,7 +32,11 @@ var Environment = function (goldenContainer) {
       this.scene.add(this.light2);
       //this.scene.add(new THREE.CameraHelper(this.light2.shadow.camera));
       this.groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000),
-                                       new THREE.MeshPhongMaterial  ({ color: 0x080808, depthWrite: true }));
+        new THREE.MeshPhongMaterial({
+          color: 0x080808, depthWrite: true,
+          polygonOffset: true, // Push the mesh back for line drawing
+          polygonOffsetFactor: 5.0, polygonOffsetUnits: 1.0
+        }));
       this.groundMesh.rotation.x = - Math.PI / 2;
       this.groundMesh.receiveShadow = true;
       this.scene.add(this.groundMesh);
@@ -147,7 +151,7 @@ var Environment = function (goldenContainer) {
             color: new THREE.Color(0xeeeeee),
             matcap: this.matcap,
             polygonOffset: true, // Push the mesh back for line drawing
-            polygonOffsetFactor: 1.0,
+            polygonOffsetFactor: 2.0,
             polygonOffsetUnits: 1.0
           }));
         currentFace.castShadow = true;
@@ -299,26 +303,26 @@ var Environment = function (goldenContainer) {
     }
     window.addEventListener('keydown', (event) => {
       switch (event.keyCode) {
-        case 76: // L
-        case 87: // W
+        // These match Unity's Hotkeys but I'm open to changing them
+        case 88: // X
           this.gizmoSpace = (this.gizmoSpace === "local") ? "world" : "local";
           this.handles.forEach((handle) => { handle.setSpace(this.gizmoSpace); });
           break;
-        case 84: // T
+        case 87: // W
           this.gizmoMode = "translate";
           this.handles.forEach((handle) => {
             //handle.showX = true; handle.showY = true; handle.showZ = true;
             handle.setMode(this.gizmoMode);
           });
           break;
-        case 82: // R
+        case 69: // E
           this.gizmoMode = "rotate";
           this.handles.forEach((handle) => {
             //handle.showX = true; handle.showY = true; handle.showZ = true;
             handle.setMode(this.gizmoMode);
           });
           break;
-        case 83: // S
+        case 82: // R
           this.gizmoMode = "scale";
           this.handles.forEach((handle) => {
             //handle.showX = false; handle.showY = false; handle.showZ = false;
