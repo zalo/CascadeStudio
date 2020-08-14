@@ -262,7 +262,7 @@ function Translate(offset, shapes, copy = false) {
     } else {
       shapes.Move(translation);
     }
-  } else if (shapes.length === 1) {
+  } else if (shapes.length >= 1) {
     for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++){
       if (copy) {
         shapes[shapeIndex] = shapes[shapeIndex].Moved(translation)
@@ -284,7 +284,7 @@ function Rotate(axis = [0, 1, 0], degrees = 0, shapes) {
   let rotation = new oc.TopLoc_Location(transformation);
   if (!isArrayLike(shapes)) {
     shapes.Move(rotation);
-  } else if (shapes.length === 1) {      // Do the normal rotation
+  } else if (shapes.length >= 1) {      // Do the normal rotation
     for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++){
       shapes[shapeIndex].Move(rotation);
     }
@@ -299,7 +299,7 @@ function Scale(scale = 1, shapes) {
   let scaleTrans = new oc.TopLoc_Location(transformation);
   if (!isArrayLike(shapes)) {
     shapes.Move(scaleTrans);
-  } else if (shapes.length === 1) {      // Do the normal scaling
+  } else if (shapes.length >= 1) {      // Do the normal scaling
     for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++){
       shapes[shapeIndex].Move(scaleTrans);
     }
