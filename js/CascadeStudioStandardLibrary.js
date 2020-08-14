@@ -238,7 +238,12 @@ function ChamferEdges(shape, distance, edgeList, keepOriginal = false) {
   return chamferedShape;
 }
 
-function Translate(offset = [0, 0, 0], shapes, copy=false) {
+function Translate(offset, shapes, copy = false, gizmo = false) {
+  if (gizmo) {
+    // Create the transform gizmo and add it to the scene
+    threejsViewport.createTransformHandle(offset, getCallingLocation());
+  }
+
   let transformation = new oc.gp_Trsf();
   transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
   let translation = new oc.TopLoc_Location(transformation);
@@ -468,4 +473,14 @@ function isArrayLike(item) {
         (item.length - 1) in item
       )
   );
+}
+
+// Mega Brittle Line Number Finding algorithm for back propagation
+function getCallingLocation() {
+  let errorStack = (new Error).stack;
+  let lineAndColumn = errorStack.split("\n")[3].split(", <anonymous>:")[1].split(':');
+  lineAndColumn[0] = parseFloat(lineAndColumn[0]);
+  lineAndColumn[1] = parseFloat(lineAndColumn[1]);
+  console.log(lineAndColumn);
+  return lineAndColumn;
 }

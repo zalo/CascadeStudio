@@ -165,6 +165,7 @@ function initialize(opencascade) {
                 Slider("MeshRes", 0.1, 0.01, 2);
 
                 sceneShapes = [];
+                threejsViewport.clearTransformHandles();
                 window.eval(newCode); // Evaluates the code in the editor
 
                 // This assembles all of the objects in the "workspace" and begins saving them out

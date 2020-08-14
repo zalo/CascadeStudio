@@ -57,21 +57,14 @@ var Environment = function (goldenContainer) {
 
       this.goldenContainer.on('resize', this.onWindowResize.bind(this));
   
-      this.draggableObjects = [this.ludic];
-      //this.dragControls = new THREE.DragControls(this.draggableObjects, this.camera, this.renderer.domElement);
-  
-      //if (this.orbit) {
-        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.target.set(0, 45, 0);
-        this.controls.panSpeed = 2;
-        this.controls.zoomSpeed = 1;
-        this.controls.screenSpacePanning = true;
-        this.controls.update();
-        this.controls.addEventListener('change', () => this.viewDirty = true);
-        //this.dragControls.addEventListener('dragstart', (data) => { this.controls.enabled = false;  data.object._isDragging = true; });
-        //this.dragControls.addEventListener('dragend', (data) => { this.controls.enabled = true; data.object._isDragging = false; });
-      //}
-      //this.dragControls.addEventListener('drag', () => this.viewDirty = true);
+      this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.target.set(0, 45, 0);
+      this.controls.panSpeed = 2;
+      this.controls.zoomSpeed = 1;
+      this.controls.screenSpacePanning = true;
+      this.controls.update();
+      this.controls.addEventListener('change', () => this.viewDirty = true);
+
       this.goldenContainer.layoutManager.eventHub.emit('Start');
     }
 
@@ -94,7 +87,8 @@ var Environment = function (goldenContainer) {
     this.openCascade     = openCascade;
     this.raycaster       = new THREE.Raycaster();
     this.highlightedObj  = null;
-  
+    this.handles         = [];
+
     this.loader = new THREE.TextureLoader();
     this.loader.setCrossOrigin ('');
     this.matcap = this.loader.load ('./textures/dullFrontLitMetal.png');
@@ -105,6 +99,53 @@ var Environment = function (goldenContainer) {
       this.mouse.x =   ( event.offsetX / this.goldenContainer.width  ) * 2 - 1;
       this.mouse.y = - ( event.offsetY / this.goldenContainer.height ) * 2 + 1;
     }, false );
+
+    this.createTransformHandle = (position, lineAndColumn) => {
+      let handle = new THREE.TransformControls(this.environment.camera,
+                                               this.environment.renderer.domElement);
+      console.log(lineAndColumn);
+      handle.lineAndColumn = lineAndColumn;
+      handle.onChanged = (event) => {
+        this.environment.controls.enabled = !event.value;
+
+        // Inject transform data back into the editor upon completion
+        if (this.environment.controls.enabled) {
+          let code = monacoEditor.getValue().split("\n");
+          let lineNum = handle.lineAndColumn[0] - 1;
+          code[lineNum] = code[lineNum].replace(/(Translate\(\[(.*?)\])/g,
+            "Translate([" +
+            handle.placeHolder.position.x.toFixed(2) + ", " +
+            -handle.placeHolder.position.z.toFixed(2) + ", " +
+            handle.placeHolder.position.y.toFixed(2) + "]");
+
+          let newCode = "";
+          code.forEach((codeLine) => {
+            newCode += codeLine + "\n";
+          });
+          monacoEditor.setValue(newCode.slice(0, -1));
+          monacoEditor.evaluateCode(false);
+        }
+      };
+      handle.addEventListener('dragging-changed', handle.onChanged);
+      
+      // Create a fake object for the handle to attach to
+      let emptyObject = new THREE.Group();
+      emptyObject.position.set(position[0], position[2], -position[1]);
+      this.environment.scene.add(emptyObject);
+      handle.placeHolder = emptyObject;
+      handle.attach(emptyObject);
+
+      this.handles.push(handle);
+      this.environment.scene.add( handle );
+    }
+    this.clearTransformHandles = () => {
+      this.handles.forEach((handle) => {
+        handle.removeEventListener('dragging-changed', handle.onChanged);
+        this.environment.scene.remove(handle.placeHolder);
+        this.environment.scene.remove(handle);
+      });
+      this.handles = [];
+    }
 
     this.updateShape = async (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) => {
       openCascadeHelper.setOpenCascade(this.openCascade);
