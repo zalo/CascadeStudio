@@ -143,13 +143,28 @@ function Button(name: string, callback?: CallableFunction) : void;
  * `callback` triggers when the button is clicked.*/
 function Checkbox(name: string, defaultValue: boolean, callback?: CallableFunction): boolean;
 
+/** BETA: Transform a shape using an in-view transformation gizmo.
+ * 
+ * Shortcuts: `T` - Translate, `R` - Rotate, `S` - Scale, `W`/`L` - Toggle World/Local Space
+ * 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
+ * @example```let transformedSphere = Transform(Sphere(50));```*/
+function Transform(shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
+/** BETA: Transform a shape using an in-view transformation gizmo.
+ * 
+ * Shortcuts: `T` - Translate, `R` - Rotate, `S` - Scale, `W`/`L` - Toggle World/Local
+ * 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
+ * @example```let transformedSphere = Transform(Sphere(50));```*/
+function Transform(translation: number[], rotation: (number|number[])[], scale: number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
+
 /** Translate a shape along the x, y, and z axes (using an array of 3 numbers).
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let upwardSphere = Translate([0, 0, 50], Sphere(50));```*/
-function Translate(offset: number[], shape: oc.TopoDS_Shape, copy?: boolean, gizmo?: boolean): oc.TopoDS_Shape;
+function Translate(offset: number[], shape: oc.TopoDS_Shape, copy?: boolean): oc.TopoDS_Shape;
 /** Translate a list of shapes along the x, y, and z axes (using an array of 3 numbers).
  * @example```let upwardBoxSphere = Translate([0, 0, 50], [Sphere(38), Box(50, 50, 50)]);```*/
-function Translate(offset: number[], shapes: oc.TopoDS_Shape[], copy?: boolean, gizmo?: boolean): oc.TopoDS_Shape[];
+function Translate(offset: number[], shapes: oc.TopoDS_Shape[], copy?: boolean): oc.TopoDS_Shape[];
 
 /** Rotate a shape degrees about a 3-coordinate axis.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)

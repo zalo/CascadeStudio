@@ -32,7 +32,7 @@ var Environment = function (goldenContainer) {
       this.scene.add(this.light2);
       //this.scene.add(new THREE.CameraHelper(this.light2.shadow.camera));
       this.groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000),
-                                       new THREE.MeshPhongMaterial  ({ color: 0x080808, depthWrite: false }));
+                                       new THREE.MeshPhongMaterial  ({ color: 0x080808, depthWrite: true }));
       this.groundMesh.rotation.x = - Math.PI / 2;
       this.groundMesh.receiveShadow = true;
       this.scene.add(this.groundMesh);
@@ -88,6 +88,8 @@ var Environment = function (goldenContainer) {
     this.raycaster       = new THREE.Raycaster();
     this.highlightedObj  = null;
     this.handles         = [];
+    this.gizmoMode       = "translate";
+    this.gizmoSpace      = "local";
 
     this.loader = new THREE.TextureLoader();
     this.loader.setCrossOrigin ('');
@@ -99,53 +101,6 @@ var Environment = function (goldenContainer) {
       this.mouse.x =   ( event.offsetX / this.goldenContainer.width  ) * 2 - 1;
       this.mouse.y = - ( event.offsetY / this.goldenContainer.height ) * 2 + 1;
     }, false );
-
-    this.createTransformHandle = (position, lineAndColumn) => {
-      let handle = new THREE.TransformControls(this.environment.camera,
-                                               this.environment.renderer.domElement);
-      console.log(lineAndColumn);
-      handle.lineAndColumn = lineAndColumn;
-      handle.onChanged = (event) => {
-        this.environment.controls.enabled = !event.value;
-
-        // Inject transform data back into the editor upon completion
-        if (this.environment.controls.enabled) {
-          let code = monacoEditor.getValue().split("\n");
-          let lineNum = handle.lineAndColumn[0] - 1;
-          code[lineNum] = code[lineNum].replace(/(Translate\(\[(.*?)\])/g,
-            "Translate([" +
-            handle.placeHolder.position.x.toFixed(2) + ", " +
-            -handle.placeHolder.position.z.toFixed(2) + ", " +
-            handle.placeHolder.position.y.toFixed(2) + "]");
-
-          let newCode = "";
-          code.forEach((codeLine) => {
-            newCode += codeLine + "\n";
-          });
-          monacoEditor.setValue(newCode.slice(0, -1));
-          monacoEditor.evaluateCode(false);
-        }
-      };
-      handle.addEventListener('dragging-changed', handle.onChanged);
-      
-      // Create a fake object for the handle to attach to
-      let emptyObject = new THREE.Group();
-      emptyObject.position.set(position[0], position[2], -position[1]);
-      this.environment.scene.add(emptyObject);
-      handle.placeHolder = emptyObject;
-      handle.attach(emptyObject);
-
-      this.handles.push(handle);
-      this.environment.scene.add( handle );
-    }
-    this.clearTransformHandles = () => {
-      this.handles.forEach((handle) => {
-        handle.removeEventListener('dragging-changed', handle.onChanged);
-        this.environment.scene.remove(handle.placeHolder);
-        this.environment.scene.remove(handle);
-      });
-      this.handles = [];
-    }
 
     this.updateShape = async (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) => {
       openCascadeHelper.setOpenCascade(this.openCascade);
@@ -263,7 +218,116 @@ var Environment = function (goldenContainer) {
 			link.download = filename;
 			link.click();
     }
-  
+
+    this.createTransformHandle = (position, rotation, scale, lineAndColumn) => {
+      let handle = new THREE.TransformControls(this.environment.camera,
+                                               this.environment.renderer.domElement);
+      handle.setTranslationSnap( 1 );
+      handle.setRotationSnap( THREE.MathUtils.degToRad( 1 ) );
+      handle.setScaleSnap(0.05);
+      handle.setMode(this.gizmoMode);
+      handle.setSpace(this.gizmoSpace);
+      handle.lineAndColumn = lineAndColumn;
+      handle.onChanged = (event) => {
+        this.environment.controls.enabled = !event.value;
+
+        // Inject transform data back into the editor upon completion
+        if (this.environment.controls.enabled) {
+          let code = monacoEditor.getValue().split("\n");
+          let lineNum = handle.lineAndColumn[0] - 1;
+
+          let translateString = "[" +
+             handle.placeHolder.position.x.toFixed() + ", " +
+            -handle.placeHolder.position.z.toFixed() + ", " +
+             handle.placeHolder.position.y.toFixed() + "]";
+          let axisAngle = [[0, 0, 0], 0];
+          let q = handle.placeHolder.quaternion;
+          if ((1 - (q.w * q.w)) > 0.001) {
+            axisAngle = [[
+               q.x / Math.sqrt(1 - q.w * q.w),
+              -q.z / Math.sqrt(1 - q.w * q.w),
+               q.y / Math.sqrt(1 - q.w * q.w),
+            ], 2 * Math.acos(q.w) * 57.2958];
+          }
+          let rotateString = "[[" +
+            axisAngle[0][0].toFixed(2) +  ", " + 
+            axisAngle[0][1].toFixed(2) +  ", " + 
+            axisAngle[0][2].toFixed(2) + "], " + 
+            axisAngle[1]   .toFixed(2) + "]";
+          let scaleString = handle.placeHolder.scale.x.toFixed(2); // Use this properly later
+          let updateString = "Transform(" + translateString + ", " + rotateString + ", " + scaleString + ",";
+
+          let fullSwapped = code[lineNum]
+            .replace(/(Transform\(\[(.*?)\]\,\s*\[\[(.*?)\,(.*?)\,(.*?)\]\,(.*?)]\, (.*?)\,)/, updateString);
+          if (!code[lineNum].includes(updateString)) { // Only update if the transform has changed!
+            if (fullSwapped === code[lineNum]) {
+              code[lineNum] = code[lineNum]
+                .replace(/(Transform\()/g, updateString + " "); // Initialize all the arguments
+            } else {
+              code[lineNum] = fullSwapped;
+            }
+
+            let newCode = "";
+            code.forEach((codeLine) => { newCode += codeLine + "\n"; });
+            monacoEditor.setValue(newCode.slice(0, -1));
+            monacoEditor.evaluateCode(false);
+          }
+        }
+      };
+      handle.addEventListener('dragging-changed', handle.onChanged);
+      
+      // Create a fake object for the handle to attach to
+      let emptyObject = new THREE.Group();
+      emptyObject.position.set(position[0], position[2], -position[1]);
+      emptyObject.setRotationFromAxisAngle(
+        new THREE.Vector3(rotation[0][0], rotation[0][2], -rotation[0][1]), rotation[1] * 0.0174533);
+      emptyObject.scale.set(scale, scale, scale);
+      this.environment.scene.add(emptyObject);
+      handle.placeHolder = emptyObject;
+      handle.attach(emptyObject);
+
+      this.handles.push(handle);
+      this.environment.scene.add( handle );
+    }
+    this.clearTransformHandles = () => {
+      this.handles.forEach((handle) => {
+        handle.removeEventListener('dragging-changed', handle.onChanged);
+        this.environment.scene.remove(handle.placeHolder);
+        this.environment.scene.remove(handle);
+      });
+      this.handles = [];
+    }
+    window.addEventListener('keydown', (event) => {
+      switch (event.keyCode) {
+        case 76: // L
+        case 87: // W
+          this.gizmoSpace = (this.gizmoSpace === "local") ? "world" : "local";
+          this.handles.forEach((handle) => { handle.setSpace(this.gizmoSpace); });
+          break;
+        case 84: // T
+          this.gizmoMode = "translate";
+          this.handles.forEach((handle) => {
+            //handle.showX = true; handle.showY = true; handle.showZ = true;
+            handle.setMode(this.gizmoMode);
+          });
+          break;
+        case 82: // R
+          this.gizmoMode = "rotate";
+          this.handles.forEach((handle) => {
+            //handle.showX = true; handle.showY = true; handle.showZ = true;
+            handle.setMode(this.gizmoMode);
+          });
+          break;
+        case 83: // S
+          this.gizmoMode = "scale";
+          this.handles.forEach((handle) => {
+            //handle.showX = false; handle.showY = false; handle.showZ = false;
+            handle.setMode(this.gizmoMode);
+          });
+          break;
+      }
+    });
+
     this.animate = function animatethis() {
       requestAnimationFrame(() => this.animate());
 

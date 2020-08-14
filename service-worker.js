@@ -15,6 +15,7 @@ var offlineFundamentals = [
   "node_modules/three/build/three.min.js",
   "node_modules/three/examples/js/controls/DragControls.js",
   "node_modules/three/examples/js/controls/OrbitControls.js",
+  "node_modules/three/examples/js/controls/TransformControls.js",
   "node_modules/three/examples/js/exporters/STLExporter.js",
   "node_modules/three/examples/js/exporters/OBJExporter.js",
   "node_modules/controlkit/bin/controlKit.js",
@@ -90,6 +91,8 @@ self.addEventListener("fetch", function(event) {
       if (cached) {
         return cached;
       } else {
+        console.error(request.url + " not found in Cache!  "+
+          "Was it included at the top of service-worker.js ? ");
         return new Response('<h1>Service Unavailable</h1>', {
           status: 503,
           statusText: 'Service Unavailable',
@@ -103,7 +106,7 @@ self.addEventListener("fetch", function(event) {
   
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, {cache: "default"})
       .then(function (response) {
            let cacheCopy = response.clone();
            caches

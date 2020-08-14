@@ -238,12 +238,20 @@ function ChamferEdges(shape, distance, edgeList, keepOriginal = false) {
   return chamferedShape;
 }
 
-function Translate(offset, shapes, copy = false, gizmo = false) {
-  if (gizmo) {
+function Transform(translation, rotation, scale, shapes) {
+  if (arguments.length == 4) {
     // Create the transform gizmo and add it to the scene
-    threejsViewport.createTransformHandle(offset, getCallingLocation());
+    threejsViewport.createTransformHandle(translation, rotation, scale, getCallingLocation());
+    // Transform the Object(s)
+    return Translate(translation, Rotate(rotation[0], rotation[1], Scale(scale, shapes)));
+  } else {
+    // Create the transform gizmo and add it to the scene
+    threejsViewport.createTransformHandle([0, 0, 0], [[0, 1, 0], 1], 1, getCallingLocation());
+    return translation; // The first element will be the shapes
   }
+}
 
+function Translate(offset, shapes, copy = false) {
   let transformation = new oc.gp_Trsf();
   transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
   let translation = new oc.TopLoc_Location(transformation);
@@ -268,6 +276,7 @@ function Translate(offset, shapes, copy = false, gizmo = false) {
 }
 
 function Rotate(axis = [0, 1, 0], degrees = 0, shapes) {
+  if (degrees === 0) { return shapes; }
   let transformation = new oc.gp_Trsf();
   transformation.SetRotation(
     new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), new oc.gp_Dir(
@@ -284,6 +293,7 @@ function Rotate(axis = [0, 1, 0], degrees = 0, shapes) {
 }
 
 function Scale(scale = 1, shapes) {
+  if (scale === 1) { return shapes; }
   let transformation = new oc.gp_Trsf();
   transformation.SetScaleFactor(scale);
   let scaleTrans = new oc.TopLoc_Location(transformation);
@@ -475,12 +485,11 @@ function isArrayLike(item) {
   );
 }
 
-// Mega Brittle Line Number Finding algorithm for back propagation
+// Mega Brittle Line Number Finding algorithm for back propagation; may only work in Chrome?!?
 function getCallingLocation() {
   let errorStack = (new Error).stack;
   let lineAndColumn = errorStack.split("\n")[3].split(", <anonymous>:")[1].split(':');
   lineAndColumn[0] = parseFloat(lineAndColumn[0]);
   lineAndColumn[1] = parseFloat(lineAndColumn[1]);
-  console.log(lineAndColumn);
   return lineAndColumn;
 }
