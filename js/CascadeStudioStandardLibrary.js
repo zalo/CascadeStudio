@@ -34,7 +34,7 @@ function Sphere(radius) {
   return curSphere;
 }
 
-function Cylinder(radius, height, centered = false) {
+function Cylinder(radius, height, centered) {
   let curCylinder = CacheOp(arguments, () => {
     let cylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, centered ? -height / 2 : 0), new oc.gp_Dir(0, 0, 1));
     return new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, radius, height).Shape();
@@ -51,7 +51,7 @@ function Cone(radius1, radius2, height) {
   return curCone;
 }
 
-function Polygon(points, wire = false) {
+function Polygon(points, wire) {
   let curPolygon = CacheOp(arguments, () => {
     let gpPoints = [];
     for (let ind = 0; ind < points.length; ind++) {
@@ -81,7 +81,7 @@ function Polygon(points, wire = false) {
   return curPolygon;
 }
 
-function Circle(radius, wire = false) {
+function Circle(radius, wire) {
   let curCircle = CacheOp(arguments, () => {
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0),
       new oc.gp_Dir(0, 0, 1)), radius).Value();
@@ -94,7 +94,7 @@ function Circle(radius, wire = false) {
   return curCircle;
 }
 
-function BSpline(inPoints, closed = false, wire = false) {
+function BSpline(inPoints, closed, wire) {
   let curSpline = CacheOp(arguments, () => {
     let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed ? 1 : 0));
     for (let pIndex = 1; pIndex <= inPoints.length; pIndex++) {
@@ -114,7 +114,11 @@ function BSpline(inPoints, closed = false, wire = false) {
   return curSpline;
 }
 
-function Text3D(text = "Hello!", size = 36, height = 0.15, fontURL = curFontURL) {
+function Text3D(text, size, height, fontURL) {
+  if (!size   ) { size    = 36; }
+  if (!height ) { height  = 0.15; }
+  if (!fontURL) { fontURL = curFontURL; }
+
   let curText = CacheOp(arguments, () => {
     if (fontURL !== curFontURL) {
       curFontURL = fontURL;
@@ -189,6 +193,7 @@ function Text3D(text = "Hello!", size = 36, height = 0.15, fontURL = curFontURL)
     if (height === 0) {
       return textFaces[textFaces.length - 1];
     } else {
+      textFaces[textFaces.length - 1].text = text; // Invalidate the text cache for the Extrude Call!
       return Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
     }
   });
@@ -285,84 +290,77 @@ function Transform(translation, rotation, scale, shapes) {
   });
 }
 
-function Translate(offset, shapes, copy = false) {
-  shapes = CacheOp(arguments, () => {
+function Translate(offset, shapes, keepOriginal) {
+  let translated = CacheOp(arguments, () => {
     let transformation = new oc.gp_Trsf();
     transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
     let translation = new oc.TopLoc_Location(transformation);
     if (!isArrayLike(shapes)) {
-      if (copy) {
-        shapes = shapes.Moved(translation);
-      } else {
-        shapes.Move(translation);
-      }
-    } else if (shapes.length >= 1) {
+      return new oc.TopoDS_Shape(shapes.Moved(translation));
+    } else if (shapes.length >= 1) {      // Do the normal rotation
+      let newTrans = [];
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-        if (copy) {
-          shapes[shapeIndex] = shapes[shapeIndex].Moved(translation);
-        } else {
-          shapes[shapeIndex].Move(translation);
-        }
+        newTrans.push(new oc.TopoDS_Shape(shapes[shapeIndex].Moved(translation)));
       }
+      return newTrans;
     }
-    return shapes;
   });
 
-  if (copy) {
-    if (!isArrayLike(shapes)) {
-      sceneShapes.push(shapes);
-    } else {
-      for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-        sceneShapes.push(shapes[shapeIndex]);
-      }
-    }
-  }
+  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shapes); }
+  sceneShapes.push(translated);
 
-  return shapes;
+  return translated;
 }
 
-function Rotate(axis = [0, 1, 0], degrees = 0, shapes) {
+function Rotate(axis, degrees, shapes, keepOriginal) {
   if (degrees === 0) { return shapes; }
-  shapes = CacheOp(arguments, () => {
+  let rotated = CacheOp(arguments, () => {
+    let newRot;
     let transformation = new oc.gp_Trsf();
     transformation.SetRotation(
       new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), new oc.gp_Dir(
         new oc.gp_Vec(axis[0], axis[1], axis[2]))), degrees * 0.0174533);
     let rotation = new oc.TopLoc_Location(transformation);
     if (!isArrayLike(shapes)) {
-      shapes.Move(rotation);
+      newRot = new oc.TopoDS_Shape(shapes.Moved(rotation));
     } else if (shapes.length >= 1) {      // Do the normal rotation
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
         shapes[shapeIndex].Move(rotation);
       }
     }
-    return shapes;
+    return newRot;
   });
-  return shapes;
+  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shapes); }
+  sceneShapes.push(rotated);
+  return rotated;
 }
 
-function Scale(scale = 1, shapes) {
-  if (scale === 1) { return shapes; }
-  shapes = CacheOp(arguments, () => {
+function Scale(scale, shapes, keepOriginal) {
+  let scaled = CacheOp(arguments, () => {
     let transformation = new oc.gp_Trsf();
     transformation.SetScaleFactor(scale);
-    let scaleTrans = new oc.TopLoc_Location(transformation);
+    let scaling = new oc.TopLoc_Location(transformation);
     if (!isArrayLike(shapes)) {
-      shapes.Move(scaleTrans);
-    } else if (shapes.length >= 1) {      // Do the normal scaling
+      return new oc.TopoDS_Shape(shapes.Moved(scaling));
+    } else if (shapes.length >= 1) {      // Do the normal rotation
+      let newScale = [];
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-        shapes[shapeIndex].Move(scaleTrans);
+        newScale.push(new oc.TopoDS_Shape(shapes[shapeIndex].Moved(scaling)));
       }
+      return newScale;
     }
-    return shapes;
   });
-  return shapes;
+
+  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shapes); }
+  sceneShapes.push(scaled);
+
+  return scaled;
 }
 
 // TODO: These ops can be more cache optimized since they're multiple sequential ops
-function Union(objectsToJoin = [], keepObjects = false) {
+function Union(objectsToJoin, keepObjects) {
   let curUnion = CacheOp(arguments, () => {
-    let combined = objectsToJoin[0];
+    let combined = new oc.TopoDS_Shape(objectsToJoin[0]);
     if (objectsToJoin.length > 1) {
       for (let i = 0; i < objectsToJoin.length; i++) {
         if (i > 0) { combined = new oc.BRepAlgoAPI_Fuse(combined, objectsToJoin[i]).Shape(); }
@@ -378,19 +376,18 @@ function Union(objectsToJoin = [], keepObjects = false) {
   return curUnion;
 }
 
-function Difference(mainBody, objectsToSubtract = [], keepObjects = false) {
+function Difference(mainBody, objectsToSubtract, keepObjects) {
   let curDifference = CacheOp(arguments, () => {
-    let difference = mainBody;
-    if (!keepObjects) { sceneShapes = Remove(sceneShapes, mainBody); }
+    let difference = new oc.TopoDS_Shape(mainBody);
     if (objectsToSubtract.length >= 1) {
       for (let i = 0; i < objectsToSubtract.length; i++) {
         difference = new oc.BRepAlgoAPI_Cut(difference, objectsToSubtract[i]).Shape();
-        if (!keepObjects) { sceneShapes = Remove(sceneShapes, objectsToSubtract[i]); }
       }
     }
     return difference;
   });
 
+  if (!keepObjects) { sceneShapes = Remove(sceneShapes, mainBody); }
   for (let i = 0; i < objectsToSubtract.length; i++) {
     if (!keepObjects) { sceneShapes = Remove(sceneShapes, objectsToSubtract[i]); }
   }
@@ -398,13 +395,12 @@ function Difference(mainBody, objectsToSubtract = [], keepObjects = false) {
   return curDifference;
 }
 
-function Intersection(objectsToIntersect = [], keepObjects = false) {
+function Intersection(objectsToIntersect, keepObjects) {
   let curIntersection = CacheOp(arguments, () => {
-    let intersected = objectsToIntersect[0];
+    let intersected = new oc.TopoDS_Shape(objectsToIntersect[0]);
     if (objectsToIntersect.length > 1) {
       for (let i = 0; i < objectsToIntersect.length; i++) {
         if (i > 0) { intersected = new oc.BRepAlgoAPI_Common(intersected, objectsToIntersect[i]).Shape(); }
-        
       }
     }
     return intersected;
@@ -417,7 +413,7 @@ function Intersection(objectsToIntersect = [], keepObjects = false) {
   return curIntersection;
 }
 
-function Extrude(face, direction, keepFace = false) {
+function Extrude(face, direction, keepFace) {
   let curExtrusion = CacheOp(arguments, () => {
     return new oc.BRepPrimAPI_MakePrism(face,
       new oc.gp_Vec(direction[0], direction[1], direction[2])).Shape();
@@ -428,7 +424,8 @@ function Extrude(face, direction, keepFace = false) {
   return curExtrusion;
 }
 
-function Offset(shape, offsetDistance, tolerance = 0.1, keepShape = false) {
+function Offset(shape, offsetDistance, tolerance, keepShape) {
+  if (!tolerance) { tolerance = 0.1; }
   if (offsetDistance === 0.0) { return shape; }
   let curOffset = CacheOp(arguments, () => {
     let offset = new oc.BRepOffsetAPI_MakeOffsetShape();
@@ -556,58 +553,38 @@ function Checkbox(name = "Toggle", defaultValue = false, callback = monacoEditor
 
 // Caching functions to speed up evaluation of slow redundant operations
 var argCache = {};
-/* This caches expensive CAD functions by their input arguments */
 function CacheOp(args, cacheMiss) {
   let check = CheckCache(args);
   if (check) {
-    return check;
+    //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
+    let copy = new oc.TopoDS_Shape(check);
+    copy.hash = check.hash;
+    return copy;
   } else {
+    //console.log("MISSED " + ComputeHash(args) + ", " + ComputeHash(args, true));
+    let curHash = ComputeHash(args);
     let miss = cacheMiss();
-    AddToCache(miss);
+    AddToCache(curHash, miss);
     return miss;
   }
 }
 function CheckCache(args) { return argCache[ComputeHash(args)] || null; }
-function AddToCache(args, shape) {
-  let arghash = ComputeHash(args);
-  argCache[arghash] = shape;
-  if (isArrayLike(shape)) {
-    let ind = 0;
-    shape.foreach((s) => {
-      s.hash = arghash + (ind++);
-    });
-  } else {
-    shape.hash = arghash;
-  }
-  return arghash;
+function AddToCache(hash, shape) {
+  shape.hash = hash; // This is the sceneShapes version of the object
+  shape      = new oc.TopoDS_Shape(shape);
+  shape.hash = hash; // This is the cached version of the object
+  argCache[hash] = shape;
+  return hash;
 }
 
-function ComputeHash(args) {
-  let name = args.callee.split("(")[0].trim();
-  let hash = stringToHash(name);
-  recursiveTraverse(args, (obj) => {
-    let curHash = 0;
-    // Check if number, string, or shape and hash
-    console.log(typeof obj);
-    if (obj.HashCode) {
-      //curHash = obj.HashCode(1000000);  // THIS IS JUST A HASH OF THE POINTER GRAH
-      if (obj.hash) { curHash = obj.hash; // Use a custom-defined hash function...
-      } else {
-        console.error("An Argument was not cached via the standard " +
-          "library!  Nothing after this can be reliably cached!");
-        curHash = -1;
-      }
-    } else if (typeof obj === "number") {
-      curHash = obj;
-    } else if (typeof obj === "boolean") {
-      curHash = obj ? 1 : 0;
-    } else {
-      curHash = stringToHash(obj.toString());
-    }
-    // Hash this object with the current hash
-    hash = CantorPairing(hash, curHash);
-  });
-  return hash;
+function ComputeHash(args, raw) {
+  let argsString = JSON.stringify(args);
+  argsString = argsString.replace(/(\"ptr\"\:(-?[0-9]*?)\,)/g, '');
+  argsString = argsString.replace(/(\"ptr\"\:(-?[0-9]*))/g, '');
+  if (argsString.includes("ptr")) { console.error("YOU DONE MESSED UP YOUR REGEX."); }
+  let hashString = args.callee.name + argsString;// + GUIState["MeshRes"];
+  if (raw) { return hashString; }
+  return stringToHash(hashString);
 }
 
 // Random Javascript Utilities
@@ -632,7 +609,10 @@ function recursiveTraverse(x, callback) {
 }
 
 function Remove(inputArray, objectToRemove) {
-  return inputArray.filter((el) => { return el !== objectToRemove; });
+  return inputArray.filter((el) => {
+    return el.hash !== objectToRemove.hash ||
+           el.ptr  !== objectToRemove.ptr;//el !== objectToRemove;
+  });
 }
 
 function isArrayLike(item) {

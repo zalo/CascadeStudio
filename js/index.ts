@@ -156,33 +156,33 @@ function Transform(shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
  * 
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let transformedSphere = Transform(Sphere(50));```*/
-function Transform(translation: number[], rotation: (number|number[])[], scale: number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
+function Transform(translation: number[], rotation: (number|number[])[], scale: number, shape: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape;
 
 /** Translate a shape along the x, y, and z axes (using an array of 3 numbers).
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let upwardSphere = Translate([0, 0, 50], Sphere(50));```*/
-function Translate(offset: number[], shape: oc.TopoDS_Shape, copy?: boolean): oc.TopoDS_Shape;
+function Translate(offset: number[], shape: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape;
 /** Translate a list of shapes along the x, y, and z axes (using an array of 3 numbers).
  * @example```let upwardBoxSphere = Translate([0, 0, 50], [Sphere(38), Box(50, 50, 50)]);```*/
-function Translate(offset: number[], shapes: oc.TopoDS_Shape[], copy?: boolean): oc.TopoDS_Shape[];
+function Translate(offset: number[], shapes: oc.TopoDS_Shape[], keepOriginal?: boolean): oc.TopoDS_Shape[];
 
 /** Rotate a shape degrees about a 3-coordinate axis.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let leaningCylinder = Rotate([0, 1, 0], 45, Cylinder(25, 50));```*/
-function Rotate(axis: number[], degrees: number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
+function Rotate(axis: number[], degrees: number, shape: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape;
 /** Rotate a list of shapes degrees about a 3-coordinate axis.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let leaningCylinder = Rotate([0, 1, 0], 45, [Cylinder(25, 50), Cylinder(15, 70)]);```*/
-function Rotate(axis: number[], degrees: number, shapes: oc.TopoDS_Shape[]): oc.TopoDS_Shape[];
+function Rotate(axis: number[], degrees: number, shapes: oc.TopoDS_Shape[], keepOriginal?: boolean): oc.TopoDS_Shape[];
 
 /** Scale a shape to be `scale` times its current size.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let scaledCylinder = Scale(50, Cylinder(0.5, 1));```*/
-function Scale(scale: number, shape: oc.TopoDS_Shape): oc.TopoDS_Shape;
+function Scale(scale: number, shape: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape;
 /** Scale a list of shapes to be `scale` times their current size.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let scaledCylinder = Scale(50, [Cylinder(0.5, 1), Cylinder(0.25, 2)]);```*/
-function Scale(scale: number, shapes: oc.TopoDS_Shape[]): oc.TopoDS_Shape[];
+function Scale(scale: number, shapes: oc.TopoDS_Shape[], keepOriginal?: boolean): oc.TopoDS_Shape[];
 
 /** Iterate over all the shells in this shape, calling `callback` on each one. */
 function ForEachShell(shape: oc.TopoDS_Shape, callback: (index: Number, shell: oc.TopoDS_Shell) => void): void;
