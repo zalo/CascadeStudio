@@ -84,14 +84,24 @@
             firebase.auth().onAuthStateChanged(function(user) {
               if (user) {
                 // User is signed in.
-                var displayName = user.displayName;
-                var email = user.email;
-                var emailVerified = user.emailVerified;
-                var photoURL = user.photoURL;
-                var uid = user.uid;
-                var phoneNumber = user.phoneNumber;
-                var providerData = user.providerData;
-                user.getIdToken().then(function(accessToken) {
+                //var displayName = user.displayName;
+                //var email = user.email;
+                //var emailVerified = user.emailVerified;
+                //var photoURL = user.photoURL;
+                //var uid = user.uid;
+                //var phoneNumber = user.phoneNumber;
+                //var providerData = user.providerData;
+                console.log(user);
+
+                // Render the signout button
+                document.getElementById("firebaseui-auth-container").innerHTML = "";
+                let signout = document.createElement("button");
+                signout.innerText = "Sign Out " + user.email.split("@")[0];
+                signout.onclick = () =>{ firebase.auth().signOut();  window.location.reload(); };
+                signout.className = "inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4";
+                document.getElementById("firebaseui-auth-container").appendChild(signout);
+
+                //user.getIdToken().then(function(accessToken) {
                   //document.getElementById('sign-in-status').textContent = 'Signed in';
                   //document.getElementById('sign-in').textContent = 'Sign out';
                   /*document.getElementById('account-details').textContent = JSON.stringify({
@@ -104,14 +114,8 @@
                     accessToken: accessToken,
                     //providerData: providerData
                   }, null, '  ');*/
-                  // Render the signout button
-                  document.getElementById("firebaseui-auth-container").innerHTML = "";
-                  let signout = document.createElement("button");
-                  signout.innerText = "Sign Out " + email.split("@")[0];
-                  signout.onclick = () =>{ firebase.auth().signOut();  window.location.reload(); };
-                  signout.className = "inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4";
-                  document.getElementById("firebaseui-auth-container").appendChild(signout);
-                });
+                  
+                //});
 
               } else {
                 // User is signed out.
