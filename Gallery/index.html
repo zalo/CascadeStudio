@@ -15,6 +15,119 @@
 
         <!-- Include Tailwind.css -->
         <link href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css" rel="stylesheet">
+
+        <!-- The core Firebase JS SDK is always required and must be listed first -->
+        <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-app.js"></script>
+
+        <!-- TODO: Add SDKs for Firebase products that you want to use
+            https://firebase.google.com/docs/web/setup#available-libraries -->
+        <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-auth.js"></script>
+
+        <script>
+          // Your web app's Firebase configuration
+          var firebaseConfig = {
+            apiKey: "AIzaSyBxJH3SLxUnG0wiZsSRSHiiAFMoEjadoCk",
+            authDomain: "cascade-studio-gallery.firebaseapp.com",
+            databaseURL: "https://cascade-studio-gallery.firebaseio.com",
+            projectId: "cascade-studio-gallery",
+            storageBucket: "cascade-studio-gallery.appspot.com",
+            messagingSenderId: "436110758694",
+            appId: "1:436110758694:web:1873f6d5aa4649fbe927e7"
+          };
+          // Initialize Firebase
+          firebase.initializeApp(firebaseConfig);
+        </script>
+
+        <!-- Include the Firebase Sign-in Auth UI -->
+        <script src="https://www.gstatic.com/firebasejs/ui/4.6.1/firebase-ui-auth.js"></script>
+        <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/4.6.1/firebase-ui-auth.css" />
+        <script type="text/javascript">
+          // FirebaseUI config.
+          var uiConfig = {
+            signInFlow: 'popup',
+            signInSuccessUrl: window.location.href,
+            signInOptions: [
+              // Leave the lines as is for the providers you want to offer your users.
+              {
+                // Google provider must be enabled in Firebase Console to support one-tap
+                // sign-up.
+                provider: firebase.auth.GoogleAuthProvider.PROVIDER_ID,
+                // Required to enable ID token credentials for this provider.
+                // This can be obtained from the Credentials page of the Google APIs
+                // console. Use the same OAuth client ID used for the Google provider
+                // configured with GCIP or Firebase Auth.
+                clientId: '436110758694-i89nnh4edgholaaskaaab6ik3tq1laf7.apps.googleusercontent.com'
+              },
+              //firebase.auth.GoogleAuthProvider.PROVIDER_ID,
+              //firebase.auth.FacebookAuthProvider.PROVIDER_ID,
+              //firebase.auth.TwitterAuthProvider.PROVIDER_ID,
+              //firebase.auth.GithubAuthProvider.PROVIDER_ID,
+              //firebase.auth.EmailAuthProvider.PROVIDER_ID,
+              //firebase.auth.PhoneAuthProvider.PROVIDER_ID,
+              //firebaseui.auth.AnonymousAuthProvider.PROVIDER_ID
+            ],
+              // Required to enable one-tap sign-up credential helper.
+            credentialHelper: firebaseui.auth.CredentialHelper.GOOGLE_YOLO,
+            // tosUrl and privacyPolicyUrl accept either url string or a callback
+            // function.
+            // Terms of service url/callback.
+            tosUrl: '<your-tos-url>',
+            // Privacy policy url/callback.
+            privacyPolicyUrl: function() {
+              window.location.assign('<your-privacy-policy-url>');
+            }
+          };
+    
+          // Initialize the FirebaseUI Widget using Firebase.
+          var ui = new firebaseui.auth.AuthUI(firebase.auth());
+          // The start method will wait until the DOM is loaded.
+          //if (!ui.isPendingRedirect()) {
+            ui.start('#firebaseui-auth-container', uiConfig);
+          //}
+        </script>
+
+        <script type="text/javascript">
+          initApp = function() {
+            firebase.auth().onAuthStateChanged(function(user) {
+              if (user) {
+                // User is signed in.
+                var displayName = user.displayName;
+                var email = user.email;
+                var emailVerified = user.emailVerified;
+                var photoURL = user.photoURL;
+                var uid = user.uid;
+                var phoneNumber = user.phoneNumber;
+                var providerData = user.providerData;
+                user.getIdToken().then(function(accessToken) {
+                  document.getElementById('sign-in-status').textContent = 'Signed in';
+                  document.getElementById('sign-in').textContent = 'Sign out';
+                  document.getElementById('account-details').textContent = JSON.stringify({
+                    displayName: displayName,
+                    email: email,
+                    emailVerified: emailVerified,
+                    phoneNumber: phoneNumber,
+                    photoURL: photoURL,
+                    uid: uid,
+                    accessToken: accessToken,
+                    //providerData: providerData
+                  }, null, '  ');
+                });
+              } else {
+                // User is signed out.
+                document.getElementById('sign-in-status').textContent = 'Signed out';
+                document.getElementById('sign-in').textContent = 'Sign in';
+                document.getElementById('account-details').textContent = 'null';
+              }
+            }, function(error) {
+              console.log(error);
+            });
+          };
+
+          window.addEventListener('load', function() {
+            initApp();
+          });
+        </script>
+        
     </head>
 
     <body style="margin: 0; background: rgb(54, 54, 54); color: white; ">
@@ -28,7 +141,8 @@
           <div class="text-sm flex-grow inline-block">
             <a href="/Gallery"         class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Gallery</a>
             <a href="/"                class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Create</a>
-            <a href="/Gallery/Profile" class="inline-block mt-0 text-gray-200 hover:text-white"     >Profile</a>
+            <!--<a href="/Gallery/Profile" class="inline-block mt-0 text-gray-200 hover:text-white"     >Profile</a>-->
+            <div id="firebaseui-auth-container"></div>
           </div>
           <div class="inline-block">
             <a href="#" class="inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4">Search</a>
@@ -36,13 +150,18 @@
         </div>
       </nav>
 
+      <button id="sign-out" onclick="firebase.auth().signOut();">Sign Out</button>
+      <div id="sign-in-status"></div>
+      <div id="sign-in"></div>
+      <pre id="account-details"></pre>
+
       <!-- Gallery Set of Cards -->
       <div class="flex flex-wrap justify-center -mb-4 p-4">
 
         <!-- An Example Card-->
         <div id="card" class="max-w-sm p-4">
           <div class="max-w-sm rounded overflow-hidden shadow-lg bg-gray-800">
-            <img class="w-full" src="Gallery/img/card-top.jpg" alt="Sunset in the mountains">
+            <img class="w-full" src="./img/card-top.jpg" alt="Sunset in the mountains">
             <div class="px-6 py-2">
               <div class="font-bold text-xl mb-0 text-white">Random Mountain</div>
             </div>
