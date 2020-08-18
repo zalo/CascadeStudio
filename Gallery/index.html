@@ -77,13 +77,6 @@
               window.location.assign('<your-privacy-policy-url>');
             }
           };
-    
-          // Initialize the FirebaseUI Widget using Firebase.
-          var ui = new firebaseui.auth.AuthUI(firebase.auth());
-          // The start method will wait until the DOM is loaded.
-          //if (!ui.isPendingRedirect()) {
-            ui.start('#firebaseui-auth-container', uiConfig);
-          //}
         </script>
 
         <script type="text/javascript">
@@ -99,9 +92,9 @@
                 var phoneNumber = user.phoneNumber;
                 var providerData = user.providerData;
                 user.getIdToken().then(function(accessToken) {
-                  document.getElementById('sign-in-status').textContent = 'Signed in';
-                  document.getElementById('sign-in').textContent = 'Sign out';
-                  document.getElementById('account-details').textContent = JSON.stringify({
+                  //document.getElementById('sign-in-status').textContent = 'Signed in';
+                  //document.getElementById('sign-in').textContent = 'Sign out';
+                  /*document.getElementById('account-details').textContent = JSON.stringify({
                     displayName: displayName,
                     email: email,
                     emailVerified: emailVerified,
@@ -110,13 +103,28 @@
                     uid: uid,
                     accessToken: accessToken,
                     //providerData: providerData
-                  }, null, '  ');
+                  }, null, '  ');*/
+                  // Render the signout button
+                  document.getElementById("firebaseui-auth-container").innerHTML = "";
+                  let signout = document.createElement("button");
+                  signout.innerText = "Sign Out " + email.split("@")[0];
+                  signout.onclick = () =>{ firebase.auth().signOut();  window.location.reload(); };
+                  signout.className = "inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4";
+                  document.getElementById("firebaseui-auth-container").appendChild(signout);
                 });
+
               } else {
                 // User is signed out.
-                document.getElementById('sign-in-status').textContent = 'Signed out';
-                document.getElementById('sign-in').textContent = 'Sign in';
-                document.getElementById('account-details').textContent = 'null';
+                //document.getElementById('sign-in-status').textContent = 'Signed out';
+                //document.getElementById('sign-in').textContent = 'Sign in';
+                //document.getElementById('account-details').textContent = 'null';
+                // Initialize the FirebaseUI Widget using Firebase.
+                var ui = new firebaseui.auth.AuthUI(firebase.auth());
+                // The start method will wait until the DOM is loaded.
+                //if (ui.isPendingRedirect()) {
+                  ui.start('#firebaseui-auth-container', uiConfig);
+                //}
+                ui.disableAutoSignIn();
               }
             }, function(error) {
               console.log(error);
@@ -142,18 +150,15 @@
             <a href="/Gallery"         class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Gallery</a>
             <a href="/"                class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Create</a>
             <!--<a href="/Gallery/Profile" class="inline-block mt-0 text-gray-200 hover:text-white"     >Profile</a>-->
-            <div id="firebaseui-auth-container"></div>
           </div>
           <div class="inline-block">
             <a href="#" class="inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4">Search</a>
           </div>
+          <div id="firebaseui-auth-container" class="inline-block"></div>
         </div>
       </nav>
 
-      <button id="sign-out" onclick="firebase.auth().signOut();">Sign Out</button>
-      <div id="sign-in-status"></div>
-      <div id="sign-in"></div>
-      <pre id="account-details"></pre>
+      <!--<pre id="account-details"></pre>-->
 
       <!-- Gallery Set of Cards -->
       <div class="flex flex-wrap justify-center -mb-4 p-4">
