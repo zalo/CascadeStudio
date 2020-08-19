@@ -10,9 +10,9 @@ firebase.initializeApp({
 });
 
 // Get a reference to the database object
-var db      = firebase.firestore();
+var db         = firebase.firestore();
 // Get a reference to the storage object
-var storage = firebase.storage();
+var storage    = firebase.storage();
 var storageRef = storage.ref();
 
 // FirebaseUI config.
@@ -34,6 +34,7 @@ var uiConfig = {
   }
 };
 
+var onLoadUserProfile = [];
 initApp = function () {
   firebase.auth().onAuthStateChanged(function (user) {
     if (user) {
@@ -42,19 +43,49 @@ initApp = function () {
 
       // Render the signout button
       document.getElementById("firebaseui-auth-container").innerHTML = "";
-      let signout = document.createElement("button");
-      signout.innerText = "Sign Out " + user.email.split("@")[0];
-      signout.onclick = () => { firebase.auth().signOut(); window.location.reload(); };
-      signout.className = "inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4";
-      document.getElementById("firebaseui-auth-container").appendChild(signout);
+
+      // Check status of user Profile
+      db.collection("users").doc(user.uid)
+        .get().then(function (userProfile) {
+          let userProfileData = null;
+          if (userProfile.exists) {
+            userProfileData = userProfile.data();
+          } else {
+            console.log("No such Profile!  Adding now...")
+            userProfileData = {
+              username: user.email.split("@")[0],
+              avatar: user.photoURL,
+              projects: [],
+              summary: "",
+            };
+            db.collection("users").doc(user.uid).set(userProfileData);
+          }
+
+          onLoadUserProfile.forEach((callback) => callback(userProfileData, user));
+          //console.log(userProfileData);
+
+          let signout = document.createElement("button");
+          signout.innerText = "Sign Out " + userProfileData.username;
+          signout.onclick = () => {
+            firebase.auth().signOut();
+            document.getElementById("firebaseui-auth-container").removeChild(signout);
+            window.location.reload();
+            ui.disableAutoSignIn();
+          };
+          signout.className = "inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4";
+          document.getElementById("firebaseui-auth-container").appendChild(signout);
+
+        }).catch(function (error) {
+          console.log("Error getting document:", error)
+        });
 
     } else {
       // User is signed out.
       // Initialize the FirebaseUI Widget using Firebase.
       var ui = new firebaseui.auth.AuthUI(firebase.auth());
+      ui.disableAutoSignIn(); // Doesn't seem to work?
       // The start method will wait until the DOM is loaded.
       ui.start('#firebaseui-auth-container', uiConfig);
-      ui.disableAutoSignIn(); // Doesn't seem to work?
     }
   }, function (error) {
     console.log(error);
@@ -72,7 +103,7 @@ var headerHTML = `
     <div class="text-sm flex-grow inline-block">
       <a href="/Gallery"         class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Gallery</a>
       <a href="/"                class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Create</a>
-      <!--<a href="/Gallery/Profile" class="inline-block mt-0 text-gray-200 hover:text-white"     >Profile</a>-->
+      <a href="/Gallery/EditProfile" class="inline-block mt-0 text-gray-200 hover:text-white"     >Edit Profile</a>
     </div>
     <div class="inline-block">
       <a href="#" class="inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4">Search</a>
