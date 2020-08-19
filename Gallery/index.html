@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <title>Cascade Studio</title>
+        <title>Cascade Studio Gallery</title>
         <!--<heading style="display:none;">Cascade Studio</heading>-->
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
         <meta name="application-name" content="Cascade Studio">
@@ -10,202 +10,82 @@
         <meta name="author" content="Johnathon Selstad">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta name="theme-color" content="#1e1e1e">
-        <!--<meta http-equiv="CACHE-CONTROL" CONTENT="NO-CACHE">
-        <meta http-equiv="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">-->
 
         <!-- Include Tailwind.css -->
         <link href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css" rel="stylesheet">
-
         <!-- The core Firebase JS SDK is always required and must be listed first -->
         <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-app.js"></script>
-
         <!-- TODO: Add SDKs for Firebase products that you want to use
             https://firebase.google.com/docs/web/setup#available-libraries -->
         <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-auth.js"></script>
-
-        <script>
-          // Your web app's Firebase configuration
-          var firebaseConfig = {
-            apiKey: "AIzaSyBxJH3SLxUnG0wiZsSRSHiiAFMoEjadoCk",
-            authDomain: "cascade-studio-gallery.firebaseapp.com",
-            databaseURL: "https://cascade-studio-gallery.firebaseio.com",
-            projectId: "cascade-studio-gallery",
-            storageBucket: "cascade-studio-gallery.appspot.com",
-            messagingSenderId: "436110758694",
-            appId: "1:436110758694:web:1873f6d5aa4649fbe927e7"
-          };
-          // Initialize Firebase
-          firebase.initializeApp(firebaseConfig);
-        </script>
-
+        <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-firestore.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-storage.js"></script>
         <!-- Include the Firebase Sign-in Auth UI -->
         <script src="https://www.gstatic.com/firebasejs/ui/4.6.1/firebase-ui-auth.js"></script>
         <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/4.6.1/firebase-ui-auth.css" />
-        <script type="text/javascript">
-          // FirebaseUI config.
-          var uiConfig = {
-            //signInFlow: 'popup',
-            signInSuccessUrl: window.location.href,
-            signInOptions: [
-              {
-                provider: firebase.auth.GoogleAuthProvider.PROVIDER_ID,
-                clientId: '436110758694-i89nnh4edgholaaskaaab6ik3tq1laf7.apps.googleusercontent.com'
-              },
-            ],
-              // Required to enable one-tap sign-up credential helper.
-            credentialHelper: firebaseui.auth.CredentialHelper.GOOGLE_YOLO,
-            // tosUrl and privacyPolicyUrl accept either url string or a callback function.
-            // Terms of service url/callback.
-            tosUrl: '<your-tos-url>',
-            // Privacy policy url/callback.
-            privacyPolicyUrl: function() {
-              window.location.assign('<your-privacy-policy-url>');
-            }
-          };
-        </script>
 
-        <script type="text/javascript">
-          initApp = function() {
-            firebase.auth().onAuthStateChanged(function(user) {
-              if (user) {
-                // User is signed in.
-                console.log(user);
-
-                // Render the signout button
-                document.getElementById("firebaseui-auth-container").innerHTML = "";
-                let signout = document.createElement("button");
-                signout.innerText = "Sign Out " + user.email.split("@")[0];
-                signout.onclick = () =>{ firebase.auth().signOut();  window.location.reload(); };
-                signout.className = "inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4";
-                document.getElementById("firebaseui-auth-container").appendChild(signout);
-
-              } else {
-                // User is signed out.
-                // Initialize the FirebaseUI Widget using Firebase.
-                var ui = new firebaseui.auth.AuthUI(firebase.auth());
-                // The start method will wait until the DOM is loaded.
-                ui.start('#firebaseui-auth-container', uiConfig);
-                ui.disableAutoSignIn(); // Doesn't seem to work?
-              }
-            }, function(error) {
-              console.log(error);
-            });
-          };
-
-          window.addEventListener('load', function() {
-            initApp();
-          });
-        </script>
+        <!-- Inject Headers/Footers, Handle Basic Auth, etc. -->
+        <script type="text/javascript" src = "/Gallery/js/main.js"></script>
         
     </head>
 
     <body style="margin: 0; background: rgb(54, 54, 54); color: white; ">
-      <!-- Top Nav Bar-->
-      <nav class="flex items-center justify-between flex-wrap bg-gray-900 p-3">
-        <div class="flex items-center flex-shrink-0 mr-6">
-          <svg class="fill-current h-8 w-8 mr-2" width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg"><path d="M13.5 22.1c1.8-7.2 6.3-10.8 13.5-10.8 10.8 0 12.15 8.1 17.55 9.45 3.6.9 6.75-.45 9.45-4.05-1.8 7.2-6.3 10.8-13.5 10.8-10.8 0-12.15-8.1-17.55-9.45-3.6-.9-6.75.45-9.45 4.05zM0 38.3c1.8-7.2 6.3-10.8 13.5-10.8 10.8 0 12.15 8.1 17.55 9.45 3.6.9 6.75-.45 9.45-4.05-1.8 7.2-6.3 10.8-13.5 10.8-10.8 0-12.15-8.1-17.55-9.45-3.6-.9-6.75.45-9.45 4.05z"/></svg>
-          <span class="font-semibold text-xl tracking-tight">Cascade Studio Gallery</span>
-        </div>
-        <div class="w-auto flex items-center lg:w-auto py-1">
-          <div class="text-sm flex-grow inline-block">
-            <a href="/Gallery"         class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Gallery</a>
-            <a href="/"                class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Create</a>
-            <!--<a href="/Gallery/Profile" class="inline-block mt-0 text-gray-200 hover:text-white"     >Profile</a>-->
-          </div>
-          <div class="inline-block">
-            <a href="#" class="inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4">Search</a>
-          </div>
-          <div id="firebaseui-auth-container" class="inline-block"></div>
-        </div>
-      </nav>
-
       <!-- Gallery Set of Cards -->
       <div class="flex flex-wrap justify-center -mb-4 p-4">
 
         <!-- An Example Card-->
-        <div id="card" class="max-w-sm p-4">
+        <div id="card" class="max-w-sm p-4" style="visibility:hidden;" hidden>
           <div class="max-w-sm rounded overflow-hidden shadow-lg bg-gray-800">
-            <img class="w-full" src="/Gallery/img/card-top.jpg" alt="Sunset in the mountains">
+            <img id="project-thumbnail" class="w-full" src="/Gallery/img/card-top.jpg" alt="Sunset in the mountains">
             <div class="px-6 py-2">
-              <div class="font-bold text-xl mb-0 text-white">Random Mountain</div>
+              <div id="project-title" class="font-bold text-xl mb-0 text-white">Random Mountain</div>
             </div>
             <div class="flex px-6 py-1 justify-end">
               <span class="inline-block px-0 py-1 text-sm font-semibold text-gray-300 mr-1">by</span>
-              <span class="inline-block px-0 py-1 text-sm font-semibold text-gray-300">zalo</span>
+              <span id="project-author" class="inline-block px-0 py-1 text-sm font-semibold text-gray-300">zalo</span>
             </div>
           </div>
         </div>
 
+        <!-- Populate the Flex Box with copies of the above card! -->
         <script>
-          let card = document.getElementById("card");
-          let cardParent = card.parentElement;
-          for(let i = 0; i < 10; i++){
-            cardParent.appendChild(card.cloneNode(true));
-          }
+          window.addEventListener('load', () => {
+            let card       = document.getElementById("card");
+            let title      = document.getElementById("project-title");
+            let author     = document.getElementById("project-author");
+            let thumbnail  = document.getElementById("project-thumbnail");
+            let cardParent = card.parentElement;
+
+            // Get a list of the newest projects in the database
+            let pageNumber = 0; let projectsPerPage = 9;
+            db.collection("projects").orderBy("modified")
+              .startAt(pageNumber * projectsPerPage).limit(projectsPerPage)
+              .get().then((projectQuery) => { // Query for 9 of the latest projects
+                projectQuery.forEach((project) => {
+                  let projectEntry   = project     .data();
+                  projectEntry.author.get().then((authorQuery) => { // Get the Author's Info
+                    let userEntry    = authorQuery .data();
+                    storageRef.child('images/'+ authorQuery.id +'/'+project.id+'.png')
+                      .getDownloadURL().then((url)=>{ // Get the Preview Image's Info
+
+                        // Create the Project Preview Card
+                        title.innerText  = projectEntry.name;
+                        thumbnail.alt    = projectEntry.name;
+                        thumbnail.src    = url;//projectEntry.preview;
+                        author.innerText = userEntry   .username;
+
+                        let currentCard  = card.cloneNode(true);
+                        currentCard.style.visibility = "visible";
+                        currentCard.hidden = false;
+                        cardParent.appendChild(currentCard);
+                      });
+                  });
+                });
+            });
+          });
         </script>
 
-      </div>
-
-
-      <div class="container bg-grey-lighter p-8">
-        <div class="sm:flex mb-4">
-      <div class="sm:w-1/4 h-auto">
-          <div class="text-orange mb-2">Orange</div>
-          <ul class="list-reset leading-normal">
-              <li class="hover:text-orange text-grey-darker">One</li>
-              <li class="hover:text-orange text-grey-darker">Two</li>
-              <li class="hover:text-orange text-grey-darker">Three</li>
-              <li class="hover:text-orange text-grey-darker">Four</li>
-              <li class="hover:text-orange text-grey-darker">Five</li>
-              <li class="hover:text-orange text-grey-darker">Six</li>
-              <li class="hover:text-orange text-grey-darker">Seven</li>
-              <li class="hover:text-orange text-grey-darker">Eight</li>
-          </ul>
-      </div>
-      <div class="sm:w-1/4 h-auto sm:mt-0 mt-8">
-          <div class="text-blue mb-2">Blue</div>
-          <ul class="list-reset leading-normal">
-              <li class="hover:text-blue text-grey-darker">One</li>
-              <li class="hover:text-blue text-grey-darker">Two</li>
-              <li class="hover:text-blue text-grey-darker">Three</li>
-          </ul>
-    
-        <div class="text-blue-light mb-2 mt-4">Blue-light</div>
-          <ul class="list-reset leading-normal">
-              <li class="hover:text-blue-light text-grey-darker">One</li>
-              <li class="hover:text-blue-light text-grey-darker">Two</li>
-              <li class="hover:text-blue-light text-grey-darker">Three</li>
-          </ul>
-    
-      </div>
-      <div class="sm:w-1/4 h-auto sm:mt-0 mt-8">
-                <div class="text-green-dark mb-2">Green-dark</div>
-          <ul class="list-reset leading-normal">
-              <li class="hover:text-green-dark text-grey-darker">One</li>
-              <li class="hover:text-green-dark text-grey-darker">Two</li>
-              <li class="hover:text-green-dark text-grey-darker">Three</li>
-          </ul>
-    
-        <div class="text-green-light mb-2 mt-4">Green-light</div>
-          <ul class="list-reset leading-normal">
-              <li class="hover:text-green-light text-grey-darker">One</li>
-              <li class="hover:text-green-light text-grey-darker">Two</li>
-              <li class="hover:text-green-light text-grey-darker">Three</li>
-          </ul>
-    
-    
-      </div>
-        <div class="sm:w-1/2 sm:mt-0 mt-8 h-auto">
-            <div class="text-red-light mb-2">Newsletter</div>
-            <p class="text-grey-darker leading-normal">Lorem ipsum dolor sit amet, consectetur adipisicing elit. Commodi, consectetur. </p>
-            <div class="mt-4 flex">
-                <input type="text" class="p-2 border border-grey-light round text-grey-dark text-sm h-auto" placeholder="Your email address">
-                <button class="bg-orange text-white rounded-sm h-auto text-xs p-3">Subscribe</button>
-            </div>
-        </div>
-    
-    </div>
-    </div>
+      </div> <!-- End Card Gallery Flex Box -->
 
     </body>
 </html>
