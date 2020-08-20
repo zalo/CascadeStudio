@@ -77,7 +77,7 @@ function BSpline(points:number[][], closed?:boolean, wire?:boolean) : oc.Handle_
  * 
  * Defaults: size:36, height:0.15, fontURL: './fonts/Consolas.ttf'
  * 
- * Try './fonts/Roboto-Black.ttf' for an alternative typeface.
+ * Try '../fonts/Roboto-Black.ttf' for an alternative typeface.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let myText = Text3D("Hello!");```*/
 function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0.15, fontURL?: string = "'./fonts/Consolas.ttf'") : oc.TopoDS_Shape;
@@ -131,17 +131,17 @@ function Offset(shape: oc.TopoDS_Shape, offsetDistance: number, tolerance?: numb
  * `name` needs to be unique!
  * 
  * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)*/
-function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean, callback?: CallableFunction): number;
+function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean): number;
 /** Creates a button that will trigger `callback` when clicked.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```Button("Yell", ()=>{ console.log("Help!  I've been clicked!"); });```*/
-function Button(name: string, callback?: CallableFunction) : void;
+function Button(name: string) : void;
 /** Creates a checkbox that returns true or false.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let currentCheckboxValue = Checkbox("Check?", true);```
  * 
  * `callback` triggers when the button is clicked.*/
-function Checkbox(name: string, defaultValue: boolean, callback?: CallableFunction): boolean;
+function Checkbox(name: string, defaultValue: boolean): boolean;
 
 /** BETA: Transform a shape using an in-view transformation gizmo.
  * 

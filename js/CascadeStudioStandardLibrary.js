@@ -447,20 +447,20 @@ function Pipe(shape, wirePath, keepInputs = false) {
   return solid;
 }
 
-function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false, callback = monacoEditor.evaluateCode) {
+function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   GUIState[name + "Range"] = [min, max];
-  guiPanel.addSlider(GUIState, name, name + 'Range', { onFinish: () => { callback(); }, onChange: () => { if (realTime) { callback(); } } });
+  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime } });
   return GUIState[name];
 }
 
-function Button(name = "Action", callback = monacoEditor.evaluateCode) {
-  guiPanel.addButton(name, () => { callback(); });
+function Button(name = "Action") {
+  postMessage({ "type": "addButton", payload: { name: name } });
 }
 
-function Checkbox(name = "Toggle", defaultValue = false, callback = monacoEditor.evaluateCode) {
+function Checkbox(name = "Toggle", defaultValue = false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
-  guiPanel.addCheckbox(GUIState, name, { onChange: () => { callback(); } });
+  postMessage({ "type": "addButton", payload: { name: name, default: defaultValue } });
   return GUIState[name];
 }
 

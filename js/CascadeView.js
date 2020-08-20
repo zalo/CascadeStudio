@@ -84,11 +84,10 @@ var Environment = function (goldenContainer) {
     this.initEnvironment();
   }
   
-  var CascadeEnvironment = function (goldenContainer, openCascade) {
+  var CascadeEnvironment = function (goldenContainer) {
     this.goldenContainer = goldenContainer;
     this.environment     = new Environment(this.goldenContainer);
     this.updating        = false;
-    this.openCascade     = openCascade;
     this.raycaster       = new THREE.Raycaster();
     this.highlightedObj  = null;
     this.handles         = [];
@@ -106,18 +105,13 @@ var Environment = function (goldenContainer) {
       this.mouse.y = - ( event.offsetY / this.goldenContainer.height ) * 2 + 1;
     }, false );
 
-    this.updateShape = async (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) => {
-      openCascadeHelper.setOpenCascade(this.openCascade);
-      this.currentShape = shape;
-
+    messageHandlers["combineAndRenderShapes"] = ([facelist, edgelist]) => {
       this.environment.scene.remove(this.mainObject);
-      //this.mainObject.remove(...this.mainObject.children);
       this.mainObject            = new THREE.Group();
       this.mainObject.name       = "shape";
       this.mainObject.rotation.x = -Math.PI / 2;
 
       // Tesellate the OpenCascade Object
-      const [facelist, edgelist] = await openCascadeHelper.tessellate(this.currentShape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes);
       facelist.forEach((face) => {
         // Sort Vertices into three.js Vector3 List
         let vertices = [];
@@ -178,29 +172,24 @@ var Environment = function (goldenContainer) {
       });
 
       this.environment.scene.add(this.mainObject);
+      console.log("Generation Complete!");
     }
 
     // Save the current shape to .stl
     this.saveShapeSTEP = (filename = "CascadeStudioPart.step") => {
-      this.writer = new oc.STEPControl_Writer();
-      let transferResult = this.writer.Transfer(this.currentShape, 0);
-      if(transferResult === 1){
-        let writeResult = this.writer.Write(filename);
-        if(writeResult === 1){
-          let stepFileText = oc.FS.readFile("/" + filename, { encoding:"utf8" });
-
-          let link = document.createElement("a");
-          link.href = URL.createObjectURL( new Blob([stepFileText], { type: 'text/plain' }) );
-          link.download = filename;
-          link.click();
-
-          oc.FS.unlink("/" + filename);
-        }else{
-          console.error("WRITE STEP FILE FAILED.");
-        }
-      }else{
-        console.error("TRANSFER TO STEP WRITER FAILED.");
-      }
+      // Ask the worker thread for a STEP file of the current space
+      cascadeStudioWorker.postMessage({
+        "type": "saveShapeSTEP",
+        payload: filename
+      });
+      
+      // Receive the STEP File from the Worker Thread
+      messageHandlers["saveShapeSTEP"] = (stepURL) => {
+        let link      = document.createElement("a");
+        link.href     = stepURL;
+        link.download = filename;
+        link.click();
+      };
     }
 
     // Save the current shape to .stl

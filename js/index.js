@@ -1,8 +1,7 @@
 var myLayout, monacoEditor,
     threejsViewport, consoleContainer, consoleGolden, gui,
     guiPanel, GUIState, count = 0, focused = true,
-    oc = null, externalShapes = {}, sceneShapes = [], mainProject = false,
-    robotoFont = null, curFontURL = './fonts/Consolas.ttf', fullShapeEdgeHashes = {}, fullShapeFaceHashes = {};
+    mainProject = false, messageHandlers = {};
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -28,9 +27,7 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 // Functions to be overwritten by the editor window
 //function Update(){}
 
-function initialize(opencascade) {
-    oc = opencascade;
-
+function initialize() {
     this.searchParams = new URLSearchParams(window.location.search);
 
     // Set up the Windowing System  ---------------------------------------
@@ -136,16 +133,15 @@ function initialize(opencascade) {
                     extraLibs.push({ content: text, filePath: 'file://'+prefix+'/js/index.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
-                    monacoEditor.evaluateCode();
                 });
             }).catch(error => console.log(error.message));
 
             monacoEditor = monaco.editor.create(container.getElement().get(0), {
-                value: state.code,
+                value   : state.code,
                 language: "typescript",
-                theme: "vs-dark",
+                theme   : "vs-dark",
                 automaticLayout: true,
-                minimap: { enabled: false}//,
+                minimap : { enabled: false}//,
                 //model: null
             });
 
@@ -162,28 +158,33 @@ function initialize(opencascade) {
                 gui.clearPanels();
                 guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                     .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
-                Slider("MeshRes", 0.1, 0.01, 2);
+                messageHandlers["addSlider"]({ name: "MeshRes", defaultValue: 0.1, min: 0.01, max: 2});
 
-                sceneShapes = [];
                 threejsViewport.clearTransformHandles();
-                window.eval(newCode); // Evaluates the code in the editor
+                cascadeStudioWorker.postMessage({ // Evaluates the code in the editor
+                    "type": "Evaluate",
+                    payload: {
+                        "code"    : newCode,
+                        "GUIState": GUIState
+                    }
+                });
 
                 // This assembles all of the objects in the "workspace" and begins saving them out
-                if (sceneShapes.length > 0) {
-                    combineAndRenderShapes(sceneShapes);
+                cascadeStudioWorker.postMessage({
+                    "type": "combineAndRenderShapes",
+                    payload: { maxDeviation: GUIState["MeshRes"] }
+                });
 
-                    if (mainProject && saveToURL) {
-                        container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
-                        console.log("Generation Complete! Saved to local storage and URL!");
-                    } else {
-                        console.log("Generation Complete!" + (saveToURL?" Saved to URL!": ""));
-                    }
-                    if (saveToURL) {
-                        window.history.replaceState({}, 'Cascade Studio',
-                            "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
-                    }
+                if (mainProject && saveToURL) {
+                    container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
+                    window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
+                    console.log("Saved to local storage and URL!");
                 } else {
-                    console.log("sceneShapes doesn't have any shapes in it!  Nothing was generated!");
+                    if (saveToURL) { console.log("Saved to URL!"); } //Generation Complete! 
+                }
+                if (saveToURL) {
+                    window.history.replaceState({}, 'Cascade Studio',
+                        "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
                 }
             }
             // Allow F5 to refresh the model
@@ -208,7 +209,7 @@ function initialize(opencascade) {
             floatingGUIContainer.id = "threejsViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
             gui             = new ControlKit({parentDomElementId: "threejsViewportContainer"});
-            threejsViewport = new CascadeEnvironment(container, oc); 
+            threejsViewport = new CascadeEnvironment(container); 
         });
     });
 
@@ -267,23 +268,13 @@ function initialize(opencascade) {
         };
 
         console.log("Welcome to Cascade Studio!");
-
-        // Reimport any imported STEP/IGES Files
-        let prexistingExternalFiles = consoleGolden.getState();
-        for (let key in prexistingExternalFiles) {
-            if (key.includes(".stl")) {
-                importSTL(key, prexistingExternalFiles[key].content);
-            } else {
-                importSTEPorIGES(key, prexistingExternalFiles[key].content);
-            }
-        }; 
     });
 
     // Doesn't get triggered in time to do any good
     //window.onbeforeunload = function () {}
-    window.onblur   = function (){ focused = false; }
-    window.onfocus  = function (){ focused = true;  }
-    document.onblur = window.onblur; document.onfocus = window.onfocus;
+    window  .onblur  = () => { focused = false; }
+    window  .onfocus = () => { focused =  true; }
+    document.onblur  = window.onblur; document.onfocus = window.onfocus;
     window.onorientationchange = function(event) { 
         myLayout.updateSize(window.innerWidth, window.innerHeight -
             document.getElementsByClassName('topnav')[0].offsetHeight);
@@ -294,33 +285,38 @@ function initialize(opencascade) {
         document.getElementById('topnav').offsetHeight);
 }
 
-function combineAndRenderShapes(shapes) {
-    let scene        = new oc.TopoDS_Compound();
-    let sceneBuilder = new oc.BRep_Builder();
-    sceneBuilder.MakeCompound(scene);
-    fullShapeEdgeHashes = {};
-    fullShapeFaceHashes = {};
-    shapes.forEach((curShape) => {
-        // Scan the edges and faces and add to the edge list
-        Object.assign(fullShapeEdgeHashes, ForEachEdge(curShape, (index, edge) => { }));
-        ForEachFace(curShape, (index, face) => {
-            fullShapeFaceHashes[face.HashCode(100000000)] = index;
-        });
-
-        sceneBuilder.Add(scene, curShape);
+messageHandlers["startupCallback"] = () => {
+    // Reimport any previously imported STEP/IGES Files
+    console.log(consoleGolden.getState());
+    cascadeStudioWorker.postMessage({
+        "type": "loadPrexistingExternalFiles",
+        payload: consoleGolden.getState()
     });
-    threejsViewport.updateShape(scene, GUIState["MeshRes"], fullShapeEdgeHashes, fullShapeFaceHashes);
+
+    monacoEditor.evaluateCode();
 }
 
-opentype.load(curFontURL, function (err, font) { //'./fonts/Roboto-Black.ttf' './fonts/Papyrus.ttf' './fonts/Consolas.ttf'
-    if (err) { console.log(err); }
-    robotoFont = font;
-});
+messageHandlers["addSlider"] = (payload) => {
+    if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
+    GUIState[payload.name + "Range"] = [payload.min, payload.max];
+    guiPanel.addSlider(GUIState, payload.name, payload.name + 'Range', {
+        onFinish: () => { monacoEditor.evaluateCode(); },
+        onChange: () => { if (payload.realTime && false) { monacoEditor.evaluateCode(); } }
+        // Disable Realtime Mode for now; need to not send messages while it's already busy...
+    });
+}
+messageHandlers["addButton"] = (payload) => {
+    guiPanel.addButton(payload.name, () => { monacoEditor.evaluateCode(); });
+}
+messageHandlers["addCheckbox"] = (payload) => {
+    if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
+    guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
+}
 
 function saveProject () {
     let link = document.createElement("a");
     link.download = "CascadeStudioProject.json";
-    link.href = "data:application/json;utf8," + 
+    link.href     = "data:application/json;utf8," + 
                   encodeURIComponent(JSON.stringify(myLayout.toConfig(), null, ' '));
     link.click();
 }
@@ -342,105 +338,31 @@ function loadProject () {
 }
 
 function loadFiles(fileElementID = "files") {
-    let extFiles = {};
+    // Ask the worker thread to load these files... 
+    // I can already feel this not working...
     let files = document.getElementById(fileElementID).files;
-    let shapesToRender = [];
-    for (let i = 0; i < files.length; i++) {
-        var lastImportedShape = null;
-        loadFileAsync(files[i]).then(async (fileText) => {
-            const fileName = files[i].name;
-            if (fileName.includes(".stl")) {
-                lastImportedShape = importSTL(fileName, fileText);
-            } else {
-                lastImportedShape = importSTEPorIGES(fileName, fileText);
-            }
-            extFiles[fileName] = { content: fileText };
-        }).then(async () => {
-            if (lastImportedShape) {
-                shapesToRender.push(lastImportedShape);
-            }
-            if (i === files.length - 1) {
-                if (lastImportedShape) {
-                    combineAndRenderShapes(shapesToRender);
-                }
-            }
-            consoleGolden.setState(extFiles);
-        });
+    cascadeStudioWorker.postMessage({
+        "type": "loadFiles",
+        "payload": files
+    });
+
+    // Receive a list of the imported files
+    messageHandlers["loadFiles"] = (extFiles) => {
+        console.log("Storing loaded files!");
+        console.log(extFiles);
+        consoleGolden.setState(extFiles);
     };
 }
 
-function importSTEPorIGES(fileName, fileText) {
-    // Writes the uploaded file to Emscripten's Virtual Filesystem
-    oc.FS.createDataFile("/", fileName, fileText, true, true);
-
-    // Choose the correct OpenCascade file parsers to read the CAD file
-    var reader = null;
-    if (fileName.endsWith(".step") || fileName.endsWith(".stp")) {
-      reader = new oc.STEPControl_Reader();
-    } else if (fileName.endsWith(".iges") || fileName.endsWith(".igs")) {
-      reader = new oc.IGESControl_Reader();
-    } else { console.error("opencascade.js can't parse this extension! (yet)"); }
-
-    let readResult = reader.ReadFile(fileName);            // Read the file
-    if (readResult === 1) {
-      console.log(fileName + " loaded successfully!     Converting to OCC now...");
-      let numRootsTransferred = reader.TransferRoots();    // Translate all transferable roots to OpenCascade
-      let stepShape           = reader.OneShape();         // Obtain the results of translation in one OCCT shape
-      
-      // Add to the externalShapes dictionary
-      externalShapes[fileName] = new oc.TopoDS_Shape(stepShape);
-      console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to add it to the scene!");
-      
-      // Remove the file when we're done (otherwise we run into errors on reupload)
-      oc.FS.unlink("/" + fileName);
-      
-      return externalShapes[fileName];
-    } else {
-      console.error("Something in OCCT went wrong trying to read " + fileName);
-      return null;
-    }
-}
-
-function importSTL(fileName, fileText) {
-    // Writes the uploaded file to Emscripten's Virtual Filesystem
-    oc.FS.createDataFile("/", fileName, fileText, true, true);
-
-    // Choose the correct OpenCascade file parsers to read the STL file
-    var reader    = new oc.StlAPI_Reader();
-    let readShape = new oc.TopoDS_Shape();
-
-    if (reader.Read(readShape, fileName)) {
-      console.log(fileName + " loaded successfully!     Converting to OCC now...");
-      
-      // Add to the externalShapes dictionary
-      externalShapes[fileName] = readShape;
-      console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to see it!");
-      
-      // Remove the file when we're done (otherwise we run into errors on reupload)
-      oc.FS.unlink("/" + fileName);
-      
-      return externalShapes[fileName];
-    } else {
-        console.log("Something in OCCT went wrong trying to read " + fileName + ".  \n"+
-      "Cascade Studio only imports small ASCII stl files for now!");
-      return null;
-    }
-}
-
-// Remove the externally imported shapes from the project
-function clearExternalFiles () {
-    externalShapes = {};
+function clearExternalFiles() {
+    cascadeStudioWorker.postMessage({
+        "type": "clearExternalFiles"
+    });
     consoleGolden.setState({});
 }
 
-function decode(string) {
-	return RawDeflate.inflate(window.atob(decodeURIComponent(string)));
-}
-
-function encode(string) {
-	return encodeURIComponent(window.btoa(RawDeflate.deflate(string)));
-}
-
+function decode(string) { return RawDeflate.inflate(window.atob(decodeURIComponent(string))); }
+function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
 function makeMainProject() {
     mainProject = true;
     document.getElementById("main-proj-button").remove();

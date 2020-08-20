@@ -26,7 +26,6 @@
         <script type="text/javascript" src="./node_modules/controlkit/bin/controlKit.js"></script>
 
         <script type="text/javascript" src="./node_modules/jquery/dist/jquery.min.js"></script>
-        <script type="text/javascript" src="./node_modules/opentype.js/dist/opentype.min.js"></script>
         <script type="text/javascript" src="./node_modules/golden-layout/dist/goldenlayout.min.js"></script>
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-base.css" />
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-dark-theme.css" />
@@ -62,24 +61,7 @@
 
         <script type="text/javascript" src="./node_modules/rawflate/rawdeflate.js"></script>
         <script type="text/javascript" src="./node_modules/rawflate/rawinflate.js"></script>
-        <script type="text/javascript" src="./js/CascadeStudioStandardLibrary.js"></script>
-        <script type="text/javascript" src="./js/openCascadeHelper.js"></script>
         <script type="text/javascript" src="./js/CascadeView.js"></script>
-
-        <!-- Import OpenCascade.js-->
-        <script type="text/javascript" src="./node_modules/opencascade.js/dist/opencascade.wasm.js"></script>
-        <script>
-            const initOpenCascade = () => {
-                return new opencascade({
-                    locateFile(path) {
-                        if(path.endsWith('.wasm')) {
-                            return "./node_modules/opencascade.js/dist/opencascade.wasm.wasm";
-                        }
-                        return path;
-                    }
-                });
-            };
-        </script>
 
         <script>
             // Install Cascade Studio as a Progressive Web App for Offline Access
@@ -93,34 +75,45 @@
                 console.log('Browser does not support offline access!');
             }
         </script>
+
+        <script>
+            if (window.Worker) {
+                var cascadeStudioWorker = new Worker('./js/CascadeStudioMainWorker.js');
+                // Ping Pong Messages Back and Forth based on their registration in messageHandlers
+                var messageHandlers = {};
+                cascadeStudioWorker.onmessage = function (e) {
+                    let response = messageHandlers[e.data.type](e.data.payload);
+                    if (response) { cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
+                }
+            }
+        </script>
     </head>
 
-    <body onload="initOpenCascade().then((openCascade) => initialize(openCascade));" style="margin:0px;background-color:rgb(34, 34, 34);">
-            <h1 hidden></h1> <!-- Puts the Lighthouse Score over 90 heheh-->
-            <div id="topnav" class="topnav">
-                <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.5</a>
-                <a href="#" id="main-proj-button" title="Sets this project to save in local storage." onmouseup="makeMainProject();">Make Main Project</a>
-                <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
-                <label for="project-file" title="Load Project from .json">Load Project
-                    <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="loadProject();"/>
-                </label>
-                <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
-                <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
-                <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
-                <label for="files" title="Import STEP, IGES, or (ASCII) STL from File">Import STEP/IGES/STL
-                    <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="loadFiles();"/>
-                </label>
-                <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
-                <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear(); window.history.replaceState({}, 'Cascade Studio','?');">Reset Project</a>
-            </div>
-            <div id="appbody" style="height:auto">
-                <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">
-                <script>var require = { paths: { 'vs': 'node_modules/monaco-editor/min/vs' } };</script>
-                <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/loader.js"></script>
-                <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
-                <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
-                <script type="text/javascript" src="./js/index.js"></script>
-            </div>
-
+    <body onload="initialize();" style="margin:0px;background-color:rgb(34, 34, 34);">
+        <h1 hidden></h1> <!-- Puts the Lighthouse Score over 90 heheh-->
+        <div id="topnav" class="topnav">
+            <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.5</a>
+            <a href="#" id="main-proj-button" title="Sets this project to save in local storage." onmouseup="makeMainProject();">Make Main Project</a>
+            <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
+            <label for="project-file" title="Load Project from .json">Load Project
+                <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="loadProject();"/>
+            </label>
+            <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
+            <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
+            <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
+            <label for="files" title="Import STEP, IGES, or (ASCII) STL from File">Import STEP/IGES/STL
+                <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="loadFiles();"/>
+            </label>
+            <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
+            <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear(); window.history.replaceState({}, 'Cascade Studio','?');">Reset Project</a>
+        </div>
+        <div id="appbody" style="height:auto">
+            <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">
+            <script>var require = { paths: { 'vs': 'node_modules/monaco-editor/min/vs' } };</script>
+            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/loader.js"></script>
+            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
+            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
+            <script type="text/javascript" src="./js/index.js"></script>
+        </div>
     </body>
 </html>
