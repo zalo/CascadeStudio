@@ -158,7 +158,7 @@ function initialize() {
                 gui.clearPanels();
                 guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                     .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
-                messageHandlers["addSlider"]({ name: "MeshRes", defaultValue: 0.1, min: 0.01, max: 2});
+                messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2});
 
                 threejsViewport.clearTransformHandles();
                 cascadeStudioWorker.postMessage({ // Evaluates the code in the editor
@@ -177,7 +177,6 @@ function initialize() {
 
                 if (mainProject && saveToURL) {
                     container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
-                    window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
                     console.log("Saved to local storage and URL!");
                 } else {
                     if (saveToURL) { console.log("Saved to URL!"); } //Generation Complete! 
