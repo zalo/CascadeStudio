@@ -11,7 +11,7 @@ importScripts(
   '../node_modules/opencascade.js/dist/opencascade.wasm.js',
   '../node_modules/opentype.js/dist/opentype.min.js');
 
-opentype.load(curFontURL, function (err, font) { //'./fonts/Roboto-Black.ttf' './fonts/Papyrus.ttf' './fonts/Consolas.ttf'
+opentype.load(curFontURL, function (err, font) { //'../fonts/Roboto-Black.ttf' '../fonts/Papyrus.ttf' '../fonts/Consolas.ttf'
     if (err) { console.log(err); }
     robotoFont = font;
 });
@@ -41,6 +41,7 @@ new opencascade({
 
 var messageHandlers = {};
 function Evaluate(payload) {
+  opNumber = 0; // This keeps track of the progress of the evaluation
   GUIState = payload.GUIState;
   eval(payload.code);
 }
@@ -82,13 +83,12 @@ messageHandlers["combineAndRenderShapes"] = combineAndRenderShapes;
 
 // File Import and Export Utilities
 function loadPrexistingExternalFiles(externalFileDict) {
-  console.log("Loading preexisting external files...");
-  //console.log(externalFileDict);
+  console.log("Loading Pre-Existing external files...");
   for (let key in externalFileDict) {
     if (key.includes(".stl")) {
-        importSTL       (key, prexistingExternalFiles[key].content);
+        importSTL       (key, externalFileDict[key].content);
     } else {
-        importSTEPorIGES(key, prexistingExternalFiles[key].content);
+        importSTEPorIGES(key, externalFileDict[key].content);
     }
   }
 }

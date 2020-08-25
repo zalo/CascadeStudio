@@ -552,21 +552,22 @@ function Checkbox(name = "Toggle", defaultValue = false) {
 }
 
 // Caching functions to speed up evaluation of slow redundant operations
-var argCache = {};
+var argCache = {}; var opNumber = 0; 
 function CacheOp(args, cacheMiss) {
+  let toReturn = null;
   let check = CheckCache(args);
   if (check) {
     //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
-    let copy = new oc.TopoDS_Shape(check);
-    copy.hash = check.hash;
-    return copy;
+    toReturn = new oc.TopoDS_Shape(check);
+    toReturn.hash = check.hash;
   } else {
     //console.log("MISSED " + ComputeHash(args) + ", " + ComputeHash(args, true));
     let curHash = ComputeHash(args);
-    let miss = cacheMiss();
-    AddToCache(curHash, miss);
-    return miss;
+    toReturn = cacheMiss();
+    AddToCache(curHash, toReturn);
   }
+  postMessage({ "type": "Progress", "payload": opNumber++ }); // Poor Man's Progress Indicator
+  return toReturn;
 }
 function CheckCache(args) { return argCache[ComputeHash(args)] || null; }
 function AddToCache(hash, shape) {

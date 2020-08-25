@@ -32,15 +32,14 @@ function initialize() {
 
     // Set up the Windowing System  ---------------------------------------
     let loadedState = window.localStorage.getItem('studioState-0.0.3');
-    if (loadedState === null || this.searchParams.has("code")) {
+    mainProject = !this.searchParams.has("code");
+    if (loadedState === null || !mainProject) {
         let codeStr = starterCode;
         GUIState = {};
-        if (this.searchParams.has("code")) {
+        if (!mainProject) {
             codeStr = decode(this.searchParams.get("code"));
             GUIState = JSON.parse(decode(this.searchParams.get("gui")));
-            mainProject = false;
         } else { makeMainProject(); }
-        mainProject = !this.searchParams.has("code");
 
         myLayout = new GoldenLayout( {
             content: [{
@@ -77,7 +76,7 @@ function initialize() {
             }
         });
     } else {
-        myLayout = new GoldenLayout( JSON.parse( loadedState ));
+        myLayout = new GoldenLayout(JSON.parse(loadedState));
     }
 
     // Set up saving code changes to the localStorage
@@ -185,6 +184,7 @@ function initialize() {
                     window.history.replaceState({}, 'Cascade Studio',
                         "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
                 }
+                console.log("Generating Model");
             }
             // Allow F5 to refresh the model
             document.onkeydown = function (e) {
@@ -239,7 +239,7 @@ function initialize() {
             newline.style.fontFamily = "monospace";
             newline.style.color = (alternatingColor = !alternatingColor) ? "LightGray" : "white";
             newline.style.fontSize = "1.2em";
-            newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer());
+            newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer()).slice(1,-1);
             consoleContainer.appendChild(newline);
             consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
             realConsoleLog.apply(console, arguments);
@@ -249,7 +249,7 @@ function initialize() {
             newline.style.color = "red";
             newline.style.fontFamily = "monospace";
             newline.style.fontSize = "1.2em";
-            newline.innerHTML = "Line : "+line + " " + JSON.stringify(err, getCircularReplacer());
+            newline.innerHTML = "Line : "+line + " " + JSON.stringify(err, getCircularReplacer()).slice(1,-1);
             consoleContainer.appendChild(newline);
             consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
 
@@ -266,7 +266,14 @@ function initialize() {
             }
         };
 
+        messageHandlers["Progress"] = (opNumber) => {
+            // Add a dot to the progress indicator for each 
+            // progress message we find in the queue
+            consoleContainer.parentElement.lastElementChild.lastElementChild.innerText = "> Generating Model" + ".".repeat(opNumber);
+        }
+
         console.log("Welcome to Cascade Studio!");
+        console.log("Loading CAD Kernel...");
     });
 
     // Doesn't get triggered in time to do any good
@@ -282,15 +289,18 @@ function initialize() {
     myLayout.init();
     myLayout.updateSize(window.innerWidth, window.innerHeight -
         document.getElementById('topnav').offsetHeight);
+    if(mainProject) { makeMainProject(); }
 }
 
 messageHandlers["startupCallback"] = () => {
     // Reimport any previously imported STEP/IGES Files
-    console.log(consoleGolden.getState());
-    cascadeStudioWorker.postMessage({
-        "type": "loadPrexistingExternalFiles",
-        payload: consoleGolden.getState()
-    });
+    if (consoleGolden.getState()) {
+        console.log("Loading External Files...");
+        cascadeStudioWorker.postMessage({
+            "type": "loadPrexistingExternalFiles",
+            payload: consoleGolden.getState()
+        });
+    }
 
     monacoEditor.evaluateCode();
 }
@@ -332,6 +342,7 @@ function loadProject () {
     // Get Project .json
     loadFileAsync(document.getElementById("project-file").files[0]).then((jsonFile) => {
         window.localStorage.setItem('studioState-0.0.3', jsonFile);
+        window.history.replaceState({}, 'Cascade Studio','?');
         location.reload();
     });
 }
@@ -364,7 +375,8 @@ function decode(string) { return RawDeflate.inflate(window.atob(decodeURICompone
 function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
 function makeMainProject() {
     mainProject = true;
-    document.getElementById("main-proj-button").remove();
+    let mainProjButton = document.getElementById("main-proj-button");
+    if (mainProjButton) { mainProjButton.remove(); }
     if (myLayout && mainProject) {
         window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
     }

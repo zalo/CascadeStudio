@@ -16,6 +16,32 @@
         <!--<meta http-equiv="CACHE-CONTROL" CONTENT="NO-CACHE">
         <meta http-equiv="EXPIRES" CONTENT="Mon, 22 Jul 2002 11:12:01 GMT">-->
 
+        <script>
+            // Install Cascade Studio as a Progressive Web App for Offline Access
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('service-worker.js').then(function(registration) {
+                    registration.update(); // Always update the registration for the latest assets
+                }, function() {
+                    console.log('Could not register Cascade Studio for offline use!');
+                });
+            } else {
+                console.log('Browser does not support offline access!');
+            }
+        </script>
+
+        <script>
+            // Begins loading the CAD Kernel Web Worker
+            if (window.Worker) {
+                var cascadeStudioWorker = new Worker('./js/CascadeStudioMainWorker.js');
+                // Ping Pong Messages Back and Forth based on their registration in messageHandlers
+                var messageHandlers = {};
+                cascadeStudioWorker.onmessage = function (e) {
+                    let response = messageHandlers[e.data.type](e.data.payload);
+                    if (response) { cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
+                }
+            }
+        </script>
+
         <script type="text/javascript" src="./node_modules/three/build/three.min.js"></script>
         <script type="text/javascript" src="./node_modules/three/examples/js/controls/DragControls.js"></script>
         <script type="text/javascript" src="./node_modules/three/examples/js/controls/OrbitControls.js"></script>
@@ -62,31 +88,6 @@
         <script type="text/javascript" src="./node_modules/rawflate/rawdeflate.js"></script>
         <script type="text/javascript" src="./node_modules/rawflate/rawinflate.js"></script>
         <script type="text/javascript" src="./js/CascadeView.js"></script>
-
-        <script>
-            // Install Cascade Studio as a Progressive Web App for Offline Access
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('service-worker.js').then(function(registration) {
-                    registration.update(); // Always update the registration for the latest assets
-                }, function() {
-                    console.log('Could not register Cascade Studio for offline use!');
-                });
-            } else {
-                console.log('Browser does not support offline access!');
-            }
-        </script>
-
-        <script>
-            if (window.Worker) {
-                var cascadeStudioWorker = new Worker('./js/CascadeStudioMainWorker.js');
-                // Ping Pong Messages Back and Forth based on their registration in messageHandlers
-                var messageHandlers = {};
-                cascadeStudioWorker.onmessage = function (e) {
-                    let response = messageHandlers[e.data.type](e.data.payload);
-                    if (response) { cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
-                }
-            }
-        </script>
     </head>
 
     <body onload="initialize();" style="margin:0px;background-color:rgb(34, 34, 34);">
