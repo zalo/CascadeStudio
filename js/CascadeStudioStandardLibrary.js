@@ -283,13 +283,12 @@ function Transform(translation, rotation, scale, shapes) {
   return CacheOp(arguments, () => {
     if (args.length == 4) {
       // Create the transform gizmo and add it to the scene
-      // Todo move this to the main thread
-      threejsViewport.createTransformHandle(translation, rotation, scale, getCallingLocation());
+      postMessage({ "type": "createTransformHandle", payload: { translation: translation, rotation: rotation, scale: scale, lineAndColumn: getCallingLocation() } });
       // Transform the Object(s)
       return Translate(translation, Rotate(rotation[0], rotation[1], Scale(scale, shapes)));
     } else {
       // Create the transform gizmo and add it to the scene
-      threejsViewport.createTransformHandle([0, 0, 0], [[0, 1, 0], 1], 1, getCallingLocation());
+      postMessage({ "type": "createTransformHandle", payload: { translation: [0, 0, 0], rotation: [[0, 1, 0], 1], scale: 1, lineAndColumn: getCallingLocation() } });
       return translation; // The first element will be the shapes
     }
   });
@@ -518,7 +517,7 @@ function Loft(wires, keepWires) {
     pipe.Build();
     return new oc.TopoDS_Solid(pipe.Shape());
   });
-  
+
   wires.forEach((wire) => {
     if (!keepWires) { sceneShapes = Remove(sceneShapes, wire); }
   });
@@ -708,11 +707,12 @@ function isArrayLike(item) {
 function getCallingLocation() {
   let errorStack = (new Error).stack;
   //console.log(errorStack);
+  //console.log(navigator.userAgent);
   let lineAndColumn = [0, 0];
   if (navigator.userAgent.includes("Chrom")) {
-    lineAndColumn = errorStack.split("\n")[3].split(", <anonymous>:")[1].split(':');
+    lineAndColumn = errorStack.split("\n")[5].split(", <anonymous>:")[1].split(':');
   }else if (navigator.userAgent.includes("Moz")) {
-    lineAndColumn = errorStack.split("\n")[2].split("eval:")[1].split(':');
+    lineAndColumn = errorStack.split("\n")[4].split("eval:")[1].split(':');
   } else {
     lineAndColumn[0] = "-1";
     lineAndColumn[1] = "-1";

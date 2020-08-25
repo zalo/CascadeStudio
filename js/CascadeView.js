@@ -213,8 +213,8 @@ var Environment = function (goldenContainer) {
 			link.click();
     }
 
-    this.createTransformHandle = (position, rotation, scale, lineAndColumn) => {
-      if (lineAndColumn[0] <= 0) {
+    messageHandlers["createTransformHandle"] = (payload) => {
+      if (payload.lineAndColumn[0] <= 0) {
         console.error("Transform Gizmo not supported in this browser!  Use Chrome or Firefox!"); return null;
       }
       let handle = new THREE.TransformControls(this.environment.camera,
@@ -224,7 +224,7 @@ var Environment = function (goldenContainer) {
       handle.setScaleSnap(0.05);
       handle.setMode(this.gizmoMode);
       handle.setSpace(this.gizmoSpace);
-      handle.lineAndColumn = lineAndColumn;
+      handle.lineAndColumn = payload.lineAndColumn;
       handle.onChanged = (event) => {
         this.environment.controls.enabled = !event.value;
 
@@ -275,17 +275,17 @@ var Environment = function (goldenContainer) {
       
       // Create a fake object for the handle to attach to
       let emptyObject = new THREE.Group();
-      emptyObject.position.set(position[0], position[2], -position[1]);
+      emptyObject.position.set(payload.translation[0], payload.translation[2], -payload.translation[1]);
       emptyObject.setRotationFromAxisAngle(
-        new THREE.Vector3(rotation[0][0], rotation[0][2], -rotation[0][1]), rotation[1] * 0.0174533);
-      emptyObject.scale.set(scale, scale, scale);
+        new THREE.Vector3(payload.rotation[0][0], payload.rotation[0][2], -payload.rotation[0][1]), payload.rotation[1] * 0.0174533);
+      emptyObject.scale.set(payload.scale, payload.scale, payload.scale);
       this.environment.scene.add(emptyObject);
       handle.placeHolder = emptyObject;
       handle.attach(emptyObject);
 
       this.handles.push(handle);
       this.environment.scene.add(handle);
-      return handle;
+      //return handle;
     }
     this.clearTransformHandles = () => {
       this.handles.forEach((handle) => {
