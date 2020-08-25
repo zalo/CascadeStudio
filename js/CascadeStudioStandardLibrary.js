@@ -283,6 +283,7 @@ function Transform(translation, rotation, scale, shapes) {
   return CacheOp(arguments, () => {
     if (args.length == 4) {
       // Create the transform gizmo and add it to the scene
+      // Todo move this to the main thread
       threejsViewport.createTransformHandle(translation, rotation, scale, getCallingLocation());
       // Transform the Object(s)
       return Translate(translation, Rotate(rotation[0], rotation[1], Scale(scale, shapes)));
@@ -512,15 +513,15 @@ function Loft(wires, keepWires) {
     let pipe = new oc.BRepOffsetAPI_ThruSections(true);
 
     // Construct a Loft that passes through the wires
-    wires.forEach((wire) => {
-      pipe.AddWire(wire);
-      if (!keepWires) { sceneShapes = Remove(sceneShapes, wire); }
-    });
+    wires.forEach((wire) => { pipe.AddWire(wire); });
 
     pipe.Build();
     return new oc.TopoDS_Solid(pipe.Shape());
   });
-
+  
+  wires.forEach((wire) => {
+    if (!keepWires) { sceneShapes = Remove(sceneShapes, wire); }
+  });
   sceneShapes.push(curLoft);
   return curLoft;
 }
@@ -538,6 +539,74 @@ function Pipe(shape, wirePath, keepInputs) {
   }
   sceneShapes.push(curPipe);
   return curPipe;
+}
+
+// This is a utility class for drawing wires/shapes with lines, arcs, and splines
+// This is unique, it needs to be called with the "new" keyword prepended
+function Sketch(startingPoint) {
+  this.faces       = [];
+  this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
+  this.lastPoint   = this.firstPoint;
+  this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
+
+  // Functions are: BSplineTo, Fillet, Wire, and Face
+  this.Start = function (startingPoint) {
+    this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
+    this.lastPoint   = this.firstPoint;
+    this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
+  }
+
+  this.End = function (closed) {
+    let faceBuilder = null;
+    if (this.faces.length > 0) {
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace(
+        this.faces[this.faces.length - 1], this.wireBuilder.Wire());
+    } else {
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace(this.wireBuilder.Wire());
+    }
+
+    this.faces.push(faceBuilder.Face());
+  }
+
+  this.AddWire = function (wire) {
+    // This adds another wire (or edge??) to the currently constructing shape...
+    this.wireBuilder.Add(wire);
+    if(endPoint) { this.lastPoint = endPoint; } // Yike what to do here...?
+  }
+
+  this.LineTo = function (nextPoint) {
+    if (this.lastPoint.X() === nextPoint[0] &&
+        this.lastPoint.Y() === nextPoint[1]) { return; }
+    let endPoint       = new oc.gp_Pnt(nextPoint[0], nextPoint[1], 0);
+    let lineSegment    = new oc.GC_MakeSegment(this.lastPoint, endPoint).Value();
+    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(lineSegment    ).Edge ();
+    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge       ).Wire ());
+    this.lastPoint     = endPoint;
+  }
+
+  this.ArcTo = function (pointOnArc, arcEnd) {
+    let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
+    let nextPoint      = new oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
+    let arc            = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
+    let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arc    ).Edge() ;
+    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(arcEdge).Wire());
+    this.lastPoint     = nextPoint;
+  }
+
+  // Constructs an order-N Bezier Curve where the first N-1 points are control points
+  // and the last point is the endpoint of the curve
+  this.BezierTo = function (bezierControlPoints) {
+    let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length);
+    for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
+      let ctrlPoint = new oc.gp_Pnt(bezierControlPoints[bInd][0], bezierControlPoints[bInd][1], 0);
+      ptList.SetValue(bInd + 1, ctrlPoint);
+      this.lastPoint = ctrlPoint;
+    }
+    let cubicCurve     = new oc.Geom_BezierCurve(ptList);
+    let handle         = new oc.Handle_Geom_BezierCurve(cubicCurve)
+    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(handle    ).Edge();
+    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge  ).Wire());
+  }
 }
 
 function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false) {

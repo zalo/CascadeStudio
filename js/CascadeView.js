@@ -173,6 +173,7 @@ var Environment = function (goldenContainer) {
 
       this.environment.scene.add(this.mainObject);
       console.log("Generation Complete!");
+      workerWorking = false;
     }
 
     // Save the current shape to .stl

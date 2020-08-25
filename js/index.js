@@ -1,7 +1,7 @@
 var myLayout, monacoEditor,
     threejsViewport, consoleContainer, consoleGolden, gui,
     guiPanel, GUIState, count = 0, focused = true,
-    mainProject = false, messageHandlers = {};
+    mainProject = false, messageHandlers = {}, workerWorking = false;
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -146,6 +146,10 @@ function initialize() {
 
             // Refresh the code once every couple seconds if necessary
             monacoEditor.evaluateCode = (saveToURL = false) => {
+                // Set the "workerWorking" flag, so we don't submit multiple jobs to the worker thread simultaneously
+                if (workerWorking) { return; }
+                workerWorking = true;
+
                 // Refresh these every so often to ensure we're always getting intellisense
                 monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
 
@@ -305,13 +309,13 @@ messageHandlers["startupCallback"] = () => {
     monacoEditor.evaluateCode();
 }
 
+// Todo: Enqueue these so the sliders are added/removed at the same time to eliminate flashing
 messageHandlers["addSlider"] = (payload) => {
     if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
     GUIState[payload.name + "Range"] = [payload.min, payload.max];
     guiPanel.addSlider(GUIState, payload.name, payload.name + 'Range', {
         onFinish: () => { monacoEditor.evaluateCode(); },
-        onChange: () => { if (payload.realTime && false) { monacoEditor.evaluateCode(); } }
-        // Disable Realtime Mode for now; need to not send messages while it's already busy...
+        onChange: () => { if (payload.realTime) { monacoEditor.evaluateCode(); } }
     });
 }
 messageHandlers["addButton"] = (payload) => {
