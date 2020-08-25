@@ -11,12 +11,16 @@
 //  - Upon push, Github Actions will build a new version of the library and commit it back to the repo
 //  - From there, you can graft those into CascadeStudio/node_modules/opencascade.js/dist (following its existing conventions)
 
-function Box(x, y, z, centered = false) {
+function Box(x, y, z, centered) {
+  if (!centered) { centered = false;}
   let curBox = CacheOp(arguments, () => {
     // Construct a Box Primitive
     let box = new oc.BRepPrimAPI_MakeBox(x, y, z).Shape();
-    if (centered) { Translate([-x / 2, -y / 2, -z / 2], box); }
-    return box;
+    if (centered) {
+      return Translate([-x / 2, -y / 2, -z / 2], box);
+    } else {
+      return box;
+    }
   });
 
   sceneShapes.push(curBox);
@@ -248,7 +252,7 @@ function ForEachVertex(shape, callback) {
   }
 }
 
-function FilletEdges(shape, radius, edgeList, keepOriginal = false) { 
+function FilletEdges(shape, radius, edgeList, keepOriginal) { 
   let curFillet = CacheOp(arguments, () => {
     let mkFillet = new oc.BRepFilletAPI_MakeFillet(shape);
     ForEachEdge(shape, (index, edge) => {
@@ -261,7 +265,7 @@ function FilletEdges(shape, radius, edgeList, keepOriginal = false) {
   return curFillet;
 }
 
-function ChamferEdges(shape, distance, edgeList, keepOriginal = false) { 
+function ChamferEdges(shape, distance, edgeList, keepOriginal) { 
   let curChamfer = CacheOp(arguments, () => {
     let mkChamfer = new oc.BRepFilletAPI_MakeChamfer(shape);
     ForEachEdge(shape, (index, edge) => {
@@ -297,7 +301,7 @@ function Translate(offset, shapes, keepOriginal) {
     let translation = new oc.TopLoc_Location(transformation);
     if (!isArrayLike(shapes)) {
       return new oc.TopoDS_Shape(shapes.Moved(translation));
-    } else if (shapes.length >= 1) {      // Do the normal rotation
+    } else if (shapes.length >= 1) {      // Do the normal translation
       let newTrans = [];
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
         newTrans.push(new oc.TopoDS_Shape(shapes[shapeIndex].Moved(translation)));
@@ -438,7 +442,9 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
   return curOffset;
 }
 
-function Revolve(shape, degrees = 360.0, direction = [0, 0, 1], keepShape = false, copy = false) {
+function Revolve(shape, degrees, direction, keepShape, copy) {
+  if (!degrees  ) { degrees   = 360.0; }
+  if (!direction) { direction = [0, 0, 1]; }
   let curRevolution = CacheOp(arguments, () => {
     if (degrees >= 360.0) {
       return new oc.BRepPrimAPI_MakeRevol(shape,
@@ -458,7 +464,7 @@ function Revolve(shape, degrees = 360.0, direction = [0, 0, 1], keepShape = fals
   return curRevolution;
 }
 
-function RotatedExtrude(wire, height, rotation, keepWire = false) {
+function RotatedExtrude(wire, height, rotation, keepWire) {
   let curExtrusion = CacheOp(arguments, () => {
     let upperPolygon = Rotate([0, 0, 1], rotation, Translate([0, 0, height], wire, true));
     sceneShapes = Remove(sceneShapes, upperPolygon);
@@ -501,7 +507,7 @@ function RotatedExtrude(wire, height, rotation, keepWire = false) {
   return curExtrusion;
 }
 
-function Loft(wires, keepWires = false) {
+function Loft(wires, keepWires) {
   let curLoft = CacheOp(arguments, () => {
     let pipe = new oc.BRepOffsetAPI_ThruSections(true);
 
@@ -519,7 +525,7 @@ function Loft(wires, keepWires = false) {
   return curLoft;
 }
 
-function Pipe(shape, wirePath, keepInputs = false) {
+function Pipe(shape, wirePath, keepInputs) {
   let curPipe = CacheOp(arguments, () => {
     let pipe = new oc.BRepOffsetAPI_MakePipe(wirePath, shape);
     pipe.Build();
@@ -547,7 +553,7 @@ function Button(name = "Action") {
 
 function Checkbox(name = "Toggle", defaultValue = false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
-  postMessage({ "type": "addButton", payload: { name: name, default: defaultValue } });
+  postMessage({ "type": "addCheckbox", payload: { name: name, default: defaultValue } });
   return GUIState[name];
 }
 
