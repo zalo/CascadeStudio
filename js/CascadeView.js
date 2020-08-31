@@ -355,6 +355,21 @@ var Environment = function (goldenContainer) {
       this.goldenContainer.layoutManager.eventHub.emit('Update');
       this.environment.renderer.render(this.environment.scene, this.environment.camera);
     };
+
+    this.takeGalleryScreenshotasURI = () => {
+      // Set to desired dimension and capture screenshot as uri
+      let width = 512, height = 384;
+      this.environment.camera.aspect = width / height;
+      this.environment.camera.updateProjectionMatrix();
+      this.environment.renderer.setSize(width, height);
+      this.environment.renderer.render(this.environment.scene, this.environment.camera, null, false);
+      let uri = this.environment.renderer.domElement.toDataURL('image/png');
+
+      // Return to original dimensions
+      this.environment.onWindowResize();
+
+      return uri;
+    }
   
     this.animate();
     // Initialize the view in-case we're lazy rendering...

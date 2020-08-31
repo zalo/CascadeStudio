@@ -30,53 +30,62 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 function initialize() {
     this.searchParams = new URLSearchParams(window.location.search);
 
+    // Three Data Loading Methods - LocalStorage (mainProject), URL, and Gallery
+    let loadFromURL = this.searchParams.has("code");
+    let loadfromGallery = this.searchParams.has("project");
+    let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
+
     // Set up the Windowing System  ---------------------------------------
-    let loadedState = window.localStorage.getItem('studioState-0.0.3');
-    mainProject = !this.searchParams.has("code");
-    if (loadedState === null || !mainProject) {
+    mainProject = (loadFromURL || loadfromGallery) ? false : true;
+    if (loadfromGallery) {
+        if (!galleryProject) { return; } // Pause initialization; gets called again when database query finishes!
+        myLayout = new GoldenLayout(JSON.parse(galleryProject));
+    } else if (!mainProject) {
         let codeStr = starterCode;
         GUIState = {};
-        if (!mainProject) {
+        if (loadFromURL) {
             codeStr = decode(this.searchParams.get("code"));
             GUIState = JSON.parse(decode(this.searchParams.get("gui")));
-        } else { makeMainProject(); }
+        } else {
+            makeMainProject();
+        }
 
-        myLayout = new GoldenLayout( {
+        myLayout = new GoldenLayout({
             content: [{
                 type: 'row',
-                content:[{
+                content: [{
                     type: 'component',
                     componentName: 'codeEditor',
-                    title:'Code Editor',
+                    title: 'Code Editor',
                     componentState: { code: codeStr },
                     width: 50.0,
                     isClosable: false
-                },{
+                }, {
                     type: 'column',
-                    content:[{
+                    content: [{
                         type: 'component',
                         componentName: 'cascadeView',
-                        title:'CAD View',
+                        title: 'CAD View',
                         componentState: GUIState,
                         isClosable: false
-                    },{
+                    }, {
                         type: 'component',
                         componentName: 'console',
-                        title:'Console',
-                        componentState: { },
+                        title: 'Console',
+                        componentState: {},
                         height: 20.0,
                         isClosable: false
                     }]
                 }]
             }],
-            settings:{
-                showPopoutIcon:   false,
+            settings: {
+                showPopoutIcon: false,
                 showMaximiseIcon: false,
-                showCloseIcon:    false
+                showCloseIcon: false
             }
         });
     } else {
-        myLayout = new GoldenLayout(JSON.parse(loadedState));
+        myLayout = new GoldenLayout(JSON.parse(loadfromStorage));
     }
 
     // Set up saving code changes to the localStorage
@@ -106,16 +115,16 @@ function initialize() {
             //}).catch(error => console.log(error.message));
 
             // Add Symbols from opencascade.js...
-            fetch(prefix+"/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
+            fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://'+prefix+'/node_modules/opencascade.js/dist/oc.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Three.js Typescript definitions...
-            fetch(prefix+"/node_modules/three/build/three.d.ts").then((response) => {
+            fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://'+prefix+'/node_modules/three/build/three.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
@@ -127,20 +136,20 @@ function initialize() {
             //}).catch(error => console.log(error.message));
 
             // Add Symbols from this file...
-            fetch(prefix+"/js/index.ts").then((response) => {
+            fetch(prefix + "/js/index.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://'+prefix+'/js/index.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/index.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 });
             }).catch(error => console.log(error.message));
 
             monacoEditor = monaco.editor.create(container.getElement().get(0), {
-                value   : state.code,
+                value: state.code,
                 language: "typescript",
-                theme   : "vs-dark",
+                theme: "vs-dark",
                 automaticLayout: true,
-                minimap : { enabled: false}//,
+                minimap: { enabled: false }//,
                 //model: null
             });
 
@@ -161,13 +170,13 @@ function initialize() {
                 gui.clearPanels();
                 guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                     .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
-                messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2});
+                messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
 
                 threejsViewport.clearTransformHandles();
                 cascadeStudioWorker.postMessage({ // Evaluates the code in the editor
                     "type": "Evaluate",
                     payload: {
-                        "code"    : newCode,
+                        "code": newCode,
                         "GUIState": GUIState
                     }
                 });
@@ -178,13 +187,13 @@ function initialize() {
                     payload: { maxDeviation: GUIState["MeshRes"] }
                 });
 
-                if (mainProject && saveToURL) {
-                    container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
-                    console.log("Saved to local storage and URL!");
-                } else {
-                    if (saveToURL) { console.log("Saved to URL!"); } //Generation Complete! 
-                }
-                if (saveToURL) {
+                if (!loadfromGallery && saveToURL) {
+                    if (mainProject) {
+                        container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
+                        console.log("Saved to local storage and URL!");
+                    } else {
+                        console.log("Saved to URL!"); //Generation Complete! 
+                    }
                     window.history.replaceState({}, 'Cascade Studio',
                         "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
                 }
@@ -197,13 +206,13 @@ function initialize() {
                     monacoEditor.evaluateCode(true);
                     return false;
                 }
-                return true;  
+                return true;
             };
         });
     });
 
     // Set up the 3D Viewport into the CAD Model
-    myLayout.registerComponent('cascadeView', function(container, state){
+    myLayout.registerComponent('cascadeView', function (container, state) {
         GUIState = state;
         container.setState(GUIState);
         myLayout.on("initialised", () => {
@@ -211,8 +220,8 @@ function initialize() {
             floatingGUIContainer.style.position = 'absolute';
             floatingGUIContainer.id = "threejsViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
-            gui             = new ControlKit({parentDomElementId: "threejsViewportContainer"});
-            threejsViewport = new CascadeEnvironment(container); 
+            gui = new ControlKit({ parentDomElementId: "threejsViewportContainer" });
+            threejsViewport = new CascadeEnvironment(container);
         });
     });
 
@@ -221,44 +230,44 @@ function initialize() {
         consoleGolden = container;
         consoleContainer = document.createElement("div");
         container.getElement().get(0).appendChild(consoleContainer);
-        container.getElement().get(0).style.overflow  = 'auto';
+        container.getElement().get(0).style.overflow = 'auto';
         container.getElement().get(0).style.boxShadow = "inset 0px 0px 3px rgba(0,0,0,0.75)";
 
         const getCircularReplacer = () => {
             const seen = new WeakSet();
             return (key, value) => {
-              if (typeof value === "object" && value !== null) {
-                if (seen.has(value)) { return; }
-                seen.add(value);
-              }
-              return value;
+                if (typeof value === "object" && value !== null) {
+                    if (seen.has(value)) { return; }
+                    seen.add(value);
+                }
+                return value;
             };
-          };
+        };
 
         // Overwrite the existing logging/error behaviour
         let alternatingColor = true;
         let realConsoleLog = console.log;
-        console.log = function(message) {
+        console.log = function (message) {
             let newline = document.createElement("div");
             newline.style.fontFamily = "monospace";
             newline.style.color = (alternatingColor = !alternatingColor) ? "LightGray" : "white";
             newline.style.fontSize = "1.2em";
-            newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer()).slice(1,-1);
+            newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer()).slice(1, -1);
             consoleContainer.appendChild(newline);
             consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
             realConsoleLog.apply(console, arguments);
         };
-        window.onerror = function(err, url, line, colno, errorObj) {
+        window.onerror = function (err, url, line, colno, errorObj) {
             let newline = document.createElement("div");
             newline.style.color = "red";
             newline.style.fontFamily = "monospace";
             newline.style.fontSize = "1.2em";
-            newline.innerHTML = "Line : "+line + " " + JSON.stringify(err, getCircularReplacer()).slice(1,-1);
+            newline.innerHTML = "Line : " + line + " " + JSON.stringify(err, getCircularReplacer()).slice(1, -1);
             consoleContainer.appendChild(newline);
             consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
 
             // Highlight the error'd code in the editor
-            if(!errorObj.stack.includes("wasm-function")){
+            if (!errorObj.stack.includes("wasm-function")) {
                 monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', [{
                     startLineNumber: line,
                     startColumn: colno,
@@ -282,10 +291,10 @@ function initialize() {
 
     // Doesn't get triggered in time to do any good
     //window.onbeforeunload = function () {}
-    window  .onblur  = () => { focused = false; }
-    window  .onfocus = () => { focused =  true; }
-    document.onblur  = window.onblur; document.onfocus = window.onfocus;
-    window.onorientationchange = function(event) { 
+    window.onblur = () => { focused = false; }
+    window.onfocus = () => { focused = true; }
+    document.onblur = window.onblur; document.onfocus = window.onfocus;
+    window.onorientationchange = function (event) {
         myLayout.updateSize(window.innerWidth, window.innerHeight -
             document.getElementsByClassName('topnav')[0].offsetHeight);
     };
@@ -293,37 +302,38 @@ function initialize() {
     myLayout.init();
     myLayout.updateSize(window.innerWidth, window.innerHeight -
         document.getElementById('topnav').offsetHeight);
-    if(mainProject) { makeMainProject(); }
-}
+    if (mainProject) { makeMainProject(); }
 
-messageHandlers["startupCallback"] = () => {
-    // Reimport any previously imported STEP/IGES Files
-    if (consoleGolden.getState()) {
-        console.log("Loading External Files...");
-        cascadeStudioWorker.postMessage({
-            "type": "loadPrexistingExternalFiles",
-            payload: consoleGolden.getState()
-        });
+
+    messageHandlers["startupCallback"] = () => {
+        // Reimport any previously imported STEP/IGES Files
+        if (consoleGolden.getState()) {
+            console.log("Loading External Files...");
+            cascadeStudioWorker.postMessage({
+                "type": "loadPrexistingExternalFiles",
+                payload: consoleGolden.getState()
+            });
+        }
+
+        monacoEditor.evaluateCode();
     }
 
-    monacoEditor.evaluateCode();
-}
-
-// Todo: Enqueue these so the sliders are added/removed at the same time to eliminate flashing
-messageHandlers["addSlider"] = (payload) => {
-    if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
-    GUIState[payload.name + "Range"] = [payload.min, payload.max];
-    guiPanel.addSlider(GUIState, payload.name, payload.name + 'Range', {
-        onFinish: () => { monacoEditor.evaluateCode(); },
-        onChange: () => { if (payload.realTime) { monacoEditor.evaluateCode(); } }
-    });
-}
-messageHandlers["addButton"] = (payload) => {
-    guiPanel.addButton(payload.name, () => { monacoEditor.evaluateCode(); });
-}
-messageHandlers["addCheckbox"] = (payload) => {
-    if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
-    guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
+    // Todo: Enqueue these so the sliders are added/removed at the same time to eliminate flashing
+    messageHandlers["addSlider"] = (payload) => {
+        if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
+        GUIState[payload.name + "Range"] = [payload.min, payload.max];
+        guiPanel.addSlider(GUIState, payload.name, payload.name + 'Range', {
+            onFinish: () => { monacoEditor.evaluateCode(); },
+            onChange: () => { if (payload.realTime) { monacoEditor.evaluateCode(); } }
+        });
+    }
+    messageHandlers["addButton"] = (payload) => {
+        guiPanel.addButton(payload.name, () => { monacoEditor.evaluateCode(); });
+    }
+    messageHandlers["addCheckbox"] = (payload) => {
+        if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
+        guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
+    }
 }
 
 function saveProject () {

@@ -38,7 +38,7 @@
           <div class="max-w-sm rounded overflow-hidden shadow-lg bg-gray-800">
             <img id="project-thumbnail" class="w-full" src="/Gallery/img/card-top.jpg" alt="Sunset in the mountains">
             <div class="px-6 py-2">
-              <div id="project-title" class="font-bold text-xl mb-0 text-white">Random Mountain</div>
+              <a id="project-title" class="font-bold text-xl mb-0 text-white">Random Mountain</a>
             </div>
             <div class="flex px-6 py-1 justify-end">
               <span class="inline-block px-0 py-1 text-sm font-semibold text-gray-300 mr-1">by</span>
@@ -70,6 +70,7 @@
 
                         // Create the Project Preview Card
                         title.innerText  = projectEntry.name;
+                        title.href       = window.location.origin + "/?project="+project.id;
                         thumbnail.alt    = projectEntry.name;
                         thumbnail.src    = url;//projectEntry.preview;
                         author.innerText = userEntry.username;

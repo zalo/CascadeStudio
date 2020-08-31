@@ -85,8 +85,8 @@
               description : descriptionElem.value,
               author      : userProfileData.username,
               author_uid  : user           .uid,
-              created     : Firebase.ServerValue.TIMESTAMP,
-              modified    : Firebase.ServerValue.TIMESTAMP,
+              created     : firebase.firestore.FieldValue.serverTimestamp(),
+              modified    : firebase.firestore.FieldValue.serverTimestamp(),
               favorites   : [],
               visibility  : "public",
             }).then(function(docRef) {
