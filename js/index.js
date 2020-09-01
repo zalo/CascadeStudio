@@ -1,7 +1,7 @@
 var myLayout, monacoEditor,
     threejsViewport, consoleContainer, consoleGolden, gui,
     guiPanel, GUIState, count = 0, focused = true,
-    mainProject = false, messageHandlers = {}, workerWorking = false;
+    mainProject = false, messageHandlers = {}, workerWorking = false, startup;
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -31,21 +31,29 @@ function initialize() {
     this.searchParams = new URLSearchParams(window.location.search);
 
     // Three Data Loading Methods - LocalStorage (mainProject), URL, and Gallery
-    let loadFromURL = this.searchParams.has("code");
+    let loadFromURL     = this.searchParams.has("code");
     let loadfromGallery = this.searchParams.has("project");
     let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
 
     // Set up the Windowing System  ---------------------------------------
     mainProject = (loadFromURL || loadfromGallery) ? false : true;
-    if (loadfromGallery) {
-        if (!galleryProject) { return; } // Pause initialization; gets called again when database query finishes!
+    let stuntedInitialization = loadfromGallery && !galleryProject;
+    if (loadfromGallery && galleryProject) {
+        // Destroy old config, load new one
+        if(myLayout != null){
+            myLayout.destroy();
+            myLayout = null;
+        }
         myLayout = new GoldenLayout(JSON.parse(galleryProject));
-    } else if (!mainProject) {
+    } else if (!mainProject || !loadfromStorage) {
         let codeStr = starterCode;
         GUIState = {};
         if (loadFromURL) {
-            codeStr = decode(this.searchParams.get("code"));
+            codeStr  = decode(this.searchParams.get("code"));
             GUIState = JSON.parse(decode(this.searchParams.get("gui")));
+        } else if (stuntedInitialization) {
+            // Begin passing on the initialization logic, this is a dead timeline
+            codeStr = '';
         } else {
             makeMainProject();
         }
@@ -167,10 +175,12 @@ function initialize() {
                 // Clear Errors
                 monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', []);
 
-                gui.clearPanels();
-                guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
-                    .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
-                messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
+                if (gui) {
+                    gui.clearPanels();
+                    guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
+                        .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
+                    messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
+                }
 
                 threejsViewport.clearTransformHandles();
                 cascadeStudioWorker.postMessage({ // Evaluates the code in the editor
@@ -187,9 +197,10 @@ function initialize() {
                     payload: { maxDeviation: GUIState["MeshRes"] }
                 });
 
+                container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
+
                 if (!loadfromGallery && saveToURL) {
                     if (mainProject) {
-                        container.setState({ code: newCode }); // Saves this code to the local cache if it compiles
                         console.log("Saved to local storage and URL!");
                     } else {
                         console.log("Saved to URL!"); //Generation Complete! 
@@ -220,7 +231,10 @@ function initialize() {
             floatingGUIContainer.style.position = 'absolute';
             floatingGUIContainer.id = "threejsViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
-            gui = new ControlKit({ parentDomElementId: "threejsViewportContainer" });
+            if (!loadfromGallery || galleryProject) {
+                gui = new ControlKit({ parentDomElementId: "threejsViewportContainer" });
+            }
+                
             threejsViewport = new CascadeEnvironment(container);
         });
     });
@@ -245,48 +259,53 @@ function initialize() {
         };
 
         // Overwrite the existing logging/error behaviour
-        let alternatingColor = true;
-        let realConsoleLog = console.log;
-        console.log = function (message) {
-            let newline = document.createElement("div");
-            newline.style.fontFamily = "monospace";
-            newline.style.color = (alternatingColor = !alternatingColor) ? "LightGray" : "white";
-            newline.style.fontSize = "1.2em";
-            newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer()).slice(1, -1);
-            consoleContainer.appendChild(newline);
-            consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
-            realConsoleLog.apply(console, arguments);
-        };
-        window.onerror = function (err, url, line, colno, errorObj) {
-            let newline = document.createElement("div");
-            newline.style.color = "red";
-            newline.style.fontFamily = "monospace";
-            newline.style.fontSize = "1.2em";
-            newline.innerHTML = "Line : " + line + " " + JSON.stringify(err, getCircularReplacer()).slice(1, -1);
-            consoleContainer.appendChild(newline);
-            consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
+        if (!stuntedInitialization) {
+            let alternatingColor = true;
+            let realConsoleLog = console.log;
+            console.log = function (message) {
+                let newline = document.createElement("div");
+                newline.style.fontFamily = "monospace";
+                newline.style.color = (alternatingColor = !alternatingColor) ? "LightGray" : "white";
+                newline.style.fontSize = "1.2em";
+                newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer()).slice(1, -1);
+                consoleContainer.appendChild(newline);
+                consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
+                realConsoleLog.apply(console, arguments);
+            };
+            // Call this console.log when triggered from the WASM
+            messageHandlers["log"] = (payload) => { console.log(payload); };
 
-            // Highlight the error'd code in the editor
-            if (!errorObj.stack.includes("wasm-function")) {
-                monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', [{
-                    startLineNumber: line,
-                    startColumn: colno,
-                    endLineNumber: line,
-                    endColumn: 1000,
-                    message: JSON.stringify(err, getCircularReplacer()),
-                    severity: monaco.MarkerSeverity.Error
-                }]);
+            window.onerror = function (err, url, line, colno, errorObj) {
+                let newline = document.createElement("div");
+                newline.style.color = "red";
+                newline.style.fontFamily = "monospace";
+                newline.style.fontSize = "1.2em";
+                newline.innerHTML = "Line : " + line + " " + JSON.stringify(err, getCircularReplacer()).slice(1, -1);
+                consoleContainer.appendChild(newline);
+                consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
+
+                // Highlight the error'd code in the editor
+                if (!errorObj.stack.includes("wasm-function")) {
+                    monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', [{
+                        startLineNumber: line,
+                        startColumn: colno,
+                        endLineNumber: line,
+                        endColumn: 1000,
+                        message: JSON.stringify(err, getCircularReplacer()),
+                        severity: monaco.MarkerSeverity.Error
+                    }]);
+                }
+            };
+
+            messageHandlers["Progress"] = (opNumber) => {
+                // Add a dot to the progress indicator for each 
+                // progress message we find in the queue
+                consoleContainer.parentElement.lastElementChild.lastElementChild.innerText = "> Generating Model" + ".".repeat(opNumber);
             }
-        };
 
-        messageHandlers["Progress"] = (opNumber) => {
-            // Add a dot to the progress indicator for each 
-            // progress message we find in the queue
-            consoleContainer.parentElement.lastElementChild.lastElementChild.innerText = "> Generating Model" + ".".repeat(opNumber);
+            console.log("Welcome to Cascade Studio!");
+            console.log("Loading CAD Kernel...");
         }
-
-        console.log("Welcome to Cascade Studio!");
-        console.log("Loading CAD Kernel...");
     });
 
     // Doesn't get triggered in time to do any good
@@ -304,19 +323,24 @@ function initialize() {
         document.getElementById('topnav').offsetHeight);
     if (mainProject) { makeMainProject(); }
 
-
     messageHandlers["startupCallback"] = () => {
-        // Reimport any previously imported STEP/IGES Files
-        if (consoleGolden.getState()) {
-            console.log("Loading External Files...");
-            cascadeStudioWorker.postMessage({
-                "type": "loadPrexistingExternalFiles",
-                payload: consoleGolden.getState()
-            });
-        }
+        startup = function () {
+            // Reimport any previously imported STEP/IGES Files
+            let curState = consoleGolden.getState();
+            if (curState && Object.keys(curState).length > 0) {
+                cascadeStudioWorker.postMessage({
+                    "type": "loadPrexistingExternalFiles",
+                    payload: consoleGolden.getState()
+                });
+            }
 
-        monacoEditor.evaluateCode();
+            monacoEditor.evaluateCode();
+        }
+        // Call the startup if we're ready when the wasm is ready
+        if (!stuntedInitialization) { startup(); }
     }
+    // Otherwise, enqueue that call for when the main thread is ready
+    if (!stuntedInitialization && startup) { startup(); }
 
     // Todo: Enqueue these so the sliders are added/removed at the same time to eliminate flashing
     messageHandlers["addSlider"] = (payload) => {

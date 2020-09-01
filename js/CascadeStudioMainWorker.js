@@ -3,11 +3,11 @@ var oc = null, externalShapes = {}, sceneShapes = [],
   robotoFont = null, curFontURL = '../fonts/Consolas.ttf', currentShape;
 
 // Capture Logs and Errors and forward them to the main thread
-//let realConsoleLog = console.log;
-//console.log = function(message) {
-//  //postMessage({ type: "log", payload: arguments }); // Todo: clone these...
-//  realConsoleLog.apply(console, arguments);
-//};
+let realConsoleLog = console.log;
+console.log = function(message) {
+  postMessage({ type: "log", payload: message }); // Todo: clone these...
+  realConsoleLog.apply(console, arguments);
+};
 //window.onerror = function(err, url, line, colno, errorObj) {
 //  postMessage({ type: "error", payload: arguments });
 //}; // This is actually accessed via worker.onerror in the main thread
@@ -40,7 +40,7 @@ new opencascade({
 
   // Ping Pong Messages Back and Forth based on their registration in messageHandlers
   onmessage = function (e) {
-    console.log(e.data.type);
+    //console.log(e.data.type);
     let response = messageHandlers[e.data.type](e.data.payload);
     if (response) { postMessage({ "type": e.data.type, payload: response }); };
   }

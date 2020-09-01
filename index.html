@@ -36,8 +36,10 @@
                 // Ping Pong Messages Back and Forth based on their registration in messageHandlers
                 var messageHandlers = {};
                 cascadeStudioWorker.onmessage = function (e) {
-                    let response = messageHandlers[e.data.type](e.data.payload);
-                    if (response) { cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
+                    if(e.data.type in messageHandlers){
+                        let response = messageHandlers[e.data.type](e.data.payload);
+                        if (response) { cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
+                    }
                 }
             }
         </script>

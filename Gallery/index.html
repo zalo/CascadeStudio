@@ -36,7 +36,7 @@
         <!-- An Example Card-->
         <div id="card" class="max-w-sm p-4" style="visibility:hidden;" hidden>
           <div class="max-w-sm rounded overflow-hidden shadow-lg bg-gray-800">
-            <img id="project-thumbnail" class="w-full" src="/Gallery/img/card-top.jpg" alt="Sunset in the mountains">
+            <a id="thumbnail-link"><img id="project-thumbnail" class="w-full" src="/Gallery/img/card-top.jpg" alt="Sunset in the mountains"></a>
             <div class="px-6 py-2">
               <a id="project-title" class="font-bold text-xl mb-0 text-white">Random Mountain</a>
             </div>
@@ -54,6 +54,7 @@
             let title      = document.getElementById("project-title");
             let author     = document.getElementById("project-author");
             let thumbnail  = document.getElementById("project-thumbnail");
+            let thumbnaila = document.getElementById("thumbnail-link");
             let cardParent = card.parentElement;
 
             // Get a list of the newest projects in the database
@@ -71,6 +72,8 @@
                         // Create the Project Preview Card
                         title.innerText  = projectEntry.name;
                         title.href       = window.location.origin + "/?project="+project.id;
+                        thumbnaila.href  = title.href;
+                        title.target     = "_blank";
                         thumbnail.alt    = projectEntry.name;
                         thumbnail.src    = url;//projectEntry.preview;
                         author.innerText = userEntry.username;

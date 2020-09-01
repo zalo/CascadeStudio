@@ -20,7 +20,7 @@ initApp = function () {
   firebase.auth().onAuthStateChanged(function (user) {
     if (user) {
       // User is signed in.
-      console.log(user);
+      //console.log(user);
       // Check status of user Profile
       db.collection("users").doc(user.uid)
         .get().then(function (userProfile) {
@@ -65,7 +65,7 @@ initApp = function () {
       //window.location.reload();
       //ui.disableAutoSignIn();
     //};
-    signIn.href = "./Gallery/Login";
+    signIn.href = "./Gallery";
     signIn.target = "_blank";
     //signIn.className = "inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4";
     document.getElementById("topnav").appendChild(signIn);
