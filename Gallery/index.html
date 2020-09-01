@@ -60,7 +60,7 @@
             // Get a list of the newest projects in the database
             let pageNumber = 0; let projectsPerPage = 9;
             db.collection("projects").orderBy("modified")
-              .startAt(pageNumber * projectsPerPage).limit(projectsPerPage)
+              .startAt(pageNumber * projectsPerPage).limit(projectsPerPage).where("visibility", "==", "public")
               .get().then((projectQuery) => { // Query for 9 of the latest projects
                 projectQuery.forEach((project) => {
                   let projectEntry   = project     .data();
