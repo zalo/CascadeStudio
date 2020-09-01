@@ -72,7 +72,9 @@
                         // Create the Project Preview Card
                         title.innerText  = projectEntry.name;
                         title.href       = window.location.origin + "/?project="+project.id;
+                        title.title      = projectEntry.description; 
                         thumbnaila.href  = title.href;
+                        thumbnaila.title = title.title; 
                         title.target     = "_blank";
                         thumbnail.alt    = projectEntry.name;
                         thumbnail.src    = url;//projectEntry.preview;

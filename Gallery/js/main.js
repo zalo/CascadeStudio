@@ -26,12 +26,9 @@ var uiConfig = {
   // Required to enable one-tap sign-up credential helper.
   credentialHelper: firebaseui.auth.CredentialHelper.GOOGLE_YOLO,
   // tosUrl and privacyPolicyUrl accept either url string or a callback function.
-  // Terms of service url/callback.
-  tosUrl: '<your-tos-url>',
-  // Privacy policy url/callback.
-  privacyPolicyUrl: function () {
-    window.location.assign('<your-privacy-policy-url>');
-  }
+  // Terms of service and privacy policy url/callback.
+  tosUrl:           window.location.origin + "/Gallery/Terms",
+  privacyPolicyUrl: window.location.origin + "/Gallery/Terms"
 };
 
 var onLoadUserProfile = [];
@@ -95,15 +92,17 @@ initApp = function () {
 var headerHTML = `
 <!-- Top Nav Bar-->
 <nav class="flex items-center justify-between flex-wrap bg-gray-900 p-3">
-  <div class="flex items-center flex-shrink-0 mr-6">
-    <svg class="fill-current h-8 w-8 mr-2" width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg"><path d="M13.5 22.1c1.8-7.2 6.3-10.8 13.5-10.8 10.8 0 12.15 8.1 17.55 9.45 3.6.9 6.75-.45 9.45-4.05-1.8 7.2-6.3 10.8-13.5 10.8-10.8 0-12.15-8.1-17.55-9.45-3.6-.9-6.75.45-9.45 4.05zM0 38.3c1.8-7.2 6.3-10.8 13.5-10.8 10.8 0 12.15 8.1 17.55 9.45 3.6.9 6.75-.45 9.45-4.05-1.8 7.2-6.3 10.8-13.5 10.8-10.8 0-12.15-8.1-17.55-9.45-3.6-.9-6.75.45-9.45 4.05z"/></svg>
-    <span class="font-semibold text-xl tracking-tight">Cascade Studio Gallery</span>
-  </div>
+  <a href="/Gallery">
+    <div class="flex items-center flex-shrink-0 mr-6">
+      <svg class="fill-current h-8 w-8 mr-2" width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg"><path d="M13.5 22.1c1.8-7.2 6.3-10.8 13.5-10.8 10.8 0 12.15 8.1 17.55 9.45 3.6.9 6.75-.45 9.45-4.05-1.8 7.2-6.3 10.8-13.5 10.8-10.8 0-12.15-8.1-17.55-9.45-3.6-.9-6.75.45-9.45 4.05zM0 38.3c1.8-7.2 6.3-10.8 13.5-10.8 10.8 0 12.15 8.1 17.55 9.45 3.6.9 6.75-.45 9.45-4.05-1.8 7.2-6.3 10.8-13.5 10.8-10.8 0-12.15-8.1-17.55-9.45-3.6-.9-6.75.45-9.45 4.05z"/></svg>
+      <span class="font-semibold text-xl tracking-tight">Cascade Studio Gallery</span>
+    </div>
+  </a>
   <div class="w-auto flex items-center lg:w-auto py-1">
     <div class="text-sm flex-grow inline-block">
       <a href="/Gallery"         class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Gallery</a>
       <a href="/"                class="inline-block mt-0 text-gray-200 hover:text-white mr-4">Create</a>
-      <a href="/Gallery/EditProfile" class="inline-block mt-0 text-gray-200 hover:text-white"     >Edit Profile</a>
+      <a href="/Gallery/EditProfile" class="inline-block mt-0 text-gray-200 hover:text-white" >Edit Profile</a>
     </div>
     <div class="inline-block">
       <a href="#" class="inline-block text-sm px-4 py-2 leading-none border rounded text-white border-white hover:border-transparent hover:text-teal-500 hover:bg-white mt-0 ml-4">Search</a>
@@ -114,59 +113,21 @@ var headerHTML = `
 var footerHTML = `
 <footer class="bg-gray-800 p-8 w-full bottom-0">
   <div class="sm:flex mb-4">
+    <div class="sm:w-1/4 h-auto mb-5">
+      <div class="text-blue-light mb-2">Quick Links</div>
+      <ul class="list-reset leading-normal">
+        <li class="hover:text-blue-light text-grey-darker"><a href="/Gallery">Gallery Home</a></li>
+        <li class="hover:text-blue-light text-grey-darker"><a href="/">Create New Project</a></li>
+        <li class="hover:text-blue-light text-grey-darker"><a href="/Gallery/EditProfile">Profile</a></li>
+      </ul>
+    </div>
     <div class="sm:w-1/4 h-auto">
-      <div class="text-orange mb-2">Orange</div>
+      <div class="text-orange mb-2">Terms</div>
       <ul class="list-reset leading-normal">
-          <li class="hover:text-orange text-grey-darker">One</li>
-          <li class="hover:text-orange text-grey-darker">Two</li>
-          <li class="hover:text-orange text-grey-darker">Three</li>
-          <li class="hover:text-orange text-grey-darker">Four</li>
-          <li class="hover:text-orange text-grey-darker">Five</li>
-          <li class="hover:text-orange text-grey-darker">Six</li>
-          <li class="hover:text-orange text-grey-darker">Seven</li>
-          <li class="hover:text-orange text-grey-darker">Eight</li>
+        <li class="hover:text-orange text-grey-darker"><a href="/Gallery/Terms">Terms of Service</a></li>
+        <li class="hover:text-orange text-grey-darker"><a href="/Gallery/Terms">Privacy Policy</a></li>
       </ul>
     </div>
-    <div class="sm:w-1/4 h-auto sm:mt-0 mt-8">
-      <div class="text-blue mb-2">Blue</div>
-      <ul class="list-reset leading-normal">
-          <li class="hover:text-blue text-grey-darker">One</li>
-          <li class="hover:text-blue text-grey-darker">Two</li>
-          <li class="hover:text-blue text-grey-darker">Three</li>
-      </ul>
-
-    <div class="text-blue-light mb-2 mt-4">Blue-light</div>
-      <ul class="list-reset leading-normal">
-          <li class="hover:text-blue-light text-grey-darker">One</li>
-          <li class="hover:text-blue-light text-grey-darker">Two</li>
-          <li class="hover:text-blue-light text-grey-darker">Three</li>
-      </ul>
-
-    </div>
-    <div class="sm:w-1/4 h-auto sm:mt-0 mt-8">
-            <div class="text-green-dark mb-2">Green-dark</div>
-      <ul class="list-reset leading-normal">
-          <li class="hover:text-green-dark text-grey-darker">One</li>
-          <li class="hover:text-green-dark text-grey-darker">Two</li>
-          <li class="hover:text-green-dark text-grey-darker">Three</li>
-      </ul>
-
-    <div class="text-green-light mb-2 mt-4">Green-light</div>
-      <ul class="list-reset leading-normal">
-          <li class="hover:text-green-light text-grey-darker">One</li>
-          <li class="hover:text-green-light text-grey-darker">Two</li>
-          <li class="hover:text-green-light text-grey-darker">Three</li>
-      </ul>
-    </div>
-    <div class="sm:w-1/2 sm:mt-0 mt-8 h-auto">
-        <div class="text-red-light mb-2">Newsletter</div>
-        <p class="text-grey-darker leading-normal">Lorem ipsum dolor sit amet, consectetur adipisicing elit. Commodi, consectetur. </p>
-        <div class="mt-4 flex">
-            <input type="text" class="p-2 border border-grey-light round text-grey-dark text-sm h-auto" placeholder="Your email address">
-            <button class="bg-orange text-white rounded-sm h-auto text-xs p-3">Subscribe</button>
-        </div>
-    </div>
-
   </div>
 </footer>`;
 

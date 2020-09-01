@@ -199,8 +199,6 @@
                         let thumbnailURI    = threejsViewport.takeGalleryScreenshotasURI();
                         previewElem.src     = thumbnailURI;
 
-                        if(!galleryWindowHidden) { return; }
-
                         // Save the modifications to those fields with the values from the database
                         document.getElementById("save-button").onclick = (event) => {
                             // Create the Project Entry in the database
