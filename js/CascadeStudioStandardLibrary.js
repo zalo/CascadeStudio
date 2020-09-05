@@ -544,6 +544,7 @@ function Pipe(shape, wirePath, keepInputs) {
 // This is unique, it needs to be called with the "new" keyword prepended
 function Sketch(startingPoint) {
   this.faces       = [];
+  this.wires       = [];
   this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
   this.lastPoint   = this.firstPoint;
   this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
@@ -553,11 +554,22 @@ function Sketch(startingPoint) {
     this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
     this.lastPoint   = this.firstPoint;
     this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
+    return this;
   }
 
   this.End = function (closed) {
+    if (closed &&
+       (this.firstPoint.X() !== this.lastPoint.X() ||
+        this.firstPoint.Y() !== this.lastPoint.Y())) {
+      this.LineTo(this.firstPoint);
+    }
+
+    //let  wire = this.wireBuilder.Wire();
+    //this.wires.push(wire);
+
     let faceBuilder = null;
     if (this.faces.length > 0) {
+      console.log("Adding Wire to Existing face!");
       faceBuilder = new oc.BRepBuilderAPI_MakeFace(
         this.faces[this.faces.length - 1], this.wireBuilder.Wire());
     } else {
@@ -565,22 +577,32 @@ function Sketch(startingPoint) {
     }
 
     this.faces.push(faceBuilder.Face());
+    return this;
   }
 
   this.AddWire = function (wire) {
     // This adds another wire (or edge??) to the currently constructing shape...
     this.wireBuilder.Add(wire);
-    if(endPoint) { this.lastPoint = endPoint; } // Yike what to do here...?
+    if (endPoint) { this.lastPoint = endPoint; } // Yike what to do here...?
+    return this;
   }
 
   this.LineTo = function (nextPoint) {
-    if (this.lastPoint.X() === nextPoint[0] &&
-        this.lastPoint.Y() === nextPoint[1]) { return; }
-    let endPoint       = new oc.gp_Pnt(nextPoint[0], nextPoint[1], 0);
+    let endPoint = null;
+    if (nextPoint.X) {
+      if (this.lastPoint.X() === nextPoint.X() &&
+          this.lastPoint.Y() === nextPoint.Y()) { return this; }
+      endPoint = nextPoint;
+    } else {
+      if (this.lastPoint.X() === nextPoint[0] &&
+          this.lastPoint.Y() === nextPoint[1]) { return this; }
+      endPoint = new oc.gp_Pnt(nextPoint[0], nextPoint[1], 0);
+    }
     let lineSegment    = new oc.GC_MakeSegment(this.lastPoint, endPoint).Value();
     let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(lineSegment    ).Edge ();
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge       ).Wire ());
     this.lastPoint     = endPoint;
+    return this;
   }
 
   this.ArcTo = function (pointOnArc, arcEnd) {
@@ -590,6 +612,7 @@ function Sketch(startingPoint) {
     let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arc    ).Edge() ;
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(arcEdge).Wire());
     this.lastPoint     = nextPoint;
+    return this;
   }
 
   // Constructs an order-N Bezier Curve where the first N-1 points are control points
@@ -604,7 +627,8 @@ function Sketch(startingPoint) {
     let cubicCurve     = new oc.Geom_BezierCurve(ptList);
     let handle         = new oc.Handle_Geom_BezierCurve(cubicCurve)
     let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(handle    ).Edge();
-    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge  ).Wire());
+    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
+    return this;
   }
 }
 
@@ -627,10 +651,10 @@ function Checkbox(name = "Toggle", defaultValue = false) {
 
 // Caching functions to speed up evaluation of slow redundant operations
 var argCache = {}; var opNumber = 0; 
-function CacheOp(args, cacheMiss) {
+function CacheOp(args, cacheMiss, useCache = false) {
   let toReturn = null;
   let check = CheckCache(args);
-  if (check) {
+  if (check && useCache) {
     //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
     toReturn = new oc.TopoDS_Shape(check);
     toReturn.hash = check.hash;
@@ -638,7 +662,7 @@ function CacheOp(args, cacheMiss) {
     //console.log("MISSED " + ComputeHash(args) + ", " + ComputeHash(args, true));
     let curHash = ComputeHash(args);
     toReturn = cacheMiss();
-    AddToCache(curHash, toReturn);
+    if (useCache) { AddToCache(curHash, toReturn); }
   }
   postMessage({ "type": "Progress", "payload": opNumber++ }); // Poor Man's Progress Indicator
   return toReturn;

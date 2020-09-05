@@ -267,7 +267,11 @@ function initialize() {
                 newline.style.fontFamily = "monospace";
                 newline.style.color = (alternatingColor = !alternatingColor) ? "LightGray" : "white";
                 newline.style.fontSize = "1.2em";
-                newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer()).slice(1, -1);
+                if (message !== undefined) {
+                    newline.innerHTML = "&gt;  " + JSON.stringify(message, getCircularReplacer()).slice(1, -1);
+                } else {
+                    newline.innerHTML = "undefined";
+                }
                 consoleContainer.appendChild(newline);
                 consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
                 realConsoleLog.apply(console, arguments);
@@ -285,7 +289,7 @@ function initialize() {
                 consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
 
                 // Highlight the error'd code in the editor
-                if (!errorObj.stack.includes("wasm-function")) {
+                if (!errorObj || !(errorObj.stack.includes("wasm-function"))) {
                     monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', [{
                         startLineNumber: line,
                         startColumn: colno,

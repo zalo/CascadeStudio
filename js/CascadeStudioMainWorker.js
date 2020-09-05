@@ -4,13 +4,15 @@ var oc = null, externalShapes = {}, sceneShapes = [],
 
 // Capture Logs and Errors and forward them to the main thread
 let realConsoleLog = console.log;
+let realConsoleError = console.error;
 console.log = function(message) {
   postMessage({ type: "log", payload: message }); // Todo: clone these...
   realConsoleLog.apply(console, arguments);
 };
-//window.onerror = function(err, url, line, colno, errorObj) {
-//  postMessage({ type: "error", payload: arguments });
-//}; // This is actually accessed via worker.onerror in the main thread
+console.error = function(err, url, line, colno, errorObj) {
+  //postMessage({ type: "error", payload: arguments });
+  realConsoleError.apply(console, arguments);
+}; // This is actually accessed via worker.onerror in the main thread
 
 // Import the set of scripts we'll need to perform all the CAD operations
 importScripts(
@@ -53,7 +55,12 @@ var messageHandlers = {};
 function Evaluate(payload) {
   opNumber = 0; // This keeps track of the progress of the evaluation
   GUIState = payload.GUIState;
-  eval(payload.code);
+  try {
+    eval(payload.code);
+  } catch(err) {
+    console.error(err);
+  }
+  
 }
 messageHandlers["Evaluate"] = Evaluate;
 

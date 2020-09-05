@@ -41,6 +41,22 @@ interface CascadeEnvironment {
 /** The 3D Rendering Viewport; mainOnbject contains all the faces and edges. */
 var threejsViewport: CascadeEnvironment;
 
+class Sketch {
+    constructor(startingPoint: number[]);
+
+    faces       : oc.TopoDS_Face;
+    wires       : oc.TopoDS_Wire;
+    firstPoint  : oc.gp_Pnt;
+    lastPoint   : oc.gp_Pnt;
+    wireBuilder : oc.BRepBuilderAPI_MakeWire;
+    
+    Start(startingPoint          : number[]       ) : Sketch;
+    End  (closed                 : boolean        ) : Sketch;
+    AddWire (wire                : oc. TopoDS_Wire) : Sketch;
+    LineTo  (nextPoint           : number[]       ) : Sketch;
+    ArcTo   (pointOnArc          : number[], arcEnd : number[]) : Sketch;
+    BezierTo(bezierControlPoints : number[][]     ) : Sketch;
+}
 
 /** Creates a solid box with dimensions x, y, and, z and adds it to `sceneShapes` for rendering. 
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
