@@ -35,8 +35,9 @@ var Environment = function (goldenContainer) {
         new THREE.MeshPhongMaterial({
           color: 0x080808, depthWrite: true,
           polygonOffset: true, // Push the mesh back for line drawing
-          polygonOffsetFactor: 5.0, polygonOffsetUnits: 1.0
+          polygonOffsetFactor: 6.0, polygonOffsetUnits: 1.0
         }));
+      this.groundMesh.position.y = -0.1;
       this.groundMesh.rotation.x = - Math.PI / 2;
       this.groundMesh.receiveShadow = true;
       this.scene.add(this.groundMesh);
@@ -106,6 +107,9 @@ var Environment = function (goldenContainer) {
     }, false );
 
     messageHandlers["combineAndRenderShapes"] = ([facelist, edgelist]) => {
+      workerWorking = false;
+      if (!facelist) { return;}
+
       this.environment.scene.remove(this.mainObject);
       this.mainObject            = new THREE.Group();
       this.mainObject.name       = "shape";
@@ -173,7 +177,6 @@ var Environment = function (goldenContainer) {
 
       this.environment.scene.add(this.mainObject);
       console.log("Generation Complete!");
-      workerWorking = false;
     }
 
     // Save the current shape to .stl

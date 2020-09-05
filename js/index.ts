@@ -41,21 +41,28 @@ interface CascadeEnvironment {
 /** The 3D Rendering Viewport; mainOnbject contains all the faces and edges. */
 var threejsViewport: CascadeEnvironment;
 
+/** Starts sketching a 2D shape which can contain lines, arcs, bezier splines, and fillets.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
+ * @example```let sketch = new Sketch([0,0]).LineTo([100,0]).Fillet(20).LineTo([100,100]).End(true).Face();```*/
 class Sketch {
     constructor(startingPoint: number[]);
 
-    faces       : oc.TopoDS_Face;
-    wires       : oc.TopoDS_Wire;
+    faces       : oc.TopoDS_Face[];
+    wires       : oc.TopoDS_Wire[];
     firstPoint  : oc.gp_Pnt;
     lastPoint   : oc.gp_Pnt;
     wireBuilder : oc.BRepBuilderAPI_MakeWire;
     
-    Start(startingPoint          : number[]       ) : Sketch;
-    End  (closed                 : boolean        ) : Sketch;
+    Start   (startingPoint       : number[]       ) : Sketch;
+    End     (closed             ?: boolean       , reversed?:boolean) : Sketch;
     AddWire (wire                : oc. TopoDS_Wire) : Sketch;
+    
     LineTo  (nextPoint           : number[]       ) : Sketch;
     ArcTo   (pointOnArc          : number[], arcEnd : number[]) : Sketch;
     BezierTo(bezierControlPoints : number[][]     ) : Sketch;
+    Fillet  (radius              : number         ) : Sketch;
+    Face    (reversed           ?:boolean) : oc.TopoDS_Face;
+    Wire    (reversed           ?:boolean) : oc.TopoDS_Wire;
 }
 
 /** Creates a solid box with dimensions x, y, and, z and adds it to `sceneShapes` for rendering. 
@@ -209,3 +216,8 @@ function FilletEdges(shape: oc.TopoDS_Shape, radius: number, edgeList: number[],
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```ChamferEdges(shape, 1, [0,1,2,7]);``` */
 function ChamferEdges(shape: oc.TopoDS_Shape, distance: number, edgeList: number[], keepOriginal?:boolean): oc.TopoDS_Shape;
+
+/** Download this file URL through the browser.  Use this to export information from the CAD engine.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
+ * @example```SaveFile("myInfo.txt", URL.createObjectURL( new Blob(["Hello, Harddrive!"], { type: 'text/plain' }) ));``` */
+function SaveFile(filename: string, fileURL: string): void;

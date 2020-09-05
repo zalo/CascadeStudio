@@ -191,6 +191,16 @@ function initialize() {
                     }
                 });
 
+                // Sets up receiving files from the worker thread
+                // This lets users download arbitrary information 
+                // from the CAD engine
+                messageHandlers["saveFile"] = (payload) => {
+                    let link      = document.createElement("a");
+                    link.href     = payload.fileURL;
+                    link.download = payload.filename;
+                    link.click();
+                };
+
                 // This assembles all of the objects in the "workspace" and begins saving them out
                 cascadeStudioWorker.postMessage({
                     "type": "combineAndRenderShapes",

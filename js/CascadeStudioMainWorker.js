@@ -55,12 +55,7 @@ var messageHandlers = {};
 function Evaluate(payload) {
   opNumber = 0; // This keeps track of the progress of the evaluation
   GUIState = payload.GUIState;
-  try {
-    eval(payload.code);
-  } catch(err) {
-    console.error(err);
-  }
-  
+  eval(payload.code);
 }
 messageHandlers["Evaluate"] = Evaluate;
 
@@ -94,6 +89,7 @@ function combineAndRenderShapes(payload) {
     return facesAndEdges;
   } else {
     console.error("There were no scene shapes returned!");
+    return [null, null];
   }
 }
 messageHandlers["combineAndRenderShapes"] = combineAndRenderShapes;

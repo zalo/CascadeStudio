@@ -543,11 +543,13 @@ function Pipe(shape, wirePath, keepInputs) {
 // This is a utility class for drawing wires/shapes with lines, arcs, and splines
 // This is unique, it needs to be called with the "new" keyword prepended
 function Sketch(startingPoint) {
-  this.faces       = [];
-  this.wires       = [];
-  this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
-  this.lastPoint   = this.firstPoint;
-  this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
+  this.currentIndex = 0;
+  this.faces        = [];
+  this.wires        = [];
+  this.firstPoint   = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
+  this.lastPoint    = this.firstPoint;
+  this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
+  this.fillets      = [];
 
   // Functions are: BSplineTo, Fillet, Wire, and Face
   this.Start = function (startingPoint) {
@@ -557,27 +559,70 @@ function Sketch(startingPoint) {
     return this;
   }
 
-  this.End = function (closed) {
+  this.End = function (closed, reversed) {
     if (closed &&
        (this.firstPoint.X() !== this.lastPoint.X() ||
         this.firstPoint.Y() !== this.lastPoint.Y())) {
       this.LineTo(this.firstPoint);
     }
 
-    //let  wire = this.wireBuilder.Wire();
-    //this.wires.push(wire);
+    let wire = this.wireBuilder.Wire();
+    if (reversed) { wire = wire.Reversed(); }
+    this.wires.push(wire);
 
     let faceBuilder = null;
     if (this.faces.length > 0) {
-      console.log("Adding Wire to Existing face!");
-      faceBuilder = new oc.BRepBuilderAPI_MakeFace(
-        this.faces[this.faces.length - 1], this.wireBuilder.Wire());
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace(this.wires[0]);
+      for (let w = 1; w < this.wires.length; w++){
+        faceBuilder.Add(this.wires[w]);
+      }
     } else {
-      faceBuilder = new oc.BRepBuilderAPI_MakeFace(this.wireBuilder.Wire());
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace(wire);
     }
 
-    this.faces.push(faceBuilder.Face());
+    let face = faceBuilder.Face();
+    this.faces.push(face);
     return this;
+  }
+
+  this.Wire = function (reversed) {
+    let wire = this.wires[this.wires.length - 1];
+    if (reversed) { wire = wire.Reversed(); }
+    sceneShapes.push(wire);
+    return wire;
+  }
+  this.Face = function (reversed) {
+    let face = this.faces[this.faces.length - 1];
+
+    // Add Fillets if Necessary
+    if (this.fillets.length > 0) {
+      let successes = 0; let swapFillets = [];
+      for (let f = 0; f < this.fillets.length; f++) { this.fillets[f].disabled = false; }
+
+      // Create Fillet Maker 2D
+      let makeFillet = new oc.BRepFilletAPI_MakeFillet2d(face);
+      // TopExp over the vertices
+      ForEachVertex(face, (vertex) => {
+        // Check if the X and Y coords of any vertices match our chosen fillet vertex
+        let pnt = oc.BRep_Tool.prototype.Pnt(vertex);
+        for (let f = 0; f < this.fillets.length; f++) {
+          if (!this.fillets[f].disabled &&
+              pnt.X() === this.fillets[f].x &&
+              pnt.Y() === this.fillets[f].y ) {
+            // If so: Add a Radius there!
+            makeFillet.AddFillet(vertex, this.fillets[f].radius);
+            this.fillets[f].disabled = true; successes++;
+            break;
+          }
+        }
+      });
+      if (successes > 0) { face = makeFillet.Shape(); } else { console.log("Couldn't find any of the vertices to fillet!!"); }
+      this.fillets.concat(swapFillets);
+    }
+
+    if (reversed) { face = face.Reversed(); }
+    sceneShapes.push(face);
+    return face;
   }
 
   this.AddWire = function (wire) {
@@ -602,6 +647,7 @@ function Sketch(startingPoint) {
     let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(lineSegment    ).Edge ();
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge       ).Wire ());
     this.lastPoint     = endPoint;
+    this.currentIndex++;
     return this;
   }
 
@@ -612,6 +658,7 @@ function Sketch(startingPoint) {
     let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arc    ).Edge() ;
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(arcEdge).Wire());
     this.lastPoint     = nextPoint;
+    this.currentIndex++;
     return this;
   }
 
@@ -626,10 +673,23 @@ function Sketch(startingPoint) {
     }
     let cubicCurve     = new oc.Geom_BezierCurve(ptList);
     let handle         = new oc.Handle_Geom_BezierCurve(cubicCurve)
-    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(handle    ).Edge();
-    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
+    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(handle    ).Edge() ;
+    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge  ).Wire());
+    this.currentIndex++;
     return this;
   }
+
+  this.Fillet = function (radius) {
+    this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
+    return this;
+  }
+}
+
+function SaveFile(filename, fileURL) {
+  postMessage({
+    "type": "saveFile",
+    payload: { filename: filename, fileURL: fileURL }
+  });
 }
 
 function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false) {
