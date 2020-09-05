@@ -59,7 +59,9 @@ class Sketch {
     
     LineTo  (nextPoint           : number[]       ) : Sketch;
     ArcTo   (pointOnArc          : number[], arcEnd : number[]) : Sketch;
-    BezierTo(bezierControlPoints : number[][]     ) : Sketch;
+    BezierTo(bezierControlPoints: number[][]): Sketch;
+    /** Adds a 2D Fillet of specified radius at this vertex.  Only applies to Faces!
+     * If a Wire is needed, use ForEachWire() to get the Wire from the resulting Face! */
     Fillet  (radius              : number         ) : Sketch;
     Face    (reversed           ?:boolean) : oc.TopoDS_Face;
     Wire    (reversed           ?:boolean) : oc.TopoDS_Wire;
