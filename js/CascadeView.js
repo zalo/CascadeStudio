@@ -41,10 +41,11 @@ var Environment = function (goldenContainer) {
       this.groundMesh.rotation.x = - Math.PI / 2;
       this.groundMesh.receiveShadow = true;
       this.scene.add(this.groundMesh);
-      var grid = new THREE.GridHelper(2000, 20, 0xcccccc, 0xcccccc);
-      grid.material.opacity = 0.3;
-      grid.material.transparent = true;
-      this.scene.add(grid);
+      this.grid = new THREE.GridHelper(2000, 20, 0xcccccc, 0xcccccc);
+      this.grid.position.y = -0.01;
+      this.grid.material.opacity = 0.3;
+      this.grid.material.transparent = true;
+      this.scene.add(this.grid);
   
       var curCanvas = document.createElement('canvas');
       //curCanvas.id = canvasId;

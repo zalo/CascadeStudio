@@ -207,6 +207,33 @@ function Text3D(text, size, height, fontURL) {
 }
 
 // These foreach functions are not cache friendly right now!
+function ForEachSolid(shape, callback) {
+  let solid_index = 0;
+  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SOLID);
+  for (anExplorer.Init(shape, oc.TopAbs_SOLID); anExplorer.More(); anExplorer.Next()) {
+    callback(solid_index++, oc.TopoDS.prototype.Solid(anExplorer.Current()));
+  }
+}
+function GetSolidFromCompound(shape, index, keepOriginal) {
+  if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
+  if (!index) { index = 0;}
+
+  let sol = CacheOp(arguments, () => {
+    let innerSolid = {}; let solidsFound = 0;
+    ForEachSolid(shape, (i, s) => {
+      if (i === index) { innerSolid = new oc.TopoDS_Solid(s); } solidsFound++;
+    });
+    if (solidsFound === 0) { console.error("NO SOLIDS FOUND IN SHAPE!"); innerSolid = shape; }
+    innerSolid.hash = shape.hash + 1;
+    return innerSolid;
+  });
+
+  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shape); }
+  sceneShapes.push(sol);
+
+  return sol;
+}
+
 function ForEachShell(shape, callback) {
   let shell_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SHELL);
@@ -255,9 +282,14 @@ function ForEachVertex(shape, callback) {
 function FilletEdges(shape, radius, edgeList, keepOriginal) { 
   let curFillet = CacheOp(arguments, () => {
     let mkFillet = new oc.BRepFilletAPI_MakeFillet(shape);
+    let foundEdges = 0;
     ForEachEdge(shape, (index, edge) => {
-      if (edgeList.includes(index)) { mkFillet.Add(radius, edge); }
+      if (edgeList.includes(index)) { mkFillet.Add(radius, edge); foundEdges++; }
     });
+    if (foundEdges == 0) {
+      console.error("Fillet Edges Not Found!  Make sure you are looking at the object _before_ the Fillet is applied!");
+      return new oc.TopoDS_Solid(shape);
+    }
     return new oc.TopoDS_Solid(mkFillet.Shape());
   });
   sceneShapes.push(curFillet);
@@ -268,9 +300,14 @@ function FilletEdges(shape, radius, edgeList, keepOriginal) {
 function ChamferEdges(shape, distance, edgeList, keepOriginal) { 
   let curChamfer = CacheOp(arguments, () => {
     let mkChamfer = new oc.BRepFilletAPI_MakeChamfer(shape);
+    let foundEdges = 0;
     ForEachEdge(shape, (index, edge) => {
-      if (edgeList.includes(index)) { mkChamfer.Add(distance, edge); }
+      if (edgeList.includes(index)) { mkChamfer.Add(distance, edge); foundEdges++; }
     });
+    if (foundEdges == 0) {
+      console.error("Chamfer Edges Not Found!  Make sure you are looking at the object _before_ the Chamfer is applied!");
+      return new oc.TopoDS_Solid(shape);
+    }
     return new oc.TopoDS_Solid(mkChamfer.Shape());
   });
   sceneShapes.push(curChamfer);
@@ -380,15 +417,19 @@ function Union(objectsToJoin, keepObjects) {
   return curUnion;
 }
 
-function Difference(mainBody, objectsToSubtract, keepObjects) {
+function Difference(mainBody, objectsToSubtract, keepObjects, onlyFirstSolid) {
   let curDifference = CacheOp(arguments, () => {
+    if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
+    
     let difference = new oc.TopoDS_Shape(mainBody);
     if (objectsToSubtract.length >= 1) {
       for (let i = 0; i < objectsToSubtract.length; i++) {
+        if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
         difference = new oc.BRepAlgoAPI_Cut(difference, objectsToSubtract[i]).Shape();
       }
     }
-    return difference;
+    difference.hash = ComputeHash(arguments);
+    return onlyFirstSolid ? GetSolidFromCompound(difference, 0) : difference;
   });
 
   if (!keepObjects) { sceneShapes = Remove(sceneShapes, mainBody); }
@@ -429,12 +470,20 @@ function Extrude(face, direction, keepFace) {
 }
 
 function Offset(shape, offsetDistance, tolerance, keepShape) {
+  if (!shape || shape.IsNull()) { console.error("Offset received Null Shape!"); }
   if (!tolerance) { tolerance = 0.1; }
   if (offsetDistance === 0.0) { return shape; }
   let curOffset = CacheOp(arguments, () => {
-    let offset = new oc.BRepOffsetAPI_MakeOffsetShape();
-    offset.PerformByJoin(shape, offsetDistance, tolerance);
-    return offset.Shape();
+    let offset = null;
+    if (shape.ShapeType() === 5) {
+      offset = new oc.BRepOffsetAPI_MakeOffset();
+      offset.AddWire(shape);
+      offset.Perform(offsetDistance);
+    } else {
+      offset = new oc.BRepOffsetAPI_MakeOffsetShape();
+      offset.PerformByJoin(shape, offsetDistance, tolerance);
+    }
+    return new oc.TopoDS_Shape(offset.Shape());
   });
   
   if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
@@ -465,6 +514,7 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
 }
 
 function RotatedExtrude(wire, height, rotation, keepWire) {
+  if (!wire || wire.IsNull()) { console.error("RotatedExtrude received Null Wire!"); }
   let curExtrusion = CacheOp(arguments, () => {
     let upperPolygon = Rotate([0, 0, 1], rotation, Translate([0, 0, height], wire, true));
     sceneShapes = Remove(sceneShapes, upperPolygon);
@@ -500,7 +550,7 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     pipe.Add(upperPolygon);
     pipe.Build();
     pipe.MakeSolid();
-    return new oc.TopoDS_Solid(pipe.Shape());
+    return new oc.TopoDS_Shape(pipe.Shape());
   });
   if (!keepWire) { sceneShapes = Remove(sceneShapes, wire); }
   sceneShapes.push(curExtrusion);
@@ -515,7 +565,7 @@ function Loft(wires, keepWires) {
     wires.forEach((wire) => { pipe.AddWire(wire); });
 
     pipe.Build();
-    return new oc.TopoDS_Solid(pipe.Shape());
+    return new oc.TopoDS_Shape(pipe.Shape());
   });
 
   wires.forEach((wire) => {
@@ -529,7 +579,7 @@ function Pipe(shape, wirePath, keepInputs) {
   let curPipe = CacheOp(arguments, () => {
     let pipe = new oc.BRepOffsetAPI_MakePipe(wirePath, shape);
     pipe.Build();
-    return new oc.TopoDS_Solid(pipe.Shape());
+    return new oc.TopoDS_Shape(pipe.Shape());
   });
   
   if (!keepInputs) {
@@ -550,16 +600,20 @@ function Sketch(startingPoint) {
   this.lastPoint    = this.firstPoint;
   this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
   this.fillets      = [];
+  this.argsString   = ComputeHash(arguments, true);
 
   // Functions are: BSplineTo, Fillet, Wire, and Face
   this.Start = function (startingPoint) {
     this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
     this.lastPoint   = this.firstPoint;
     this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
+    this.argsString += ComputeHash(arguments, true);
     return this;
   }
 
   this.End = function (closed, reversed) {
+    this.argsString += ComputeHash(arguments, true);
+
     if (closed &&
        (this.firstPoint.X() !== this.lastPoint.X() ||
         this.firstPoint.Y() !== this.lastPoint.Y())) {
@@ -568,6 +622,7 @@ function Sketch(startingPoint) {
 
     let wire = this.wireBuilder.Wire();
     if (reversed) { wire = wire.Reversed(); }
+    wire.hash = stringToHash(this.argsString);
     this.wires.push(wire);
 
     let faceBuilder = null;
@@ -581,17 +636,21 @@ function Sketch(startingPoint) {
     }
 
     let face = faceBuilder.Face();
+    face.hash = stringToHash(this.argsString);
     this.faces.push(face);
     return this;
   }
 
   this.Wire = function (reversed) {
+    this.argsString += ComputeHash(arguments, true);
     let wire = this.wires[this.wires.length - 1];
     if (reversed) { wire = wire.Reversed(); }
+    wire.hash = stringToHash(this.argsString);
     sceneShapes.push(wire);
     return wire;
   }
   this.Face = function (reversed) {
+    this.argsString += ComputeHash(arguments, true);
     let face = this.faces[this.faces.length - 1];
 
     // Add Fillets if Necessary
@@ -621,11 +680,13 @@ function Sketch(startingPoint) {
     }
 
     if (reversed) { face = face.Reversed(); }
+    face.hash = stringToHash(this.argsString);
     sceneShapes.push(face);
     return face;
   }
 
   this.AddWire = function (wire) {
+    this.argsString += ComputeHash(arguments, true);
     // This adds another wire (or edge??) to the currently constructing shape...
     this.wireBuilder.Add(wire);
     if (endPoint) { this.lastPoint = endPoint; } // Yike what to do here...?
@@ -633,6 +694,7 @@ function Sketch(startingPoint) {
   }
 
   this.LineTo = function (nextPoint) {
+    this.argsString += ComputeHash(arguments, true);
     let endPoint = null;
     if (nextPoint.X) {
       if (this.lastPoint.X() === nextPoint.X() &&
@@ -652,6 +714,7 @@ function Sketch(startingPoint) {
   }
 
   this.ArcTo = function (pointOnArc, arcEnd) {
+    this.argsString += ComputeHash(arguments, true);
     let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
     let nextPoint      = new oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
     let arc            = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
@@ -665,6 +728,7 @@ function Sketch(startingPoint) {
   // Constructs an order-N Bezier Curve where the first N-1 points are control points
   // and the last point is the endpoint of the curve
   this.BezierTo = function (bezierControlPoints) {
+    this.argsString += ComputeHash(arguments, true);
     let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length);
     for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
       let ctrlPoint = new oc.gp_Pnt(bezierControlPoints[bInd][0], bezierControlPoints[bInd][1], 0);
@@ -680,6 +744,7 @@ function Sketch(startingPoint) {
   }
 
   this.Fillet = function (radius) {
+    this.argsString += ComputeHash(arguments, true);
     this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
     return this;
   }
@@ -711,18 +776,18 @@ function Checkbox(name = "Toggle", defaultValue = false) {
 
 // Caching functions to speed up evaluation of slow redundant operations
 var argCache = {}; var opNumber = 0; 
-function CacheOp(args, cacheMiss, useCache = false) {
+function CacheOp(args, cacheMiss, disableCache) {
   let toReturn = null;
   let check = CheckCache(args);
-  if (check && useCache) {
+  if (check && !disableCache) {
     //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
     toReturn = new oc.TopoDS_Shape(check);
     toReturn.hash = check.hash;
   } else {
     //console.log("MISSED " + ComputeHash(args) + ", " + ComputeHash(args, true));
     let curHash = ComputeHash(args);
-    toReturn = cacheMiss();
-    if (useCache) { AddToCache(curHash, toReturn); }
+    toReturn = cacheMiss();//new oc.TopoDS_Shape();
+    if (!disableCache) { AddToCache(curHash, toReturn); }
   }
   postMessage({ "type": "Progress", "payload": opNumber++ }); // Poor Man's Progress Indicator
   return toReturn;

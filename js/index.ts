@@ -114,10 +114,10 @@ function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0
  * @example```let sharpSphere = Union([Sphere(38), Box(50, 50, 50, true)]);```*/
 function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean): oc.TopoDS_Shape;
 /** Subtracts a list of shapes from mainBody.
- * The original shapes are removed unless `keepObjects` is true.
+ * The original shapes are removed unless `keepObjects` is true.  Returns a Compound Shape unless onlyFirstSolid is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let floatingCorners = Difference(Box(50, 50, 50, true), [Sphere(38)]);```*/
-function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean): oc.TopoDS_Shape;
+function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, onlyFirstSolid?:boolean): oc.TopoDS_Shape;
 /** Takes only the intersection of a list of shapes.
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
@@ -198,6 +198,10 @@ function Rotate(axis: number[], degrees: number, shape: oc.TopoDS_Shape, keepOri
  * @example```let scaledCylinder = Scale(50, Cylinder(0.5, 1));```*/
 function Scale(scale: number, shape: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape;
 
+/** Iterate over all the solids in this shape, calling `callback` on each one. */
+function ForEachSolid(shape: oc.TopoDS_Shape, callback: (index: Number, shell: oc.TopoDS_Solid) => void): void;
+/** Gets the indexth solid from this compound shape. */
+function GetSolidFromCompound(shape: oc.TopoDS_Shape, index:number): oc.TopoDS_Solid;
 /** Iterate over all the shells in this shape, calling `callback` on each one. */
 function ForEachShell(shape: oc.TopoDS_Shape, callback: (index: Number, shell: oc.TopoDS_Shell) => void): void;
 /** Iterate over all the faces in this shape, calling `callback` on each one. */

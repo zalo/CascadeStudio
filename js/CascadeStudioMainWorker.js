@@ -6,11 +6,18 @@ var oc = null, externalShapes = {}, sceneShapes = [],
 let realConsoleLog = console.log;
 let realConsoleError = console.error;
 console.log = function(message) {
-  postMessage({ type: "log", payload: message }); // Todo: clone these...
+  setTimeout(() => {
+    postMessage({ type: "log", payload: message });
+  }, 0);
   realConsoleLog.apply(console, arguments);
 };
-console.error = function(err, url, line, colno, errorObj) {
-  //postMessage({ type: "error", payload: arguments });
+console.error = function (err, url, line, colno, errorObj) {
+  postMessage({ type: "resetWorking" });
+  setTimeout(() => {
+    err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
+    throw err; 
+  }, 0);
+  
   realConsoleError.apply(console, arguments);
 }; // This is actually accessed via worker.onerror in the main thread
 
@@ -55,7 +62,12 @@ var messageHandlers = {};
 function Evaluate(payload) {
   opNumber = 0; // This keeps track of the progress of the evaluation
   GUIState = payload.GUIState;
-  eval(payload.code);
+  try {
+    eval(payload.code);
+  } catch (e) {
+    //console.error(JSON.stringify(e));
+    postMessage({ type: "resetWorking" });
+  }
 }
 messageHandlers["Evaluate"] = Evaluate;
 
@@ -67,11 +79,14 @@ function combineAndRenderShapes(payload) {
   let fullShapeFaceHashes = {};
   if (sceneShapes.length > 0) {
     for (let shapeInd = 0; shapeInd < sceneShapes.length; shapeInd++) {
-      if (!sceneShapes[shapeInd]) { console.error("Null Shape detected in sceneShapes; skipping: " + sceneShapes[shapeInd]); continue; }
+      if (!sceneShapes[shapeInd] || sceneShapes[shapeInd].IsNull()) {
+        console.error("Null Shape detected in sceneShapes; skipping: " + JSON.stringify(sceneShapes[shapeInd]));
+        continue;
+      }
       if (!sceneShapes[shapeInd].ShapeType) {
         console.error("Non-Shape detected in sceneShapes; " +
           "are you sure it is a TopoDS_Shape and not something else that needs to be converted to one?");
-        console.error(sceneShapes[shapeInd]);
+        console.error(JSON.stringify(sceneShapes[shapeInd]));
         continue;
       }
       // Scan the edges and faces and add to the edge list
@@ -79,6 +94,7 @@ function combineAndRenderShapes(payload) {
       ForEachFace(sceneShapes[shapeInd], (index, face) => {
         fullShapeFaceHashes[face.HashCode(100000000)] = index;
       });
+      //console.error("Adding Shape of Type: "+sceneShapes[shapeInd].ShapeType());
       sceneBuilder.Add(currentShape, sceneShapes[shapeInd]);
     }
 

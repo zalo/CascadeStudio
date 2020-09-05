@@ -287,7 +287,8 @@ function initialize() {
                 realConsoleLog.apply(console, arguments);
             };
             // Call this console.log when triggered from the WASM
-            messageHandlers["log"] = (payload) => { console.log(payload); };
+            messageHandlers["log"  ] = (payload) => { console.log(payload); };
+            messageHandlers["error"] = (payload) => { workerWorking = false; console.error(payload); };
 
             window.onerror = function (err, url, line, colno, errorObj) {
                 let newline = document.createElement("div");
@@ -370,6 +371,9 @@ function initialize() {
     messageHandlers["addCheckbox"] = (payload) => {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
         guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
+    }
+    messageHandlers["resetWorking"] = () => {
+        workerWorking = false;
     }
 }
 
