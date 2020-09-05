@@ -86,7 +86,8 @@ self.addEventListener("install", function(event) {
    CSS resources, fonts, any images, etc.*/
 self.addEventListener("fetch", function(event) {
   if (event.request.method !== 'GET') {
-    console.log('Non GET fetch event ignored...', event.request.method, event.request.url);
+    //console.log('Non GET fetch event ignored...', event.request.method, event.request.url);
+    //event.respondWith(useNetwork(event.request, failureResponse));
     return;
   }
 

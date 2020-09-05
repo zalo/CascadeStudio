@@ -298,8 +298,7 @@ function initialize() {
             };
 
             messageHandlers["Progress"] = (opNumber) => {
-                // Add a dot to the progress indicator for each 
-                // progress message we find in the queue
+                // Add a dot to the progress indicator for each progress message we find in the queue
                 consoleContainer.parentElement.lastElementChild.lastElementChild.innerText = "> Generating Model" + ".".repeat(opNumber);
             }
 
