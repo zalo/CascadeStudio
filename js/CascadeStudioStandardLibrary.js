@@ -196,6 +196,7 @@ function Text3D(text, size, height, fontURL) {
     if (height === 0) {
       return textFaces[textFaces.length - 1];
     } else {
+      textFaces[textFaces.length - 1].text = text; // Invalidate the text cache for the Extrude Call!
       return Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
     }
   });
