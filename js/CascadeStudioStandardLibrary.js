@@ -120,21 +120,20 @@ function BSpline(inPoints, closed, wire) {
 
 function Text3D(text, size, height, fontURL) {
   if (!size   ) { size    = 36; }
-  if (!height ) { height  = 0.15; }
+  if (!height && height !== 0.0) { height  = 0.15; }
   if (!fontURL) { fontURL = curFontURL; }
 
-  let curText = CacheOp(arguments, () => {
-    if (fontURL !== curFontURL) {
+  if (fontURL !== curFontURL) {
+    opentype.load(fontURL, (err, font) => {
+      if (err || !font) { console.error(err); return; }
+      robotoFont = font;
       curFontURL = fontURL;
-      let textArgs = arguments;
-      opentype.load(curFontURL, (err, font) => {
-        if (err) { console.log(err); }
-        robotoFont = font;
-        argCache[ComputeHash(textArgs)] = null; // Invalidate the cache!
-        console.log("New Font Loaded!  Please re-evaluate your model to see changes...");
-      });
-    }
+      argCache = {}; // Wipe the whole cache for now
+      console.log("New Font " + curFontURL + " Loaded!  Please re-evaluate your model to see changes...");
+    });
+  }
 
+  let curText = CacheOp(arguments, () => {
     if (robotoFont === undefined) { console.log("Font not loaded yet!  Try again..."); return; }
     let textFaces = [];
     let commands = robotoFont.getPath(text, 0, 0, size).commands;
@@ -197,7 +196,6 @@ function Text3D(text, size, height, fontURL) {
     if (height === 0) {
       return textFaces[textFaces.length - 1];
     } else {
-      textFaces[textFaces.length - 1].text = text; // Invalidate the text cache for the Extrude Call!
       return Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
     }
   });
@@ -213,6 +211,12 @@ function ForEachSolid(shape, callback) {
   for (anExplorer.Init(shape, oc.TopAbs_SOLID); anExplorer.More(); anExplorer.Next()) {
     callback(solid_index++, oc.TopoDS.prototype.Solid(anExplorer.Current()));
   }
+}
+function GetNumSolidsInCompound(shape) {
+  if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
+  let solidsFound = 0;
+  ForEachSolid(shape, (i, s) => { solidsFound++; });
+  return solidsFound;
 }
 function GetSolidFromCompound(shape, index, keepOriginal) {
   if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
@@ -417,7 +421,7 @@ function Union(objectsToJoin, keepObjects) {
   return curUnion;
 }
 
-function Difference(mainBody, objectsToSubtract, keepObjects, onlyFirstSolid) {
+function Difference(mainBody, objectsToSubtract, keepObjects) {
   let curDifference = CacheOp(arguments, () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
     
@@ -429,7 +433,10 @@ function Difference(mainBody, objectsToSubtract, keepObjects, onlyFirstSolid) {
       }
     }
     difference.hash = ComputeHash(arguments);
-    return onlyFirstSolid ? GetSolidFromCompound(difference, 0) : difference;
+    if (GetNumSolidsInCompound(difference) === 1) {
+      difference = GetSolidFromCompound(difference, 0);
+    }
+    return difference;
   });
 
   if (!keepObjects) { sceneShapes = Remove(sceneShapes, mainBody); }
@@ -528,7 +535,7 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     //sceneShapes.push(spineEdge);
 
     // Define the guiding helical auxiliary spine (which controls the rotation)
-    let steps = 100;
+    let steps = 20;
     let aspinePoints = [];
     for (let i = 0; i <= steps; i++) {
       let alpha = i / steps;
@@ -775,29 +782,31 @@ function Checkbox(name = "Toggle", defaultValue = false) {
 }
 
 // Caching functions to speed up evaluation of slow redundant operations
-var argCache = {}; var opNumber = 0; 
-function CacheOp(args, cacheMiss, disableCache) {
+var argCache = {}; var usedHashes = {}; var opNumber = 0; 
+function CacheOp(args, cacheMiss) {
+  //toReturn = cacheMiss();
+  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": args.callee.name } }); // Poor Man's Progress Indicator
   let toReturn = null;
-  let check = CheckCache(args);
-  if (check && !disableCache) {
+  let curHash = ComputeHash(args); usedHashes[curHash] = curHash;
+  let check = CheckCache(curHash);
+  if (check && GUIState["CacheResults"]) {
     //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
     toReturn = new oc.TopoDS_Shape(check);
     toReturn.hash = check.hash;
   } else {
     //console.log("MISSED " + ComputeHash(args) + ", " + ComputeHash(args, true));
-    let curHash = ComputeHash(args);
-    toReturn = cacheMiss();//new oc.TopoDS_Shape();
-    if (!disableCache) { AddToCache(curHash, toReturn); }
+    toReturn = cacheMiss();
+    toReturn.hash = curHash;
+    if (GUIState["CacheResults"]) { AddToCache(curHash, toReturn); }
   }
-  postMessage({ "type": "Progress", "payload": opNumber++ }); // Poor Man's Progress Indicator
+  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": null } }); // Poor Man's Progress Indicator
   return toReturn;
 }
-function CheckCache(args) { return argCache[ComputeHash(args)] || null; }
+function CheckCache(hash) { return argCache[hash] || null; }
 function AddToCache(hash, shape) {
-  shape.hash = hash; // This is the sceneShapes version of the object
-  shape      = new oc.TopoDS_Shape(shape);
-  shape.hash = hash; // This is the cached version of the object
-  argCache[hash] = shape;
+  let cacheShape  = new oc.TopoDS_Shape(shape);
+  cacheShape.hash = hash; // This is the cached version of the object
+  argCache[hash]  = cacheShape;
   return hash;
 }
 

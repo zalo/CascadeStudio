@@ -5,10 +5,9 @@ var oc = null, externalShapes = {}, sceneShapes = [],
 // Capture Logs and Errors and forward them to the main thread
 let realConsoleLog = console.log;
 let realConsoleError = console.error;
-console.log = function(message) {
-  setTimeout(() => {
-    postMessage({ type: "log", payload: message });
-  }, 0);
+console.log = function (message) {
+  //postMessage({ type: "log", payload: message });
+  setTimeout(() => { postMessage({ type: "log", payload: message }); }, 0);
   realConsoleLog.apply(console, arguments);
 };
 console.error = function (err, url, line, colno, errorObj) {
@@ -64,9 +63,15 @@ function Evaluate(payload) {
   GUIState = payload.GUIState;
   try {
     eval(payload.code);
+    postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": "Triangulating Faces" } }); // Poor Man's Progress Indicator
   } catch (e) {
-    //console.error(JSON.stringify(e));
+    setTimeout(() => { throw e; }, 0);
+  } finally {
     postMessage({ type: "resetWorking" });
+    // Clean Cache; remove unused Objects
+    for (let hash in argCache) {
+      if (!usedHashes.hasOwnProperty(hash)) { delete argCache[hash]; } }
+    usedHashes = {};
   }
 }
 messageHandlers["Evaluate"] = Evaluate;
@@ -102,11 +107,13 @@ function combineAndRenderShapes(payload) {
     const facesAndEdges = openCascadeHelper.tessellate(currentShape,
       payload.maxDeviation||0.1, fullShapeEdgeHashes, fullShapeFaceHashes);
     sceneShapes = [];
+    postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } }); // Finish the progress
     return facesAndEdges;
   } else {
     console.error("There were no scene shapes returned!");
-    return [null, null];
+    //return [null, null];
   }
+  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } });
 }
 messageHandlers["combineAndRenderShapes"] = combineAndRenderShapes;
 

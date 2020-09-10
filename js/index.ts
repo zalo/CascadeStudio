@@ -100,12 +100,12 @@ function BSpline(points:number[][], closed?:boolean, wire?:boolean) : oc.Handle_
 /** Creates set of glyph solids from a string and a font-file and adds it to sceneShapes.
  * Note that all the characters share a singular face. 
  * 
- * Defaults: size:36, height:0.15, fontURL: './fonts/Consolas.ttf'
+ * Defaults: size:36, height:0.15, fontURL: '../fonts/Consolas.ttf'
  * 
  * Try '../fonts/Roboto-Black.ttf' for an alternative typeface.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CascadeStudioStandardLibrary.js)
  * @example```let myText = Text3D("Hello!");```*/
-function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0.15, fontURL?: string = "'./fonts/Consolas.ttf'") : oc.TopoDS_Shape;
+function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0.15, fontURL?: string = "'../fonts/Consolas.ttf'") : oc.TopoDS_Shape;
 
 
 /** Joins a list of shapes into a single solid.

@@ -180,6 +180,7 @@ function initialize() {
                     guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                         .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
                     messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
+                    messageHandlers["addCheckbox"]({ name: "CacheResults", default: true });
                 }
 
                 threejsViewport.clearTransformHandles();
@@ -312,9 +313,10 @@ function initialize() {
                 }
             };
 
-            messageHandlers["Progress"] = (opNumber) => {
+            messageHandlers["Progress"] = (payload) => {
                 // Add a dot to the progress indicator for each progress message we find in the queue
-                consoleContainer.parentElement.lastElementChild.lastElementChild.innerText = "> Generating Model" + ".".repeat(opNumber);
+                consoleContainer.parentElement.lastElementChild.lastElementChild.innerText =
+                    "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType)? " ("+payload.opType+")" : "");
             }
 
             console.log("Welcome to Cascade Studio!");
@@ -372,9 +374,7 @@ function initialize() {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
         guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
     }
-    messageHandlers["resetWorking"] = () => {
-        workerWorking = false;
-    }
+    messageHandlers["resetWorking"] = () => { workerWorking = false; }
 }
 
 function saveProject () {
