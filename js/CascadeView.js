@@ -137,7 +137,8 @@ var Environment = function (goldenContainer) {
                                            face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 2]),
                          new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 2 ] * 3)    ], 
                                            face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 1], 
-                                           face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 2])]
+                                           face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 2])],
+                         new THREE.Color(face.face_index, 0, 0)
           ));
         }
 
@@ -343,10 +344,13 @@ var Environment = function (goldenContainer) {
             this.highlightedObj = intersects[0].object;
             this.highlightedObj.currentHex = this.highlightedObj.material.color.getHex();
             this.highlightedObj.material.color.setHex(0xffffff);
+            console.log(intersects[0]);
+            let is_line = "computeLineDistances" in this.highlightedObj;
+            this.highlightedIndex = !is_line ? intersects[0].face.color.r : this.highlightedObj.shapeIndex;
           }
           if (this.highlightedObj.hasOwnProperty("shapeIndex")) {
             let is_line = "computeLineDistances" in this.highlightedObj;
-            let indexHelper = (is_line ? "Edge" : "Face")+ " Index: " + this.highlightedObj.shapeIndex;
+            let indexHelper = (is_line ? "Edge" : "Face") + " Index: " + this.highlightedIndex;
             this.goldenContainer.getElement().get(0).title = indexHelper;
           }
         } else {
