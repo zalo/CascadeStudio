@@ -44,7 +44,7 @@ var offlineFundamentals = [
   "js/CascadeView.js",
   "js/index.js",
   "js/index.ts",
-  "fonts/Roboto-Black.ttf",
+  "fonts/Roboto.ttf",
   "fonts/Consolas.ttf",
   "fonts/Papyrus.ttf",
   "textures/dullFrontLitMetal.png",
