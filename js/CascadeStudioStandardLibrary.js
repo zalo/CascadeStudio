@@ -673,9 +673,9 @@ function Sketch(startingPoint) {
     this.argsString += ComputeHash(arguments, true);
     //let wire = this.wires[this.wires.length - 1];
     this.applyFillets();
+    this.faces[this.faces.length - 1].hash = stringToHash(this.argsString);
     let wire = GetWire(this.faces[this.faces.length - 1]);
     if (reversed) { wire = wire.Reversed(); }
-    wire.hash = stringToHash(this.argsString);
     sceneShapes.push(wire);
     return wire;
   }
