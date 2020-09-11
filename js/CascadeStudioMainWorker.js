@@ -1,6 +1,6 @@
 var oc = null, externalShapes = {}, sceneShapes = [],
   GUIState, fullShapeEdgeHashes = {}, fullShapeFaceHashes = {},
-  robotoFont = null, curFontURL = '../fonts/Consolas.ttf', currentShape;
+  currentShape;
 
 // Capture Logs and Errors and forward them to the main thread
 let realConsoleLog = console.log;
@@ -28,10 +28,17 @@ importScripts(
   '../node_modules/opencascade.js/dist/opencascade.wasm.js',
   '../node_modules/opentype.js/dist/opentype.min.js');
 
-opentype.load(curFontURL, function (err, font) { //'../fonts/Roboto-Black.ttf' '../fonts/Papyrus.ttf' '../fonts/Consolas.ttf'
+var preloadedFonts = ['../fonts/Roboto.ttf',
+  '../fonts/Papyrus.ttf', '../fonts/Consolas.ttf'];
+var fonts = {};
+preloadedFonts.forEach((fontURL) => {
+  opentype.load(fontURL, function (err, font) {
     if (err) { console.log(err); }
-    robotoFont = font;
+    let fontName = fontURL.split("./fonts/")[1].split(".ttf")[0];
+    fonts[fontName] = font;
+  });
 });
+
 
 // Load the full Open Cascade Web Assembly Module
 new opencascade({

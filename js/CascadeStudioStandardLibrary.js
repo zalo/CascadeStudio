@@ -118,25 +118,16 @@ function BSpline(inPoints, closed, wire) {
   return curSpline;
 }
 
-function Text3D(text, size, height, fontURL) {
+function Text3D(text, size, height, fontName) {
   if (!size   ) { size    = 36; }
   if (!height && height !== 0.0) { height  = 0.15; }
-  if (!fontURL) { fontURL = curFontURL; }
+  if (!fontName) { fontName = "Consolas"; }
 
-  if (fontURL !== curFontURL) {
-    opentype.load(fontURL, (err, font) => {
-      if (err || !font) { console.error(err); return; }
-      robotoFont = font;
-      curFontURL = fontURL;
-      argCache = {}; // Wipe the whole cache for now
-      console.log("New Font " + curFontURL + " Loaded!  Please re-evaluate your model to see changes...");
-    });
-  }
-
+  let textArgs = JSON.stringify(arguments);
   let curText = CacheOp(arguments, () => {
-    if (robotoFont === undefined) { console.log("Font not loaded yet!  Try again..."); return; }
+    if (fonts[fontName] === undefined) { argCache = {}; console.log("Font not loaded or found yet!  Try again..."); return; }
     let textFaces = [];
-    let commands = robotoFont.getPath(text, 0, 0, size).commands;
+    let commands = fonts[fontName].getPath(text, 0, 0, size).commands;
     for (let idx = 0; idx < commands.length; idx++) {
       if (commands[idx].type === "M") {
         // Start a new Glyph
@@ -196,7 +187,7 @@ function Text3D(text, size, height, fontURL) {
     if (height === 0) {
       return textFaces[textFaces.length - 1];
     } else {
-      textFaces[textFaces.length - 1].text = text; // Invalidate the text cache for the Extrude Call!
+      textFaces[textFaces.length - 1].hash = stringToHash(textArgs);
       return Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
     }
   });

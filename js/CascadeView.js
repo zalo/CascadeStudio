@@ -143,11 +143,11 @@ var Environment = function (goldenContainer) {
         }
 
         // Slots the lists into the Geometry
-        let geometry               = new THREE.Geometry();
-            geometry.vertices      = vertices;
-            geometry.faces         = triangles;
-        let currentFace = new THREE.Mesh(geometry, new THREE.MeshMatcapMaterial(
-          {
+        let geometry          = new THREE.Geometry();
+            geometry.vertices = vertices;
+            geometry.faces    = triangles;
+        let currentFace = new THREE.Mesh(geometry,
+          new THREE.MeshMatcapMaterial({
             color: new THREE.Color(0xeeeeee),
             matcap: this.matcap,
             polygonOffset: true, // Push the mesh back for line drawing
@@ -344,7 +344,7 @@ var Environment = function (goldenContainer) {
             this.highlightedObj = intersects[0].object;
             this.highlightedObj.currentHex = this.highlightedObj.material.color.getHex();
             this.highlightedObj.material.color.setHex(0xffffff);
-            console.log(intersects[0]);
+            //console.log(intersects[0]);
             let is_line = "computeLineDistances" in this.highlightedObj;
             this.highlightedIndex = !is_line ? intersects[0].face.color.r : this.highlightedObj.shapeIndex;
           }
