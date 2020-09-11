@@ -201,7 +201,9 @@ function Scale(scale: number, shape: oc.TopoDS_Shape, keepOriginal?: boolean): o
 /** Iterate over all the solids in this shape, calling `callback` on each one. */
 function ForEachSolid(shape: oc.TopoDS_Shape, callback: (index: Number, shell: oc.TopoDS_Solid) => void): void;
 /** Gets the indexth solid from this compound shape. */
-function GetSolidFromCompound(shape: oc.TopoDS_Shape, index:number): oc.TopoDS_Solid;
+function GetSolidFromCompound(shape: oc.TopoDS_Shape, index?:number, keepOriginal?:boolean): oc.TopoDS_Solid;
+/** Gets the indexth wire from this face (or above) shape. */
+function GetWire(shape: oc.TopoDS_Face, index?:number, keepOriginal?:boolean): oc.TopoDS_Wire;
 /** Iterate over all the shells in this shape, calling `callback` on each one. */
 function ForEachShell(shape: oc.TopoDS_Shape, callback: (index: Number, shell: oc.TopoDS_Shell) => void): void;
 /** Iterate over all the faces in this shape, calling `callback` on each one. */

@@ -84,7 +84,7 @@ function combineAndRenderShapes(payload) {
   let fullShapeFaceHashes = {};
   if (sceneShapes.length > 0) {
     for (let shapeInd = 0; shapeInd < sceneShapes.length; shapeInd++) {
-      if (!sceneShapes[shapeInd] || sceneShapes[shapeInd].IsNull()) {
+      if (!sceneShapes[shapeInd] || !sceneShapes[shapeInd].IsNull || sceneShapes[shapeInd].IsNull()) {
         console.error("Null Shape detected in sceneShapes; skipping: " + JSON.stringify(sceneShapes[shapeInd]));
         continue;
       }

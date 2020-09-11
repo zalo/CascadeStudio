@@ -256,10 +256,30 @@ function ForEachFace(shape, callback) {
 }
 
 function ForEachWire(shape, callback) {
+  let wire_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_WIRE);
   for (anExplorer.Init(shape, oc.TopAbs_WIRE); anExplorer.More(); anExplorer.Next()) {
-    callback(oc.TopoDS.prototype.Wire(anExplorer.Current()));
+    callback(wire_index++, oc.TopoDS.prototype.Wire(anExplorer.Current()));
   }
+}
+function GetWire(shape, index, keepOriginal) {
+  if (!shape || shape.ShapeType() > 4 || shape.IsNull()) { console.error("Not a wire shape!"); return shape; }
+  if (!index) { index = 0;}
+
+  let wire = CacheOp(arguments, () => {
+    let innerWire = {}; let wiresFound = 0;
+    ForEachWire(shape, (i, s) => {
+      if (i === index) { innerWire = new oc.TopoDS_Wire(s); } wiresFound++;
+    });
+    if (wiresFound === 0) { console.error("NO WIRES FOUND IN SHAPE!"); innerWire = shape; }
+    innerWire.hash = shape.hash + 1;
+    return innerWire;
+  });
+
+  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shape); }
+  sceneShapes.push(wire);
+
+  return wire;
 }
 
 function ForEachEdge(shape, callback) {
@@ -651,7 +671,9 @@ function Sketch(startingPoint) {
 
   this.Wire = function (reversed) {
     this.argsString += ComputeHash(arguments, true);
-    let wire = this.wires[this.wires.length - 1];
+    //let wire = this.wires[this.wires.length - 1];
+    this.applyFillets();
+    let wire = GetWire(this.faces[this.faces.length - 1]);
     if (reversed) { wire = wire.Reversed(); }
     wire.hash = stringToHash(this.argsString);
     sceneShapes.push(wire);
@@ -659,17 +681,24 @@ function Sketch(startingPoint) {
   }
   this.Face = function (reversed) {
     this.argsString += ComputeHash(arguments, true);
+    this.applyFillets();
     let face = this.faces[this.faces.length - 1];
+    if (reversed) { face = face.Reversed(); }
+    face.hash = stringToHash(this.argsString);
+    sceneShapes.push(face);
+    return face;
+  }
 
+  this.applyFillets = function () {
     // Add Fillets if Necessary
     if (this.fillets.length > 0) {
       let successes = 0; let swapFillets = [];
       for (let f = 0; f < this.fillets.length; f++) { this.fillets[f].disabled = false; }
 
       // Create Fillet Maker 2D
-      let makeFillet = new oc.BRepFilletAPI_MakeFillet2d(face);
+      let makeFillet = new oc.BRepFilletAPI_MakeFillet2d(this.faces[this.faces.length - 1]);
       // TopExp over the vertices
-      ForEachVertex(face, (vertex) => {
+      ForEachVertex(this.faces[this.faces.length - 1], (vertex) => {
         // Check if the X and Y coords of any vertices match our chosen fillet vertex
         let pnt = oc.BRep_Tool.prototype.Pnt(vertex);
         for (let f = 0; f < this.fillets.length; f++) {
@@ -683,14 +712,10 @@ function Sketch(startingPoint) {
           }
         }
       });
-      if (successes > 0) { face = makeFillet.Shape(); } else { console.log("Couldn't find any of the vertices to fillet!!"); }
+      if (successes > 0) { this.faces[this.faces.length - 1] = makeFillet.Shape(); }
+        else { console.log("Couldn't find any of the vertices to fillet!!"); }
       this.fillets.concat(swapFillets);
     }
-
-    if (reversed) { face = face.Reversed(); }
-    face.hash = stringToHash(this.argsString);
-    sceneShapes.push(face);
-    return face;
   }
 
   this.AddWire = function (wire) {
