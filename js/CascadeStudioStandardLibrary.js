@@ -806,7 +806,7 @@ function CacheOp(args, cacheMiss) {
   let toReturn = null;
   let curHash = ComputeHash(args); usedHashes[curHash] = curHash;
   let check = CheckCache(curHash);
-  if (check && GUIState["CacheResults"]) {
+  if (check && GUIState["Cache?"]) {
     //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
     toReturn = new oc.TopoDS_Shape(check);
     toReturn.hash = check.hash;
@@ -814,7 +814,7 @@ function CacheOp(args, cacheMiss) {
     //console.log("MISSED " + ComputeHash(args) + ", " + ComputeHash(args, true));
     toReturn = cacheMiss();
     toReturn.hash = curHash;
-    if (GUIState["CacheResults"]) { AddToCache(curHash, toReturn); }
+    if (GUIState["Cache?"]) { AddToCache(curHash, toReturn); }
   }
   postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": null } }); // Poor Man's Progress Indicator
   return toReturn;

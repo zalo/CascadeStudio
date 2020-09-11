@@ -179,8 +179,8 @@ function initialize() {
                     gui.clearPanels();
                     guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                         .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
-                    messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
-                    messageHandlers["addCheckbox"]({ name: "CacheResults", default: true });
+                    messageHandlers["addSlider"  ]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
+                    messageHandlers["addCheckbox"]({ name: "Cache?" , default: true });
                 }
 
                 threejsViewport.clearTransformHandles();
