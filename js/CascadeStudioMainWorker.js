@@ -192,6 +192,7 @@ function importSTEPorIGES(fileName, fileText) {
     
     // Add to the externalShapes dictionary
     externalShapes[fileName] = new oc.TopoDS_Shape(stepShape);
+    externalShapes[fileName].hash = stringToHash(fileName);
     console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to add it to the scene!");
     
     // Remove the file when we're done (otherwise we run into errors on reupload)
@@ -215,7 +216,8 @@ function importSTL(fileName, fileText) {
     console.log(fileName + " loaded successfully!     Converting to OCC now...");
     
     // Add to the externalShapes dictionary
-    externalShapes[fileName] = readShape;
+    externalShapes[fileName] = new oc.TopoDS_Shape(readShape);
+    externalShapes[fileName].hash = stringToHash(fileName);
     console.log("Shape Import complete! Use sceneShapes.push(externalShapes['" + fileName + "']); to see it!");
     
     // Remove the file when we're done (otherwise we run into errors on reupload)
