@@ -117,18 +117,17 @@ var Environment = function (goldenContainer) {
       this.mainObject.rotation.x = -Math.PI / 2;
 
       // Tesellate the OpenCascade Object
+      let vertices = []; let triangles = []; let vInd = 0;
       facelist.forEach((face) => {
         // Sort Vertices into three.js Vector3 List
-        let vertices = [];
         for (let i = 0; i < face.vertex_coord.length; i += 3) {
           vertices.push(new THREE.Vector3(face.vertex_coord[i    ],
                                           face.vertex_coord[i + 1],
                                           face.vertex_coord[i + 2]));
         }
         // Sort Triangles into a three.js Face List
-        let triangles = [];
         for (let i = 0; i < face.tri_indexes.length; i += 3) {
-          triangles.push(new THREE.Face3(face.tri_indexes[i],face.tri_indexes[i + 1], face.tri_indexes[i + 2], 
+          triangles.push(new THREE.Face3(face.tri_indexes[i] + vInd,face.tri_indexes[i + 1] + vInd, face.tri_indexes[i + 2] + vInd, 
                         [new THREE.Vector3(face.normal_coord[(face.tri_indexes[i     ] * 3)    ], 
                                            face.normal_coord[(face.tri_indexes[i     ] * 3) + 1], 
                                            face.normal_coord[(face.tri_indexes[i     ] * 3) + 2]),
@@ -141,41 +140,47 @@ var Environment = function (goldenContainer) {
                          new THREE.Color(face.face_index, 0, 0)
           ));
         }
-
-        // Slots the lists into the Geometry
-        let geometry          = new THREE.Geometry();
-            geometry.vertices = vertices;
-            geometry.faces    = triangles;
-        let currentFace = new THREE.Mesh(geometry,
-          new THREE.MeshMatcapMaterial({
-            color: new THREE.Color(0xeeeeee),
-            matcap: this.matcap,
-            polygonOffset: true, // Push the mesh back for line drawing
-            polygonOffsetFactor: 2.0,
-            polygonOffsetUnits: 1.0
-          }));
-        currentFace.castShadow = true;
-        currentFace.shapeIndex = face.face_index;
-        this.mainObject.add(currentFace);
+        vInd += face.vertex_coord.length / 3;
       });
+
+      // Slots the lists into the Geometry
+      let geometry          = new THREE.Geometry();
+          geometry.vertices = vertices;
+          geometry.faces    = triangles;
+      let model = new THREE.Mesh(geometry,
+        new THREE.MeshMatcapMaterial({
+          color: new THREE.Color(0xeeeeee),
+          matcap: this.matcap,
+          polygonOffset: true, // Push the mesh back for line drawing
+          polygonOffsetFactor: 2.0,
+          polygonOffsetUnits: 1.0
+        }));
+      model.castShadow = true;
+      model.name = "Model Faces";
+      this.mainObject.add(model);
 
       // Draw Edges of Object
+      let lineVertices = []; let edgeIndices = [];
       edgelist.forEach((edge)=>{
-        let vertices = [];
-        for (let i = 0; i < edge.vertex_coord.length; i += 3) {
-          vertices.push(new THREE.Vector3(edge.vertex_coord[i    ],
-                                          edge.vertex_coord[i + 1],
-                                          edge.vertex_coord[i + 2]));
+        for (let i = 0; i < edge.vertex_coord.length-3; i += 3) {
+          lineVertices.push(new THREE.Vector3(edge.vertex_coord[i    ],
+                                              edge.vertex_coord[i + 1],
+                                              edge.vertex_coord[i + 2]));
+                    
+          lineVertices.push(new THREE.Vector3(edge.vertex_coord[i     + 3],
+                                              edge.vertex_coord[i + 1 + 3],
+                                              edge.vertex_coord[i + 2 + 3]));
+          edgeIndices.push(edge.edge_index); edgeIndices.push(edge.edge_index);
         }
-        let linegeometry = new THREE.BufferGeometry().setFromPoints( vertices );
-        let linematerial = new THREE.LineBasicMaterial({
-          color: 0x000000,
-          linewidth: 1.5
-        });
-        let line = new THREE.Line(linegeometry, linematerial);
-        line.shapeIndex = edge.edge_index;
-        this.mainObject.add(line);
       });
+
+      let lineGeometry = new THREE.BufferGeometry().setFromPoints( lineVertices );
+      let lineMaterial = new THREE.LineBasicMaterial({
+        color: 0x000000, linewidth: 1.5 });
+      let line = new THREE.LineSegments(lineGeometry, lineMaterial);
+      line.edgeIndices = edgeIndices;
+      line.name = "Model Edges";
+      this.mainObject.add(line);
 
       this.environment.scene.add(this.mainObject);
       console.log("Generation Complete!");
@@ -334,25 +339,25 @@ var Environment = function (goldenContainer) {
     this.animate = function animatethis() {
       requestAnimationFrame(() => this.animate());
 
-      // Lightly Highlight the faces of the object
+      // Lightly Highlight the faces of the object and the current face/edge index
       if (this.mainObject) {
         this.raycaster.setFromCamera(this.mouse, this.environment.camera);
         let intersects = this.raycaster.intersectObjects(this.mainObject.children);
         if (this.environment.controls.state < 0 && intersects.length > 0) {
-          if (this.highlightedObj != intersects[0].object) {
+          let isLine = intersects[0].object.type === "LineSegments";
+          let newIndex = !isLine ? intersects[0].face.color.r : intersects[0].object.edgeIndices[intersects[0].index];
+          if (this.highlightedObj != intersects[0].object || this.highlightedIndex !== newIndex) {
             if (this.highlightedObj) this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
             this.highlightedObj = intersects[0].object;
             this.highlightedObj.currentHex = this.highlightedObj.material.color.getHex();
             this.highlightedObj.material.color.setHex(0xffffff);
             //console.log(intersects[0]);
-            let is_line = "computeLineDistances" in this.highlightedObj;
-            this.highlightedIndex = !is_line ? intersects[0].face.color.r : this.highlightedObj.shapeIndex;
+            this.highlightedIndex = newIndex;
           }
-          if (this.highlightedObj.hasOwnProperty("shapeIndex")) {
-            let is_line = "computeLineDistances" in this.highlightedObj;
-            let indexHelper = (is_line ? "Edge" : "Face") + " Index: " + this.highlightedIndex;
+          //if (this.highlightedObj.hasOwnProperty("shapeIndex")) {
+            let indexHelper = (isLine ? "Edge" : "Face") + " Index: " + this.highlightedIndex;
             this.goldenContainer.getElement().get(0).title = indexHelper;
-          }
+          //}
         } else {
           if (this.highlightedObj) this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
           this.highlightedObj = null;

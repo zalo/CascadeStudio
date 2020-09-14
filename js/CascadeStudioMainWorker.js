@@ -147,8 +147,8 @@ function loadFiles(files) {
   for (let i = 0; i < files.length; i++) {
     var lastImportedShape = null;
     loadFileSync(files[i]).then(async (fileText) => {
-      const fileName = files[i].name;
-      if (fileName.includes(".stl")) {
+      let fileName = files[i].name;
+      if (fileName.toLowerCase().includes(".stl")) {
         lastImportedShape = importSTL(fileName, fileText);
       } else {
         lastImportedShape = importSTEPorIGES(fileName, fileText);
@@ -177,10 +177,10 @@ function importSTEPorIGES(fileName, fileText) {
   oc.FS.createDataFile("/", fileName, fileText, true, true);
 
   // Choose the correct OpenCascade file parsers to read the CAD file
-  var reader = null;
-  if (fileName.endsWith(".step") || fileName.endsWith(".stp")) {
+  var reader = null; let tempFilename = fileName.toLowerCase()
+  if (tempFilename.endsWith(".step") || tempFilename.endsWith(".stp")) {
     reader = new oc.STEPControl_Reader();
-  } else if (fileName.endsWith(".iges") || fileName.endsWith(".igs")) {
+  } else if (tempFilename.endsWith(".iges") || tempFilename.endsWith(".igs")) {
     reader = new oc.IGESControl_Reader();
   } else { console.error("opencascade.js can't parse this extension! (yet)"); }
 
@@ -215,8 +215,12 @@ function importSTL(fileName, fileText) {
   if (reader.Read(readShape, fileName)) {
     console.log(fileName + " loaded successfully!     Converting to OCC now...");
     
+    // Convert Shell to Solid as is expected
+    let solidSTL = new oc.BRepBuilderAPI_MakeSolid();
+    solidSTL.Add(new oc.TopoDS_Shape(readShape));
+
     // Add to the externalShapes dictionary
-    externalShapes[fileName] = new oc.TopoDS_Shape(readShape);
+    externalShapes[fileName] = new oc.TopoDS_Shape(solidSTL.Solid());
     externalShapes[fileName].hash = stringToHash(fileName);
     console.log("Shape Import complete! Use sceneShapes.push(externalShapes['" + fileName + "']); to see it!");
     

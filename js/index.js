@@ -414,7 +414,7 @@ function loadFiles(fileElementID = "files") {
     // Receive a list of the imported files
     messageHandlers["loadFiles"] = (extFiles) => {
         console.log("Storing loaded files!");
-        console.log(extFiles);
+        //console.log(extFiles);
         consoleGolden.setState(extFiles);
     };
 }
