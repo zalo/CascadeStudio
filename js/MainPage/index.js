@@ -181,6 +181,7 @@ function initialize() {
                 // Refresh the GUI Panel
                 if (gui) {
                     gui.clearPanels();
+
                     guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                         .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
                     messageHandlers["addSlider"  ]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
@@ -259,6 +260,13 @@ function initialize() {
             container.getElement().get(0).appendChild(floatingGUIContainer);
             if (!loadfromGallery || galleryProject) {
                 gui = new ControlKit({ parentDomElementId: "threejsViewportContainer" });
+                gui.clearPanels = function () {
+                    let curNode = this._node._element;
+                    while (curNode.firstChild) {
+                        curNode.removeChild(curNode.firstChild);
+                    }
+                    this._panels = [];
+                }.bind(gui);
             }
                 
             threejsViewport = new CascadeEnvironment(container);
