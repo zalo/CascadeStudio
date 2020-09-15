@@ -116,7 +116,7 @@ var Environment = function (goldenContainer) {
       this.mainObject.name       = "shape";
       this.mainObject.rotation.x = -Math.PI / 2;
 
-      // Tesellate the OpenCascade Object
+      // Add Triangulated Faces to Object
       let vertices = []; let triangles = []; let vInd = 0;
       facelist.forEach((face) => {
         // Sort Vertices into three.js Vector3 List
@@ -158,10 +158,16 @@ var Environment = function (goldenContainer) {
       model.castShadow = true;
       model.name = "Model Faces";
       this.mainObject.add(model);
+      //End Triangulated Faces
 
-      // Draw Edges of Object
-      let lineVertices = []; let edgeIndices = [];
-      edgelist.forEach((edge)=>{
+      // Add Highlightable Edges to Object
+      let lineVertices = []; let globalEdgeIndices = [];
+      let curGlobalEdgeIndex = 0; let edgeVertices = 0;
+      let globalEdgeMetadata = {}; globalEdgeMetadata[-1] = { start: -1, end: -1 };
+      edgelist.forEach((edge) => {
+        let edgeMetadata = {};
+        edgeMetadata.localEdgeIndex = edge.edge_index;
+        edgeMetadata.start = globalEdgeIndices.length;
         for (let i = 0; i < edge.vertex_coord.length-3; i += 3) {
           lineVertices.push(new THREE.Vector3(edge.vertex_coord[i    ],
                                               edge.vertex_coord[i + 1],
@@ -170,17 +176,43 @@ var Environment = function (goldenContainer) {
           lineVertices.push(new THREE.Vector3(edge.vertex_coord[i     + 3],
                                               edge.vertex_coord[i + 1 + 3],
                                               edge.vertex_coord[i + 2 + 3]));
-          edgeIndices.push(edge.edge_index); edgeIndices.push(edge.edge_index);
+          globalEdgeIndices.push(curGlobalEdgeIndex); globalEdgeIndices.push(curGlobalEdgeIndex);
+          edgeVertices++;
         }
+        edgeMetadata.end = globalEdgeIndices.length-1;
+        globalEdgeMetadata[curGlobalEdgeIndex] = edgeMetadata;
+        curGlobalEdgeIndex++;
       });
 
-      let lineGeometry = new THREE.BufferGeometry().setFromPoints( lineVertices );
+      let lineGeometry = new THREE.BufferGeometry().setFromPoints(lineVertices);
+      let lineColors = []; for ( let i = 0; i < lineVertices.length; i++ ) { lineColors.push( 0, 0, 0 ); }
+      lineGeometry.setAttribute( 'color', new THREE.Float32BufferAttribute( lineColors, 3 ) );
       let lineMaterial = new THREE.LineBasicMaterial({
-        color: 0x000000, linewidth: 1.5 });
+        color: 0xffffff, linewidth: 1.5, vertexColors: true });
       let line = new THREE.LineSegments(lineGeometry, lineMaterial);
-      line.edgeIndices = edgeIndices;
+      line.globalEdgeIndices = globalEdgeIndices;
       line.name = "Model Edges";
+      line.lineColors = lineColors;
+      line.globalEdgeMetadata = globalEdgeMetadata;
+      line.highlightEdgeAtLineIndex = function (lineIndex) {
+        let edgeIndex  = lineIndex >=0 ?this.globalEdgeIndices [lineIndex] : lineIndex;
+        let startIndex = this.globalEdgeMetadata[edgeIndex].start;
+        let endIndex   = this.globalEdgeMetadata[edgeIndex].end;
+        for (let i = 0; i < this.lineColors.length; i++) {
+          let colIndex       = Math.floor(i / 3);
+          this.lineColors[i] = (colIndex >= startIndex && colIndex <= endIndex) ? 1 : 0; 
+        }
+        this.geometry.setAttribute('color', new THREE.Float32BufferAttribute(this.lineColors, 3));
+        this.geometry.colorsNeedUpdate = true;
+      }.bind(line);
+      line.getEdgeMetadataAtLineIndex = function (lineIndex) {
+        return this.globalEdgeMetadata[this.globalEdgeIndices[lineIndex]];
+      }.bind(line);
+      line.clearHighlights = function () {
+        return this.highlightEdgeAtLineIndex(-1);
+      }.bind(line);
       this.mainObject.add(line);
+      // End Highlightable Edges
 
       this.environment.scene.add(this.mainObject);
       console.log("Generation Complete!");
@@ -345,21 +377,29 @@ var Environment = function (goldenContainer) {
         let intersects = this.raycaster.intersectObjects(this.mainObject.children);
         if (this.environment.controls.state < 0 && intersects.length > 0) {
           let isLine = intersects[0].object.type === "LineSegments";
-          let newIndex = !isLine ? intersects[0].face.color.r : intersects[0].object.edgeIndices[intersects[0].index];
+          let newIndex = isLine ? intersects[0].object.getEdgeMetadataAtLineIndex(intersects[0].index).localEdgeIndex : 
+                                  intersects[0].face.color.r;
           if (this.highlightedObj != intersects[0].object || this.highlightedIndex !== newIndex) {
-            if (this.highlightedObj) this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
+            if (this.highlightedObj) {
+              this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
+              if (this.highlightedObj && this.highlightedObj.clearHighlights) { this.highlightedObj.clearHighlights(); }
+            }
             this.highlightedObj = intersects[0].object;
             this.highlightedObj.currentHex = this.highlightedObj.material.color.getHex();
             this.highlightedObj.material.color.setHex(0xffffff);
-            //console.log(intersects[0]);
             this.highlightedIndex = newIndex;
+            if (isLine) { this.highlightedObj.highlightEdgeAtLineIndex(intersects[0].index); }
           }
           //if (this.highlightedObj.hasOwnProperty("shapeIndex")) {
-            let indexHelper = (isLine ? "Edge" : "Face") + " Index: " + this.highlightedIndex;
-            this.goldenContainer.getElement().get(0).title = indexHelper;
+          let indexHelper = (isLine ? "Edge" : "Face") + " Index: " + this.highlightedIndex;
+          this.goldenContainer.getElement().get(0).title = indexHelper;
           //}
         } else {
-          if (this.highlightedObj) this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
+          if (this.highlightedObj) {
+            this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);
+            if (this.highlightedObj.clearHighlights) { this.highlightedObj.clearHighlights(); }
+          }
+          
           this.highlightedObj = null;
           this.goldenContainer.getElement().get(0).title = "";
         }
