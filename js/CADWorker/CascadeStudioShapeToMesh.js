@@ -1,8 +1,4 @@
-const openCascadeHelper = {
-  setOpenCascade (openCascade) {
-    oc = openCascade;
-  },
-  tessellate (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
+function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
     let facelist = [], edgeList = [];
     try {
       shape = new oc.TopoDS_Shape(shape);
@@ -147,4 +143,3 @@ const openCascadeHelper = {
 
     return [facelist, edgeList];
   }
-}
