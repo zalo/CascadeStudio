@@ -7,40 +7,6 @@ var sceneShapes: oc.TopoDS_Shape[];
  * @example```sceneShapes.push(externalShapes['myStep.step']);``` */
 var externalShapes: { [filename: string]: oc.TopoDS_Shape };
 
-/** The base generic 3D Rendering Viewport implementation. */
-interface Environment {
-    //constructor(goldenContainer: any);
-
-    time      : THREE.Clock;
-    lastTimeRendered : number;
-    camera    : THREE.PerspectiveCamera; 
-    scene     : THREE.Scene;
-    renderer  : THREE.WebGLRenderer;
-    controls  : THREE.OrbitControls;
-    isVisible : boolean;
-    viewDirty : boolean; 
-
-    initEnvironment(): void;
-    onWindowResize(): void;
-}
-
-/** The Cascade Studio specific 3D Rendering Viewport; mainOnbject contains all the faces and edges. */
-interface CascadeEnvironment {
-    //constructor(goldenContainer: any);
-
-    environment    : Environment;
-    updating       : boolean;
-    matcapMaterial : THREE.MeshMatcapMaterial;
-    mainObject     : THREE.Group;
-    
-    updateShape (shape : oc.TopoDS_Shape, maxDeviation:Number) : void;
-
-    animate() : void;
-}
-
-/** The 3D Rendering Viewport; mainOnbject contains all the faces and edges. */
-var threejsViewport: CascadeEnvironment;
-
 /** Starts sketching a 2D shape which can contain lines, arcs, bezier splines, and fillets.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let sketch = new Sketch([0,0]).LineTo([100,0]).Fillet(20).LineTo([100,100]).End(true).Face();```*/
