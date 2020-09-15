@@ -117,7 +117,7 @@ var Environment = function (goldenContainer) {
       this.mainObject.rotation.x = -Math.PI / 2;
 
       // Add Triangulated Faces to Object
-      let vertices = []; let triangles = []; let vInd = 0;
+      let vertices = []; let triangles = []; let vInd = 0; let globalFaceIndex = 0;
       facelist.forEach((face) => {
         // Sort Vertices into three.js Vector3 List
         for (let i = 0; i < face.vertex_coord.length; i += 3) {
@@ -137,9 +137,10 @@ var Environment = function (goldenContainer) {
                          new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 2 ] * 3)    ], 
                                            face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 1], 
                                            face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 2])],
-                         new THREE.Color(face.face_index, 0, 0)
+                         new THREE.Color(face.face_index, globalFaceIndex, 0)
           ));
         }
+        globalFaceIndex++;
         vInd += face.vertex_coord.length / 3;
       });
 
@@ -149,7 +150,7 @@ var Environment = function (goldenContainer) {
           geometry.faces    = triangles;
       let model = new THREE.Mesh(geometry,
         new THREE.MeshMatcapMaterial({
-          color: new THREE.Color(0xeeeeee),
+          color: new THREE.Color(0xf5f5f5),
           matcap: this.matcap,
           polygonOffset: true, // Push the mesh back for line drawing
           polygonOffsetFactor: 2.0,
