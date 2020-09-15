@@ -1,9 +1,10 @@
+// Define the persistent global variables
 var oc = null, externalShapes = {}, sceneShapes = [],
   GUIState, fullShapeEdgeHashes = {}, fullShapeFaceHashes = {},
   currentShape;
 
 // Capture Logs and Errors and forward them to the main thread
-let realConsoleLog = console.log;
+let realConsoleLog   = console.log;
 let realConsoleError = console.error;
 console.log = function (message) {
   //postMessage({ type: "log", payload: message });
@@ -24,10 +25,11 @@ console.error = function (err, url, line, colno, errorObj) {
 importScripts(
   '../../node_modules/three/build/three.min.js',
   './CascadeStudioStandardLibrary.js',
-  './openCascadeHelper.js',
+  './CascadeStudioShapeToMesh.js',
   '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
   '../../node_modules/opentype.js/dist/opentype.min.js');
 
+// Preload the Various Fonts that are available via Text3D
 var preloadedFonts = ['../../fonts/Roboto.ttf',
   '../../fonts/Papyrus.ttf', '../../fonts/Consolas.ttf'];
 var fonts = {};
@@ -39,8 +41,8 @@ preloadedFonts.forEach((fontURL) => {
   });
 });
 
-
 // Load the full Open Cascade Web Assembly Module
+var messageHandlers = {};
 new opencascade({
   locateFile(path) {
     if (path.endsWith('.wasm')) {
@@ -50,12 +52,10 @@ new opencascade({
   }
 }).then((openCascade) => {
   // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
-  var oc = openCascade;
-  openCascadeHelper.setOpenCascade(oc);
+  oc = openCascade;
 
   // Ping Pong Messages Back and Forth based on their registration in messageHandlers
   onmessage = function (e) {
-    //console.log(e.data.type);
     let response = messageHandlers[e.data.type](e.data.payload);
     if (response) { postMessage({ "type": e.data.type, payload: response }); };
   }
@@ -64,13 +64,13 @@ new opencascade({
   postMessage({ type: "startupCallback" });
 });
 
-var messageHandlers = {};
+/** This function evaluates `payload.code` (the contents of the Editor Window)
+ *  and sets the GUI State. */
 function Evaluate(payload) {
   opNumber = 0; // This keeps track of the progress of the evaluation
   GUIState = payload.GUIState;
   try {
     eval(payload.code);
-    postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": "Triangulating Faces" } }); // Poor Man's Progress Indicator
   } catch (e) {
     setTimeout(() => { throw e; }, 0);
   } finally {
@@ -83,12 +83,17 @@ function Evaluate(payload) {
 }
 messageHandlers["Evaluate"] = Evaluate;
 
+/**This function accumulates all the shapes in `sceneShapes` into the `TopoDS_Compound` `currentShape`
+ * and converts it to a mesh (and a set of edges) with `ShapeToMesh()`, and sends it off to be rendered. */
 function combineAndRenderShapes(payload) {
+  // Initialize currentShape as an empty Compound Solid
   currentShape     = new oc.TopoDS_Compound();
   let sceneBuilder = new oc.BRep_Builder();
   sceneBuilder.MakeCompound(currentShape);
-  let fullShapeEdgeHashes = {};
-  let fullShapeFaceHashes = {};
+  let fullShapeEdgeHashes = {}; let fullShapeFaceHashes = {};
+  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": "Combining Shapes" } });
+
+  // If there are sceneShapes, iterate through them and add them to currentShape
   if (sceneShapes.length > 0) {
     for (let shapeInd = 0; shapeInd < sceneShapes.length; shapeInd++) {
       if (!sceneShapes[shapeInd] || !sceneShapes[shapeInd].IsNull || sceneShapes[shapeInd].IsNull()) {
@@ -101,162 +106,29 @@ function combineAndRenderShapes(payload) {
         console.error(JSON.stringify(sceneShapes[shapeInd]));
         continue;
       }
+
       // Scan the edges and faces and add to the edge list
       Object.assign(fullShapeEdgeHashes, ForEachEdge(sceneShapes[shapeInd], (index, edge) => { }));
       ForEachFace(sceneShapes[shapeInd], (index, face) => {
         fullShapeFaceHashes[face.HashCode(100000000)] = index;
       });
-      //console.error("Adding Shape of Type: "+sceneShapes[shapeInd].ShapeType());
+
       sceneBuilder.Add(currentShape, sceneShapes[shapeInd]);
     }
 
-    // Tesellate
-    const facesAndEdges = openCascadeHelper.tessellate(currentShape,
+    // Use ShapeToMesh to output a set of triangulated faces and discretized edges to the 3D Viewport
+    postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": "Triangulating Faces" } });
+    let facesAndEdges = ShapeToMesh(currentShape,
       payload.maxDeviation||0.1, fullShapeEdgeHashes, fullShapeFaceHashes);
     sceneShapes = [];
     postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } }); // Finish the progress
     return facesAndEdges;
   } else {
     console.error("There were no scene shapes returned!");
-    //return [null, null];
   }
   postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } });
 }
 messageHandlers["combineAndRenderShapes"] = combineAndRenderShapes;
 
-// File Import and Export Utilities
-function loadPrexistingExternalFiles(externalFileDict) {
-  console.log("Loading Pre-Existing external files...");
-  for (let key in externalFileDict) {
-    if (key.includes(".stl")) {
-        importSTL       (key, externalFileDict[key].content);
-    } else {
-        importSTEPorIGES(key, externalFileDict[key].content);
-    }
-  }
-}
-messageHandlers["loadPrexistingExternalFiles"] = loadPrexistingExternalFiles;
-const loadFileSync = async (file) => {
-  return new Promise((resolve, reject) => {
-    resolve(new FileReaderSync().readAsText(file));
-  });
-}
-function loadFiles(files) {
-  let extFiles = {};
-  sceneShapes = [];
-  for (let i = 0; i < files.length; i++) {
-    var lastImportedShape = null;
-    loadFileSync(files[i]).then(async (fileText) => {
-      let fileName = files[i].name;
-      if (fileName.toLowerCase().includes(".stl")) {
-        lastImportedShape = importSTL(fileName, fileText);
-      } else {
-        lastImportedShape = importSTEPorIGES(fileName, fileText);
-      }
-      extFiles[fileName] = { content: fileText };
-    }).then(async () => {
-      if (lastImportedShape) {
-        sceneShapes.push(lastImportedShape);
-      }
-      if (i === files.length - 1) {
-        if (lastImportedShape) {
-          console.log("Imports complete, rendering shapes now...");
-          combineAndRenderShapes({ maxDeviation: GUIState['MeshRes'] || 0.1 });
-        }
-      }
-      //consoleGolden.setState(extFiles);
-      postMessage({ "type": "loadFiles", payload: extFiles });
-      //return extFiles;
-    });
-  };
-}
-messageHandlers["loadFiles"] = loadFiles;
-
-function importSTEPorIGES(fileName, fileText) {
-  // Writes the uploaded file to Emscripten's Virtual Filesystem
-  oc.FS.createDataFile("/", fileName, fileText, true, true);
-
-  // Choose the correct OpenCascade file parsers to read the CAD file
-  var reader = null; let tempFilename = fileName.toLowerCase()
-  if (tempFilename.endsWith(".step") || tempFilename.endsWith(".stp")) {
-    reader = new oc.STEPControl_Reader();
-  } else if (tempFilename.endsWith(".iges") || tempFilename.endsWith(".igs")) {
-    reader = new oc.IGESControl_Reader();
-  } else { console.error("opencascade.js can't parse this extension! (yet)"); }
-
-  let readResult = reader.ReadFile(fileName);            // Read the file
-  if (readResult === 1) {
-    console.log(fileName + " loaded successfully!     Converting to OCC now...");
-    let numRootsTransferred = reader.TransferRoots();    // Translate all transferable roots to OpenCascade
-    let stepShape           = reader.OneShape();         // Obtain the results of translation in one OCCT shape
-    
-    // Add to the externalShapes dictionary
-    externalShapes[fileName] = new oc.TopoDS_Shape(stepShape);
-    externalShapes[fileName].hash = stringToHash(fileName);
-    console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to add it to the scene!");
-    
-    // Remove the file when we're done (otherwise we run into errors on reupload)
-    oc.FS.unlink("/" + fileName);
-    
-    return externalShapes[fileName];
-  } else {
-    console.error("Something in OCCT went wrong trying to read " + fileName);
-    return null;
-  }
-}
-function importSTL(fileName, fileText) {
-  // Writes the uploaded file to Emscripten's Virtual Filesystem
-  oc.FS.createDataFile("/", fileName, fileText, true, true);
-
-  // Choose the correct OpenCascade file parsers to read the STL file
-  var reader    = new oc.StlAPI_Reader();
-  let readShape = new oc.TopoDS_Shape ();
-
-  if (reader.Read(readShape, fileName)) {
-    console.log(fileName + " loaded successfully!     Converting to OCC now...");
-    
-    // Convert Shell to Solid as is expected
-    let solidSTL = new oc.BRepBuilderAPI_MakeSolid();
-    solidSTL.Add(new oc.TopoDS_Shape(readShape));
-
-    // Add to the externalShapes dictionary
-    externalShapes[fileName] = new oc.TopoDS_Shape(solidSTL.Solid());
-    externalShapes[fileName].hash = stringToHash(fileName);
-    console.log("Shape Import complete! Use sceneShapes.push(externalShapes['" + fileName + "']); to see it!");
-    
-    // Remove the file when we're done (otherwise we run into errors on reupload)
-    oc.FS.unlink("/" + fileName);
-    
-    return externalShapes[fileName];
-  } else {
-    console.log("Something in OCCT went wrong trying to read " + fileName + ".  \n" +
-      "Cascade Studio only imports small ASCII stl files for now!");
-    return null;
-  }
-}
-
-// NEEDS currentShape defined!!
-function saveShapeSTEP (filename = "CascadeStudioPart.step") {
-  let writer = new oc.STEPControl_Writer();
-  let transferResult = writer.Transfer(currentShape, 0);
-  if(transferResult === 1){
-    let writeResult = writer.Write(filename);
-    if(writeResult === 1){
-      let stepFileText = oc.FS.readFile("/" + filename, { encoding:"utf8" });
-      oc.FS.unlink("/" + filename);
-
-      return URL.createObjectURL( new Blob([stepFileText], { type: 'text/plain' }) );
-    }else{
-      console.error("WRITE STEP FILE FAILED.");
-    }
-  }else{
-    console.error("TRANSFER TO STEP WRITER FAILED.");
-  }
-}
-messageHandlers["saveShapeSTEP"] = saveShapeSTEP;
-
-// Remove the externally imported shapes from the project
-function clearExternalFiles () {
-  externalShapes = {};
-}
-messageHandlers["clearExternalFiles"] = clearExternalFiles;
+// Import the File IO Utilities
+importScripts('./CascadeStudioFileUtils.js');

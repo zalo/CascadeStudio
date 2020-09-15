@@ -11,6 +11,9 @@
 //  - Upon push, Github Actions will build a new version of the library and commit it back to the repo
 //  - From there, you can graft those into CascadeStudio/node_modules/opencascade.js/dist (following its existing conventions)
 
+/** Import Misc. Utilities that aren't part of the Exposed Library */
+importScripts('./CascadeStudioStandardUtils.js');
+
 function Box(x, y, z, centered) {
   if (!centered) { centered = false;}
   let curBox = CacheOp(arguments, () => {
@@ -796,128 +799,4 @@ function Checkbox(name = "Toggle", defaultValue = false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   postMessage({ "type": "addCheckbox", payload: { name: name, default: defaultValue } });
   return GUIState[name];
-}
-
-// Caching functions to speed up evaluation of slow redundant operations
-var argCache = {}; var usedHashes = {}; var opNumber = 0; 
-function CacheOp(args, cacheMiss) {
-  //toReturn = cacheMiss();
-  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": args.callee.name } }); // Poor Man's Progress Indicator
-  let toReturn = null;
-  let curHash = ComputeHash(args); usedHashes[curHash] = curHash;
-  let check = CheckCache(curHash);
-  if (check && GUIState["Cache?"]) {
-    //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
-    toReturn = new oc.TopoDS_Shape(check);
-    toReturn.hash = check.hash;
-  } else {
-    //console.log("MISSED " + ComputeHash(args) + ", " + ComputeHash(args, true));
-    toReturn = cacheMiss();
-    toReturn.hash = curHash;
-    if (GUIState["Cache?"]) { AddToCache(curHash, toReturn); }
-  }
-  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": null } }); // Poor Man's Progress Indicator
-  return toReturn;
-}
-function CheckCache(hash) { return argCache[hash] || null; }
-function AddToCache(hash, shape) {
-  let cacheShape  = new oc.TopoDS_Shape(shape);
-  cacheShape.hash = hash; // This is the cached version of the object
-  argCache[hash]  = cacheShape;
-  return hash;
-}
-
-function ComputeHash(args, raw) {
-  let argsString = JSON.stringify(args);
-  argsString = argsString.replace(/(\"ptr\"\:(-?[0-9]*?)\,)/g, '');
-  argsString = argsString.replace(/(\"ptr\"\:(-?[0-9]*))/g, '');
-  if (argsString.includes("ptr")) { console.error("YOU DONE MESSED UP YOUR REGEX."); }
-  let hashString = args.callee.name + argsString;// + GUIState["MeshRes"];
-  if (raw) { return hashString; }
-  return stringToHash(hashString);
-}
-
-// Random Javascript Utilities
-function recursiveTraverse(x, callback) {
-  if (Object.prototype.toString.call(x) === '[object Array]') {
-    x.forEach(function (x1) {
-      recursiveTraverse(x1, callback)
-    });
-  } else if ((typeof x === 'object') && (x !== null)) {
-    if (x.HashCode) {
-      callback(x);
-    } else {
-      for (let key in x) {
-        if (x.hasOwnProperty(key)) {
-          recursiveTraverse(x[key], callback)
-        }
-      }
-    }
-  } else {
-    callback(x);
-  }
-}
-
-function Remove(inputArray, objectToRemove) {
-  return inputArray.filter((el) => {
-    return el.hash !== objectToRemove.hash ||
-           el.ptr  !== objectToRemove.ptr;//el !== objectToRemove;
-  });
-}
-
-function isArrayLike(item) {
-  return (
-      Array.isArray(item) || 
-      (!!item &&
-        typeof item === "object" &&
-        item.hasOwnProperty("length") && 
-        typeof item.length === "number" && 
-        item.length > 0 && 
-        (item.length - 1) in item
-      )
-  );
-}
-
-// Mega Brittle Line Number Finding algorithm for back propagation; only works in Chrome and FF
-function getCallingLocation() {
-  let errorStack = (new Error).stack;
-  //console.log(errorStack);
-  //console.log(navigator.userAgent);
-  let lineAndColumn = [0, 0];
-  if (navigator.userAgent.includes("Chrom")) {
-    lineAndColumn = errorStack.split("\n")[5].split(", <anonymous>:")[1].split(':');
-  }else if (navigator.userAgent.includes("Moz")) {
-    lineAndColumn = errorStack.split("\n")[4].split("eval:")[1].split(':');
-  } else {
-    lineAndColumn[0] = "-1";
-    lineAndColumn[1] = "-1";
-  }
-  lineAndColumn[0] = parseFloat(lineAndColumn[0]);
-  lineAndColumn[1] = parseFloat(lineAndColumn[1]);
-
-  return lineAndColumn;
-}
-
-function convertToPnt(pnt) {
-  let point = pnt; // Accept raw gp_Points if we got 'em
-  if (point.length) {
-    point = new oc.gp_Pnt(point[0], point[1], point[2]);
-  }
-  return point;
-}
-
-// Convert to 32bit integer 
-function stringToHash(string) { 
-    var hash = 0; 
-    if (string.length == 0) return hash; 
-    for (i = 0; i < string.length; i++) { 
-        char = string.charCodeAt(i); 
-        hash = ((hash << 5) - hash) + char; 
-        hash = hash & hash; 
-    } 
-    return hash; 
-}
-
-function CantorPairing(x, y) {
-  return ((x + y) * (x + y + 1)) / 2 + y;
 }
