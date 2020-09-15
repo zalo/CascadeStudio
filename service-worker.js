@@ -2,7 +2,7 @@
 
 /* A version number is useful when updating the worker logic,
    allowing you to remove outdated cache entries during the update. */
-var version = 'v0.0.5.3::';
+var version = 'v0.0.6.4::';
 
 /* These resources will be downloaded and cached by the service worker
    during the installation process. If any resource fails to be downloaded,
@@ -11,7 +11,9 @@ var version = 'v0.0.5.3::';
 var offlineFundamentals = [
   '',
   //'service-worker.js',
-  "node_modules/three/build/three.d.ts",
+  "manifest.webmanifest",
+  "icon/android-chrome-192x192.png",
+  /*"node_modules/three/build/three.d.ts",
   "node_modules/three/build/three.min.js",
   "node_modules/three/examples/js/controls/DragControls.js",
   "node_modules/three/examples/js/controls/OrbitControls.js",
@@ -48,9 +50,7 @@ var offlineFundamentals = [
   "fonts/Consolas.ttf",
   "fonts/Papyrus.ttf",
   "textures/dullFrontLitMetal.png",
-  "icon/favicon.ico",
-  "manifest.webmanifest",
-  "icon/android-chrome-192x192.png"
+  "icon/favicon.ico"*/
 ];
 
 /* The install event fires when the service worker is first installed.

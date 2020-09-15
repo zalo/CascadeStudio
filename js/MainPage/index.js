@@ -144,9 +144,9 @@ function initialize() {
             //}).catch(error => console.log(error.message));
 
             // Add Symbols from this file...
-            fetch(prefix + "/js/index.ts").then((response) => {
+            fetch(prefix + "/js/MainPage/index.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/index.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/MainPage/index.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 });
