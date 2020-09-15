@@ -44,7 +44,7 @@ var offlineFundamentals = [
   "js/CascadeStudioStandardLibrary.js",
   "js/openCascadeHelper.js",
   "js/CascadeView.js",
-  "js/index.js",
+  "js/main.js",
   "js/index.ts",
   "fonts/Roboto.ttf",
   "fonts/Consolas.ttf",

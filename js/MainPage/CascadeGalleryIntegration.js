@@ -1,3 +1,5 @@
+// This file handles the connection to the Gallery and its associated logic.
+
 // Initialize Firebase in General
 firebase.initializeApp({
   apiKey: "AIzaSyBxJH3SLxUnG0wiZsSRSHiiAFMoEjadoCk",
@@ -137,6 +139,22 @@ window.addEventListener('load', () => {
         </div>`;
 });
 
+/** Temporarily resize the renderer to Thumbnail size and take a screenshot. */
+function takeGalleryScreenshotasURI (environment) {
+  // Set to desired dimension and capture screenshot as uri
+  let width = 512, height = 384;
+  environment.camera.aspect = width / height;
+  environment.camera.updateProjectionMatrix();
+  environment.renderer.setSize(width, height);
+  environment.renderer.render(environment.scene, environment.camera, null, false);
+  let uri = environment.renderer.domElement.toDataURL('image/png');
+  
+  // Return to original dimensions
+  environment.onWindowResize();
+  
+  return uri;
+}
+
 // Manage the showing and hiding of the gallery upload window
 var galleryWindowHidden = true;
 onLoadUserProfile.push((userProfileData, user, userProfile)=>{
@@ -153,7 +171,7 @@ onLoadUserProfile.push((userProfileData, user, userProfile)=>{
         // Hide or unhide the gallery parameters window!
         galleryWindowHidden         = !galleryWindowHidden;
         galleryWindow.style.display =  galleryWindowHidden ? 'none' : '';
-        let thumbnailURI    = threejsViewport.takeGalleryScreenshotasURI();
+        let thumbnailURI    = takeGalleryScreenshotasURI(threejsViewport.environment);
         previewElem.src     = thumbnailURI;
         // Save the modifications to those fields with the values from the database
         document.getElementById("save-button").onclick = (event) => {
