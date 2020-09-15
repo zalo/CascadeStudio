@@ -11,7 +11,7 @@
   <a href="https://github.com/zalo/CascadeStudio/commits/master">
       <img src="https://img.shields.io/github/last-commit/zalo/CascadeStudio" title="Last Commit Date"></a>
   <a href="https://github.com/zalo/CascadeStudio/blob/master/LICENSE">
-      <img src="https://img.shields.io/badge/license-GPL%20v3-brightgreen" title="License: GPL v3"></a>
+      <img src="https://img.shields.io/badge/license-MIT-brightgreen" title="License: MIT"></a>
 </p>
 
 ## A Full Live-Scripted CAD Kernel and IDE in the Browser.
