@@ -1,5 +1,5 @@
 // Define the persistent global variables
-var oc = null, externalShapes = {}, sceneShapes = [],
+var oc = null, openCascade = null, externalShapes = {}, sceneShapes = [],
   GUIState, fullShapeEdgeHashes = {}, fullShapeFaceHashes = {},
   currentShape;
 
@@ -26,7 +26,6 @@ importScripts(
   '../../node_modules/three/build/three.min.js',
   './CascadeStudioStandardLibrary.js',
   './CascadeStudioShapeToMesh.js',
-  '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
   '../../node_modules/opentype.js/dist/opentype.min.js');
 
 // Preload the Various Fonts that are available via Text3D
@@ -43,26 +42,37 @@ preloadedFonts.forEach((fontURL) => {
 
 // Load the full Open Cascade Web Assembly Module
 var messageHandlers = {};
-new opencascade({
-  locateFile(path) {
-    if (path.endsWith('.wasm')) {
-      return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
-    }
-    return path;
-  }
-}).then((openCascade) => {
-  // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
-  oc = openCascade;
+fetch('https://raw.githack.com/donalffons/opencascade.js/embind/dist/opencascade.wasm.js')
+  .then(response => response.text())
+  .then((data) => {
+    // Remove this export line from the end so it works in browsers
+    data = data.split("export default opencascade;")[0];
 
-  // Ping Pong Messages Back and Forth based on their registration in messageHandlers
-  onmessage = function (e) {
-    let response = messageHandlers[e.data.type](e.data.payload);
-    if (response) { postMessage({ "type": e.data.type, payload: response }); };
-  }
+    // Import the Javascript from a blob URL
+    importScripts(URL.createObjectURL(new Blob([data], { type: 'text/javascript' })));
 
-  // Initial Evaluation after everything has been loaded...
-  postMessage({ type: "startupCallback" });
-});
+    new opencascade({
+      locateFile(path) {
+        if (path.endsWith('.wasm')) {
+          return "https://raw.githack.com/donalffons/opencascade.js/embind/dist/opencascade.wasm.wasm";
+        }
+        return path;
+      }
+    }).then((openCascade) => {
+      // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
+      oc = openCascade;
+    
+      // Ping Pong Messages Back and Forth based on their registration in messageHandlers
+      onmessage = function (e) {
+        let response = messageHandlers[e.data.type](e.data.payload);
+        if (response) { postMessage({ "type": e.data.type, payload: response }); };
+      }
+    
+      // Initial Evaluation after everything has been loaded...
+      postMessage({ type: "startupCallback" });
+    });
+  });
+
 
 /** This function evaluates `payload.code` (the contents of the Editor Window)
  *  and sets the GUI State. */
