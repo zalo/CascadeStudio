@@ -1,5 +1,5 @@
 // Define the persistent global variables
-var oc = null, openCascade = null, externalShapes = {}, sceneShapes = [],
+var oc = null, externalShapes = {}, sceneShapes = [],
   GUIState, fullShapeEdgeHashes = {}, fullShapeFaceHashes = {},
   currentShape;
 
