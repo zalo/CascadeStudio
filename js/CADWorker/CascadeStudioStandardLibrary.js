@@ -113,7 +113,7 @@ function BSpline(inPoints, closed) {
     let edge = new oc.BRepBuilderAPI_MakeEdge(geomCurveHandle).Edge();
     return     new oc.BRepBuilderAPI_MakeWire(edge).Wire();
   });
-  if (wire) { sceneShapes.push(curSpline) };
+  sceneShapes.push(curSpline);
   return curSpline;
 }
 

@@ -1,6 +1,6 @@
 // This script governs the layout and intialization of all of the sub-windows
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
-// If you're looking for the 3D Three.js Viewport, it is in /js/MainPage/CascadeView*
+// If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
 var myLayout, monacoEditor, threejsViewport,
     consoleContainer, consoleGolden, gui,

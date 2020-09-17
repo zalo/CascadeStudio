@@ -1,5 +1,5 @@
 /** The list that stores all of the OpenCascade shapes for rendering.  
- * Add to this when using imported files or doing custom operations. 
+ * Add to this when using imported files or doing custom oc. operations. 
  * @example```sceneShapes.push(externalShapes['myStep.step']);``` */
 var sceneShapes: oc.TopoDS_Shape[];
 
