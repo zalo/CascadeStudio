@@ -541,6 +541,7 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     let spineWire = BSpline([
       [0, 0, 0],
       [0, 0, height]], false);
+    sceneShapes = Remove(sceneShapes, spineWire); // Don't render these
 
     // Define the guiding helical auxiliary spine (which controls the rotation)
     let steps = 30;
@@ -553,9 +554,12 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
         height * alpha]);
     }
 
+    let aspineWire = BSpline(aspinePoints, false);
+    sceneShapes = Remove(sceneShapes, aspineWire); // Don't render these
+
     // Sweep the face wires along the spine to create the extrusion
     let pipe = new oc.BRepOffsetAPI_MakePipeShell(spineWire);
-    pipe.SetMode(BSpline(aspinePoints, false), true);
+    pipe.SetMode(aspineWire, true);
     pipe.Add(wire);
     pipe.Add(upperPolygon);
     pipe.Build();
