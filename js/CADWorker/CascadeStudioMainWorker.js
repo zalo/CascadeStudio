@@ -47,13 +47,22 @@ fetch('https://raw.githack.com/donalffons/opencascade.js/embind/dist/opencascade
   .then((data) => {
 
     // Patch in an intelligible overload finding mechanism
+    data = data.replace("classType.registeredClass.constructor_body[argCount-1]=function constructor_body()", 
+    `classType.registeredClass.argTypes = argTypes;
+    classType.registeredClass.constructor_body[argCount-1]=function constructor_body()`);
     data = data.replace('throw new BindingError(name+" has no accessible constructor")', 
       `let message = name + " overload not specified!  Consider using one of these overloads: ";
       let matches = Object.values(registeredPointers).filter((item) => (item.pointerType && item.pointerType.name.includes(legalFunctionName+"_")));
       for(let ii = 0; ii < matches.length; ii++){
-        message += matches[ii].pointerType.name.slice(0, -1) + "(" + matches[ii].pointerType.registeredClass.constructor_body.length-1 +  " args), "; //
+        message += matches[ii].pointerType.name.slice(0, -1) + "(";
+        let argTypes = matches[ii].pointerType.registeredClass.argTypes;
+        for(let jj = 1; jj < argTypes.length; jj++){
+          message += argTypes[jj].name + ", ";
+        }
+        if(argTypes.length > 1) { message = message.slice(0, -2); }
+        message += "), ";
       }
-      throw new BindingError(matches);`); //message.slice(0, -1));
+      throw new BindingError(message.slice(0, -2));`);
 
     // Remove this export line from the end so it works in browsers
     data = data.split("export default opencascade;")[0];
