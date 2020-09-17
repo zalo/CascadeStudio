@@ -1,10 +1,10 @@
 function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
     let facelist = [], edgeList = [];
-    try {
-      shape = new oc.TopoDS_Shape(shape);
+    //try {
+      //shape = new oc.TopoDS_Shape(shape);
 
       // Set up the Incremental Mesh builder, with a precision
-      let incremental_mesh = new oc.BRepMesh_IncrementalMesh(shape, maxDeviation, false, maxDeviation * 5);
+      let incremental_mesh = new oc.BRepMesh_IncrementalMesh_2(shape, maxDeviation, false, maxDeviation * 5, false);
 
       // Construct the edge hashes to assign proper indices to the edges
       let fullShapeEdgeHashes2 = {};
@@ -12,8 +12,8 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
       // Iterate through the faces and triangulate each one
       let triangulations = [];
       ForEachFace(shape, (faceIndex, myFace) => {
-        let aLocation = new oc.TopLoc_Location();
-        let myT = oc.BRep_Tool.prototype.Triangulation(myFace, aLocation);
+        let aLocation = new oc.TopLoc_Location_1();
+        let myT = oc.BRep_Tool.Triangulation(myFace, aLocation);
         if (myT.IsNull()) { console.error("Encountered Null Face!"); return; }
 
         let this_face = {
@@ -24,7 +24,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
           face_index: fullShapeFaceHashes[myFace.HashCode(100000000)]
         };
 
-        let pc = new oc.Poly_Connect(myT);
+        let pc = new oc.Poly_Connect_2(myT);
         let Nodes = myT.get().Nodes();
 
         // write vertex buffer
@@ -37,9 +37,8 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
         }
 
         // write normal buffer
-        let myNormal = new oc.TColgp_Array1OfDir(Nodes.Lower(), Nodes.Upper());
-        let SST = new oc.StdPrs_ToolTriangulatedShape();
-        SST.Normal(myFace, pc, myNormal);
+        let myNormal = new oc.TColgp_Array1OfDir_2(Nodes.Lower(), Nodes.Upper());
+        oc.StdPrs_ToolTriangulatedShape.Normal(myFace, pc, myNormal);
         this_face.normal_coord = new Array(myNormal.Length() * 3);
         for(let i = 0; i < myNormal.Length(); i++) {
           let d = myNormal.Value(i + 1).Transformed(aLocation.Transformation());
@@ -49,7 +48,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
         }
         
         // write triangle buffer
-        let orient = myFace.Orientation();
+        let orient = myFace.Orientation_1();
         let triangles = myT.get().Triangles();
         this_face.tri_indexes = new Array(triangles.Length() * 3);
         let validFaceTriCount = 0;
@@ -58,7 +57,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
           let n1 = t.Value(1);
           let n2 = t.Value(2);
           let n3 = t.Value(3);
-          if(orient !== oc.TopAbs_FORWARD) {
+          if(orient !== oc.TopAbs_Orientation.TopAbs_FORWARD) {
             let tmp = n1;
             n1 = n2;
             n2 = tmp;
@@ -73,7 +72,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
         this_face.number_of_triangles = validFaceTriCount;
         facelist.push(this_face);
 
-        ForEachEdge(myFace, (index, myEdge) => {
+        /*ForEachEdge(myFace, (index, myEdge) => {
           let edgeHash = myEdge.HashCode(100000000);
           if (fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
             let this_edge = {
@@ -81,7 +80,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
               edge_index: -1
             };
 
-            let myP = oc.BRep_Tool.prototype.PolygonOnTriangulation(myEdge, myT, aLocation);
+            let myP = oc.BRep_Tool.PolygonOnTriangulation(myEdge, myT, aLocation);
             let edgeNodes = myP.get().Nodes();
 
             // write vertex buffer
@@ -99,14 +98,14 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
           } else {
             fullShapeEdgeHashes2[edgeHash] = edgeHash;
           }
-        });
+        });*/
         triangulations.push(myT);
       });
       // Nullify Triangulations between runs so they're not stored in the cache
       for (let i = 0; i < triangulations.length; i++) { triangulations[i].Nullify(); }
 
       // Get the free edges that aren't on any triangulated face/surface
-      ForEachEdge(shape, (index, myEdge) => {
+      /*ForEachEdge(shape, (index, myEdge) => {
         let edgeHash = myEdge.HashCode(100000000);
         if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
           let this_edge = {
@@ -114,7 +113,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
             edge_index: -1
           };
 
-          let aLocation = new oc.TopLoc_Location();
+          let aLocation = new oc.TopLoc_Location_1();
           let adaptorCurve = new oc.BRepAdaptor_Curve(myEdge);
           let tangDef = new oc.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.1);
 
@@ -132,14 +131,15 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
 
           edgeList.push(this_edge);
         }
-      });
+      });*/
 
-    } catch(err) {
-      setTimeout(() => {
-        err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
-        throw err; 
-      }, 0);
-    }
+    //}// catch (err) {
+     // throw err;
+     // //setTimeout(() => {
+     // //  //err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
+     // //  throw err; 
+     // //}, 0);
+    //}
 
     return [facelist, edgeList];
   }

@@ -18,7 +18,7 @@ function Box(x, y, z, centered) {
   if (!centered) { centered = false;}
   let curBox = CacheOp(arguments, () => {
     // Construct a Box Primitive
-    let box = new oc.BRepPrimAPI_MakeBox(x, y, z).Shape();
+    let box = new oc.BRepPrimAPI_MakeBox_1(x, y, z).Shape();
     if (centered) {
       return Translate([-x / 2, -y / 2, -z / 2], box);
     } else {
@@ -202,9 +202,9 @@ function Text3D(text, size, height, fontName) {
 // These foreach functions are not cache friendly right now!
 function ForEachSolid(shape, callback) {
   let solid_index = 0;
-  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SOLID);
-  for (anExplorer.Init(shape, oc.TopAbs_SOLID); anExplorer.More(); anExplorer.Next()) {
-    callback(solid_index++, oc.TopoDS.prototype.Solid(anExplorer.Current()));
+  let anExplorer = new oc.TopExp_Explorer_2(shape, oc.TopAbs_ShapeEnum.TopAbs_SOLID, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, oc.TopAbs_ShapeEnum.TopAbs_SOLID, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(solid_index++, oc.TopoDS.Solid_1(anExplorer.Current()));
   }
 }
 function GetNumSolidsInCompound(shape) {
@@ -235,25 +235,25 @@ function GetSolidFromCompound(shape, index, keepOriginal) {
 
 function ForEachShell(shape, callback) {
   let shell_index = 0;
-  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SHELL);
-  for (anExplorer.Init(shape, oc.TopAbs_SHELL); anExplorer.More(); anExplorer.Next()) {
-    callback(shell_index++, oc.TopoDS.prototype.Shell(anExplorer.Current()));
+  let anExplorer = new oc.TopExp_Explorer_2(shape, oc.TopAbs_ShapeEnum.TopAbs_SHELL, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, oc.TopAbs_ShapeEnum.TopAbs_SHELL, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(shell_index++, oc.TopoDS.Shell_1(anExplorer.Current()));
   }
 }
 
 function ForEachFace(shape, callback) {
   let face_index = 0;
-  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_FACE);
-  for (anExplorer.Init(shape, oc.TopAbs_FACE); anExplorer.More(); anExplorer.Next()) {
-    callback(face_index++, oc.TopoDS.prototype.Face(anExplorer.Current()));
+  let anExplorer = new oc.TopExp_Explorer_2(shape, oc.TopAbs_ShapeEnum.TopAbs_FACE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, oc.TopAbs_ShapeEnum.TopAbs_FACE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(face_index++, oc.TopoDS.Face_1(anExplorer.Current()));
   }
 }
 
 function ForEachWire(shape, callback) {
   let wire_index = 0;
-  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_WIRE);
-  for (anExplorer.Init(shape, oc.TopAbs_WIRE); anExplorer.More(); anExplorer.Next()) {
-    callback(wire_index++, oc.TopoDS.prototype.Wire(anExplorer.Current()));
+  let anExplorer = new oc.TopExp_Explorer_2(shape, oc.TopAbs_ShapeEnum.TopAbs_WIRE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, oc.TopAbs_ShapeEnum.TopAbs_WIRE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(wire_index++, oc.TopoDS.Wire_1(anExplorer.Current()));
   }
 }
 function GetWire(shape, index, keepOriginal) {
@@ -279,9 +279,9 @@ function GetWire(shape, index, keepOriginal) {
 function ForEachEdge(shape, callback) {
   let edgeHashes = {};
   let edgeIndex = 0;
-  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_EDGE);
-  for (anExplorer.Init(shape, oc.TopAbs_EDGE); anExplorer.More(); anExplorer.Next()) {
-    let edge = oc.TopoDS.prototype.Edge(anExplorer.Current());
+  let anExplorer = new oc.TopExp_Explorer_2(shape, oc.TopAbs_ShapeEnum.TopAbs_EDGE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, oc.TopAbs_ShapeEnum.TopAbs_EDGE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    let edge = oc.TopoDS.Edge_1(anExplorer.Current());
     let edgeHash = edge.HashCode(100000000);
     if(!edgeHashes.hasOwnProperty(edgeHash)){
       edgeHashes[edgeHash] = edgeIndex;
@@ -292,9 +292,9 @@ function ForEachEdge(shape, callback) {
 }
 
 function ForEachVertex(shape, callback) {
-  let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_VERTEX);
-  for (anExplorer.Init(shape, oc.TopAbs_VERTEX); anExplorer.More(); anExplorer.Next()) {
-    callback(oc.TopoDS.prototype.Vertex(anExplorer.Current()));
+  let anExplorer = new oc.TopExp_Explorer_2(shape, oc.TopAbs_ShapeEnum.TopAbs_VERTEX, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, oc.TopAbs_ShapeEnum.TopAbs_VERTEX, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(oc.TopoDS.Vertex_1(anExplorer.Current()));
   }
 }
 

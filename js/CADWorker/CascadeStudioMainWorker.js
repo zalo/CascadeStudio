@@ -45,6 +45,16 @@ var messageHandlers = {};
 fetch('https://raw.githack.com/donalffons/opencascade.js/embind/dist/opencascade.wasm.js')
   .then(response => response.text())
   .then((data) => {
+
+    // Patch in an intelligible overload finding mechanism
+    data = data.replace('throw new BindingError(name+" has no accessible constructor")', 
+      `let message = name + " overload not specified!  Consider using one of these overloads: ";
+      let matches = Object.values(registeredPointers).filter((item) => (item.pointerType && item.pointerType.name.includes(legalFunctionName+"_")));
+      for(let ii = 0; ii < matches.length; ii++){
+        message += matches[ii].pointerType.name.slice(0, -1) + "(" + matches[ii].pointerType.registeredClass.constructor_body.length-1 +  " args), "; //
+      }
+      throw new BindingError(matches);`); //message.slice(0, -1));
+
     // Remove this export line from the end so it works in browsers
     data = data.split("export default opencascade;")[0];
 
