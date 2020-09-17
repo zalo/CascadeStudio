@@ -58,11 +58,11 @@ function Polygon(points: number[][], wire?: boolean): oc.TopoDS_Shape;
  * @example```let circle = Circle(50);```*/
 function Circle(radius:number, wire?:boolean) : oc.TopoDS_Shape;
 /** Creates a bspline from a list of 3-component lists (points). 
- * This can be converted into an edge -> wire -> face via the respective BRepBuilderAPI functions.
+ * This can be converted into a face via the respective oc.BRepBuilderAPI functions.
  * Or used directly with BRepPrimAPI_MakeRevolution()
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let bspline = BSpline([[0,0,0], [40, 0, 50], [50, 0, 50]], true);```*/
-function BSpline(points:number[][], closed?:boolean, wire?:boolean) : oc.Handle_Geom_BSplineCurve | oc.TopoDS_Shape;
+function BSpline(points:number[][], closed?:boolean) : oc.TopoDS_Shape;
 /** Creates set of glyph solids from a string and a font-file and adds it to sceneShapes.
  * Note that all the characters share a singular face. 
  * 

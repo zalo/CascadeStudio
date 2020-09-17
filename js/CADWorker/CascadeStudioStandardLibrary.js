@@ -101,7 +101,7 @@ function Circle(radius, wire) {
   return curCircle;
 }
 
-function BSpline(inPoints, closed, wire) {
+function BSpline(inPoints, closed) {
   let curSpline = CacheOp(arguments, () => {
     let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed ? 1 : 0));
     for (let pIndex = 1; pIndex <= inPoints.length; pIndex++) {
@@ -110,12 +110,8 @@ function BSpline(inPoints, closed, wire) {
     if (closed) { ptList.SetValue(inPoints.length + 1, ptList.Value(1)); }
 
     let geomCurveHandle = new oc.GeomAPI_PointsToBSpline(ptList).Curve();
-    if (wire) {
-      let edge = new oc.BRepBuilderAPI_MakeEdge(geomCurveHandle).Edge();
-      return     new oc.BRepBuilderAPI_MakeWire(edge).Wire();
-    } else {
-      return geomCurveHandle;
-    }
+    let edge = new oc.BRepBuilderAPI_MakeEdge(geomCurveHandle).Edge();
+    return     new oc.BRepBuilderAPI_MakeWire(edge).Wire();
   });
   if (wire) { sceneShapes.push(curSpline) };
   return curSpline;
@@ -763,7 +759,7 @@ function Sketch(startingPoint) {
       this.lastPoint = ctrlPoint;
     }
     let cubicCurve     = new oc.Geom_BezierCurve(ptList);
-    let handle         = new oc.Handle_Geom_BezierCurve(cubicCurve)
+    let handle         = new oc.Handle_Geom_BezierCurve(cubicCurve);
     let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(handle    ).Edge() ;
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge  ).Wire());
     this.currentIndex++;

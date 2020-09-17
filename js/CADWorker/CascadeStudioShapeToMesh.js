@@ -4,7 +4,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
       shape = new oc.TopoDS_Shape(shape);
 
       // Set up the Incremental Mesh builder, with a precision
-      let incremental_mesh = new oc.BRepMesh_IncrementalMesh(shape, maxDeviation, false, maxDeviation * 5);
+      new oc.BRepMesh_IncrementalMesh(shape, maxDeviation, false, maxDeviation * 5);
 
       // Construct the edge hashes to assign proper indices to the edges
       let fullShapeEdgeHashes2 = {};

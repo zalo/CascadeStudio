@@ -127,10 +127,10 @@ function convertToPnt(pnt) {
 
 /** This function converts a string to a 32bit integer. */
 function stringToHash(string) { 
-    var hash = 0; 
+    let hash = 0; 
     if (string.length == 0) return hash; 
-    for (i = 0; i < string.length; i++) { 
-        char = string.charCodeAt(i); 
+    for (let i = 0; i < string.length; i++) { 
+        let char = string.charCodeAt(i); 
         hash = ((hash << 5) - hash) + char; 
         hash = hash & hash; 
     } 

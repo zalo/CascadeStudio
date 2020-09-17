@@ -61,7 +61,7 @@ function importSTEPorIGES(fileName, fileText) {
   oc.FS.createDataFile("/", fileName, fileText, true, true);
 
   // Choose the correct OpenCascade file parsers to read the CAD file
-  var reader = null; let tempFilename = fileName.toLowerCase()
+  var reader = null; let tempFilename = fileName.toLowerCase();
   if (tempFilename.endsWith(".step") || tempFilename.endsWith(".stp")) {
     reader = new oc.STEPControl_Reader();
   } else if (tempFilename.endsWith(".iges") || tempFilename.endsWith(".igs")) {
@@ -71,7 +71,7 @@ function importSTEPorIGES(fileName, fileText) {
   let readResult = reader.ReadFile(fileName);            // Read the file
   if (readResult === 1) {
     console.log(fileName + " loaded successfully!     Converting to OCC now...");
-    let numRootsTransferred = reader.TransferRoots();    // Translate all transferable roots to OpenCascade
+    reader.TransferRoots();                              // Translate all transferable roots to OpenCascade
     let stepShape           = reader.OneShape();         // Obtain the results of translation in one OCCT shape
     
     // Add to the externalShapes dictionary

@@ -126,7 +126,7 @@ function initialize() {
 
             // Import Typescript Intellisense Definitions for the relevant libraries...
             var extraLibs = [];
-            let prefix = window.location.origin.includes("zalo.github.io") ? "/CascadeStudio" : "";
+            let prefix = window.location.origin.slice(8).startsWith("zalo.github.io") ? "/CascadeStudio" : "";
             // opencascade.js Typescript Definitions...
             fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
                 response.text().then(function (text) {
@@ -185,8 +185,8 @@ function initialize() {
 
                     guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                         .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
-                    messageHandlers["addSlider"  ]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
-                    messageHandlers["addCheckbox"]({ name: "Cache?" , default: true });
+                    messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
+                    messageHandlers["addCheckbox"]({ name: "Cache?", default: true });
                 }
 
                 // Remove any existing Transform Handles that could be laying around
@@ -196,8 +196,8 @@ function initialize() {
                 // This lets users download arbitrary information 
                 // from the CAD engine via the `saveFile()` function
                 messageHandlers["saveFile"] = (payload) => {
-                    let link      = document.createElement("a");
-                    link.href     = payload.fileURL;
+                    let link = document.createElement("a");
+                    link.href = payload.fileURL;
                     link.download = payload.filename;
                     link.click();
                 };
@@ -207,8 +207,8 @@ function initialize() {
                 cascadeStudioWorker.postMessage({
                     "type": "Evaluate",
                     payload: {
-                        "code"     : newCode,
-                        "GUIState" : GUIState
+                        "code": newCode,
+                        "GUIState": GUIState
                     }
                 });
 
@@ -236,7 +236,7 @@ function initialize() {
 
                 // Print a friendly message (to which we'll append progress updates)
                 console.log("Generating Model");
-            }
+            };
 
             // Force the F5 Key to refresh the model instead of refreshing the page
             document.onkeydown = function (e) {
@@ -305,7 +305,7 @@ function initialize() {
                 newline.style.fontSize = "1.2em";
                 if (message !== undefined) {
                     let messageText = JSON.stringify(message, getCircularReplacer());
-                    if(messageText.startsWith('"')) { messageText = messageText.slice(1, -1)}
+                    if (messageText.startsWith('"')) { messageText = messageText.slice(1, -1); }
                     newline.innerHTML = "&gt;  " + messageText;
                 } else {
                     newline.innerHTML = "undefined";
@@ -326,7 +326,7 @@ function initialize() {
                 newline.style.fontSize = "1.2em";
                 let errorText = JSON.stringify(err, getCircularReplacer());
                 if(errorText.startsWith('"')) { errorText = errorText.slice(1, -1)}
-                newline.innerHTML = "Line : " + line + " " + errorText;
+                newline.innerHTML = "Line " + line + ": " + errorText;
                 consoleContainer.appendChild(newline);
                 consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
 
@@ -348,7 +348,7 @@ function initialize() {
                 // Add a dot to the progress indicator for each progress message we find in the queue
                 consoleContainer.parentElement.lastElementChild.lastElementChild.innerText =
                     "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType)? " ("+payload.opType+")" : "");
-            }
+            };
 
             // Print friendly welcoming messages
             console.log("Welcome to Cascade Studio!");
