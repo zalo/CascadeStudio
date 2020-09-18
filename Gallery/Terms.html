@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Cascade Studio Gallery</title>
+        <!--<heading style="display:none;">Cascade Studio</heading>-->
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <meta name="application-name" content="Cascade Studio">
+        <meta name="description" content="A Full Live-Scripted CAD Kernel in the Browser">
+        <meta name="keywords" content="SCAD, OpenSCAD, CAD, OpenCascade, Scripting">
+        <meta name="author" content="Johnathon Selstad">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="theme-color" content="#1e1e1e">
+
+        <!-- Include Tailwind.css -->
+        <link href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css" rel="stylesheet">
+        <!-- The core Firebase JS SDK is always required and must be listed first -->
+        <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-app.js"></script>
+        <!-- TODO: Add SDKs for Firebase products that you want to use
+            https://firebase.google.com/docs/web/setup#available-libraries -->
+        <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-auth.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-firestore.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-storage.js"></script>
+        <!-- Include the Firebase Sign-in Auth UI -->
+        <script src="https://www.gstatic.com/firebasejs/ui/4.6.1/firebase-ui-auth.js"></script>
+        <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/4.6.1/firebase-ui-auth.css" />
+
+        <!-- Inject Headers/Footers, Handle Basic Auth, etc. -->
+        <script type="text/javascript" src = "/Gallery/js/main.js"></script>
+        
+        <style>
+          .transparentPannel {
+              background-color:rgba(22, 22, 22, 0.1);
+              padding:16px;
+          }
+
+          .license {
+              background-color: rgba(60, 72, 92, 0.5);
+              border-radius: 4px;
+              padding:16px;
+              margin:0px;
+          }
+          div#mainText {
+              text-align: justify;
+              user-select: text;
+              -moz-user-select: -moz-text;
+              -webkit-user-select: text;
+              width:70%;
+              margin:auto;
+              padding-bottom:40px;
+          }
+          @media screen and (max-width:799px)  { div#mainText { width: 92%; } }
+
+          h1{font-size:36px}h2{font-size:30px}h3{font-size:24px}h4{font-size:20px}h5{font-size:18px}h6{font-size:16px}.w3-serif{font-family:serif}
+          h1,h2,h3,h4,h5,h6{font-family:"Segoe UI",Arial,sans-serif;font-weight:400;margin:10px 0}.w3-wide{letter-spacing:4px}
+        </style>
+    </head>
+
+    <body style="margin: 0; background: rgb(54, 54, 54); color: white; ">
+      <div id="mainText">
+        <br>
+        <br>
+        <center><span style="font-size:48px">Privacy Policy and Terms of Service</span></center>
+        <br>
+        <br>
+        <h2>What license will my projects have?</h2>
+        <div class="transparentPannel">   
+            All the projects you create in Cascade Studio are owned by you. You decide which license applies to every project you create. We recommend you paste your preferred license on top of your code, if you don't place a license on a project, it will be protected by our default license:<br>
+            <br>
+            <div class="license">
+            <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US"><img alt="Creative Commons License" style="border-width:0" src="http://i.creativecommons.org/l/by-nc-sa/3.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US">Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License</a>.
+            </div>
+            <br>
+    
+            <p>
+            The following is an example of another license you might want to use for your projects (MIT license):
+            </p>
+    
+            <p class="license">
+            /*
+            <br/><br/>
+            Copyright (c) &lt;year&gt; &lt;copyright holders&gt;
+            <br/><br/>
+            Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+            <br/><br/>
+            The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+            <br/><br/>
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+            <br/><br/>
+            */
+            </p>
+            <p>On top of any license you might want to apply to your projects, you agree to give Cascade Studio a worldwide license to host, store, reproduce, modify, create derivative works, communicate, publish, publicly perform, publicly display such content, for the limited purpose of operating, promoting, and improving Cascade Studio.</p>
+        </div>
+        <br/>
+        <br/>
+        <br/>
+        <h2>Your Public Information</h2>
+        <div class="transparentPannel">   
+            Cascade Studio is a public platform. As such, all the <b>projects and content</b> you share as "Public" become visible to everybody. In particular,
+            <ul>
+            <li>Content shared as <b>Public</b> is accessible and searchable in the Cascade Studio Browse window, but can also be accessible to third party applications or services that use <a class="regular" href="/api">Cascade Studio's public firebase API</a>.</li>
+            <li>Content shared as <b>Private</b> is visible to anyone who has an embed/iframe or direct link to your published content, but won't show up in the Browse section of the web.</li>
+            </ul>
+            <br>
+            Cascade Studio is also a public community. <b>Your profile</b>, including your username, avatar picture, and "about yourself" sections 
+            are visible to anyone who visits Cascade Studio. You can edit your profile information and picture at any time.<br>
+            <br>
+            Similarly, <b>your interactions</b> and activity on Cascade Studio such as your comments and likes is public as well. You can delete 
+            comments, edit likes, delete projects and playlists, picture and edit your profile information and picture at any time.
+        </div>
+        <br/>
+        <br/>
+        <br/>
+        <h2>Your Private Information</h2>
+        <div class="transparentPannel">   
+            Cascade Studio respects the privacy of its users and will not use data in its databases to compete with its users, market to its user's clients, 
+            advertise to, or contact them for any other means of profit.<br>
+            <br>
+            All private information, including email address and private projects and content (see above), is never shared with or sold to any other 
+            organizations or services.<br/>
+            <br/>
+            Cascade Studio does however reserve the right to react according to the law and authorities and investigate, prevent, or take action regarding
+            illegal activities, suspected fraud, situations involving potential threats to the physical safety of any person, violations of the Terms of 
+            Service (section below), or as otherwise required by law.<br/>
+        </div>
+        <br/>
+        <br/>
+        <br/>
+        <h2>Cookies and Analytics</h2>
+        <div class="transparentPannel">   
+            <b>Cookies</b> are required to use Cascade Studio, they are used to help the system identify users and maintain their session open while they
+            work in the website. Without cookies Cascade Studio won't be able to store progress outside of the url, and it won't be able to connecting to the database.<br>
+            <br>
+            Cascade Studio does not use cookies to track any of the users actions in the site, or store any of the content they type of search for.<br>
+            <br>
+            Cascade Studio collects global, non user-specific information regarding overal website traffic volume, frequency of visits, type of browser and operating system. Cascade Studio
+            employes Google Analytics.<br>
+        </div>
+        <br/>
+        <br/>
+        <br/>
+        <h2>Terminating your Account</h2>
+        <div class="transparentPannel">   
+            In the case you decide to delete your Cascade Studio account, all the content you created and your profile will be deleted.
+        </div>
+        <br/>
+        <br/>
+        <br/>
+        <h2>Changes to This Policy</h2>
+        <div class="transparentPannel">   
+            Cascade Studio's Privacy Policy may change from time to time. Cascade Studio will not reduce its user's rights under this policy without explicit
+            consent. Cascade Studio will post any privacy policy changes on this page and, if the changes are significant, Cascade Studio will provide a more
+            prominent notice.<br>
+            <br>
+            If Cascade Studio is acquired by or merged with a company, Cascade Studio will notify the user before any personal information is transferred
+            and becomes subject to a different privacy policy.
+        </div>
+        <br/>
+        <br/>
+        <br/>
+        <h2>Terms of Service</h2>
+        <div class="transparentPannel">
+            You must be at least 13 years old in order to use Cascade Studio. If Cascade Studio becomes aware that you aren't, and that therefore we have unknowingly
+            collected some personal information about you, we will delete your account without further notice.<br>
+            <br>
+            Cascade Studio is not responsible for the content you create. You are responsible for that content. Cascade Studio reserves the right to suspend any 
+            user account without further notice and, in the same way, Cascade Studio reserves the right to block any projects or assets without further notice.
+            We encourage freedom of speech and diversity of opinions and believes, but we will not tolerate content that threatens people or communities.<br>
+            <br>
+            Cascade Studio or its contributors are not responsible for content shared on the website that can potentially damage hardware and/or software.
+            The user agrees that WebGL, WebAssembly, and raw javascript evaluation are delicate technologies and will assume all the risk when browsing, playing or editing the projects.<br>
+            <br>
+            Although Cascade Studio owns the data storage, databases and the Cascade Studio site, the users retain all rights to their creations and can decide
+            a specific license for it (section "What license will my projects have?" above).
+        </div>
+        <br/>
+
+        <a href="https://github.com/zalo/CascadeStudio#credits" class="underline"><h2>Cascade Studio Proudly Uses these dependencies.</h2></a>
+
+        <br/><br/>
+        <a href="https://www.shadertoy.com/terms" class="underline">These are terms are based on the wonderful Shadertoy's Terms of Service.</a>
+    
+      </div>
+    </body>
+</html>
