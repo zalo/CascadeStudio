@@ -160,6 +160,31 @@ function initialize() {
                 //model: null
             });
 
+            // Collapse all Functions in the Editor to suppress library clutter -----------------
+            let codeLines = state.code.split(/\r\n|\r|\n/);
+            let collapsed = []; let curCollapse = null;
+            for (let li = 0; li < codeLines.length; li++) {
+                if (codeLines[li].startsWith("function")) {
+                    curCollapse = { "startLineNumber": (li + 1) };
+                } else if (codeLines[li].startsWith("}") && curCollapse !== null) {
+                    curCollapse["endLineNumber"] = (li + 1);
+                    collapsed.push(curCollapse);
+                    curCollapse = null;
+                }
+            }
+            let mergedViewState = Object.assign(monacoEditor.saveViewState(), {
+                "contributionsState": {
+                    "editor.contrib.folding": {
+                        "collapsedRegions": collapsed, 
+                        "lineCount": codeLines.length,
+                        "provider": "indent" 
+                    },
+                    "editor.contrib.wordHighlighter": false 
+                }
+            });
+            monacoEditor.restoreViewState(mergedViewState);
+            // End Collapsing All Functions -----------------------------------------------------
+            
             /** This function triggers the evaluation of the editor code 
              *  inside the CAD Worker thread.*/
             monacoEditor.evaluateCode = (saveToURL = false) => {

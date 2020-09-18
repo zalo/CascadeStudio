@@ -198,3 +198,12 @@ function ChamferEdges(shape: oc.TopoDS_Shape, distance: number, edgeList: number
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```SaveFile("myInfo.txt", URL.createObjectURL( new Blob(["Hello, Harddrive!"], { type: 'text/plain' }) ));``` */
 function SaveFile(filename: string, fileURL: string): void;
+
+/** Explicitly Cache the result of this operation so that it can return instantly next time it is called with the same arguments.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let box = CacheOp(arguments, () => { return new oc.BRepPrimAPI_MakeBox(x, y, z).Shape(); });``` */
+function CacheOp(arguments: IArguments, cacheMiss: () => oc.TopoDS_Shape): oc.TopoDS_Shape;
+ /** Remove this object from this array.  Useful for preventing objects being added to `sceneShapes` (in cached functions).
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let box = CacheOp(arguments, () => { let box = Box(x,y,z); sceneShapes = Remove(sceneShapes, box); return box; });``` */
+function Remove(array: any[], toRemove: any): any[];
