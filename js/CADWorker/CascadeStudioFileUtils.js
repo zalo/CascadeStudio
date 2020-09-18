@@ -43,7 +43,8 @@ function loadFiles(files) {
       if (i === files.length - 1) {
         if (lastImportedShape) {
           console.log("Imports complete, rendering shapes now...");
-          combineAndRenderShapes({ maxDeviation: GUIState['MeshRes'] || 0.1 });
+          let response = messageHandlers["combineAndRenderShapes"]({ maxDeviation: GUIState['MeshRes'] || 0.1 });
+          postMessage({ "type": "combineAndRenderShapes", payload: response });
         }
       }
       //consoleGolden.setState(extFiles);
