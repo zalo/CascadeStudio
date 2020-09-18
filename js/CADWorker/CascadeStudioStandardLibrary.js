@@ -736,8 +736,6 @@ function Sketch(startingPoint) {
     this.argsString += ComputeHash(arguments, true);
     let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
     let nextPoint      = new oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
-    let arc            = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
-    let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arc    ).Edge() ;
     let arcCurve       = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
     let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arcCurve    ).Edge() ;
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(arcEdge).Wire());
