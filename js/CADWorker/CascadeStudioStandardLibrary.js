@@ -738,6 +738,8 @@ function Sketch(startingPoint) {
     let nextPoint      = new oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
     let arc            = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
     let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arc    ).Edge() ;
+    let arcCurve       = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
+    let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arcCurve    ).Edge() ;
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(arcEdge).Wire());
     this.lastPoint     = nextPoint;
     this.currentIndex++;
@@ -748,10 +750,11 @@ function Sketch(startingPoint) {
   // and the last point is the endpoint of the curve
   this.BezierTo = function (bezierControlPoints) {
     this.argsString += ComputeHash(arguments, true);
-    let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length);
+    let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length+1);
+    ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
-      let ctrlPoint = new oc.gp_Pnt(bezierControlPoints[bInd][0], bezierControlPoints[bInd][1], 0);
-      ptList.SetValue(bInd + 1, ctrlPoint);
+      let ctrlPoint = convertToPnt(bezierControlPoints[bInd]);
+      ptList.SetValue(bInd + 2, ctrlPoint);
       this.lastPoint = ctrlPoint;
     }
     let cubicCurve     = new oc.Geom_BezierCurve(ptList);
@@ -762,9 +765,51 @@ function Sketch(startingPoint) {
     return this;
   }
 
+  /* Constructs a BSpline from the previous point through this set of points */
+  this.BSplineTo = function (bsplinePoints) {
+    this.argsString += ComputeHash(arguments, true);
+    let ptList = new oc.TColgp_Array1OfPnt(1, bsplinePoints.length+1);
+    ptList.SetValue(1, this.lastPoint);
+    for (let bInd = 0; bInd < bsplinePoints.length; bInd++){
+      let ctrlPoint = convertToPnt(bsplinePoints[bInd]);
+      ptList.SetValue(bInd + 2, ctrlPoint);
+      this.lastPoint = ctrlPoint;
+    }
+    let handle         = new oc.GeomAPI_PointsToBSpline(ptList  ).Curve();
+    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(handle  ).Edge() ;
+    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
+    this.currentIndex++;
+    return this;
+  }
+
   this.Fillet = function (radius) {
     this.argsString += ComputeHash(arguments, true);
     this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
+    return this;
+  }
+
+  this.Circle = function (center, radius, reversed) {
+    this.argsString += ComputeHash(arguments, true);
+    let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(convertToPnt(center),
+    new oc.gp_Dir(0, 0, 1)), radius).Value();
+    let edge = new oc.BRepBuilderAPI_MakeEdge(circle).Edge();
+    let wire = new oc.BRepBuilderAPI_MakeWire(edge).Wire();
+    if (reversed) { wire = wire.Reversed(); }
+    wire.hash = stringToHash(this.argsString);
+    this.wires.push(wire);
+
+    let faceBuilder = null;
+    if (this.faces.length > 0) {
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace(this.wires[0]);
+      for (let w = 1; w < this.wires.length; w++){
+        faceBuilder.Add(this.wires[w]);
+      }
+    } else {
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace(wire);
+    }
+    let face = faceBuilder.Face();
+    face.hash = stringToHash(this.argsString);
+    this.faces.push(face);
     return this;
   }
 }
