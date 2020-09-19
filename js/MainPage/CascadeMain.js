@@ -350,7 +350,7 @@ function initialize() {
                 newline.style.fontFamily = "monospace";
                 newline.style.fontSize = "1.2em";
                 let errorText = JSON.stringify(err, getCircularReplacer());
-                if(errorText.startsWith('"')) { errorText = errorText.slice(1, -1)}
+                if (errorText.startsWith('"')) { errorText = errorText.slice(1, -1); }
                 newline.innerHTML = "Line " + line + ": " + errorText;
                 consoleContainer.appendChild(newline);
                 consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;

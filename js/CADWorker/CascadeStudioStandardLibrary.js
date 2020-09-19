@@ -189,7 +189,7 @@ function Text3D(text, size, height, fontName) {
       textFaces[textFaces.length - 1].hash = stringToHash(textArgs);
       let textSolid = Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
       sceneShapes = Remove(sceneShapes, textSolid);
-      return textSolid
+      return textSolid;
     }
   });
 
