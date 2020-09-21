@@ -1,5 +1,5 @@
 /** The list that stores all of the OpenCascade shapes for rendering.  
- * Add to this when using imported files or doing custom operations. 
+ * Add to this when using imported files or doing custom oc. operations. 
  * @example```sceneShapes.push(externalShapes['myStep.step']);``` */
 var sceneShapes: oc.TopoDS_Shape[];
 
@@ -25,12 +25,15 @@ class Sketch {
     
     LineTo  (nextPoint           : number[]       ) : Sketch;
     ArcTo   (pointOnArc          : number[], arcEnd : number[]) : Sketch;
-    BezierTo(bezierControlPoints: number[][]): Sketch;
+    BezierTo(bezierControlPoints : number[][]): Sketch;
+    BSplineTo(bsplinePoints      : number[][]): Sketch; 
     /** Adds a 2D Fillet of specified radius at this vertex.  Only applies to Faces!
      * If a Wire is needed, use ForEachWire() to get the Wire from the resulting Face! */
     Fillet  (radius              : number         ) : Sketch;
     Face    (reversed           ?:boolean) : oc.TopoDS_Face;
     Wire    (reversed           ?:boolean) : oc.TopoDS_Wire;
+    /** Punches a circular hole in the existing face (may need to use reversed) */
+    Circle  (center             ?:number[], radius:number, reversed?:boolean) : Sketch;
 }
 
 /** Creates a solid box with dimensions x, y, and, z and adds it to `sceneShapes` for rendering. 
@@ -58,11 +61,11 @@ function Polygon(points: number[][], wire?: boolean): oc.TopoDS_Shape;
  * @example```let circle = Circle(50);```*/
 function Circle(radius:number, wire?:boolean) : oc.TopoDS_Shape;
 /** Creates a bspline from a list of 3-component lists (points). 
- * This can be converted into an edge -> wire -> face via the respective BRepBuilderAPI functions.
+ * This can be converted into a face via the respective oc.BRepBuilderAPI functions.
  * Or used directly with BRepPrimAPI_MakeRevolution()
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let bspline = BSpline([[0,0,0], [40, 0, 50], [50, 0, 50]], true);```*/
-function BSpline(points:number[][], closed?:boolean, wire?:boolean) : oc.Handle_Geom_BSplineCurve | oc.TopoDS_Shape;
+function BSpline(points:number[][], closed?:boolean) : oc.TopoDS_Shape;
 /** Creates set of glyph solids from a string and a font-file and adds it to sceneShapes.
  * Note that all the characters share a singular face. 
  * 
@@ -195,3 +198,12 @@ function ChamferEdges(shape: oc.TopoDS_Shape, distance: number, edgeList: number
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```SaveFile("myInfo.txt", URL.createObjectURL( new Blob(["Hello, Harddrive!"], { type: 'text/plain' }) ));``` */
 function SaveFile(filename: string, fileURL: string): void;
+
+/** Explicitly Cache the result of this operation so that it can return instantly next time it is called with the same arguments.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let box = CacheOp(arguments, () => { return new oc.BRepPrimAPI_MakeBox(x, y, z).Shape(); });``` */
+function CacheOp(arguments: IArguments, cacheMiss: () => oc.TopoDS_Shape): oc.TopoDS_Shape;
+ /** Remove this object from this array.  Useful for preventing objects being added to `sceneShapes` (in cached functions).
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let box = CacheOp(arguments, () => { let box = Box(x,y,z); sceneShapes = Remove(sceneShapes, box); return box; });``` */
+function Remove(array: any[], toRemove: any): any[];

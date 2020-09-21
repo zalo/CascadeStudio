@@ -120,17 +120,17 @@ function getCallingLocation() {
 function convertToPnt(pnt) {
   let point = pnt; // Accept raw gp_Points if we got 'em
   if (point.length) {
-    point = new oc.gp_Pnt(point[0], point[1], point[2]);
+    point = new oc.gp_Pnt(point[0], point[1], (point[2])?point[2]:0);
   }
   return point;
 }
 
 /** This function converts a string to a 32bit integer. */
 function stringToHash(string) { 
-    var hash = 0; 
+    let hash = 0; 
     if (string.length == 0) return hash; 
-    for (i = 0; i < string.length; i++) { 
-        char = string.charCodeAt(i); 
+    for (let i = 0; i < string.length; i++) { 
+        let char = string.charCodeAt(i); 
         hash = ((hash << 5) - hash) + char; 
         hash = hash & hash; 
     } 

@@ -37,13 +37,13 @@ var Environment = function (goldenContainer) {
     this.light2 = new THREE.DirectionalLight(0xbbbbbb);
     this.light2.position.set(6, 50, -12);
     this.light2.castShadow = true;
-    this.light2.shadow.camera.top      =  100;
-    this.light2.shadow.camera.bottom   = -100;
-    this.light2.shadow.camera.left     = -100;
-    this.light2.shadow.camera.right    =  100;
+    this.light2.shadow.camera.top      =  200;
+    this.light2.shadow.camera.bottom   = -200;
+    this.light2.shadow.camera.left     = -200;
+    this.light2.shadow.camera.right    =  200;
     //this.light2.shadow.radius        =  32;
-    this.light2.shadow.mapSize.width   =  64;
-    this.light2.shadow.mapSize.height  =  64;
+    this.light2.shadow.mapSize.width   =  128;
+    this.light2.shadow.mapSize.height  =  128;
     this.scene.add(this.light);
     this.scene.add(this.light2);
     this.renderer.shadowMap.enabled    = true;
@@ -119,7 +119,7 @@ var CascadeEnvironment = function (goldenContainer) {
 
   // Load the Shiny Dull Metal Matcap Material
   this.loader = new THREE.TextureLoader(); this.loader.setCrossOrigin ('');
-  this.matcap = this.loader.load ('./textures/dullFrontLitMetal.png');
+  this.matcap = this.loader.load ('./textures/dullFrontLitMetal.png', (tex) => this.environment.viewDirty = true );
   this.matcapMaterial = new THREE.MeshMatcapMaterial({
                           color: new THREE.Color(0xf5f5f5),
                           matcap: this.matcap,

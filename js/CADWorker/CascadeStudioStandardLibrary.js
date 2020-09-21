@@ -101,7 +101,7 @@ function Circle(radius, wire) {
   return curCircle;
 }
 
-function BSpline(inPoints, closed, wire) {
+function BSpline(inPoints, closed) {
   let curSpline = CacheOp(arguments, () => {
     let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed ? 1 : 0));
     for (let pIndex = 1; pIndex <= inPoints.length; pIndex++) {
@@ -110,14 +110,10 @@ function BSpline(inPoints, closed, wire) {
     if (closed) { ptList.SetValue(inPoints.length + 1, ptList.Value(1)); }
 
     let geomCurveHandle = new oc.GeomAPI_PointsToBSpline(ptList).Curve();
-    if (wire) {
-      let edge = new oc.BRepBuilderAPI_MakeEdge(geomCurveHandle).Edge();
-      return     new oc.BRepBuilderAPI_MakeWire(edge).Wire();
-    } else {
-      return geomCurveHandle;
-    }
+    let edge = new oc.BRepBuilderAPI_MakeEdge(geomCurveHandle).Edge();
+    return     new oc.BRepBuilderAPI_MakeWire(edge).Wire();
   });
-  if (wire) { sceneShapes.push(curSpline) };
+  sceneShapes.push(curSpline);
   return curSpline;
 }
 
@@ -191,11 +187,13 @@ function Text3D(text, size, height, fontName) {
       return textFaces[textFaces.length - 1];
     } else {
       textFaces[textFaces.length - 1].hash = stringToHash(textArgs);
-      return Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
+      let textSolid = Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
+      sceneShapes = Remove(sceneShapes, textSolid);
+      return textSolid;
     }
   });
 
-  if(height === 0) { sceneShapes.push(curText); }
+  sceneShapes.push(curText);
   return curText;
 }
 
@@ -542,15 +540,13 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     sceneShapes = Remove(sceneShapes, upperPolygon);
 
     // Define the straight spine going up the middle of the sweep
-    let spine = BSpline([
+    let spineWire = BSpline([
       [0, 0, 0],
       [0, 0, height]], false);
-    let spineEdge = new oc.BRepBuilderAPI_MakeEdge(spine).Edge();
-    let spineWire = new oc.BRepBuilderAPI_MakeWire(spineEdge).Wire();
-    //sceneShapes.push(spineEdge);
+    sceneShapes = Remove(sceneShapes, spineWire); // Don't render these
 
     // Define the guiding helical auxiliary spine (which controls the rotation)
-    let steps = 20;
+    let steps = 30;
     let aspinePoints = [];
     for (let i = 0; i <= steps; i++) {
       let alpha = i / steps;
@@ -560,10 +556,8 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
         height * alpha]);
     }
 
-    let aspine = BSpline(aspinePoints, false);
-    let aspineEdge = new oc.BRepBuilderAPI_MakeEdge(aspine).Edge();
-    let aspineWire = new oc.BRepBuilderAPI_MakeWire(aspineEdge).Wire();
-    //sceneShapes.push(aspineEdge);
+    let aspineWire = BSpline(aspinePoints, false);
+    sceneShapes = Remove(sceneShapes, aspineWire); // Don't render these
 
     // Sweep the face wires along the spine to create the extrusion
     let pipe = new oc.BRepOffsetAPI_MakePipeShell(spineWire);
@@ -744,8 +738,8 @@ function Sketch(startingPoint) {
     this.argsString += ComputeHash(arguments, true);
     let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
     let nextPoint      = new oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
-    let arc            = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
-    let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arc    ).Edge() ;
+    let arcCurve       = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
+    let arcEdge        = new oc.BRepBuilderAPI_MakeEdge(arcCurve    ).Edge() ;
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(arcEdge).Wire());
     this.lastPoint     = nextPoint;
     this.currentIndex++;
@@ -756,16 +750,34 @@ function Sketch(startingPoint) {
   // and the last point is the endpoint of the curve
   this.BezierTo = function (bezierControlPoints) {
     this.argsString += ComputeHash(arguments, true);
-    let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length);
+    let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length+1);
+    ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
-      let ctrlPoint = new oc.gp_Pnt(bezierControlPoints[bInd][0], bezierControlPoints[bInd][1], 0);
-      ptList.SetValue(bInd + 1, ctrlPoint);
+      let ctrlPoint = convertToPnt(bezierControlPoints[bInd]);
+      ptList.SetValue(bInd + 2, ctrlPoint);
       this.lastPoint = ctrlPoint;
     }
     let cubicCurve     = new oc.Geom_BezierCurve(ptList);
-    let handle         = new oc.Handle_Geom_BezierCurve(cubicCurve)
+    let handle         = new oc.Handle_Geom_BezierCurve(cubicCurve);
     let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(handle    ).Edge() ;
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge  ).Wire());
+    this.currentIndex++;
+    return this;
+  }
+
+  /* Constructs a BSpline from the previous point through this set of points */
+  this.BSplineTo = function (bsplinePoints) {
+    this.argsString += ComputeHash(arguments, true);
+    let ptList = new oc.TColgp_Array1OfPnt(1, bsplinePoints.length+1);
+    ptList.SetValue(1, this.lastPoint);
+    for (let bInd = 0; bInd < bsplinePoints.length; bInd++){
+      let ctrlPoint = convertToPnt(bsplinePoints[bInd]);
+      ptList.SetValue(bInd + 2, ctrlPoint);
+      this.lastPoint = ctrlPoint;
+    }
+    let handle         = new oc.GeomAPI_PointsToBSpline(ptList  ).Curve();
+    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge(handle  ).Edge() ;
+    this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
     this.currentIndex++;
     return this;
   }
@@ -773,6 +785,31 @@ function Sketch(startingPoint) {
   this.Fillet = function (radius) {
     this.argsString += ComputeHash(arguments, true);
     this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
+    return this;
+  }
+
+  this.Circle = function (center, radius, reversed) {
+    this.argsString += ComputeHash(arguments, true);
+    let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(convertToPnt(center),
+    new oc.gp_Dir(0, 0, 1)), radius).Value();
+    let edge = new oc.BRepBuilderAPI_MakeEdge(circle).Edge();
+    let wire = new oc.BRepBuilderAPI_MakeWire(edge).Wire();
+    if (reversed) { wire = wire.Reversed(); }
+    wire.hash = stringToHash(this.argsString);
+    this.wires.push(wire);
+
+    let faceBuilder = null;
+    if (this.faces.length > 0) {
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace(this.wires[0]);
+      for (let w = 1; w < this.wires.length; w++){
+        faceBuilder.Add(this.wires[w]);
+      }
+    } else {
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace(wire);
+    }
+    let face = faceBuilder.Face();
+    face.hash = stringToHash(this.argsString);
+    this.faces.push(face);
     return this;
   }
 }
