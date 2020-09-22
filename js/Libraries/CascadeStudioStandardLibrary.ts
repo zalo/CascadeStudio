@@ -736,6 +736,9 @@ class Sketch {
   wireBuilder : oc.BRepBuilderAPI_MakeWire;
   fillets     : { x: number, y: number, radius: number }[];
   argsString  : string
+  /** This starts a new wire in the sketch.  This wire will be added to 
+   * the existing wires when when building the face.  If it has an opposite
+   *  winding order, this wire will subtract from the existing face. */
   constructor(startingPoint: number[]) {
     this.currentIndex = 0;
     this.faces        = [];
@@ -747,7 +750,9 @@ class Sketch {
     this.argsString   = ComputeHash(arguments, true);
   }
 
-  // Functions are: BSplineTo, Fillet, Wire, and Face
+  /** This starts a new wire in the sketch.  This wire will be added to 
+   * the existing when when building the face.  If it has an opposite
+   *  winding order, this wire will subtract from the existing face. */
   Start = function (startingPoint: number[]) : Sketch {
     this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
     this.lastPoint   = this.firstPoint;
@@ -756,6 +761,10 @@ class Sketch {
     return this;
   }
 
+  /** This ends the current wire in the sketch.  If this is the 
+   * second closed wire, it will try to subtract its area from 
+   * the first closed wire's face if its winding order is reversed
+   * relative to the first one. */
   End = function (closed?: boolean, reversed?:boolean) : Sketch {
     this.argsString += ComputeHash(arguments, true);
 
@@ -786,7 +795,8 @@ class Sketch {
     return this;
   }
 
-  Wire = function (reversed) {
+  /** This Extracts the primary wire of the resultant face. */
+  Wire = function (reversed?:boolean) : oc.TopoDS_Wire {
     this.argsString += ComputeHash(arguments, true);
     //let wire = this.wires[this.wires.length - 1];
     this.applyFillets();
@@ -796,7 +806,8 @@ class Sketch {
     sceneShapes.push(wire);
     return wire;
   }
-  Face = function (reversed) {
+  /** This extracts the face accumulated from all of the wires specified so far. */
+  Face = function (reversed?:boolean) : oc.TopoDS_Face {
     this.argsString += ComputeHash(arguments, true);
     this.applyFillets();
     let face = this.faces[this.faces.length - 1];
@@ -806,7 +817,8 @@ class Sketch {
     return face;
   }
 
-  applyFillets = function () {
+  /** INTERNAL: This applies the fillets to the wire in-progress. */
+  applyFillets = function () : void {
     // Add Fillets if Necessary
     if (this.fillets.length > 0) {
       let successes = 0; let swapFillets = [];
@@ -835,6 +847,7 @@ class Sketch {
     }
   }
 
+  /** Adds a wire to the face-in-progress. */
   AddWire = function (wire: oc.TopoDS_Wire) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     // This adds another wire (or edge??) to the currently constructing shape...
@@ -843,6 +856,7 @@ class Sketch {
     return this;
   }
 
+  /** Connects from the last point in the sketch to the specified next point with a straight line. */
   LineTo = function (nextPoint : number[]) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     let endPoint = null;
@@ -863,6 +877,7 @@ class Sketch {
     return this;
   }
 
+  /** Constructs an arc from the last point in the sketch through a point on the arc to end at arcEnd */
   ArcTo = function (pointOnArc : number[], arcEnd : number[]) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
@@ -875,8 +890,8 @@ class Sketch {
     return this;
   }
 
-  // Constructs an order-N Bezier Curve where the first N-1 points are control points
-  // and the last point is the endpoint of the curve
+  /** Constructs an order-N Bezier Curve where the first N-1 points are control points
+    * and the last point is the endpoint of the curve */
   BezierTo = function (bezierControlPoints : number[][]) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length+1);
@@ -911,12 +926,16 @@ class Sketch {
     return this;
   }
 
+  /** Rounds out this vertex with a specified radius */
   Fillet = function (radius: number) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
     return this;
   }
 
+  /** Appends a circle to this face as a hole to punch out.  
+   * Apply only after "End()" ing your other shapes and you 
+   * may need to set "reversed" to true. */
   Circle = function (center:number[], radius:number, reversed?:boolean) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(convertToPnt(center),
