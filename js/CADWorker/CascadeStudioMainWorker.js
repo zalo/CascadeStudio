@@ -73,14 +73,12 @@ function importLibrary(urls, forceReload) {
     if (!importedLibraries[url] || forceReload) {
       let oReq = new XMLHttpRequest();
       oReq.addEventListener("load", (response) => {
-        importedLibraries[url] = ts.transpileModule(response.responseText,
-          { compilerOptions: { module: ts.ModuleKind.CommonJS } });
+        importedLibraries[url] = ts.transpileModule(response.target.responseText,
+          { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
         eval(importedLibraries[url]);
-        postMessage({ "type": "addLibrary", payload: { url: url, contents: importedLibraries[url] } });
-        console.log("I am in the request response.");
+        postMessage({ "type": "addLibrary", payload: { url: url, contents: response.target.responseText } });
       });
-      oReq.open("GET", url); oReq.send();
-      console.log("I am after everything.");
+      oReq.open("GET", url, false); oReq.send();
     } else {
       // Already Imported this URL, no need to do so again...
     }

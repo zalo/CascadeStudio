@@ -1,6 +1,6 @@
 /** Creates an Involute Spur Gear Face with the Given Radius, Number of Teeth, and Attack Angle;
  * Shamelessly Ripped from https://ciechanow.ski/gears/ */
-function SpurGear(radius, num_teeth, attack_angle) {
+function SpurGear(radius: number, num_teeth: number, attack_angle: number) {
     let gear = CacheOp(arguments, () => {
         function involute_points(radius, angle, num, left) {
             let points = [];
