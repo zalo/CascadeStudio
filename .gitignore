@@ -109,6 +109,8 @@ node_modules/opencascade.js/dist/opencascade.js
 !node_modules/typescript/*/
 !node_modules/typescript/bin/
 !node_modules/typescript/bin/*
+!node_modules/typescript/lib/
+!node_modules/typescript/lib/*
 
 jspm_packages/
 
