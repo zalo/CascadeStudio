@@ -23,12 +23,38 @@ console.error = function (err, url, line, colno, errorObj) {
 
 // Import the set of scripts we'll need to perform all the CAD operations
 importScripts(
-  '../../node_modules/three/build/three.min.js',
-  './CascadeStudioStandardLibrary.js',
+  //'../../node_modules/three/build/three.min.js',
   './CascadeStudioShapeToMesh.js',
   '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
   '../../node_modules/opentype.js/dist/opentype.min.js',
   '../../node_modules/typescript/bin/typescript.min.js');
+
+let importedLibraries = {};
+/** This function imports a typescript file to the current workspace.
+ * Note, urls are not imported multiple times unless forceReload is true. */
+function ImportLibrary(urls, forceReload) {
+  urls.forEach((url) => {
+    if (!importedLibraries[url] || forceReload) {
+      let oReq = new XMLHttpRequest();
+      oReq.addEventListener("load", (response) => {
+        if (response.target.status === 200 && response.target.responseText) {
+          importedLibraries[url] = ts.transpileModule(response.target.responseText,
+            { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+          eval.call(null, importedLibraries[url]);
+          postMessage({ "type": "addLibrary", payload: { url: url, contents: response.target.responseText } });
+        } else {
+          console.error("Could not find library at this URL! URL: "+ response.target.responseURL +",  Status Code: "+response.target.status);
+          console.error(response);
+        }
+      });
+      oReq.open("GET", url, false); oReq.send();
+    } else {
+      // Already Imported this URL, no need to do so again...
+    }
+  });
+}
+
+ImportLibrary(['../Libraries/CascadeStudioStandardLibrary.ts']);
 
 // Preload the Various Fonts that are available via Text3D
 var preloadedFonts = ['../../fonts/Roboto.ttf',
@@ -64,26 +90,6 @@ new opencascade({
   // Initial Evaluation after everything has been loaded...
   postMessage({ type: "startupCallback" });
 });
-
-let importedLibraries = {};
-/** This function imports a typescript file to the current workspace.
- * Note, urls are not imported multiple times unless forceReload is true. */
-function importLibrary(urls, forceReload) {
-  urls.forEach((url) => {
-    if (!importedLibraries[url] || forceReload) {
-      let oReq = new XMLHttpRequest();
-      oReq.addEventListener("load", (response) => {
-        importedLibraries[url] = ts.transpileModule(response.target.responseText,
-          { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-        eval.call(null, importedLibraries[url]);
-        postMessage({ "type": "addLibrary", payload: { url: url, contents: response.target.responseText } });
-      });
-      oReq.open("GET", url, false); oReq.send();
-    } else {
-      // Already Imported this URL, no need to do so again...
-    }
-  });
-}
 
 /** This function evaluates `payload.code` (the contents of the Editor Window)
  *  and sets the GUI State. */

@@ -12,9 +12,34 @@
 //  - From there, you can graft those into CascadeStudio/node_modules/opencascade.js/dist (following its existing conventions)
 
 /** Import Misc. Utilities that aren't part of the Exposed Library */
-importScripts('./CascadeStudioStandardUtils.js');
+ImportLibrary(['../Libraries/CascadeStudioStandardUtils.ts']);
 
-function Box(x, y, z, centered) {
+/** The list that stores all of the OpenCascade shapes for rendering.  
+ * Add to this when using imported files or doing custom oc. operations. 
+ * @example```sceneShapes.push(externalShapes['myStep.step']);``` */
+var sceneShapes: oc.TopoDS_Shape[];
+
+/** The dictionary that stores all of your imported STEP and IGES files.  Push to sceneShapes to render in the view! 
+ * @example```sceneShapes.push(externalShapes['myStep.step']);``` */
+var externalShapes: { [filename: string]: oc.TopoDS_Shape };
+
+/** Explicitly Cache the result of this operation so that it can return instantly next time it is called with the same arguments.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let box = CacheOp(arguments, () => { return new oc.BRepPrimAPI_MakeBox(x, y, z).Shape(); });``` */
+function CacheOp(arguments: IArguments, cacheMiss: () => oc.TopoDS_Shape): oc.TopoDS_Shape;
+ /** Remove this object from this array.  Useful for preventing objects being added to `sceneShapes` (in cached functions).
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let box = CacheOp(arguments, () => { let box = Box(x,y,z); sceneShapes = Remove(sceneShapes, box); return box; });``` */
+function Remove(array: any[], toRemove: any): any[];
+
+/** This function imports a typescript file to the current workspace.
+ * Note, urls are not imported multiple times unless forceReload is true. */
+function ImportLibrary(urls: string[], forceReload?: boolean): void;
+
+/** Creates a solid box with dimensions x, y, and, z and adds it to `sceneShapes` for rendering. 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let myBox = Box(10, 20, 30);```*/
+function Box(x: number, y: number, z: number, centered?: boolean): oc.TopoDS_Shape {
   if (!centered) { centered = false;}
   let curBox = CacheOp(arguments, () => {
     // Construct a Box Primitive
@@ -30,7 +55,10 @@ function Box(x, y, z, centered) {
   return curBox;
 }
 
-function Sphere(radius) {
+/** Creates a solid sphere of specified radius and adds it to `sceneShapes` for rendering. 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let mySphere = Sphere(40);```*/
+function Sphere(radius: number): oc.TopoDS_Shape {
   let curSphere = CacheOp(arguments, () => {
     // Construct a Sphere Primitive
     let spherePlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0), oc.gp.prototype.DZ());
@@ -41,7 +69,10 @@ function Sphere(radius) {
   return curSphere;
 }
 
-function Cylinder(radius, height, centered) {
+/** Creates a solid cylinder of specified radius and height and adds it to `sceneShapes` for rendering. 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let myCylinder = Cylinder(30, 50);```*/
+function Cylinder(radius: number, height: number, centered?: boolean): oc.TopoDS_Shape {
   let curCylinder = CacheOp(arguments, () => {
     let cylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, centered ? -height / 2 : 0), new oc.gp_Dir(0, 0, 1));
     return new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, radius, height).Shape();
@@ -50,7 +81,10 @@ function Cylinder(radius, height, centered) {
   return curCylinder;
 }
 
-function Cone(radius1, radius2, height) {
+/** Creates a solid cone of specified bottom radius, top radius, and height and adds it to `sceneShapes` for rendering. 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let myCone = Cone(30, 50);```*/
+function Cone(radius1: number, radius2: number, height: number): oc.TopoDS_Shape {
   let curCone = CacheOp(arguments, () => {
     return new oc.BRepPrimAPI_MakeCone(radius1, radius2, height).Shape();
   });
@@ -58,7 +92,10 @@ function Cone(radius1, radius2, height) {
   return curCone;
 }
 
-function Polygon(points, wire) {
+/** Creates a polygon from a list of 3-component lists (points) and adds it to `sceneShapes` for rendering. 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let triangle = Polygon([[0, 0, 0], [50, 0, 0], [25, 50, 0]]);```*/
+function Polygon(points: number[][], wire?: boolean): oc.TopoDS_Shape {
   let curPolygon = CacheOp(arguments, () => {
     let gpPoints = [];
     for (let ind = 0; ind < points.length; ind++) {
@@ -88,7 +125,10 @@ function Polygon(points, wire) {
   return curPolygon;
 }
 
-function Circle(radius, wire) {
+/** Creates a circle from a radius and adds it to `sceneShapes` for rendering. 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let circle = Circle(50);```*/
+function Circle(radius:number, wire?:boolean) : oc.TopoDS_Shape {
   let curCircle = CacheOp(arguments, () => {
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0),
       new oc.gp_Dir(0, 0, 1)), radius).Value();
@@ -101,13 +141,18 @@ function Circle(radius, wire) {
   return curCircle;
 }
 
-function BSpline(inPoints, closed) {
+/** Creates a bspline from a list of 3-component lists (points). 
+ * This can be converted into a face via the respective oc.BRepBuilderAPI functions.
+ * Or used directly with BRepPrimAPI_MakeRevolution()
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let bspline = BSpline([[0,0,0], [40, 0, 50], [50, 0, 50]], true);```*/
+function BSpline(points:number[][], closed?:boolean) : oc.TopoDS_Shape {
   let curSpline = CacheOp(arguments, () => {
-    let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed ? 1 : 0));
-    for (let pIndex = 1; pIndex <= inPoints.length; pIndex++) {
-      ptList.SetValue(pIndex, convertToPnt(inPoints[pIndex - 1]));
+    let ptList = new oc.TColgp_Array1OfPnt(1, points.length + (closed ? 1 : 0));
+    for (let pIndex = 1; pIndex <= points.length; pIndex++) {
+      ptList.SetValue(pIndex, convertToPnt(points[pIndex - 1]));
     }
-    if (closed) { ptList.SetValue(inPoints.length + 1, ptList.Value(1)); }
+    if (closed) { ptList.SetValue(points.length + 1, ptList.Value(1)); }
 
     let geomCurveHandle = new oc.GeomAPI_PointsToBSpline(ptList).Curve();
     let edge = new oc.BRepBuilderAPI_MakeEdge(geomCurveHandle).Edge();
@@ -117,7 +162,15 @@ function BSpline(inPoints, closed) {
   return curSpline;
 }
 
-function Text3D(text, size, height, fontName) {
+/** Creates set of glyph solids from a string and a font-file and adds it to sceneShapes.
+ * Note that all the characters share a singular face. 
+ * 
+ * Defaults: size:36, height:0.15, fontName: 'Consolas'
+ * 
+ * Try 'Roboto' or 'Papyrus' for an alternative typeface.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let myText = Text3D("Hello!");```*/
+function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0.15, fontName?: string = "Consolas") : oc.TopoDS_Shape {
   if (!size   ) { size    = 36; }
   if (!height && height !== 0.0) { height  = 0.15; }
   if (!fontName) { fontName = "Consolas"; }
@@ -198,20 +251,23 @@ function Text3D(text, size, height, fontName) {
 }
 
 // These foreach functions are not cache friendly right now!
-function ForEachSolid(shape, callback) {
+/** Iterate over all the solids in this shape, calling `callback` on each one. */
+function ForEachSolid(shape: oc.TopoDS_Shape, callback: (index: Number, shell: oc.TopoDS_Solid) => void): void {
   let solid_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SOLID);
   for (anExplorer.Init(shape, oc.TopAbs_SOLID); anExplorer.More(); anExplorer.Next()) {
     callback(solid_index++, oc.TopoDS.prototype.Solid(anExplorer.Current()));
   }
 }
-function GetNumSolidsInCompound(shape) {
+/** Returns the number of solids in this compound shape. */
+function GetNumSolidsInCompound(shape: oc.TopoDS_Shape) : number {
   if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
   let solidsFound = 0;
   ForEachSolid(shape, (i, s) => { solidsFound++; });
   return solidsFound;
 }
-function GetSolidFromCompound(shape, index, keepOriginal) {
+/** Gets the indexth solid from this compound shape. */
+function GetSolidFromCompound(shape: oc.TopoDS_Shape, index?:number, keepOriginal?:boolean): oc.TopoDS_Solid {
   if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
   if (!index) { index = 0;}
 
@@ -231,7 +287,8 @@ function GetSolidFromCompound(shape, index, keepOriginal) {
   return sol;
 }
 
-function ForEachShell(shape, callback) {
+/** Iterate over all the shells in this shape, calling `callback` on each one. */
+function ForEachShell(shape: oc.TopoDS_Shape, callback: (index: Number, shell: oc.TopoDS_Shell) => void): void {
   let shell_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SHELL);
   for (anExplorer.Init(shape, oc.TopAbs_SHELL); anExplorer.More(); anExplorer.Next()) {
@@ -239,7 +296,8 @@ function ForEachShell(shape, callback) {
   }
 }
 
-function ForEachFace(shape, callback) {
+/** Iterate over all the faces in this shape, calling `callback` on each one. */
+function ForEachFace(shape: oc.TopoDS_Shape, callback: (index: number, face: oc.TopoDS_Face) => void): void {
   let face_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_FACE);
   for (anExplorer.Init(shape, oc.TopAbs_FACE); anExplorer.More(); anExplorer.Next()) {
@@ -247,19 +305,21 @@ function ForEachFace(shape, callback) {
   }
 }
 
-function ForEachWire(shape, callback) {
+/** Iterate over all the wires in this shape, calling `callback` on each one. */
+function ForEachWire(shape: oc.TopoDS_Shape, callback: (index: number, wire: oc.TopoDS_Wire) => void): void {
   let wire_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_WIRE);
   for (anExplorer.Init(shape, oc.TopAbs_WIRE); anExplorer.More(); anExplorer.Next()) {
     callback(wire_index++, oc.TopoDS.prototype.Wire(anExplorer.Current()));
   }
 }
-function GetWire(shape, index, keepOriginal) {
+/** Gets the indexth wire from this face (or above) shape. */
+function GetWire(shape: oc.TopoDS_Face, index?:number, keepOriginal?:boolean): oc.TopoDS_Wire {
   if (!shape || shape.ShapeType() > 4 || shape.IsNull()) { console.error("Not a wire shape!"); return shape; }
   if (!index) { index = 0;}
 
   let wire = CacheOp(arguments, () => {
-    let innerWire = {}; let wiresFound = 0;
+    let innerWire = { hash: 0 }; let wiresFound = 0;
     ForEachWire(shape, (i, s) => {
       if (i === index) { innerWire = new oc.TopoDS_Wire(s); } wiresFound++;
     });
@@ -274,7 +334,8 @@ function GetWire(shape, index, keepOriginal) {
   return wire;
 }
 
-function ForEachEdge(shape, callback) {
+/** Iterate over all the UNIQUE indices and edges in this shape, calling `callback` on each one. */
+function ForEachEdge(shape: oc.TopoDS_Shape, callback: (index: number, edge: oc.TopoDS_Edge) => void): {[edgeHash:number] : number} {
   let edgeHashes = {};
   let edgeIndex = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_EDGE);
@@ -289,14 +350,19 @@ function ForEachEdge(shape, callback) {
   return edgeHashes;
 }
 
-function ForEachVertex(shape, callback) {
+/** Iterate over all the vertices in this shape, calling `callback` on each one. */
+function ForEachVertex(shape: oc.TopoDS_Shape, callback: (vertex: oc.TopoDS_Vertex) => void): void {
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_VERTEX);
   for (anExplorer.Init(shape, oc.TopAbs_VERTEX); anExplorer.More(); anExplorer.Next()) {
     callback(oc.TopoDS.prototype.Vertex(anExplorer.Current()));
   }
 }
 
-function FilletEdges(shape, radius, edgeList, keepOriginal) { 
+/** Attempt to Fillet all selected edge indices in "edgeList" with a radius. 
+ * Hover over the edges you'd like to select and use those indices as in the example.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```FilletEdges(shape, 1, [0,1,2,7]);``` */
+function FilletEdges(shape: oc.TopoDS_Shape, radius: number, edgeList: number[], keepOriginal?:boolean): oc.TopoDS_Shape { 
   let curFillet = CacheOp(arguments, () => {
     let mkFillet = new oc.BRepFilletAPI_MakeFillet(shape);
     let foundEdges = 0;
@@ -314,7 +380,11 @@ function FilletEdges(shape, radius, edgeList, keepOriginal) {
   return curFillet;
 }
 
-function ChamferEdges(shape, distance, edgeList, keepOriginal) { 
+/** Attempt to Chamfer all selected edge indices in "edgeList" symmetrically by distance. 
+ * Hover over the edges you'd like to select and use those indices in the edgeList array.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```ChamferEdges(shape, 1, [0,1,2,7]);``` */
+function ChamferEdges(shape: oc.TopoDS_Shape, distance: number, edgeList: number[], keepOriginal?:boolean): oc.TopoDS_Shape { 
   let curChamfer = CacheOp(arguments, () => {
     let mkChamfer = new oc.BRepFilletAPI_MakeChamfer(shape);
     let foundEdges = 0;
@@ -332,23 +402,32 @@ function ChamferEdges(shape, distance, edgeList, keepOriginal) {
   return curChamfer;
 }
 
-function Transform(translation, rotation, scale, shapes) {
+/** BETA: Transform a shape using an in-view transformation gizmo.
+ * 
+ * Shortcuts: `T` - Translate, `R` - Rotate, `S` - Scale, `W`/`L` - Toggle World/Local
+ * 
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let transformedSphere = Transform(Sphere(50));```*/
+function Transform(translation?: number[], rotation?: (number|number[])[], scale: number, shapes: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape {
   let args = arguments;
   return CacheOp(arguments, () => {
     if (args.length == 4) {
       // Create the transform gizmo and add it to the scene
-      postMessage({ "type": "createTransformHandle", payload: { translation: translation, rotation: rotation, scale: scale, lineAndColumn: getCallingLocation() } });
+      postMessage({ "type": "createTransformHandle", payload: { translation: translation, rotation: rotation, scale: scale, lineAndColumn: getCallingLocation() } }, null);
       // Transform the Object(s)
-      return Translate(translation, Rotate(rotation[0], rotation[1], Scale(scale, shapes)));
+      return Translate(translation, Rotate(rotation[0], rotation[1], Scale(scale, shapes)), keepOriginal);
     } else {
       // Create the transform gizmo and add it to the scene
-      postMessage({ "type": "createTransformHandle", payload: { translation: [0, 0, 0], rotation: [[0, 1, 0], 1], scale: 1, lineAndColumn: getCallingLocation() } });
+      postMessage({ "type": "createTransformHandle", payload: { translation: [0, 0, 0], rotation: [[0, 1, 0], 1], scale: 1, lineAndColumn: getCallingLocation() } }, null);
       return translation; // The first element will be the shapes
     }
   });
 }
 
-function Translate(offset, shapes, keepOriginal) {
+/** Translate a shape along the x, y, and z axes (using an array of 3 numbers).
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let upwardSphere = Translate([0, 0, 50], Sphere(50));```*/
+function Translate(offset: number[], shapes: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape {
   let translated = CacheOp(arguments, () => {
     let transformation = new oc.gp_Trsf();
     transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
@@ -370,7 +449,10 @@ function Translate(offset, shapes, keepOriginal) {
   return translated;
 }
 
-function Rotate(axis, degrees, shapes, keepOriginal) {
+/** Rotate a shape degrees about a 3-coordinate axis.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let leaningCylinder = Rotate([0, 1, 0], 45, Cylinder(25, 50));```*/
+function Rotate(axis: number[], degrees: number, shapes: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape {
   if (degrees === 0) { return shapes; }
   let rotated = CacheOp(arguments, () => {
     let newRot;
@@ -393,7 +475,10 @@ function Rotate(axis, degrees, shapes, keepOriginal) {
   return rotated;
 }
 
-function Scale(scale, shapes, keepOriginal) {
+/** Scale a shape to be `scale` times its current size.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let scaledCylinder = Scale(50, Cylinder(0.5, 1));```*/
+function Scale(scale: number, shapes: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape {
   let scaled = CacheOp(arguments, () => {
     let transformation = new oc.gp_Trsf();
     transformation.SetScaleFactor(scale);
@@ -416,7 +501,11 @@ function Scale(scale, shapes, keepOriginal) {
 }
 
 // TODO: These ops can be more cache optimized since they're multiple sequential ops
-function Union(objectsToJoin, keepObjects) {
+/** Joins a list of shapes into a single solid.
+ * The original shapes are removed unless `keepObjects` is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let sharpSphere = Union([Sphere(38), Box(50, 50, 50, true)]);```*/
+function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean): oc.TopoDS_Shape {
   let curUnion = CacheOp(arguments, () => {
     let combined = new oc.TopoDS_Shape(objectsToJoin[0]);
     if (objectsToJoin.length > 1) {
@@ -434,7 +523,11 @@ function Union(objectsToJoin, keepObjects) {
   return curUnion;
 }
 
-function Difference(mainBody, objectsToSubtract, keepObjects) {
+/** Subtracts a list of shapes from mainBody.
+ * The original shapes are removed unless `keepObjects` is true.  Returns a Compound Shape unless onlyFirstSolid is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let floatingCorners = Difference(Box(50, 50, 50, true), [Sphere(38)]);```*/
+function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, onlyFirstSolid?:boolean): oc.TopoDS_Shape{
   let curDifference = CacheOp(arguments, () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
     
@@ -460,7 +553,11 @@ function Difference(mainBody, objectsToSubtract, keepObjects) {
   return curDifference;
 }
 
-function Intersection(objectsToIntersect, keepObjects) {
+/** Takes only the intersection of a list of shapes.
+ * The original shapes are removed unless `keepObjects` is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let roundedBox = Intersection([Box(50, 50, 50, true), Sphere(38)]);```*/
+function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean) : oc.TopoDS_Shape {
   let curIntersection = CacheOp(arguments, () => {
     let intersected = new oc.TopoDS_Shape(objectsToIntersect[0]);
     if (objectsToIntersect.length > 1) {
@@ -478,7 +575,11 @@ function Intersection(objectsToIntersect, keepObjects) {
   return curIntersection;
 }
 
-function Extrude(face, direction, keepFace) {
+/** Extrudes a shape along direction, a 3-component vector. Edges form faces, Wires form shells, Faces form solids, etc.
+ * The original face is removed unless `keepFace` is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let tallTriangle = Extrude(Polygon([[0, 0, 0], [50, 0, 0], [25, 50, 0]]), [0, 0, 50]);```*/
+function Extrude(face: oc.TopoDS_Shape, direction: number[], keepFace?: boolean) : oc.TopoDS_Shape {
   let curExtrusion = CacheOp(arguments, () => {
     return new oc.BRepPrimAPI_MakePrism(face,
       new oc.gp_Vec(direction[0], direction[1], direction[2])).Shape();
@@ -489,7 +590,11 @@ function Extrude(face, direction, keepFace) {
   return curExtrusion;
 }
 
-function Offset(shape, offsetDistance, tolerance, keepShape) {
+/** Offsets the faces of a shape by offsetDistance
+ * The original shape is removed unless `keepShape` is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let roundedCube = Offset(Box(10,10,10), 10);```*/
+function Offset(shape: oc.TopoDS_Shape, offsetDistance: number, tolerance?: number, keepShape?: boolean) : oc.TopoDS_Shape {
   if (!shape || shape.IsNull()) { console.error("Offset received Null Shape!"); }
   if (!tolerance) { tolerance = 0.1; }
   if (offsetDistance === 0.0) { return shape; }
@@ -511,19 +616,22 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
   return curOffset;
 }
 
-function Revolve(shape, degrees, direction, keepShape, copy) {
-  if (!degrees  ) { degrees   = 360.0; }
-  if (!direction) { direction = [0, 0, 1]; }
+/** Revolves this shape "degrees" about "axis" (a 3-component array).  Edges form faces, Wires form shells, Faces form solids, etc.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js) 
+ * @example```let cone = Revolve(Polygon([[0, 0, 0], [0, 0, 50], [50, 0, 0]]));```*/
+function Revolve(shape: oc.TopoDS_Shape, degrees?: number, axis?: number[], keepShape?: boolean, copy?: boolean): oc.TopoDS_Shape{
+  if (!degrees  ) { degrees = 360.0; }
+  if (!axis     ) { axis    = [0, 0, 1]; }
   let curRevolution = CacheOp(arguments, () => {
     if (degrees >= 360.0) {
       return new oc.BRepPrimAPI_MakeRevol(shape,
         new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0),
-          new oc.gp_Dir(direction[0], direction[1], direction[2])),
+          new oc.gp_Dir(axis[0], axis[1], axis[2])),
         copy).Shape();
     } else {
       return new oc.BRepPrimAPI_MakeRevol(shape,
         new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0),
-          new oc.gp_Dir(direction[0], direction[1], direction[2])),
+          new oc.gp_Dir(axis[0], axis[1], axis[2])),
         degrees * 0.0174533, copy).Shape();
     }
   });
@@ -533,7 +641,11 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
   return curRevolution;
 }
 
-function RotatedExtrude(wire, height, rotation, keepWire) {
+/** Extrudes and twists a flat *wire* upwards along the z-axis (see the optional argument for Polygon).
+ * The original wire is removed unless `keepWire` is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let twistyTriangle = RotatedExtrude(Polygon([[-25, -15, 0], [25, -15, 0], [0, 35, 0]], true), 50, 90);```*/
+function RotatedExtrude(wire: oc.TopoDS_Shape, height: number, rotation: number, keepWire?: boolean) : oc.TopoDS_Shape{
   if (!wire || wire.IsNull()) { console.error("RotatedExtrude received Null Wire!"); }
   let curExtrusion = CacheOp(arguments, () => {
     let upperPolygon = Rotate([0, 0, 1], rotation, Translate([0, 0, height], wire, true));
@@ -573,25 +685,31 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
   return curExtrusion;
 }
 
-function Loft(wires, keepWires) {
+/** Lofts a solid through the sections defined by an array of 2 or more closed wires.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js) */
+ function Loft(wireSections: oc.TopoDS_Shape[], keepWires?: boolean): oc.TopoDS_Shape {
   let curLoft = CacheOp(arguments, () => {
     let pipe = new oc.BRepOffsetAPI_ThruSections(true);
 
     // Construct a Loft that passes through the wires
-    wires.forEach((wire) => { pipe.AddWire(wire); });
+    wireSections.forEach((wire) => { pipe.AddWire(wire); });
 
     pipe.Build();
     return new oc.TopoDS_Shape(pipe.Shape());
   });
 
-  wires.forEach((wire) => {
+  wireSections.forEach((wire) => {
     if (!keepWires) { sceneShapes = Remove(sceneShapes, wire); }
   });
   sceneShapes.push(curLoft);
   return curLoft;
 }
 
-function Pipe(shape, wirePath, keepInputs) {
+/** Sweeps this shape along a path wire.
+ * The original shapes are removed unless `keepObjects` is true.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js) 
+ * @example```let pipe = Pipe(Circle(20), BSpline([[0,0,0],[0,0,50],[20,0,100]], false, true));```*/
+function Pipe(shape: oc.TopoDS_Shape, wirePath: oc.TopoDS_Shape, keepInputs?: boolean): oc.TopoDS_Shape {
   let curPipe = CacheOp(arguments, () => {
     let pipe = new oc.BRepOffsetAPI_MakePipe(wirePath, shape);
     pipe.Build();
@@ -606,20 +724,31 @@ function Pipe(shape, wirePath, keepInputs) {
   return curPipe;
 }
 
-// This is a utility class for drawing wires/shapes with lines, arcs, and splines
-// This is unique, it needs to be called with the "new" keyword prepended
-function Sketch(startingPoint) {
-  this.currentIndex = 0;
-  this.faces        = [];
-  this.wires        = [];
-  this.firstPoint   = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
-  this.lastPoint    = this.firstPoint;
-  this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
-  this.fillets      = [];
-  this.argsString   = ComputeHash(arguments, true);
+/** Starts sketching a 2D shape which can contain lines, arcs, bezier splines, and fillets.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let sketch = new Sketch([0,0]).LineTo([100,0]).Fillet(20).LineTo([100,100]).End(true).Face();```*/
+class Sketch {
+  currentIndex: number;
+  faces       : oc.TopoDS_Face[];
+  wires       : oc.TopoDS_Wire[];
+  firstPoint  : oc.gp_Pnt;
+  lastPoint   : oc.gp_Pnt;
+  wireBuilder : oc.BRepBuilderAPI_MakeWire;
+  fillets     : { x: number, y: number, radius: number }[];
+  argsString  : string
+  constructor(startingPoint: number[]) {
+    this.currentIndex = 0;
+    this.faces        = [];
+    this.wires        = [];
+    this.firstPoint   = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
+    this.lastPoint    = this.firstPoint;
+    this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
+    this.fillets      = [];
+    this.argsString   = ComputeHash(arguments, true);
+  }
 
   // Functions are: BSplineTo, Fillet, Wire, and Face
-  this.Start = function (startingPoint) {
+  Start = function (startingPoint: number[]) : Sketch {
     this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
     this.lastPoint   = this.firstPoint;
     this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
@@ -627,7 +756,7 @@ function Sketch(startingPoint) {
     return this;
   }
 
-  this.End = function (closed, reversed) {
+  End = function (closed?: boolean, reversed?:boolean) : Sketch {
     this.argsString += ComputeHash(arguments, true);
 
     if (closed &&
@@ -657,7 +786,7 @@ function Sketch(startingPoint) {
     return this;
   }
 
-  this.Wire = function (reversed) {
+  Wire = function (reversed) {
     this.argsString += ComputeHash(arguments, true);
     //let wire = this.wires[this.wires.length - 1];
     this.applyFillets();
@@ -667,7 +796,7 @@ function Sketch(startingPoint) {
     sceneShapes.push(wire);
     return wire;
   }
-  this.Face = function (reversed) {
+  Face = function (reversed) {
     this.argsString += ComputeHash(arguments, true);
     this.applyFillets();
     let face = this.faces[this.faces.length - 1];
@@ -677,7 +806,7 @@ function Sketch(startingPoint) {
     return face;
   }
 
-  this.applyFillets = function () {
+  applyFillets = function () {
     // Add Fillets if Necessary
     if (this.fillets.length > 0) {
       let successes = 0; let swapFillets = [];
@@ -706,15 +835,15 @@ function Sketch(startingPoint) {
     }
   }
 
-  this.AddWire = function (wire) {
+  AddWire = function (wire: oc.TopoDS_Wire) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     // This adds another wire (or edge??) to the currently constructing shape...
     this.wireBuilder.Add(wire);
-    if (endPoint) { this.lastPoint = endPoint; } // Yike what to do here...?
+    //if (endPoint) { this.lastPoint = endPoint; } // Yike what to do here...?
     return this;
   }
 
-  this.LineTo = function (nextPoint) {
+  LineTo = function (nextPoint : number[]) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     let endPoint = null;
     if (nextPoint.X) {
@@ -734,7 +863,7 @@ function Sketch(startingPoint) {
     return this;
   }
 
-  this.ArcTo = function (pointOnArc, arcEnd) {
+  ArcTo = function (pointOnArc : number[], arcEnd : number[]) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
     let nextPoint      = new oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
@@ -748,7 +877,7 @@ function Sketch(startingPoint) {
 
   // Constructs an order-N Bezier Curve where the first N-1 points are control points
   // and the last point is the endpoint of the curve
-  this.BezierTo = function (bezierControlPoints) {
+  BezierTo = function (bezierControlPoints : number[][]) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length+1);
     ptList.SetValue(1, this.lastPoint);
@@ -766,7 +895,7 @@ function Sketch(startingPoint) {
   }
 
   /* Constructs a BSpline from the previous point through this set of points */
-  this.BSplineTo = function (bsplinePoints) {
+  BSplineTo = function (bsplinePoints : number[][]): Sketch{
     this.argsString += ComputeHash(arguments, true);
     let ptList = new oc.TColgp_Array1OfPnt(1, bsplinePoints.length+1);
     ptList.SetValue(1, this.lastPoint);
@@ -782,13 +911,13 @@ function Sketch(startingPoint) {
     return this;
   }
 
-  this.Fillet = function (radius) {
+  Fillet = function (radius: number) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
     return this;
   }
 
-  this.Circle = function (center, radius, reversed) {
+  Circle = function (center:number[], radius:number, reversed?:boolean) : Sketch {
     this.argsString += ComputeHash(arguments, true);
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(convertToPnt(center),
     new oc.gp_Dir(0, 0, 1)), radius).Value();
@@ -814,26 +943,42 @@ function Sketch(startingPoint) {
   }
 }
 
-function SaveFile(filename, fileURL) {
+/** Download this file URL through the browser.  Use this to export information from the CAD engine.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```SaveFile("myInfo.txt", URL.createObjectURL( new Blob(["Hello, Harddrive!"], { type: 'text/plain' }) ));``` */
+ function SaveFile(filename: string, fileURL: string): void {
   postMessage({
     "type": "saveFile",
     payload: { filename: filename, fileURL: fileURL }
-  });
+  }, null);
 }
 
-function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false) {
+/** Creates a labeled slider with specified defaults, mins, and max ranges.
+ * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40);```
+ * `name` needs to be unique!
+ * 
+ * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)*/
+function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean): number {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   GUIState[name + "Range"] = [min, max];
-  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime } });
+  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime } }, null);
   return GUIState[name];
 }
 
-function Button(name = "Action") {
-  postMessage({ "type": "addButton", payload: { name: name } });
+/** Creates a button that will trigger `callback` when clicked.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```Button("Yell", ()=>{ console.log("Help!  I've been clicked!"); });```*/
+function Button(name: string) : void {
+  postMessage({ "type": "addButton", payload: { name: name } }, null);
 }
 
-function Checkbox(name = "Toggle", defaultValue = false) {
+/** Creates a checkbox that returns true or false.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let currentCheckboxValue = Checkbox("Check?", true);```
+ * 
+ * `callback` triggers when the button is clicked.*/
+function Checkbox(name: string, defaultValue: boolean): boolean {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
-  postMessage({ "type": "addCheckbox", payload: { name: name, default: defaultValue } });
+  postMessage({ "type": "addCheckbox", payload: { name: name, default: defaultValue } }, null);
   return GUIState[name];
 }

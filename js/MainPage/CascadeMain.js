@@ -130,7 +130,6 @@ function initialize() {
             var extraLibs = [];
             let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
             let extraLibPaths = [
-                '/js/StandardLibraryIntellisense.ts',
                 '/node_modules/opencascade.js/dist/oc.d.ts',
                 '/node_modules/three/build/three.d.ts',
                 '/node_modules/typescript/lib/lib.es5.d.ts',
@@ -147,7 +146,7 @@ function initialize() {
             messageHandlers["addLibrary"] = (payload) => {
                 extraLibs.push({ content: payload.contents, filePath: 'file://' + payload.url });
                 monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
-                console.log("Imported a library from: " + payload.url);
+                //console.log("Imported a library from: " + payload.url);
             }
 
             // Initialize the Monaco Code Editor inside this dockable container
