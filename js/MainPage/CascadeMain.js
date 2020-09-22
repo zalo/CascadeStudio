@@ -120,35 +120,30 @@ function initialize() {
             // Set the Monaco Language Options
             monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
                 allowNonTsExtensions: true,
+                target: monaco.languages.typescript.ScriptTarget.ES6,
                 moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+                noLib: true
             });
             monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
 
             // Import Typescript Intellisense Definitions for the relevant libraries...
             var extraLibs = [];
             let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
-            // opencascade.js Typescript Definitions...
-            fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
-                });
-            }).catch(error => console.log(error.message));
-
-            // Three.js Typescript definitions...
-            fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
-                });
-            }).catch(error => console.log(error.message));
-
-            // CascadeStudio Typescript Definitions...
-            fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/StandardLibraryIntellisense.d.ts' });
-                    monaco.editor.createModel("", "typescript"); //text
-                    monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
-                });
-            }).catch(error => console.log(error.message));
+            let extraLibPaths = [
+                '/js/StandardLibraryIntellisense.ts',
+                '/node_modules/opencascade.js/dist/oc.d.ts',
+                '/node_modules/three/build/three.d.ts',
+                '/node_modules/typescript/lib/lib.es5.d.ts',
+                '/node_modules/typescript/lib/lib.webworker.d.ts'
+            ];
+            extraLibPaths.forEach((path) => {
+                fetch(prefix + path).then((response) => {
+                    response.text().then(function (text) {
+                        extraLibs.push({ content: text, filePath: 'file://' + prefix + path });
+                        monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
+                    });
+                }).catch(error => console.log(error.message));
+            });
 
             // Initialize the Monaco Code Editor inside this dockable container
             monacoEditor = monaco.editor.create(container.getElement().get(0), {

@@ -27,7 +27,8 @@ importScripts(
   './CascadeStudioStandardLibrary.js',
   './CascadeStudioShapeToMesh.js',
   '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
-  '../../node_modules/opentype.js/dist/opentype.min.js');
+  '../../node_modules/opentype.js/dist/opentype.min.js',
+  '../../node_modules/typescript/bin/typescript.min.js');
 
 // Preload the Various Fonts that are available via Text3D
 var preloadedFonts = ['../../fonts/Roboto.ttf',
@@ -70,7 +71,10 @@ function Evaluate(payload) {
   opNumber = 0; // This keeps track of the progress of the evaluation
   GUIState = payload.GUIState;
   try {
-    eval(payload.code);
+    let transpiled = ts.transpileModule(payload.code,
+      { compilerOptions: { module: ts.ModuleKind.CommonJS } });
+
+    eval(transpiled.outputText);
   } catch (e) {
     setTimeout(() => { throw e; }, 0);
   } finally {
