@@ -75,7 +75,7 @@ function importLibrary(urls, forceReload) {
       oReq.addEventListener("load", (response) => {
         importedLibraries[url] = ts.transpileModule(response.target.responseText,
           { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-        eval(importedLibraries[url]);
+        eval.call(null, importedLibraries[url]);
         postMessage({ "type": "addLibrary", payload: { url: url, contents: response.target.responseText } });
       });
       oReq.open("GET", url, false); oReq.send();
