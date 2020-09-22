@@ -65,6 +65,28 @@ new opencascade({
   postMessage({ type: "startupCallback" });
 });
 
+let importedLibraries = {};
+/** This function imports a typescript file to the current workspace.
+ * Note, urls are not imported multiple times unless forceReload is true. */
+function importLibrary(urls, forceReload) {
+  urls.forEach((url) => {
+    if (!importedLibraries[url] || forceReload) {
+      let oReq = new XMLHttpRequest();
+      oReq.addEventListener("load", (response) => {
+        importedLibraries[url] = ts.transpileModule(response.responseText,
+          { compilerOptions: { module: ts.ModuleKind.CommonJS } });
+        eval(importedLibraries[url]);
+        postMessage({ "type": "addLibrary", payload: { url: url, contents: importedLibraries[url] } });
+        console.log("I am in the request response.");
+      });
+      oReq.open("GET", url); oReq.send();
+      console.log("I am after everything.");
+    } else {
+      // Already Imported this URL, no need to do so again...
+    }
+  });
+}
+
 /** This function evaluates `payload.code` (the contents of the Editor Window)
  *  and sets the GUI State. */
 function Evaluate(payload) {

@@ -207,3 +207,7 @@ function CacheOp(arguments: IArguments, cacheMiss: () => oc.TopoDS_Shape): oc.To
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let box = CacheOp(arguments, () => { let box = Box(x,y,z); sceneShapes = Remove(sceneShapes, box); return box; });``` */
 function Remove(array: any[], toRemove: any): any[];
+
+/** This function imports a typescript file to the current workspace.
+ * Note, urls are not imported multiple times unless forceReload is true. */
+function importLibrary(urls: string[], forceReload: boolean): void;

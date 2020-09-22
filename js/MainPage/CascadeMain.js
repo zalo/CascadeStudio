@@ -144,6 +144,11 @@ function initialize() {
                     });
                 }).catch(error => console.log(error.message));
             });
+            messageHandlers["addLibrary"] = (payload) => {
+                extraLibs.push({ content: payload.contents, filePath: 'file://' + payload.url });
+                monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
+                console.log("Imported a library from: " + payload.url);
+            }
 
             // Initialize the Monaco Code Editor inside this dockable container
             monacoEditor = monaco.editor.create(container.getElement().get(0), {
