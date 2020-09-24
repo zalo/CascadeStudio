@@ -104,6 +104,12 @@ CascadeStudio/
 node_modules/opencascade.js/dist/opencascade.js
 # Add the above line for now, can take it out if necessary
 
+# qrcode.js Bin
+!node_modules/qrcode.js/
+!node_modules/qrcode.js/*/
+!node_modules/qrcode.js/bin/
+!node_modules/qrcode.js/bin/*
+
 jspm_packages/
 
 # TypeScript v1 declaration files

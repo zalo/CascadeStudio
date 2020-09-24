@@ -51,6 +51,8 @@
 
         <script type="text/javascript" src="./node_modules/controlkit/bin/controlKit.min.js"></script>
 
+        <script type="text/javascript" src="./node_modules/qrcode.js/bin/qrcode.min.js"></script>
+
         <script type="text/javascript" src="./node_modules/jquery/dist/jquery.min.js"></script>
         <script type="text/javascript" src="./node_modules/golden-layout/dist/goldenlayout.min.js"></script>
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-base.css" />
@@ -75,6 +77,7 @@
             <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
             <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
             <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
+            <a href="#" onmouseup="saveQRCode();">Save QR Code</a>
             <label for="files" title="Import STEP, IGES, or (ASCII) STL from File">Import STEP/IGES/STL
                 <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="loadFiles();"/>
             </label>

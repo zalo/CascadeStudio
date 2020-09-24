@@ -450,6 +450,25 @@ function saveProject () {
     link.click();
 }
 
+function saveQRCode() {
+    let canvasContainer = document.createElement("div");
+    let qrCode = new QRCode(canvasContainer, {
+        text: window.location.href,
+        width : 512,
+        height: 512,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+    let canvasLink = qrCode._oDrawing._oContext.canvas.toDataURL("image/png")
+
+    let link = document.createElement("a");
+    link.download = "CascadeStudioQRCode.png";
+    link.target = "_blank";
+    link.href = canvasLink;
+    link.click();
+}
+
 /** This function asynchronously reads the text content of a file. */
 const loadFileAsync = async (file) => {
     return new Promise((resolve, reject) => {
