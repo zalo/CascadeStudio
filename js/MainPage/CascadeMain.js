@@ -6,7 +6,7 @@ var myLayout, monacoEditor, threejsViewport,
     consoleContainer, consoleGolden, gui,
     guiPanel, GUIState, count = 0, //focused = true,
     mainProject = false, messageHandlers = {},
-    workerWorking = false, startup;
+    workerWorking = false, startup, maximizedModel = false;
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -57,6 +57,7 @@ function initialize() {
         if (loadFromURL) {
             codeStr  = decode(this.searchParams.get("code"));
             GUIState = JSON.parse(decode(this.searchParams.get("gui")));
+            maximizedModel = GUIState.qr || false;
         } else if (stuntedInitialization) {
             // Begin passing on the initialization logic, this is a dead timeline
             codeStr = '';
@@ -67,33 +68,46 @@ function initialize() {
         // Define the Default Golden Layout
         // Code on the left, Model on the right
         // Console on the bottom right
+        let codeEditor = {
+            type: 'component',
+            componentName: 'codeEditor',
+            title: 'Code Editor',
+            componentState: { code: codeStr },
+            width: 50.0,
+            isClosable: false
+        };
+        let modelView = {
+            type: 'column',
+            title: 'Model View',
+            content: [{
+                type: 'component',
+                componentName: 'cascadeView',
+                title: 'CAD View',
+                componentState: GUIState,
+                isClosable: false
+            }, {
+                type: 'component',
+                componentName: 'console',
+                title: 'Console',
+                componentState: {},
+                height: 20.0,
+                isClosable: false
+            }]
+        };
+        let windowList = []; let rowType = "row";
+        if (maximizedModel) {
+            windowList.push(modelView);
+            windowList.push(codeEditor);
+            rowType = "stack";
+        } else {
+            windowList.push(codeEditor);
+            windowList.push(modelView);
+        }
+
         myLayout = new GoldenLayout({
             content: [{
-                type: 'row',
-                content: [{
-                    type: 'component',
-                    componentName: 'codeEditor',
-                    title: 'Code Editor',
-                    componentState: { code: codeStr },
-                    width: 50.0,
-                    isClosable: false
-                }, {
-                    type: 'column',
-                    content: [{
-                        type: 'component',
-                        componentName: 'cascadeView',
-                        title: 'CAD View',
-                        componentState: GUIState,
-                        isClosable: false
-                    }, {
-                        type: 'component',
-                        componentName: 'console',
-                        title: 'Console',
-                        componentState: {},
-                        height: 20.0,
-                        isClosable: false
-                    }]
-                }]
+                type: rowType,
+                content: windowList
             }],
             settings: {
                 showPopoutIcon: false,
@@ -208,7 +222,7 @@ function initialize() {
                 if (gui) {
                     gui.clearPanels();
 
-                    guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
+                    guiPanel = gui.addPanel({ label: 'Cascade Control Panel' , enable: !maximizedModel})
                         .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
                     messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
                     messageHandlers["addCheckbox"]({ name: "Cache?", default: true });
@@ -255,8 +269,7 @@ function initialize() {
                     } else {
                         console.log("Saved to URL!"); //Generation Complete! 
                     }
-                    window.history.replaceState({}, 'Cascade Studio',
-                        "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
+                    window.history.replaceState({}, 'Cascade Studio', generateQueryString());
                 }
 
                 // Print a friendly message (to which we'll append progress updates)
@@ -450,10 +463,19 @@ function saveProject () {
     link.click();
 }
 
+function generateQueryString() {
+    return "?code=" + encode(monacoEditor.getValue()) + "&gui=" + encode(JSON.stringify(GUIState));
+}
+
 function saveQRCode() {
+
+    GUIState.qr = true;
+    let URLWithMaximizedModel = window.location.origin + "/" + generateQueryString();
+    delete GUIState.qr;
+
     let canvasContainer = document.createElement("div");
     let qrCode = new QRCode(canvasContainer, {
-        text: window.location.href,
+        text: URLWithMaximizedModel,
         width : 512,
         height: 512,
         colorDark: "#000000",
