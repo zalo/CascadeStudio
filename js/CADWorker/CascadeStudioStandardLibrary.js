@@ -416,7 +416,7 @@ function Scale(scale, shapes, keepOriginal) {
 }
 
 // TODO: These ops can be more cache optimized since they're multiple sequential ops
-function Union(objectsToJoin, keepObjects, fuzzValue) {
+function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
   let curUnion = CacheOp(arguments, () => {
     let combined = new oc.TopoDS_Shape(objectsToJoin[0]);
@@ -430,6 +430,12 @@ function Union(objectsToJoin, keepObjects, fuzzValue) {
         }
       }
     }
+
+    if (!keepEdges) {
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain(combined); fusor.Build();
+      combined = fusor.Shape();
+    }
+
     return combined;
   });
 
@@ -440,7 +446,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue) {
   return curUnion;
 }
 
-function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue) {
+function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
   let curDifference = CacheOp(arguments, () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
@@ -455,10 +461,17 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue) {
         difference = differenceCut.Shape();
       }
     }
+    
+    if (!keepEdges) {
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain(difference); fusor.Build();
+      difference = fusor.Shape();
+    }
+
     difference.hash = ComputeHash(arguments);
     if (GetNumSolidsInCompound(difference) === 1) {
       difference = GetSolidFromCompound(difference, 0);
     }
+
     return difference;
   });
 
@@ -470,7 +483,7 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue) {
   return curDifference;
 }
 
-function Intersection(objectsToIntersect, keepObjects, fuzzValue) {
+function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
   let curIntersection = CacheOp(arguments, () => {
     let intersected = new oc.TopoDS_Shape(objectsToIntersect[0]);
@@ -484,6 +497,12 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue) {
         }
       }
     }
+
+    if (!keepEdges) {
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain(intersected); fusor.Build();
+      intersected = fusor.Shape();
+    }
+
     return intersected;
   });
 

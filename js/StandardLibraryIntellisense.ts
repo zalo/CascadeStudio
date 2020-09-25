@@ -81,17 +81,17 @@ function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let sharpSphere = Union([Sphere(38), Box(50, 50, 50, true)]);```*/
-function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?:number): oc.TopoDS_Shape;
+function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?:number, keepEdges?: boolean): oc.TopoDS_Shape;
 /** Subtracts a list of shapes from mainBody.
  * The original shapes are removed unless `keepObjects` is true.  Returns a Compound Shape unless onlyFirstSolid is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let floatingCorners = Difference(Box(50, 50, 50, true), [Sphere(38)]);```*/
-function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?:number): oc.TopoDS_Shape;
+function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?:number, keepEdges?: boolean): oc.TopoDS_Shape;
 /** Takes only the intersection of a list of shapes.
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let roundedBox = Intersection([Box(50, 50, 50, true), Sphere(38)]);```*/
-function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number): oc.TopoDS_Shape;
+function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean): oc.TopoDS_Shape;
 /** Removes internal, unused edges from the insides of faces on this shape.  Keeps the model clean.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let cleanPart = RemoveInternalEdges(part);```*/
