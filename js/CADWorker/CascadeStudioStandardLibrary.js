@@ -416,12 +416,18 @@ function Scale(scale, shapes, keepOriginal) {
 }
 
 // TODO: These ops can be more cache optimized since they're multiple sequential ops
-function Union(objectsToJoin, keepObjects) {
+function Union(objectsToJoin, keepObjects, fuzzValue) {
+  if (!fuzzValue) { fuzzValue = 0.1; }
   let curUnion = CacheOp(arguments, () => {
     let combined = new oc.TopoDS_Shape(objectsToJoin[0]);
     if (objectsToJoin.length > 1) {
       for (let i = 0; i < objectsToJoin.length; i++) {
-        if (i > 0) { combined = new oc.BRepAlgoAPI_Fuse(combined, objectsToJoin[i]).Shape(); }
+        if (i > 0) {
+          let combinedFuse = new oc.BRepAlgoAPI_Fuse(combined, objectsToJoin[i]);
+          combinedFuse.SetFuzzyValue(fuzzValue);
+          combinedFuse.Build();
+          combined = combinedFuse.Shape();
+        }
       }
     }
     return combined;
@@ -434,7 +440,8 @@ function Union(objectsToJoin, keepObjects) {
   return curUnion;
 }
 
-function Difference(mainBody, objectsToSubtract, keepObjects) {
+function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue) {
+  if (!fuzzValue) { fuzzValue = 0.1; }
   let curDifference = CacheOp(arguments, () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
     
@@ -442,7 +449,10 @@ function Difference(mainBody, objectsToSubtract, keepObjects) {
     if (objectsToSubtract.length >= 1) {
       for (let i = 0; i < objectsToSubtract.length; i++) {
         if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
-        difference = new oc.BRepAlgoAPI_Cut(difference, objectsToSubtract[i]).Shape();
+        let differenceCut = new oc.BRepAlgoAPI_Cut(difference, objectsToSubtract[i]);
+        differenceCut.SetFuzzyValue(fuzzValue);
+        differenceCut.Build();
+        difference = differenceCut.Shape();
       }
     }
     difference.hash = ComputeHash(arguments);
@@ -460,12 +470,18 @@ function Difference(mainBody, objectsToSubtract, keepObjects) {
   return curDifference;
 }
 
-function Intersection(objectsToIntersect, keepObjects) {
+function Intersection(objectsToIntersect, keepObjects, fuzzValue) {
+  if (!fuzzValue) { fuzzValue = 0.1; }
   let curIntersection = CacheOp(arguments, () => {
     let intersected = new oc.TopoDS_Shape(objectsToIntersect[0]);
     if (objectsToIntersect.length > 1) {
       for (let i = 0; i < objectsToIntersect.length; i++) {
-        if (i > 0) { intersected = new oc.BRepAlgoAPI_Common(intersected, objectsToIntersect[i]).Shape(); }
+        if (i > 0) {
+          let intersectedCommon = new oc.BRepAlgoAPI_Common(intersected, objectsToIntersect[i]);
+          intersectedCommon.SetFuzzyValue(fuzzValue);
+          intersectedCommon.Build();
+          intersected = intersectedCommon.Shape();
+        }
       }
     }
     return intersected;
@@ -487,6 +503,18 @@ function Extrude(face, direction, keepFace) {
   if (!keepFace) { sceneShapes = Remove(sceneShapes, face); }
   sceneShapes.push(curExtrusion);
   return curExtrusion;
+}
+
+function RemoveInternalEdges(shape, keepShape) {
+  let cleanShape = CacheOp(arguments, () => {
+    let fusor = new oc.ShapeUpgrade_UnifySameDomain(shape);
+    fusor.Build();
+    return fusor.Shape();
+  });
+  
+  if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
+  sceneShapes.push(cleanShape);
+  return cleanShape;
 }
 
 function Offset(shape, offsetDistance, tolerance, keepShape) {
