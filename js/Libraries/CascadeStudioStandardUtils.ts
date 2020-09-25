@@ -21,7 +21,7 @@ function CacheOp(args: IArguments, cacheMiss: () => oc.TopoDS_Shape): oc.TopoDS_
   let check = CheckCache(curHash);
   if (check && GUIState["Cache?"]) {
     //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
-    toReturn = new oc.TopoDS_Shape(check);
+    toReturn = new oc.BRepBuilderAPI_Copy_2(check, true, false).Shape();
     toReturn.hash = check.hash;
   } else {
     //console.log("MISSED " + ComputeHash(args) + ", " + ComputeHash(args, true));
@@ -36,7 +36,7 @@ function CacheOp(args: IArguments, cacheMiss: () => oc.TopoDS_Shape): oc.TopoDS_
 function CheckCache(hash : number) : oc.TopoDS_Shape|null { return argCache[hash] || null; }
 /** Adds this `shape` to the cache, indexable by `hash`.  Returns the hash. */
 function AddToCache(hash : number, shape : oc.TopoDS_Shape) : number {
-  let cacheShape  = new oc.TopoDS_Shape(shape);
+  let cacheShape  = new oc.BRepBuilderAPI_Copy_2(shape, true, false).Shape();
   cacheShape.hash = hash; // This is the cached version of the object
   argCache[hash]  = cacheShape;
   return hash;
@@ -127,21 +127,25 @@ function getCallingLocation() : number[] {
 function convertToPnt(pnt) {
   let point = pnt; // Accept raw gp_Points if we got 'em
   if (point.length) {
-    point = new oc.gp_Pnt(point[0], point[1], (point[2])?point[2]:0);
+    point = new oc.gp_Pnt_3(point[0], point[1], (point[2])?point[2]:0);
   }
   return point;
 }
 
 /** This function converts a string to a 32bit integer. */
-function stringToHash(string: string) : number { 
-    let hash = 0; 
-    if (string.length == 0) return hash; 
-    for (let i = 0; i < string.length; i++) { 
-        let char = string.charCodeAt(i); 
-        hash = ((hash << 5) - hash) + char; 
-        hash = hash & hash; 
-    } 
-    return hash; 
+function stringToHash(string: string): number {
+  if (string) {
+    let hash = 0;
+    if (string.length == 0) return hash;
+    for (let i = 0; i < string.length; i++) {
+      let char = string.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return hash;
+  } else {
+    console.error("String in StringToHash is null!");
+  }
 }
 
 /** This function hashes two numbers together. */

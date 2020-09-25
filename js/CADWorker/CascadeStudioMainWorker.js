@@ -25,7 +25,6 @@ console.error = function (err, url, line, colno, errorObj) {
 importScripts(
   //'../../node_modules/three/build/three.min.js',
   './CascadeStudioShapeToMesh.js',
-  '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
   '../../node_modules/opentype.js/dist/opentype.min.js',
   '../../node_modules/typescript/bin/typescript.min.js');
 
@@ -41,6 +40,8 @@ function ImportLibrary(urls, forceReload) {
           importedLibraries[url] = ts.transpileModule(response.target.responseText,
             { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
           eval.call(null, importedLibraries[url]);
+          //let importedLibrary = new Function(importedLibraries[url]);
+          //importedLibrary.call(null,[]);
           postMessage({ "type": "addLibrary", payload: { url: url, contents: response.target.responseText } });
         } else {
           console.error("Could not find library at this URL! URL: "+ response.target.responseURL +",  Status Code: "+response.target.status);
@@ -70,7 +71,7 @@ preloadedFonts.forEach((fontURL) => {
 
 // Load the full Open Cascade Web Assembly Module
 var messageHandlers = {};
-fetch('https://raw.githack.com/donalffons/opencascade.js/embind/dist/opencascade.wasm.js')
+fetch('../../node_modules/opencascade.js/dist/opencascade.wasm.js')
   .then(response => response.text())
   .then((data) => {
 
@@ -97,11 +98,11 @@ fetch('https://raw.githack.com/donalffons/opencascade.js/embind/dist/opencascade
 
     // Import the Javascript from a blob URL
     importScripts(URL.createObjectURL(new Blob([data], { type: 'text/javascript' })));
-
+    console.log("Actually start loading CAD Kernel...");
     new opencascade({
       locateFile(path) {
         if (path.endsWith('.wasm')) {
-          return "https://raw.githack.com/donalffons/opencascade.js/embind/dist/opencascade.wasm.wasm";
+          return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
         }
         return path;
       }

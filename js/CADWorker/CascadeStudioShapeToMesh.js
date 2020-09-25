@@ -1,7 +1,7 @@
 function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
     let facelist = [], edgeList = [];
     //try {
-      //shape = new oc.TopoDS_Shape(shape);
+      //shape = new oc.BRepBuilderAPI_Copy_2(shape, true, false).Shape();
 
       // Set up the Incremental Mesh builder, with a precision
       new oc.BRepMesh_IncrementalMesh_2(shape, maxDeviation, false, maxDeviation * 5, false);
@@ -105,7 +105,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
       for (let i = 0; i < triangulations.length; i++) { triangulations[i].Nullify(); }
 
       // Get the free edges that aren't on any triangulated face/surface
-      /*ForEachEdge(shape, (index, myEdge) => {
+      ForEachEdge(shape, (index, myEdge) => {
         let edgeHash = myEdge.HashCode(100000000);
         if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
           let this_edge = {
@@ -114,8 +114,8 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
           };
 
           let aLocation = new oc.TopLoc_Location_1();
-          let adaptorCurve = new oc.BRepAdaptor_Curve(myEdge);
-          let tangDef = new oc.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.1);
+          let adaptorCurve = new oc.BRepAdaptor_Curve_2(myEdge);
+          let tangDef = new oc.GCPnts_TangentialDeflection_2(adaptorCurve, maxDeviation, 0.1, 2, 1.0e-9, 1.0e-7);
 
           // write vertex buffer
           this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
@@ -131,7 +131,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
 
           edgeList.push(this_edge);
         }
-      });*/
+      });
 
     //}// catch (err) {
      // throw err;
