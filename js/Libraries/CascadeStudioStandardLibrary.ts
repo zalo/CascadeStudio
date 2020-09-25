@@ -148,7 +148,7 @@ function Circle(radius:number, wire?:boolean) : oc.TopoDS_Shape {
  * @example```let bspline = BSpline([[0,0,0], [40, 0, 50], [50, 0, 50]], true);```*/
 function BSpline(points:number[][], closed?:boolean) : oc.TopoDS_Shape {
   let curSpline = CacheOp(arguments, () => {
-    let ptList = new oc.TColgp_Array1OfPnt(1, points.length + (closed ? 1 : 0));
+    let ptList = new oc.TColgp_Array1OfPnt_2(1, points.length + (closed ? 1 : 0));
     for (let pIndex = 1; pIndex <= points.length; pIndex++) {
       ptList.SetValue(pIndex, convertToPnt(points[pIndex - 1]));
     }
@@ -170,7 +170,7 @@ function BSpline(points:number[][], closed?:boolean) : oc.TopoDS_Shape {
  * Try 'Roboto' or 'Papyrus' for an alternative typeface.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let myText = Text3D("Hello!");```*/
-function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0.15, fontName?: string = "Consolas") : oc.TopoDS_Shape {
+function Text3D(text: string, size?: number, height?: number, fontName?: string) : oc.TopoDS_Shape {
   if (!size   ) { size    = 36; }
   if (!height && height !== 0.0) { height  = 0.15; }
   if (!fontName) { fontName = "Consolas"; }
@@ -207,13 +207,13 @@ function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0
         lastPoint = nextPoint;
       } else if (commands[idx].type === "Q") {
         let controlPoint = new oc.gp_Pnt_3(commands[idx].x1, commands[idx].y1, 0);
-        let nextPoint = new oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
+        let nextPoint    = new oc.gp_Pnt_3(commands[idx].x,  commands[idx].y,  0);
 
-        let ptList = new oc.TColgp_Array1OfPnt(1, 3);
+        let ptList = new oc.TColgp_Array1OfPnt_2(1, 3);
         ptList.SetValue(1, lastPoint);
         ptList.SetValue(2, controlPoint);
         ptList.SetValue(3, nextPoint);
-        let quadraticCurve = new oc.Geom_BezierCurve(ptList);
+        let quadraticCurve = new oc.Geom_BezierCurve_1(ptList); // THIS IS THE LINE THAT IS FAILING
         let lineEdge = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(new oc.Handle_Geom_BezierCurve(quadraticCurve).get())).Edge();
         currentWire.Add_2(new oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
 
@@ -223,7 +223,7 @@ function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0
         let controlPoint2 = new oc.gp_Pnt_3(commands[idx].x2, commands[idx].y2, 0);
         let nextPoint = new oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
 
-        let ptList = new oc.TColgp_Array1OfPnt(1, 4);
+        let ptList = new oc.TColgp_Array1OfPnt_2(1, 4);
         ptList.SetValue(1, lastPoint);
         ptList.SetValue(2, controlPoint1);
         ptList.SetValue(3, controlPoint2);
@@ -894,7 +894,7 @@ class Sketch {
     * and the last point is the endpoint of the curve */
   BezierTo = function (bezierControlPoints : number[][]) : Sketch {
     this.argsString += ComputeHash(arguments, true);
-    let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length+1);
+    let ptList = new oc.TColgp_Array1OfPnt_2(1, bezierControlPoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
       let ctrlPoint = convertToPnt(bezierControlPoints[bInd]);
@@ -912,7 +912,7 @@ class Sketch {
   /* Constructs a BSpline from the previous point through this set of points */
   BSplineTo = function (bsplinePoints : number[][]): Sketch{
     this.argsString += ComputeHash(arguments, true);
-    let ptList = new oc.TColgp_Array1OfPnt(1, bsplinePoints.length+1);
+    let ptList = new oc.TColgp_Array1OfPnt_2(1, bsplinePoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bsplinePoints.length; bInd++){
       let ctrlPoint = convertToPnt(bsplinePoints[bInd]);

@@ -80,7 +80,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
               edge_index: -1
             };
 
-            let myP = oc.BRep_Tool.PolygonOnTriangulation(myEdge, myT, aLocation);
+            let myP = oc.BRep_Tool.PolygonOnTriangulation_1(myEdge, myT, aLocation);
             let edgeNodes = myP.get().Nodes();
 
             // write vertex buffer
