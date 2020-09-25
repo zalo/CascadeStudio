@@ -91,7 +91,11 @@ function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shap
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let roundedBox = Intersection([Box(50, 50, 50, true), Sphere(38)]);```*/
-function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?:number) : oc.TopoDS_Shape;
+function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number): oc.TopoDS_Shape;
+/** Removes internal, unused edges from the insides of faces on this shape.  Keeps the model clean.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let cleanPart = RemoveInternalEdges(part);```*/
+function RemoveInternalEdges(shape: oc.TopoDS_Shape, keepShape?: boolean) : oc.TopoDS_Shape;
 /** Extrudes a shape along direction, a 3-component vector. Edges form faces, Wires form shells, Faces form solids, etc.
  * The original face is removed unless `keepFace` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)

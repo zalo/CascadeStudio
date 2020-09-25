@@ -505,6 +505,18 @@ function Extrude(face, direction, keepFace) {
   return curExtrusion;
 }
 
+function RemoveInternalEdges(shape, keepShape) {
+  let cleanShape = CacheOp(arguments, () => {
+    let fusor = new oc.ShapeUpgrade_UnifySameDomain(shape);
+    fusor.Build();
+    return fusor.Shape();
+  });
+  
+  if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
+  sceneShapes.push(cleanShape);
+  return cleanShape;
+}
+
 function Offset(shape, offsetDistance, tolerance, keepShape) {
   if (!shape || shape.IsNull()) { console.error("Offset received Null Shape!"); }
   if (!tolerance) { tolerance = 0.1; }
