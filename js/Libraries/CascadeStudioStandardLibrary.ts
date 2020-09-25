@@ -104,13 +104,13 @@ function Polygon(points: number[][], wire?: boolean): oc.TopoDS_Shape {
 
     let polygonWire = new oc.BRepBuilderAPI_MakeWire_1();
     for (let ind = 0; ind < points.length - 1; ind++) {
-      let seg = new oc.GC_MakeSegment_1(gpPoints[ind], gpPoints[ind + 1]).Value();
-      let edge = new oc.BRepBuilderAPI_MakeEdge_24((seg)).Edge();
+      let seg = new oc.GC_MakeSegment_1(gpPoints[ind], gpPoints[ind + 1]).Value().get();
+      let edge = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(seg)).Edge();
       let innerWire = new oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
       polygonWire.Add(innerWire);
     }
-    let seg2 = new oc.GC_MakeSegment_1(gpPoints[points.length - 1], gpPoints[0]).Value();
-    let edge2 = new oc.BRepBuilderAPI_MakeEdge_24((seg2)).Edge();
+    let seg2 = new oc.GC_MakeSegment_1(gpPoints[points.length - 1], gpPoints[0]).Value().get();
+    let edge2 = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(seg2)).Edge();
     let innerWire2 = new oc.BRepBuilderAPI_MakeWire_2(edge2).Wire();
     polygonWire.Add(innerWire2);
     let finalWire = polygonWire.Wire();
@@ -118,7 +118,7 @@ function Polygon(points: number[][], wire?: boolean): oc.TopoDS_Shape {
     if (wire) {
       return finalWire;
     } else {
-      return new oc.BRepBuilderAPI_MakeFace(finalWire).Face();
+      return new oc.BRepBuilderAPI_MakeFace_15(finalWire, false).Face();
     }
   });
   sceneShapes.push(curPolygon);
@@ -135,7 +135,7 @@ function Circle(radius:number, wire?:boolean) : oc.TopoDS_Shape {
     let edge = new oc.BRepBuilderAPI_MakeEdge_11(circle).Edge();
     let circleWire = new oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
     if (wire) { return circleWire; }
-    return new oc.BRepBuilderAPI_MakeFace(circleWire).Face();
+    return new oc.BRepBuilderAPI_MakeFace_15(circleWire, false).Face();
   });
   sceneShapes.push(curCircle);
   return curCircle;
@@ -154,8 +154,8 @@ function BSpline(points:number[][], closed?:boolean) : oc.TopoDS_Shape {
     }
     if (closed) { ptList.SetValue(points.length + 1, ptList.Value(1)); }
 
-    let geomCurveHandle = new oc.GeomAPI_PointsToBSpline(ptList).Curve();
-    let edge = new oc.BRepBuilderAPI_MakeEdge_24((geomCurveHandle)).Edge();
+    let geomCurveHandle = new oc.GeomAPI_PointsToBSpline(ptList).Curve().get();
+    let edge = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(geomCurveHandle)).Edge();
     return     new oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
   });
   sceneShapes.push(curSpline);
@@ -191,19 +191,19 @@ function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0
 
         let faceBuilder = null;
         if (textFaces.length > 0) {
-          faceBuilder = new oc.BRepBuilderAPI_MakeFace(
+          faceBuilder = new oc.BRepBuilderAPI_MakeFace_22(
             textFaces[textFaces.length - 1], currentWire.Wire());
         } else {
-          faceBuilder = new oc.BRepBuilderAPI_MakeFace(currentWire.Wire());
+          faceBuilder = new oc.BRepBuilderAPI_MakeFace_15(currentWire.Wire(), false);
         }
 
         textFaces.push(faceBuilder.Face());
       } else if (commands[idx].type === "L") {
         let nextPoint = new oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
         if (lastPoint.X() === nextPoint.X() && lastPoint.Y() === nextPoint.Y()) { continue; }
-        let lineSegment = new oc.GC_MakeSegment_1(lastPoint, nextPoint).Value();
-        let lineEdge = new oc.BRepBuilderAPI_MakeEdge_24((lineSegment)).Edge();
-        currentWire.Add(new oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
+        let lineSegment = new oc.GC_MakeSegment_1(lastPoint, nextPoint).Value().get();
+        let lineEdge = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(lineSegment)).Edge();
+        currentWire.Add_2(new oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
         lastPoint = nextPoint;
       } else if (commands[idx].type === "Q") {
         let controlPoint = new oc.gp_Pnt_3(commands[idx].x1, commands[idx].y1, 0);
@@ -214,8 +214,8 @@ function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0
         ptList.SetValue(2, controlPoint);
         ptList.SetValue(3, nextPoint);
         let quadraticCurve = new oc.Geom_BezierCurve(ptList);
-        let lineEdge = new oc.BRepBuilderAPI_MakeEdge_24((new oc.Handle_Geom_BezierCurve(quadraticCurve))).Edge();
-        currentWire.Add(new oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
+        let lineEdge = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(new oc.Handle_Geom_BezierCurve(quadraticCurve).get())).Edge();
+        currentWire.Add_2(new oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
 
         lastPoint = nextPoint;
       } else if (commands[idx].type === "C") {
@@ -229,8 +229,8 @@ function Text3D(text?: string = "Hi!", size?: number = "36", height?: number = 0
         ptList.SetValue(3, controlPoint2);
         ptList.SetValue(4, nextPoint);
         let cubicCurve = new oc.Geom_BezierCurve(ptList);
-        let lineEdge = new oc.BRepBuilderAPI_MakeEdge_24((new oc.Handle_Geom_BezierCurve(cubicCurve))).Edge();
-        currentWire.Add(new oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
+        let lineEdge = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(new oc.Handle_Geom_BezierCurve(cubicCurve).get())).Edge();
+        currentWire.Add_2(new oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
           
         lastPoint = nextPoint;
       }
@@ -781,12 +781,12 @@ class Sketch {
 
     let faceBuilder = null;
     if (this.faces.length > 0) {
-      faceBuilder = new oc.BRepBuilderAPI_MakeFace(this.wires[0]);
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace_15(this.wires[0], false);
       for (let w = 1; w < this.wires.length; w++){
         faceBuilder.Add(this.wires[w]);
       }
     } else {
-      faceBuilder = new oc.BRepBuilderAPI_MakeFace(wire);
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace_15(wire, false);
     }
 
     let face = faceBuilder.Face();
@@ -870,7 +870,7 @@ class Sketch {
       endPoint = new oc.gp_Pnt_3(nextPoint[0], nextPoint[1], 0);
     }
     let lineSegment    = new oc.GC_MakeSegment_1(this.lastPoint, endPoint).Value();
-    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge_24((lineSegment    )).Edge ();
+    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(lineSegment    ).get()).Edge ();
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire_2(lineEdge       ).Wire ());
     this.lastPoint     = endPoint;
     this.currentIndex++;
@@ -883,7 +883,7 @@ class Sketch {
     let onArc          = new oc.gp_Pnt_3(pointOnArc[0], pointOnArc[1], 0);
     let nextPoint      = new oc.gp_Pnt_3(    arcEnd[0],     arcEnd[1], 0);
     let arcCurve       = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
-    let arcEdge        = new oc.BRepBuilderAPI_MakeEdge_24((arcCurve    )).Edge() ;
+    let arcEdge        = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(arcCurve    ).get()).Edge() ;
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire_2(arcEdge).Wire());
     this.lastPoint     = nextPoint;
     this.currentIndex++;
@@ -903,7 +903,7 @@ class Sketch {
     }
     let cubicCurve     = new oc.Geom_BezierCurve(ptList);
     let handle         = new oc.Handle_Geom_BezierCurve(cubicCurve);
-    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge_24((handle    ).Edge() ;
+    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(handle.get())).Edge();
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire_2(lineEdge  ).Wire());
     this.currentIndex++;
     return this;
@@ -920,7 +920,7 @@ class Sketch {
       this.lastPoint = ctrlPoint;
     }
     let handle         = new oc.GeomAPI_PointsToBSpline(ptList  ).Curve();
-    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge_24((handle  )).Edge() ;
+    let lineEdge       = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(handle.get())).Edge();
     this.wireBuilder.Add(new oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
     this.currentIndex++;
     return this;
@@ -940,7 +940,7 @@ class Sketch {
     this.argsString += ComputeHash(arguments, true);
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2_3(convertToPnt(center),
     new oc.gp_Dir_4(0, 0, 1)), radius).Value();
-    let edge = new oc.BRepBuilderAPI_MakeEdge_24((circle)).Edge();
+    let edge = new oc.BRepBuilderAPI_MakeEdge_24(new oc.Handle_Geom_Curve_2(circle.get())).Edge();
     let wire = new oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
     if (reversed) { wire = wire.Reversed(); }
     wire.hash = stringToHash(this.argsString);
@@ -948,12 +948,12 @@ class Sketch {
 
     let faceBuilder = null;
     if (this.faces.length > 0) {
-      faceBuilder = new oc.BRepBuilderAPI_MakeFace(this.wires[0]);
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace_15(this.wires[0], false);
       for (let w = 1; w < this.wires.length; w++){
         faceBuilder.Add(this.wires[w]);
       }
     } else {
-      faceBuilder = new oc.BRepBuilderAPI_MakeFace(wire);
+      faceBuilder = new oc.BRepBuilderAPI_MakeFace_15(wire, false);
     }
     let face = faceBuilder.Face();
     face.hash = stringToHash(this.argsString);
