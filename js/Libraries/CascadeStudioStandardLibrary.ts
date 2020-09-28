@@ -505,7 +505,7 @@ function Scale(scale: number, shapes: oc.TopoDS_Shape, keepOriginal?: boolean): 
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let sharpSphere = Union([Sphere(38), Box(50, 50, 50, true)]);```*/
-function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean): oc.TopoDS_Shape {
+function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, /*fuzzValue?: number,*/ keepEdges?: boolean): oc.TopoDS_Shape {
   if (!fuzzValue) { fuzzValue = 0.1; }
   let curUnion = CacheOp(arguments, () => {
     let combined = new oc.BRepBuilderAPI_Copy_2(objectsToJoin[0], true, false).Shape();
@@ -513,7 +513,7 @@ function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValu
       for (let i = 0; i < objectsToJoin.length; i++) {
         if (i > 0) {
           let combinedFuse = new oc.BRepAlgoAPI_Fuse_3(combined, objectsToJoin[i]);
-          combinedFuse.SetFuzzyValue(fuzzValue);
+          //combinedFuse.SetFuzzyValue(fuzzValue);
           combinedFuse.Build();
           combined = combinedFuse.Shape();
         }
@@ -521,7 +521,7 @@ function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValu
     }
 
     if (!keepEdges) {
-      let fusor = new oc.ShapeUpgrade_UnifySameDomain(combined); fusor.Build();
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
       combined = fusor.Shape();
     }
 
@@ -539,7 +539,7 @@ function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValu
  * The original shapes are removed unless `keepObjects` is true.  Returns a Compound Shape unless onlyFirstSolid is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let floatingCorners = Difference(Box(50, 50, 50, true), [Sphere(38)]);```*/
-function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean): oc.TopoDS_Shape {
+function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, /*fuzzValue?: number,*/ keepEdges?: boolean): oc.TopoDS_Shape {
   let storedArgs = arguments;
   if(!fuzzValue) { fuzzValue = 0.1; }
   let curDifference = CacheOp(arguments, () => {
@@ -549,14 +549,14 @@ function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shap
       for (let i = 0; i < objectsToSubtract.length; i++) {
         if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
         let differenceCut = new oc.BRepAlgoAPI_Cut_3(difference, objectsToSubtract[i]);
-        differenceCut.SetFuzzyValue(fuzzValue);
+        //differenceCut.SetFuzzyValue(fuzzValue);
         differenceCut.Build();
         difference = differenceCut.Shape();
       }
     }
     
     if (!keepEdges) {
-      let fusor = new oc.ShapeUpgrade_UnifySameDomain(difference); fusor.Build();
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain_2(difference, true, true, false); fusor.Build();
       difference = fusor.Shape();
     }
 
@@ -580,7 +580,7 @@ function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shap
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let roundedBox = Intersection([Box(50, 50, 50, true), Sphere(38)]);```*/
-function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean) : oc.TopoDS_Shape {
+function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, /*fuzzValue?: number,*/ keepEdges?: boolean) : oc.TopoDS_Shape {
   if (!fuzzValue) { fuzzValue = 0.1; }
   let curIntersection = CacheOp(arguments, () => {
     let intersected = new oc.BRepBuilderAPI_Copy_2(objectsToIntersect[0], true, false).Shape();
@@ -588,7 +588,7 @@ function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boole
       for (let i = 0; i < objectsToIntersect.length; i++) {
         if (i > 0) {
           let intersectedCommon = new oc.BRepAlgoAPI_Common_3(intersected, objectsToIntersect[i]);
-          intersectedCommon.SetFuzzyValue(fuzzValue);
+          //intersectedCommon.SetFuzzyValue(fuzzValue);
           intersectedCommon.Build();
           intersected = intersectedCommon.Shape();
         }
@@ -596,7 +596,7 @@ function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boole
     }
 
     if (!keepEdges) {
-      let fusor = new oc.ShapeUpgrade_UnifySameDomain(intersected); fusor.Build();
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain_2(intersected, true, true, false); fusor.Build();
       intersected = fusor.Shape();
     }
 
