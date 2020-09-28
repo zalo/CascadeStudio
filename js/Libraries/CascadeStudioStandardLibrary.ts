@@ -505,14 +505,26 @@ function Scale(scale: number, shapes: oc.TopoDS_Shape, keepOriginal?: boolean): 
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let sharpSphere = Union([Sphere(38), Box(50, 50, 50, true)]);```*/
-function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean): oc.TopoDS_Shape {
+function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean): oc.TopoDS_Shape {
+  if (!fuzzValue) { fuzzValue = 0.1; }
   let curUnion = CacheOp(arguments, () => {
     let combined = new oc.BRepBuilderAPI_Copy_2(objectsToJoin[0], true, false).Shape();
     if (objectsToJoin.length > 1) {
       for (let i = 0; i < objectsToJoin.length; i++) {
-        if (i > 0) { combined = new oc.BRepAlgoAPI_Fuse_3(combined, objectsToJoin[i]).Shape(); }
+        if (i > 0) {
+          let combinedFuse = new oc.BRepAlgoAPI_Fuse_3(combined, objectsToJoin[i]);
+          combinedFuse.SetFuzzyValue(fuzzValue);
+          combinedFuse.Build();
+          combined = combinedFuse.Shape();
+        }
       }
     }
+
+    if (!keepEdges) {
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain(combined); fusor.Build();
+      combined = fusor.Shape();
+    }
+
     return combined;
   });
 
@@ -527,21 +539,32 @@ function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean): oc.Topo
  * The original shapes are removed unless `keepObjects` is true.  Returns a Compound Shape unless onlyFirstSolid is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let floatingCorners = Difference(Box(50, 50, 50, true), [Sphere(38)]);```*/
-function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, onlyFirstSolid?:boolean): oc.TopoDS_Shape{
-  let argss = arguments;
+function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean): oc.TopoDS_Shape {
+  let storedArgs = arguments;
+  if(!fuzzValue) { fuzzValue = 0.1; }
   let curDifference = CacheOp(arguments, () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
     let difference = new oc.BRepBuilderAPI_Copy_2(mainBody, true, false).Shape();
     if (objectsToSubtract.length >= 1) {
       for (let i = 0; i < objectsToSubtract.length; i++) {
         if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
-        difference = new oc.BRepAlgoAPI_Cut_3(difference, objectsToSubtract[i]).Shape();
+        let differenceCut = new oc.BRepAlgoAPI_Cut_3(difference, objectsToSubtract[i]);
+        differenceCut.SetFuzzyValue(fuzzValue);
+        differenceCut.Build();
+        difference = differenceCut.Shape();
       }
     }
-    difference.hash = ComputeHash(argss);
+    
+    if (!keepEdges) {
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain(difference); fusor.Build();
+      difference = fusor.Shape();
+    }
+
+    difference.hash = ComputeHash(storedArgs);
     if (GetNumSolidsInCompound(difference) === 1) {
       difference = GetSolidFromCompound(difference, 0);
     }
+
     return difference;
   });
 
@@ -557,14 +580,26 @@ function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shap
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let roundedBox = Intersection([Box(50, 50, 50, true), Sphere(38)]);```*/
-function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean) : oc.TopoDS_Shape {
+function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean) : oc.TopoDS_Shape {
+  if (!fuzzValue) { fuzzValue = 0.1; }
   let curIntersection = CacheOp(arguments, () => {
     let intersected = new oc.BRepBuilderAPI_Copy_2(objectsToIntersect[0], true, false).Shape();
     if (objectsToIntersect.length > 1) {
       for (let i = 0; i < objectsToIntersect.length; i++) {
-        if (i > 0) { intersected = new oc.BRepAlgoAPI_Common_3(intersected, objectsToIntersect[i]).Shape(); }
+        if (i > 0) {
+          let intersectedCommon = new oc.BRepAlgoAPI_Common_3(intersected, objectsToIntersect[i]);
+          intersectedCommon.SetFuzzyValue(fuzzValue);
+          intersectedCommon.Build();
+          intersected = intersectedCommon.Shape();
+        }
       }
     }
+
+    if (!keepEdges) {
+      let fusor = new oc.ShapeUpgrade_UnifySameDomain(intersected); fusor.Build();
+      intersected = fusor.Shape();
+    }
+
     return intersected;
   });
 
@@ -588,6 +623,21 @@ function Extrude(face: oc.TopoDS_Shape, direction: number[], keepFace?: boolean)
   if (!keepFace) { sceneShapes = Remove(sceneShapes, face); }
   sceneShapes.push(curExtrusion);
   return curExtrusion;
+}
+
+/** Removes internal, unused edges from the insides of faces on this shape.  Keeps the model clean.
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let cleanPart = RemoveInternalEdges(part);```*/
+function RemoveInternalEdges(shape: oc.TopoDS_Shape, keepShape?: boolean) : oc.TopoDS_Shape {
+  let cleanShape = CacheOp(arguments, () => {
+    let fusor = new oc.ShapeUpgrade_UnifySameDomain(shape);
+    fusor.Build();
+    return fusor.Shape();
+  });
+  
+  if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
+  sceneShapes.push(cleanShape);
+  return cleanShape;
 }
 
 /** Offsets the faces of a shape by offsetDistance
