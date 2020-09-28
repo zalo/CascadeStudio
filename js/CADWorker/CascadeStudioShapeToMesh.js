@@ -72,7 +72,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
         this_face.number_of_triangles = validFaceTriCount;
         facelist.push(this_face);
 
-        /*ForEachEdge(myFace, (index, myEdge) => {
+        ForEachEdge(myFace, (index, myEdge) => {
           let edgeHash = myEdge.HashCode(100000000);
           if (fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
             let this_edge = {
@@ -98,7 +98,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
           } else {
             fullShapeEdgeHashes2[edgeHash] = edgeHash;
           }
-        });*/
+        });
         triangulations.push(myT);
       });
       // Nullify Triangulations between runs so they're not stored in the cache
