@@ -1665,7 +1665,7 @@ var zip_deflate = function(str, level) {
     return aout.join("");
 }
 
-if (! window.RawDeflate) RawDeflate = {};
-RawDeflate.deflate = zip_deflate;
+if (! window.RawDeflate) window.RawDeflate = {};
+window.RawDeflate.deflate = zip_deflate;
 
 })();

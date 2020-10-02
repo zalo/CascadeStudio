@@ -26,13 +26,13 @@
 
             // Begins loading the CAD Kernel Web Worker
             if (window.Worker) {
-                var cascadeStudioWorker = new Worker('./js/CADWorker/CascadeStudioMainWorker.js');
+                window.cascadeStudioWorker = new Worker('./js/CADWorker/CascadeStudioMainWorker.js');
                 // Ping Pong Messages Back and Forth based on their registration in messageHandlers
-                var messageHandlers = {};
-                cascadeStudioWorker.onmessage = function (e) {
-                    if(e.data.type in messageHandlers){
-                        let response = messageHandlers[e.data.type](e.data.payload);
-                        if (response) { cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
+                window.messageHandlers = {};
+                window.cascadeStudioWorker.onmessage = function (e) {
+                    if(e.data.type in window.messageHandlers){
+                        let response = window.messageHandlers[e.data.type](e.data.payload);
+                        if (response) { window.cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
                     }
                 }
             }
@@ -42,13 +42,6 @@
         <link rel="manifest"           href="./manifest.webmanifest">
         <link rel="apple-touch-icon"   href="./icon/apple-touch-icon.png">
 
-        <script type="text/javascript" src="./node_modules/three/build/three.min.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/DragControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/OrbitControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/TransformControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/exporters/STLExporter.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/exporters/OBJExporter.js"></script>
-
         <script type="text/javascript" src="./node_modules/controlkit/bin/controlKit.min.js"></script>
 
         <script type="text/javascript" src="./node_modules/jquery/dist/jquery.min.js"></script>
@@ -56,29 +49,24 @@
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-base.css" />
         <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-dark-theme.css" />
         <link type="text/css" rel="stylesheet" href="./css/main.css" />
-
-        <script type="text/javascript" src="./node_modules/rawflate/rawdeflate.js"></script>
-        <script type="text/javascript" src="./node_modules/rawflate/rawinflate.js"></script>
-        <script type="text/javascript" src="./js/MainPage/CascadeViewHandles.js"></script>
-        <script type="text/javascript" src="./js/MainPage/CascadeView.js"></script>
     </head>
 
-    <body onload="initialize();" style="margin:0px; background-color:rgb(34, 34, 34); "><!--overflow:hidden; position:fixed;-->
+    <body style="margin:0px; background-color:rgb(34, 34, 34); "><!--overflow:hidden; position:fixed;-->
         <h1 hidden></h1> <!-- Puts the Lighthouse Score over 90 heheh-->
         <div id="topnav" class="topnav">
             <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.6</a>
-            <a href="#" id="main-proj-button" title="Sets this project to save in local storage." onmouseup="makeMainProject();">Make Main Project</a>
-            <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
+            <a href="#" id="main-proj-button" title="Sets this project to save in local storage." onmouseup="window.makeMainProject();">Make Main Project</a>
+            <a href="#" title="Save Project to .json" onmouseup="window.saveProject();">Save Project</a>
             <label for="project-file" title="Load Project from .json">Load Project
-                <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="loadProject();"/>
+                <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="window.loadProject();"/>
             </label>
-            <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
-            <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
-            <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
+            <a href="#" onmouseup="window.threejsViewport.saveShapeSTEP();">Save STEP</a>
+            <a href="#" onmouseup="window.threejsViewport.saveShapeSTL();">Save STL</a>
+            <a href="#" onmouseup="window.threejsViewport.saveShapeOBJ();">Save OBJ</a>
             <label for="files" title="Import STEP, IGES, or (ASCII) STL from File">Import STEP/IGES/STL
-                <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="loadFiles();"/>
+                <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="window.loadFiles();"/>
             </label>
-            <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
+            <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="window.clearExternalFiles();">Clear Imported Files</a>
             <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear(); window.history.replaceState({}, 'Cascade Studio','?');">Reset Project</a>
         </div>
         <div id="appbody" style="height:auto">
@@ -87,7 +75,7 @@
             <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/loader.js"></script>
             <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
             <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
-            <script type="text/javascript" src="./js/MainPage/CascadeMain.js"></script>
+            <script type="module"          src="./js/MainPage/CascadeMain.js"></script>
         </div>
 
     </body>

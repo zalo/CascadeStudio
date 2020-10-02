@@ -1,6 +1,12 @@
 // This file governs the 3D Viewport which displays the 3D Model
 // It is also in charge of saving to STL and OBJ
 
+import * as THREE                 from '../../node_modules/three/build/three.module.js';
+import { OrbitControls          } from '../../node_modules/three/examples/jsm/controls/OrbitControls.js';
+import { OBJExporter            } from '../../node_modules/three/examples/jsm/exporters/OBJExporter.js';
+import { STLExporter            } from '../../node_modules/three/examples/jsm/exporters/STLExporter.js';
+import { initializeHandleGizmos } from './CascadeViewHandles.js';
+
 /** Create the base class for a 3D Viewport.
  *  This includes the floor, the grid, the fog, the camera, and lights */
 var Environment = function (goldenContainer) {
@@ -19,7 +25,7 @@ var Environment = function (goldenContainer) {
     this.goldenContainer.on('resize', this.onWindowResize.bind(this));
 
     // Create the Three.js Scene
-    this.scene = new THREE.Scene();
+    this.scene            = new THREE.Scene();
     this.scene.background = new THREE.Color(0x222222);          //0xa0a0a0
     this.scene.fog        = new THREE.Fog  (0x222222, 200, 600);//0xa0a0a0
 
@@ -70,7 +76,7 @@ var Environment = function (goldenContainer) {
     this.scene.add(this.grid);
 
     // Set up the orbit controls used for Cascade Studio
-    this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(0, 45, 0);
     this.controls.panSpeed  = 2;
     this.controls.zoomSpeed = 1;
@@ -104,7 +110,7 @@ var Environment = function (goldenContainer) {
 }
 
 /** This "inherits" from Environment (by including it as a sub object) */
-var CascadeEnvironment = function (goldenContainer) {
+export function CascadeEnvironment (goldenContainer) {
   this.goldenContainer = goldenContainer;
   this.environment     = new Environment(this.goldenContainer);
 
@@ -129,7 +135,7 @@ var CascadeEnvironment = function (goldenContainer) {
                         });
 
   // A callback to load the Triangulated Shape from the Worker and add it to the Scene
-  messageHandlers["combineAndRenderShapes"] = ([facelist, edgelist]) => {
+  window.messageHandlers["combineAndRenderShapes"] = ([facelist, edgelist]) => {
     workerWorking = false;     // Untick this flag to allow Evaluations again
     if (!facelist) { return;}  // Do nothing if the results are null
 
@@ -242,13 +248,13 @@ var CascadeEnvironment = function (goldenContainer) {
   /** Save the current shape to .stl */
   this.saveShapeSTEP = (filename = "CascadeStudioPart.step") => {
     // Ask the worker thread for a STEP file of the current space
-    cascadeStudioWorker.postMessage({
+    window.cascadeStudioWorker.postMessage({
       "type": "saveShapeSTEP",
       payload: filename
     });
 
     // Receive the STEP File from the Worker Thread
-    messageHandlers["saveShapeSTEP"] = (stepURL) => {
+    window.messageHandlers["saveShapeSTEP"] = (stepURL) => {
       let link      = document.createElement("a");
       link.href     = stepURL;
       link.download = filename;
@@ -258,29 +264,37 @@ var CascadeEnvironment = function (goldenContainer) {
 
   /**  Save the current shape to an ASCII .stl */
   this.saveShapeSTL = (filename = "CascadeStudioPart.stl") => {
-    this.stlExporter = new THREE.STLExporter();
-    let result = this.stlExporter.parse(this.mainObject);
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
-		link.download = filename;
-		link.click();
+    if (this.mainObject) {
+      this.stlExporter = new STLExporter();
+      let result = this.stlExporter.parse(this.mainObject);
+      let link = document.createElement("a");
+      link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
+      link.download = filename;
+      link.click();
+    } else {
+      console.error("No scene objects to save!");
+    }
   }
 
   /**  Save the current shape to .obj */
   this.saveShapeOBJ = (filename = "CascadeStudioPart.obj") => {
-    this.objExporter = new THREE.OBJExporter();
-    let result = this.objExporter.parse(this.mainObject);
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
-		link.download = filename;
-		link.click();
+    if (this.mainObject) {
+      this.objExporter = new OBJExporter();
+      let result = this.objExporter.parse(this.mainObject);
+      let link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([result], { type: 'text/plain' }));
+      link.download = filename;
+      link.click();
+    } else {
+      console.error("No scene objects to save!");
+    }
   }
 
   /** Set up the the Mouse Move Callback */
   this.mouse = { x: 0, y: 0 };
   this.goldenContainer.getElement().get(0).addEventListener('mousemove', (event) => {
     this.mouse.x =   ( event.offsetX / this.goldenContainer.width  ) * 2 - 1;
-    this.mouse.y = - (event.offsetY / this.goldenContainer.height) * 2 + 1;
+    this.mouse.y = - ( event.offsetY / this.goldenContainer.height ) * 2 + 1;
   }, false );
 
   this.animate = function animatethis() {

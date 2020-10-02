@@ -2,11 +2,16 @@
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
-var myLayout, monacoEditor, threejsViewport,
+import { CascadeEnvironment } from './CascadeView.js';
+import '../../node_modules/rawflate/rawdeflate.js';
+import '../../node_modules/rawflate/rawinflate.js';
+
+export var myLayout, monacoEditor,
     consoleContainer, consoleGolden, codeContainer, gui,
-    guiPanel, GUIState, count = 0, //focused = true,
-    mainProject = false, messageHandlers = {},
-    workerWorking = false, startup;
+    guiPanel, GUIState, //focused = true,
+    mainProject = false, startup;
+
+window.workerWorking = false;
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -29,12 +34,12 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
-function initialize() {
-    this.searchParams = new URLSearchParams(window.location.search);
+window.initialize = function () {
+    let searchParams = new URLSearchParams(window.location.search);
 
     // Load the initial Project from - LocalStorage (mainProject), URL, or the Gallery
-    let loadFromURL     = this.searchParams.has("code");
-    let loadfromGallery = this.searchParams.has("project");
+    let loadFromURL     = searchParams.has("code");
+    let loadfromGallery = searchParams.has("project");
     let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
 
     // Set up the Windowing/Docking/Layout System  ---------------------------------------
@@ -55,8 +60,8 @@ function initialize() {
         let codeStr = starterCode;
         GUIState = {};
         if (loadFromURL) {
-            codeStr  = decode(this.searchParams.get("code"));
-            GUIState = JSON.parse(decode(this.searchParams.get("gui")));
+            codeStr  = decode(searchParams.get("code"));
+            GUIState = JSON.parse(decode(searchParams.get("gui")));
         } else if (stuntedInitialization) {
             // Begin passing on the initialization logic, this is a dead timeline
             codeStr = '';
@@ -134,13 +139,6 @@ function initialize() {
                 });
             }).catch(error => console.log(error.message));
 
-            // Three.js Typescript definitions...
-            fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
-                });
-            }).catch(error => console.log(error.message));
-
             // CascadeStudio Typescript Definitions...
             fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
                 response.text().then(function (text) {
@@ -200,12 +198,12 @@ function initialize() {
             /** This function triggers the evaluation of the editor code 
              *  inside the CAD Worker thread.*/
             monacoEditor.evaluateCode = (saveToURL = false) => {
-                // Don't evaluate if the `workerWorking` flag is true
-                if (workerWorking) { return; }
+                // Don't evaluate if the `window.workerWorking` flag is true
+                if (window.workerWorking) { return; }
 
-                // Set the "workerWorking" flag, so we don't submit 
+                // Set the "window.workerWorking" flag, so we don't submit 
                 // multiple jobs to the worker thread simultaneously
-                workerWorking = true;
+                window.workerWorking = true;
 
                 // Refresh these every so often to ensure we're always getting intellisense
                 monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
@@ -222,17 +220,17 @@ function initialize() {
 
                     guiPanel = gui.addPanel({ label: 'Cascade Control Panel' })
                         .addButton('Evaluate', () => { monacoEditor.evaluateCode(true); });
-                    messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
-                    messageHandlers["addCheckbox"]({ name: "Cache?", default: true });
+                    window.messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2 });
+                    window.messageHandlers["addCheckbox"]({ name: "Cache?", default: true });
                 }
 
                 // Remove any existing Transform Handles that could be laying around
-                threejsViewport.clearTransformHandles();
+                window.threejsViewport.clearTransformHandles();
 
                 // Set up receiving files from the worker thread
                 // This lets users download arbitrary information 
                 // from the CAD engine via the `saveFile()` function
-                messageHandlers["saveFile"] = (payload) => {
+                window.messageHandlers["saveFile"] = (payload) => {
                     let link = document.createElement("a");
                     link.href = payload.fileURL;
                     link.download = payload.filename;
@@ -241,7 +239,7 @@ function initialize() {
 
                 // Send the current editor code and GUI state to the Worker thread
                 // This is where the magic happens!
-                cascadeStudioWorker.postMessage({
+                window.cascadeStudioWorker.postMessage({
                     "type": "Evaluate",
                     payload: {
                         "code": newCode,
@@ -251,7 +249,7 @@ function initialize() {
 
                 // After evaluating, assemble all of the objects in the "workspace" 
                 // and begin saving them out
-                cascadeStudioWorker.postMessage({
+                window.cascadeStudioWorker.postMessage({
                     "type": "combineAndRenderShapes",
                     payload: { maxDeviation: GUIState["MeshRes"] }
                 });
@@ -307,7 +305,7 @@ function initialize() {
                 }.bind(gui);
             }
                 
-            threejsViewport = new CascadeEnvironment(container);
+            window.threejsViewport = new CascadeEnvironment(container);
         });
     });
 
@@ -352,8 +350,8 @@ function initialize() {
                 realConsoleLog.apply(console, arguments);
             };
             // Call this console.log when triggered from the WASM
-            messageHandlers["log"  ] = (payload) => { console.log(payload); };
-            messageHandlers["error"] = (payload) => { workerWorking = false; console.error(payload); };
+            window.messageHandlers["log"  ] = (payload) => { console.log(payload); };
+            window.messageHandlers["error"] = (payload) => { window.workerWorking = false; console.error(payload); };
 
             // Print Errors in Red
             window.onerror = function (err, url, line, colno, errorObj) {
@@ -381,7 +379,7 @@ function initialize() {
             };
 
             // If we've received a progress update from the Worker Thread, append it to our previous message
-            messageHandlers["Progress"] = (payload) => {
+            window.messageHandlers["Progress"] = (payload) => {
                 // Add a dot to the progress indicator for each progress message we find in the queue
                 consoleContainer.parentElement.lastElementChild.lastElementChild.innerText =
                     "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType)? " ("+payload.opType+")" : "");
@@ -413,12 +411,12 @@ function initialize() {
 
     // If the Main Page loads before the CAD Worker, register a 
     // callback to start the model evaluation when the CAD is ready.
-    messageHandlers["startupCallback"] = () => {
+    window.messageHandlers["startupCallback"] = () => {
         startup = function () {
             // Reimport any previously imported STEP/IGES Files
             let curState = consoleGolden.getState();
             if (curState && Object.keys(curState).length > 0) {
-                cascadeStudioWorker.postMessage({
+                window.cascadeStudioWorker.postMessage({
                     "type": "loadPrexistingExternalFiles",
                     payload: consoleGolden.getState()
                 });
@@ -434,7 +432,7 @@ function initialize() {
 
     // Register callbacks from the CAD Worker to add Sliders, Buttons, and Checkboxes to the UI
     // TODO: Enqueue these so the sliders are added/removed at the same time to eliminate flashing
-    messageHandlers["addSlider"] = (payload) => {
+    window.messageHandlers["addSlider"] = (payload) => {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
         GUIState[payload.name + "Range"] = [payload.min, payload.max];
         guiPanel.addSlider(GUIState, payload.name, payload.name + 'Range', {
@@ -442,19 +440,19 @@ function initialize() {
             onChange: () => { if (payload.realTime) { monacoEditor.evaluateCode(); } }
         });
     }
-    messageHandlers["addButton"] = (payload) => {
+    window.messageHandlers["addButton"] = (payload) => {
         guiPanel.addButton(payload.name, () => { monacoEditor.evaluateCode(); });
     }
-    messageHandlers["addCheckbox"] = (payload) => {
+    window.messageHandlers["addCheckbox"] = (payload) => {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
         guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
     }
-    messageHandlers["resetWorking"] = () => { workerWorking = false; }
+    window.messageHandlers["resetWorking"] = () => { window.workerWorking = false; }
 }
 
 /** This function serializes the Project's current state 
  * into a `.json` file and starts downloading it. */
-function saveProject() {
+window.saveProject = function () {
     let currentCode = codeContainer.getState().code;
     if (!isArrayLike(currentCode)) {
         codeContainer.setState({ code: currentCode.split(/\r\n|\r|\n/) });
@@ -467,7 +465,7 @@ function saveProject() {
 }
 
 /** This function asynchronously reads the text content of a file. */
-const loadFileAsync = async (file) => {
+export const loadFileAsync = async (file) => {
     return new Promise((resolve, reject) => {
       let reader = new FileReader();
       reader.onload = () => resolve(reader.result);
@@ -478,7 +476,7 @@ const loadFileAsync = async (file) => {
 
 /** This loads a .json file into the localStorage and refreshes the page with it.
  *  This will load that data as the new Main Project.*/
-function loadProject () {
+window.loadProject = function  () {
     // Get Project .json
     loadFileAsync(document.getElementById("project-file").files[0]).then((jsonFile) => {
         window.localStorage.setItem('studioState-0.0.3', jsonFile);
@@ -489,17 +487,17 @@ function loadProject () {
 
 /** This function triggers the CAD WebWorker to 
  * load one or more  .stl, .step, or .iges files. */
-function loadFiles(fileElementID = "files") {
+window.loadFiles = function (fileElementID = "files") {
     // Ask the worker thread to load these files... 
     // I can already feel this not working...
     let files = document.getElementById(fileElementID).files;
-    cascadeStudioWorker.postMessage({
+    window.cascadeStudioWorker.postMessage({
         "type": "loadFiles",
         "payload": files
     });
 
     // Receive a list of the imported files
-    messageHandlers["loadFiles"] = (extFiles) => {
+    window.messageHandlers["loadFiles"] = (extFiles) => {
         console.log("Storing loaded files!");
         //console.log(extFiles);
         consoleGolden.setState(extFiles);
@@ -508,8 +506,8 @@ function loadFiles(fileElementID = "files") {
 
 /** This function clears all Externally Loaded files 
  * from the `externalFiles` dict and localStorage. */
-function clearExternalFiles() {
-    cascadeStudioWorker.postMessage({
+window.clearExternalFiles = function () {
+    window.cascadeStudioWorker.postMessage({
         "type": "clearExternalFiles"
     });
     consoleGolden.setState({});
@@ -521,7 +519,7 @@ function decode(string) { return RawDeflate.inflate(window.atob(decodeURICompone
 function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
 /** This function promotes the project to localStorage, allowing it to persist between sessions.
  * This also saves externally imported files. */
-function makeMainProject() {
+window.makeMainProject = function() {
     mainProject = true;
     let mainProjButton = document.getElementById("main-proj-button");
     if (mainProjButton) { mainProjButton.remove(); }
@@ -542,3 +540,6 @@ function isArrayLike(item) {
         )
     );
 }
+
+// Call Initialize here since modules load late
+window.initialize();
