@@ -157,6 +157,7 @@ function initialize() {
                 for (let i = 0; i < state.code.length; i++) {
                     codeString += state.code[i] + "\n";
                 }
+                codeString = codeString.slice(0,-1);
                 state.code = codeString;
                 container.setState({ code: codeString });
             }
@@ -456,7 +457,7 @@ function initialize() {
 function saveProject() {
     let currentCode = codeContainer.getState().code;
     if (!isArrayLike(currentCode)) {
-        codeContainer.setState({ code: state.code.split(/\r\n|\r|\n/) });
+        codeContainer.setState({ code: currentCode.split(/\r\n|\r|\n/) });
     }
     let link = document.createElement("a");
     link.download = "CascadeStudioProject.json";
