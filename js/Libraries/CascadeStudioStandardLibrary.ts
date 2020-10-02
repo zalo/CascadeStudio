@@ -505,15 +505,15 @@ function Scale(scale: number, shapes: oc.TopoDS_Shape, keepOriginal?: boolean): 
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let sharpSphere = Union([Sphere(38), Box(50, 50, 50, true)]);```*/
-function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, /*fuzzValue?: number,*/ keepEdges?: boolean): oc.TopoDS_Shape {
-  //if (!fuzzValue) { fuzzValue = 0.1; }
+function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean): oc.TopoDS_Shape {
+  if (!fuzzValue) { fuzzValue = 0.1; }
   let curUnion = CacheOp(arguments, () => {
     let combined = new oc.BRepBuilderAPI_Copy_2(objectsToJoin[0], true, false).Shape();
     if (objectsToJoin.length > 1) {
       for (let i = 0; i < objectsToJoin.length; i++) {
         if (i > 0) {
           let combinedFuse = new oc.BRepAlgoAPI_Fuse_3(combined, objectsToJoin[i]);
-          //combinedFuse.SetFuzzyValue(fuzzValue);
+          combinedFuse.SetFuzzyValue(fuzzValue);
           combinedFuse.Build();
           combined = combinedFuse.Shape();
         }
@@ -539,9 +539,9 @@ function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, /*fuzzVa
  * The original shapes are removed unless `keepObjects` is true.  Returns a Compound Shape unless onlyFirstSolid is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let floatingCorners = Difference(Box(50, 50, 50, true), [Sphere(38)]);```*/
-function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, /*fuzzValue?: number,*/ keepEdges?: boolean): oc.TopoDS_Shape {
+function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean): oc.TopoDS_Shape {
   let storedArgs = arguments;
-  //if(!fuzzValue) { fuzzValue = 0.1; }
+  if(!fuzzValue) { fuzzValue = 0.1; }
   let curDifference = CacheOp(arguments, () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
     let difference = new oc.BRepBuilderAPI_Copy_2(mainBody, true, false).Shape();
@@ -549,7 +549,7 @@ function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shap
       for (let i = 0; i < objectsToSubtract.length; i++) {
         if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
         let differenceCut = new oc.BRepAlgoAPI_Cut_3(difference, objectsToSubtract[i]);
-        //differenceCut.SetFuzzyValue(fuzzValue);
+        differenceCut.SetFuzzyValue(fuzzValue);
         differenceCut.Build();
         difference = differenceCut.Shape();
       }
@@ -580,8 +580,8 @@ function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shap
  * The original shapes are removed unless `keepObjects` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let roundedBox = Intersection([Box(50, 50, 50, true), Sphere(38)]);```*/
-function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, /*fuzzValue?: number,*/ keepEdges?: boolean) : oc.TopoDS_Shape {
-  //if (!fuzzValue) { fuzzValue = 0.1; }
+function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean) : oc.TopoDS_Shape {
+  if (!fuzzValue) { fuzzValue = 0.1; }
   let curIntersection = CacheOp(arguments, () => {
     let intersected = new oc.BRepBuilderAPI_Copy_2(objectsToIntersect[0], true, false).Shape();
     if (objectsToIntersect.length > 1) {
