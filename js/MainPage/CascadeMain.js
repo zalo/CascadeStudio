@@ -5,6 +5,7 @@
 import { CascadeEnvironment } from './CascadeView.js';
 import '../../node_modules/rawflate/rawdeflate.js';
 import '../../node_modules/rawflate/rawinflate.js';
+import * as controlKit from '../../node_modules/controlkit/lib/ControlKit.js';
 
 export var myLayout, monacoEditor,
     consoleContainer, consoleGolden, codeContainer, gui,
@@ -34,7 +35,7 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
-window.initialize = function () {
+window.initializeCascadeStudio = function () {
     let searchParams = new URLSearchParams(window.location.search);
 
     // Load the initial Project from - LocalStorage (mainProject), URL, or the Gallery
@@ -160,7 +161,7 @@ window.initialize = function () {
                 container.setState({ code: codeString });
             }
 
-            // Initialize the Monaco Code Editor inside this dockable container
+            // initialize the Monaco Code Editor inside this dockable container
             monacoEditor = monaco.editor.create(container.getElement().get(0), {
                 value: state.code,
                 language: "typescript",
@@ -295,7 +296,7 @@ window.initialize = function () {
             floatingGUIContainer.id = "threejsViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
             if (!loadfromGallery || galleryProject) {
-                gui = new ControlKit({ parentDomElementId: "threejsViewportContainer" });
+                gui = new controlKit.default({ parentDomElementId: "threejsViewportContainer" });
                 gui.clearPanels = function () {
                     let curNode = this._node._element;
                     while (curNode.firstChild) {
@@ -403,7 +404,7 @@ window.initialize = function () {
             document.getElementsByClassName('topnav')[0].offsetHeight);
     };
 
-    // Initialize the Layout
+    // initialize the Layout
     myLayout.init();
     myLayout.updateSize(window.innerWidth, window.innerHeight -
         document.getElementById('topnav').offsetHeight);
@@ -541,5 +542,5 @@ function isArrayLike(item) {
     );
 }
 
-// Call Initialize here since modules load late
-window.initialize();
+// Call initialize here since modules load late
+window.initializeCascadeStudio();

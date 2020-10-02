@@ -93,8 +93,8 @@ CascadeStudio/
 # ControlKit Bin
 !node_modules/controlkit/
 !node_modules/controlkit/*/
-!node_modules/controlkit/bin/
-!node_modules/controlkit/bin/*
+!node_modules/controlkit/lib/
+!node_modules/controlkit/lib/**
 
 # opencascade.js Bin
 !node_modules/opencascade.js/
