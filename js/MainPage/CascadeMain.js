@@ -7,6 +7,11 @@ import '../../node_modules/rawflate/rawdeflate.js';
 import '../../node_modules/rawflate/rawinflate.js';
 import * as controlKit from '../../node_modules/controlkit/lib/ControlKit.js';
 
+import '../../node_modules/golden-layout/src/less/goldenlayout-base.less'
+import '../../node_modules/golden-layout/src/less/themes/goldenlayout-dark-theme.less'
+import $ from 'jquery'
+import GoldenLayout from "../../node_modules/golden-layout/src/index.js"
+
 export var myLayout, monacoEditor,
     consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, //focused = true,
