@@ -1,6 +1,6 @@
 // This file handles Transformation Gizmos
-import * as THREE from '../../node_modules/three/build/three.module.js';
-import { TransformControls } from '../../node_modules/three/examples/jsm/controls/TransformControls.js';
+import * as THREE from 'three';
+import { TransformControls } from '../../node_modules/three/examples/jsm/controls/TransformControls';
 
 /** Adds Handle Gizmo Functionality to the Cascade View */
 export function initializeHandleGizmos(threejsViewport){

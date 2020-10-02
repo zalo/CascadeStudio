@@ -1,3 +1,9 @@
+// Import the set of scripts we'll need to perform all the CAD operations
+import './CascadeStudioStandardLibrary.js';
+import './CascadeStudioShapeToMesh.js';
+import '../../node_modules/opencascade.js/dist/opencascade.wasm.js';
+import '../../node_modules/opentype.js/dist/opentype.min.js';
+
 // Define the persistent global variables
 var oc = null, externalShapes = {}, sceneShapes = [],
   GUIState, fullShapeEdgeHashes = {}, fullShapeFaceHashes = {},
@@ -20,14 +26,6 @@ console.error = function (err, url, line, colno, errorObj) {
   
   realConsoleError.apply(console, arguments);
 }; // This is actually accessed via worker.onerror in the main thread
-
-// Import the set of scripts we'll need to perform all the CAD operations
-importScripts(
-  '../../node_modules/three/build/three.min.js',
-  './CascadeStudioStandardLibrary.js',
-  './CascadeStudioShapeToMesh.js',
-  '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
-  '../../node_modules/opentype.js/dist/opentype.min.js');
 
 // Preload the Various Fonts that are available via Text3D
 var preloadedFonts = ['../../fonts/Roboto.ttf',

@@ -4,6 +4,7 @@ module.exports = {
 	mode: 'development',
 	entry: {
 		app: './js/MainPage/CascadeMain.js',
+		'CADWorker'    : './js/CADWorker/CascadeStudioMainWorker.js',
 		'editor.worker': './node_modules/monaco-editor/esm/vs/editor/editor.worker.js',
 		'json.worker'  : './node_modules/monaco-editor/esm/vs/language/json/json.worker',
 		'css.worker'   : './node_modules/monaco-editor/esm/vs/language/css/css.worker',
@@ -26,5 +27,6 @@ module.exports = {
 				use: ['file-loader']
 			}
 		]
-	}
+	},
+	node: { "fs": "empty" }
 };

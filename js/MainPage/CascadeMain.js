@@ -2,15 +2,15 @@
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
-import { CascadeEnvironment } from './CascadeView.js';
-import '../../node_modules/rawflate/rawdeflate.js';
-import '../../node_modules/rawflate/rawinflate.js';
-import * as controlKit from '../../node_modules/controlkit/lib/ControlKit.js';
+import { CascadeEnvironment } from './CascadeView';
+import '../../node_modules/rawflate/rawinflate';
+import '../../node_modules/rawflate/rawdeflate';
+import * as controlKit from 'ControlKit';
 
-import '../../node_modules/golden-layout/src/less/goldenlayout-base.less'
-import '../../node_modules/golden-layout/src/less/themes/goldenlayout-dark-theme.less'
+//import '../../node_modules/golden-layout/src/less/goldenlayout-base.less'
+//import '../../node_modules/golden-layout/src/less/themes/goldenlayout-dark-theme.less'
 import $ from 'jquery'
-import GoldenLayout from "../../node_modules/golden-layout/dist/es2015/index.js"
+import GoldenLayout from "golden-layout"
 import * as monaco from 'monaco-editor';
 
 self.MonacoEnvironment = {

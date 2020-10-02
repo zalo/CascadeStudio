@@ -1,11 +1,11 @@
 // This file governs the 3D Viewport which displays the 3D Model
 // It is also in charge of saving to STL and OBJ
 
-import * as THREE                 from '../../node_modules/three/build/three.module.js';
+import * as THREE                 from 'three';
 import { OrbitControls          } from '../../node_modules/three/examples/jsm/controls/OrbitControls.js';
 import { OBJExporter            } from '../../node_modules/three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter            } from '../../node_modules/three/examples/jsm/exporters/STLExporter.js';
-import { initializeHandleGizmos } from './CascadeViewHandles.js';
+import { initializeHandleGizmos } from './CascadeViewHandles';
 
 /** Create the base class for a 3D Viewport.
  *  This includes the floor, the grid, the fog, the camera, and lights */
