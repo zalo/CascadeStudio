@@ -3,7 +3,7 @@
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
 var myLayout, monacoEditor, threejsViewport,
-    consoleContainer, consoleGolden, gui,
+    consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
     mainProject = false, messageHandlers = {},
     workerWorking = false, startup;
@@ -149,6 +149,17 @@ function initialize() {
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 });
             }).catch(error => console.log(error.message));
+
+            // Check for code serialization as an array
+            codeContainer = container;
+            if (isArrayLike(state.code)) {
+                let codeString = "";
+                for (let i = 0; i < state.code.length; i++) {
+                    codeString += state.code[i] + "\n";
+                }
+                state.code = codeString;
+                container.setState({ code: codeString });
+            }
 
             // Initialize the Monaco Code Editor inside this dockable container
             monacoEditor = monaco.editor.create(container.getElement().get(0), {
@@ -442,11 +453,15 @@ function initialize() {
 
 /** This function serializes the Project's current state 
  * into a `.json` file and starts downloading it. */
-function saveProject () {
+function saveProject() {
+    let currentCode = codeContainer.getState().code;
+    if (!isArrayLike(currentCode)) {
+        codeContainer.setState({ code: state.code.split(/\r\n|\r|\n/) });
+    }
     let link = document.createElement("a");
     link.download = "CascadeStudioProject.json";
     link.href     = "data:application/json;utf8," + 
-                  encodeURIComponent(JSON.stringify(myLayout.toConfig(), null, ' '));
+                  encodeURIComponent(JSON.stringify(myLayout.toConfig(), null, 2));
     link.click();
 }
 
@@ -512,4 +527,17 @@ function makeMainProject() {
     if (myLayout && mainProject) {
         window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
     }
+}
+/** This function returns true if item is indexable like an array. */
+function isArrayLike(item) {
+    return (
+        Array.isArray(item) || 
+        (!!item &&
+          typeof item === "object" &&
+          item.hasOwnProperty("length") && 
+          typeof item.length === "number" && 
+          item.length > 0 && 
+          (item.length - 1) in item
+        )
+    );
 }
