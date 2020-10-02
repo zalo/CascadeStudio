@@ -10,7 +10,26 @@ import * as controlKit from '../../node_modules/controlkit/lib/ControlKit.js';
 import '../../node_modules/golden-layout/src/less/goldenlayout-base.less'
 import '../../node_modules/golden-layout/src/less/themes/goldenlayout-dark-theme.less'
 import $ from 'jquery'
-import GoldenLayout from "../../node_modules/golden-layout/src/index.js"
+import GoldenLayout from "../../node_modules/golden-layout/dist/es2015/index.js"
+import * as monaco from 'monaco-editor';
+
+self.MonacoEnvironment = {
+  getWorkerUrl: function (moduleId, label) {
+    if (label === 'json') {
+      return './json.worker.bundle.js';
+    }
+    if (label === 'css') {
+      return './css.worker.bundle.js';
+    }
+    if (label === 'html') {
+      return './html.worker.bundle.js';
+    }
+    if (label === 'typescript' || label === 'javascript') {
+      return './ts.worker.bundle.js';
+    }
+    return './editor.worker.bundle.js';
+  }
+}
 
 export var myLayout, monacoEditor,
     consoleContainer, consoleGolden, codeContainer, gui,
