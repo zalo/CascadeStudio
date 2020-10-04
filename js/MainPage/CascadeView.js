@@ -89,6 +89,23 @@ var Environment = function (goldenContainer) {
     this.goldenContainer.layoutManager.eventHub.emit('Start');
   }
 
+  // Draw Text to a Texture and spawn it as a Quad
+  this.createLabel = (text, x, y, z, size, color) => {
+    let canvas           = document.createElement("canvas");
+    let context          = canvas.getContext("2d");
+    context.font         = "bold 96px arial";
+    context.textAlign    = "center";
+    context.textBaseline = "middle";
+    context.fillStyle    = color;
+    context.fillText       (text, canvas.width  / 2, canvas.height / 2);
+    let texture          = new THREE.Texture(canvas); texture.needsUpdate = true;
+    let material         = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+    let mesh             = new THREE.Mesh(new THREE.PlaneGeometry(size, size, 1, 1), material);
+    mesh.renderOrder     = 101;
+    mesh.position.set(x, y, z);
+    return mesh;
+  }
+
   // Resize the container, canvas, and renderer when the window resizes
   this.onWindowResize = function () {
       this.goldenContainer.layoutManager.updateSize(window.innerWidth, window.innerHeight -
@@ -129,6 +146,20 @@ var CascadeEnvironment = function (goldenContainer) {
                           polygonOffsetFactor: 2.0,
                           polygonOffsetUnits: 1.0
                         });
+  
+  // A special corner gizmo that controls the orientation of the camera
+  this.viewCube = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial(
+      { color: 0x1f1f1f, depthTest: false, depthWrite: true, transparent: true }));
+  this.viewCube.renderOrder = 100;
+  this.viewCube.add(this.environment.createLabel("+X",  0.5,  0.0,  0.0, 1, /*"red"  */"white").rotateY( 1.57));
+  this.viewCube.add(this.environment.createLabel("-X", -0.5,  0.0,  0.0, 1, /*"red"  */"white").rotateY(-1.57));
+  this.viewCube.add(this.environment.createLabel("-Y",  0.0,  0.0,  0.5, 1, /*"green"*/"white"));
+  this.viewCube.add(this.environment.createLabel("+Y",  0.0,  0.0, -0.5, 1, /*"green"*/"white").rotateY( 3.14));
+  this.viewCube.add(this.environment.createLabel("+Z",  0.0,  0.5,  0.0, 1, /*"blue" */"white").rotateX(-1.57));
+  this.viewCube.add(this.environment.createLabel("-Z",  0.0, -0.5,  0.0, 1, /*"blue" */"white").rotateX( 1.57));
+  this.environment.scene.add(this.viewCube);
 
   // A callback to load the Triangulated Shape from the Worker and add it to the Scene
   messageHandlers["combineAndRenderShapes"] = ([facelist, edgelist]) => {
@@ -288,7 +319,7 @@ var CascadeEnvironment = function (goldenContainer) {
   this.mouse = { x: 0, y: 0 };
   this.goldenContainer.getElement().get(0).addEventListener('mousemove', (event) => {
     this.mouse.x =   ( event.offsetX / this.goldenContainer.width  ) * 2 - 1;
-    this.mouse.y = - (event.offsetY / this.goldenContainer.height) * 2 + 1;
+    this.mouse.y = - ( event.offsetY / this.goldenContainer.height ) * 2 + 1;
   }, false );
 
   this.animate = function animatethis() {
@@ -335,6 +366,35 @@ var CascadeEnvironment = function (goldenContainer) {
       for (let i = 0; i < this.handles.length; i++){
         this.environment.viewDirty = this.handles[i].dragging || this.environment.viewDirty;
       }
+    }
+
+    // Rotate the camera with clicks from the view cube
+    if (this.targetDirection) {
+      let fullDelta = new THREE.Quaternion().setFromUnitVectors(
+        this.environment.camera.getWorldDirection().clone().negate(),
+        this.targetDirection);
+      let workingQuat = new THREE.Quaternion();
+      if (workingQuat.angleTo(fullDelta) > 0.01) {
+        workingQuat.slerp(fullDelta, 0.2);
+      } else {
+        this.targetDirection = null;
+      }
+
+      this.environment.camera.position.copy(this.environment.camera.position.clone()
+        .sub(this.environment.controls.target)
+        .applyQuaternion(workingQuat)
+        .add(this.environment.controls.target));
+
+      this.environment.viewDirty = true;
+      this.environment.controls.update();
+    }
+
+    // Place the View Cube in the Corner and Interpret Clicks
+    this.environment.camera.updateMatrixWorld();
+    this.viewCube.position.copy(new THREE.Vector3(-0.75, 0.75, 0.75).unproject(this.environment.camera));
+    let intersects = this.raycaster.intersectObject(this.viewCube);
+    if (intersects.length > 0 && this.environment.controls.state === 0) {
+      this.targetDirection = intersects[0].face.normal;
     }
     
     // Only render the Three.js Viewport if the View is Dirty
