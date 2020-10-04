@@ -20,10 +20,11 @@ var Environment = function (goldenContainer) {
 
     // Create the Three.js Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x222222);          //0xa0a0a0
-    this.scene.fog        = new THREE.Fog  (0x222222, 200, 600);//0xa0a0a0
+    this.backgroundColor  = 0x222222; //0xa0a0a0
+    this.scene.background = new THREE.Color(this.backgroundColor);          
+    this.scene.fog        = new THREE.Fog  (this.backgroundColor, 200, 600);
 
-    this.camera = new THREE.PerspectiveCamera (45, 1, 1, 2000);
+    this.camera = new THREE.PerspectiveCamera (45, 1, 1, 5000);
                 //new THREE.OrthographicCamera(300 / - 2, 300 / 2, 300 / 2, 300 / - 2, 1, 1000);
                 // Consider an Orthographic Camera.  It doesn't look so hot with the Matcap Material.
     this.camera.position.set(50, 100, 150);
@@ -111,6 +112,7 @@ var CascadeEnvironment = function (goldenContainer) {
   // State for the Hover Highlighting
   this.raycaster       = new THREE.Raycaster();
   this.highlightedObj  = null;
+  this.fogDist         = 200;
 
   // State for the Handles
   this.handles         = [];
@@ -233,6 +235,12 @@ var CascadeEnvironment = function (goldenContainer) {
     }.bind(line);
     this.mainObject.add(line);
     // End Adding Highlightable Edges
+
+    // Expand fog distance to enclose the current object; always expand
+    //  otherwise you can lose the object if it gets smaller again)
+    this.boundingBox = new THREE.Box3().setFromObject(this.mainObject);
+    this.fogDist = Math.max(this.fogDist, this.boundingBox.min.distanceTo(this.boundingBox.max)*1.5);
+    this.environment.scene.fog = new THREE.Fog(this.environment.backgroundColor, this.fogDist, this.fogDist + 400);
     
     this.environment.scene.add(this.mainObject);
     this.environment.viewDirty = true;
