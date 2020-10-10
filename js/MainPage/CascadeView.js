@@ -1,3 +1,7 @@
+import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { initializeHandleGizmos } from './CascadeViewHandles'
+
 // This file governs the 3D Viewport which displays the 3D Model
 // It is also in charge of saving to STL and OBJ
 
@@ -21,7 +25,7 @@ var Environment = function (goldenContainer) {
     // Create the Three.js Scene
     this.scene = new THREE.Scene();
     this.backgroundColor  = 0x222222; //0xa0a0a0
-    this.scene.background = new THREE.Color(this.backgroundColor);          
+    this.scene.background = new THREE.Color(this.backgroundColor);
     this.scene.fog        = new THREE.Fog  (this.backgroundColor, 200, 600);
 
     this.camera = new THREE.PerspectiveCamera (45, 1, 1, 5000);
@@ -71,7 +75,7 @@ var Environment = function (goldenContainer) {
     this.scene.add(this.grid);
 
     // Set up the orbit controls used for Cascade Studio
-    this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(0, 45, 0);
     this.controls.panSpeed  = 2;
     this.controls.zoomSpeed = 1;
@@ -81,7 +85,7 @@ var Environment = function (goldenContainer) {
     // Keep track of the last time the scene was interacted with
     // This allows for lazy rendering to reduce power consumption
     this.controls.addEventListener('change', () => this.viewDirty = true);
-    this.isVisible = true; this.viewDirty = true; 
+    this.isVisible = true; this.viewDirty = true;
     this.time = new THREE.Clock();
     this.time.autoStart = true;
     this.lastTimeRendered = 0.0;
@@ -105,7 +109,7 @@ var Environment = function (goldenContainer) {
 }
 
 /** This "inherits" from Environment (by including it as a sub object) */
-var CascadeEnvironment = function (goldenContainer) {
+export function CascadeEnvironment(goldenContainer) {
   this.goldenContainer = goldenContainer;
   this.environment     = new Environment(this.goldenContainer);
 
@@ -152,15 +156,15 @@ var CascadeEnvironment = function (goldenContainer) {
       }
       // Sort Triangles into a three.js Face List
       for (let i = 0; i < face.tri_indexes.length; i += 3) {
-        triangles.push(new THREE.Face3(face.tri_indexes[i] + vInd,face.tri_indexes[i + 1] + vInd, face.tri_indexes[i + 2] + vInd, 
-                      [new THREE.Vector3(face.normal_coord[(face.tri_indexes[i     ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i     ] * 3) + 1], 
+        triangles.push(new THREE.Face3(face.tri_indexes[i] + vInd,face.tri_indexes[i + 1] + vInd, face.tri_indexes[i + 2] + vInd,
+                      [new THREE.Vector3(face.normal_coord[(face.tri_indexes[i     ] * 3)    ],
+                                         face.normal_coord[(face.tri_indexes[i     ] * 3) + 1],
                                          face.normal_coord[(face.tri_indexes[i     ] * 3) + 2]),
-                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 1 ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 1], 
+                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 1 ] * 3)    ],
+                                         face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 1],
                                          face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 2]),
-                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 2 ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 1], 
+                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 2 ] * 3)    ],
+                                         face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 1],
                                          face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 2])],
                        new THREE.Color(face.face_index, globalFaceIndex, 0)
         ));
@@ -194,7 +198,7 @@ var CascadeEnvironment = function (goldenContainer) {
         lineVertices.push(new THREE.Vector3(edge.vertex_coord[i    ],
                                             edge.vertex_coord[i + 1],
                                             edge.vertex_coord[i + 2]));
-                  
+
         lineVertices.push(new THREE.Vector3(edge.vertex_coord[i     + 3],
                                             edge.vertex_coord[i + 1 + 3],
                                             edge.vertex_coord[i + 2 + 3]));
@@ -222,7 +226,7 @@ var CascadeEnvironment = function (goldenContainer) {
       let endIndex   = this.globalEdgeMetadata[edgeIndex].end;
       for (let i = 0; i < this.lineColors.length; i++) {
         let colIndex       = Math.floor(i / 3);
-        this.lineColors[i] = (colIndex >= startIndex && colIndex <= endIndex) ? 1 : 0; 
+        this.lineColors[i] = (colIndex >= startIndex && colIndex <= endIndex) ? 1 : 0;
       }
       this.geometry.setAttribute('color', new THREE.Float32BufferAttribute(this.lineColors, 3));
       this.geometry.colorsNeedUpdate = true;
@@ -241,7 +245,7 @@ var CascadeEnvironment = function (goldenContainer) {
     this.boundingBox = new THREE.Box3().setFromObject(this.mainObject);
     this.fogDist = Math.max(this.fogDist, this.boundingBox.min.distanceTo(this.boundingBox.max)*1.5);
     this.environment.scene.fog = new THREE.Fog(this.environment.backgroundColor, this.fogDist, this.fogDist + 400);
-    
+
     this.environment.scene.add(this.mainObject);
     this.environment.viewDirty = true;
     console.log("Generation Complete!");
@@ -293,7 +297,7 @@ var CascadeEnvironment = function (goldenContainer) {
 
   this.animate = function animatethis() {
     requestAnimationFrame(() => this.animate());
-    
+
     // Lightly Highlight the faces of the object and the current face/edge index
     // This wild complexity is largely to handle the fact that all the faces and lines
     // are being drawn in a single drawcall.  This is also on the docket for refactoring.
@@ -302,7 +306,7 @@ var CascadeEnvironment = function (goldenContainer) {
       let intersects = this.raycaster.intersectObjects(this.mainObject.children);
       if (this.environment.controls.state < 0 && intersects.length > 0) {
         let isLine = intersects[0].object.type === "LineSegments";
-        let newIndex = isLine ? intersects[0].object.getEdgeMetadataAtLineIndex(intersects[0].index).localEdgeIndex : 
+        let newIndex = isLine ? intersects[0].object.getEdgeMetadataAtLineIndex(intersects[0].index).localEdgeIndex :
                                 intersects[0].face.color.r;
         if (this.highlightedObj != intersects[0].object || this.highlightedIndex !== newIndex) {
           if (this.highlightedObj) {
@@ -325,7 +329,7 @@ var CascadeEnvironment = function (goldenContainer) {
           if (this.highlightedObj.clearHighlights) { this.highlightedObj.clearHighlights(); }
           this.environment.viewDirty = true;
         }
-        
+
         this.highlightedObj = null;
         this.goldenContainer.getElement().get(0).title = "";
       }
@@ -336,16 +340,16 @@ var CascadeEnvironment = function (goldenContainer) {
         this.environment.viewDirty = this.handles[i].dragging || this.environment.viewDirty;
       }
     }
-    
+
     // Only render the Three.js Viewport if the View is Dirty
-    // This saves on rendering time/cost now, but may 
+    // This saves on rendering time/cost now, but may
     // create headaches in the future.
     if (this.environment.viewDirty) {
       this.environment.renderer.render(this.environment.scene, this.environment.camera);
       this.environment.viewDirty = false;
     }
   };
-  
+
   // Patch in the Handle Gizmo Code
   initializeHandleGizmos(this);
 

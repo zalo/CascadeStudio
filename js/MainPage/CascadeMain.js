@@ -1,5 +1,11 @@
 import GoldenLayout from 'golden-layout'
 import * as monaco from 'monaco-editor'
+import ControlKit from 'controlkit'
+import { CascadeEnvironment } from './CascadeView'
+// const hi = require('../../node_modules/opencascade.js/dist/oc.d.ts')
+// console.log(hi, 'wee')
+
+
 // This script governs the layout and intialization of all of the sub-windows
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
@@ -130,30 +136,30 @@ export function initialize() {
             var extraLibs = [];
             let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
             // opencascade.js Typescript Definitions...
-            fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
-                });
-            }).catch(error => {
-              console.log('DERPPP')
-              console.log(error.message)
-            });
+            // fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
+            //     response.text().then(function (text) {
+            //         extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
+            //     });
+            // }).catch(error => {
+            //   console.log('DERPPP')
+            //   console.log(error.message)
+            // });
 
-            // Three.js Typescript definitions...
-            fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
-                });
-            }).catch(error => console.log(error.message));
+            // // Three.js Typescript definitions...
+            // fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
+            //     response.text().then(function (text) {
+            //         extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
+            //     });
+            // }).catch(error => console.log(error.message));
 
-            // CascadeStudio Typescript Definitions...
-            fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/StandardLibraryIntellisense.d.ts' });
-                    monaco.editor.createModel("", "typescript"); //text
-                    monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
-                });
-            }).catch(error => console.log(error.message));
+            // // CascadeStudio Typescript Definitions...
+            // fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
+            //     response.text().then(function (text) {
+            //         extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/StandardLibraryIntellisense.d.ts' });
+            //         monaco.editor.createModel("", "typescript"); //text
+            //         monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
+            //     });
+            // }).catch(error => console.log(error.message));
 
             // Check for code serialization as an array
             codeContainer = container;
