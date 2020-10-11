@@ -2,9 +2,6 @@ import GoldenLayout from 'golden-layout'
 import * as monaco from 'monaco-editor'
 import ControlKit from 'controlkit'
 import { CascadeEnvironment } from './CascadeView'
-// const hi = require('../../node_modules/opencascade.js/dist/oc.d.ts')
-// console.log(hi, 'wee')
-
 
 // This script governs the layout and intialization of all of the sub-windows
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
@@ -36,7 +33,7 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
-export function initialize() {
+export function initialize(codeUpdateCallback = () => {}, initCode) {
     this.searchParams = new URLSearchParams(window.location.search);
 
     // Load the initial Project from - LocalStorage (mainProject), URL, or the Gallery
@@ -55,21 +52,21 @@ export function initialize() {
             myLayout.destroy();
             myLayout = null;
         }
-        myLayout = new GoldenLayout(JSON.parse(galleryProject));
+        myLayout = new GoldenLayout(JSON.parse(galleryProject), document.getElementById( 'cascade-container'));
 
     // Else load a project from the URL or create a new one from scratch
-    } else if (!mainProject || !loadfromStorage) {
-        let codeStr = starterCode;
+    } else if (!mainProject || !loadfromStorage || true) {
+        let codeStr = initCode ? initCode : starterCode;
         GUIState = {};
-        if (loadFromURL) {
-            // codeStr  = decode(this.searchParams.get("code"));
-            // GUIState = JSON.parse(decode(this.searchParams.get("gui")));
-        } else if (stuntedInitialization) {
-            // Begin passing on the initialization logic, this is a dead timeline
-            codeStr = '';
-        } else {
-            makeMainProject();
-        }
+        // if (loadFromURL) {
+        //     // codeStr  = decode(this.searchParams.get("code"));
+        //     // GUIState = JSON.parse(decode(this.searchParams.get("gui")));
+        // } else if (stuntedInitialization) {
+        //     // Begin passing on the initialization logic, this is a dead timeline
+        //     codeStr = '';
+        // } else {
+        //     makeMainProject();
+        // }
 
         // Define the Default Golden Layout
         // Code on the left, Model on the right
@@ -107,11 +104,11 @@ export function initialize() {
                 showMaximiseIcon: false,
                 showCloseIcon: false
             }
-        });
+        }, document.getElementById( 'cascade-container'));
 
     // Else load the project wholesale from local storage
     } else {
-        myLayout = new GoldenLayout(JSON.parse(loadfromStorage));
+        myLayout = new GoldenLayout(JSON.parse(loadfromStorage), document.getElementById( 'cascade-container'));
     }
 
     // Set up saving code changes to the localStorage
@@ -226,6 +223,7 @@ export function initialize() {
 
                 // Retrieve the code from the editor window as a string
                 let newCode = monacoEditor.getValue();
+                codeUpdateCallback(newCode)
 
                 // Clear Inline Monaco Editor Error Highlights
                 monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', []);
@@ -281,8 +279,8 @@ export function initialize() {
                     } else {
                         console.log("Saved to URL!"); //Generation Complete!
                     }
-                    window.history.replaceState({}, 'Cascade Studio',
-                        "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
+                    // window.history.replaceState({}, 'Cascade Studio',
+                    //     "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
                 }
 
                 // Print a friendly message (to which we'll append progress updates)
@@ -464,6 +462,8 @@ export function initialize() {
         guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
     }
     messageHandlers["resetWorking"] = () => { workerWorking = false; }
+    // run code as the last part of the init process
+    monacoEditor.evaluateCode()
 }
 
 /** This function serializes the Project's current state
@@ -535,8 +535,6 @@ function decode(string) { return ''; }
 /** This function encodes a string to a base64 and zipped version of that string */
 // function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
 function encode(string) {
-  // TODO update react state instead of logging, on second thought do it at whatever calls this function
-  console.log('save code', string)
   return ''
 }
 /** This function promotes the project to localStorage, allowing it to persist between sessions.
