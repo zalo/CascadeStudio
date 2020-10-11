@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { initializeHandleGizmos } from './CascadeViewHandles'
+import texture from '../../textures/dullFrontLitMetal.png'
 
 // This file governs the 3D Viewport which displays the 3D Model
 // It is also in charge of saving to STL and OBJ
@@ -125,7 +126,7 @@ export function CascadeEnvironment(goldenContainer) {
 
   // Load the Shiny Dull Metal Matcap Material
   this.loader = new THREE.TextureLoader(); this.loader.setCrossOrigin ('');
-  this.matcap = this.loader.load ('./textures/dullFrontLitMetal.png', (tex) => this.environment.viewDirty = true );
+  this.matcap = this.loader.load (texture, (tex) => this.environment.viewDirty = true );
   this.matcapMaterial = new THREE.MeshMatcapMaterial({
                           color: new THREE.Color(0xf5f5f5),
                           matcap: this.matcap,

@@ -15,9 +15,9 @@ console.error = function (err, url, line, colno, errorObj) {
   postMessage({ type: "resetWorking" });
   setTimeout(() => {
     err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
-    throw err; 
+    throw err;
   }, 0);
-  
+
   realConsoleError.apply(console, arguments);
 }; // This is actually accessed via worker.onerror in the main thread
 

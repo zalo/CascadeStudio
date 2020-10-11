@@ -13,8 +13,7 @@ import { CascadeEnvironment } from './CascadeView'
 var myLayout, monacoEditor, threejsViewport,
     consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
-    mainProject = false, messageHandlers = {},
-    workerWorking = false, startup;
+    mainProject = false, messageHandlers = {}, startup;
 
 let starterCode =
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -63,8 +62,8 @@ export function initialize() {
         let codeStr = starterCode;
         GUIState = {};
         if (loadFromURL) {
-            codeStr  = decode(this.searchParams.get("code"));
-            GUIState = JSON.parse(decode(this.searchParams.get("gui")));
+            // codeStr  = decode(this.searchParams.get("code"));
+            // GUIState = JSON.parse(decode(this.searchParams.get("gui")));
         } else if (stuntedInitialization) {
             // Begin passing on the initialization logic, this is a dead timeline
             codeStr = '';
@@ -137,29 +136,33 @@ export function initialize() {
             let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
             // opencascade.js Typescript Definitions...
             // fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
-            //     response.text().then(function (text) {
-            //         extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
-            //     });
-            // }).catch(error => {
-            //   console.log('DERPPP')
-            //   console.log(error.message)
-            // });
+            // This d.ts file is moved into /public by the script "move-ts-defs" in package.json
+            fetch("/opencascade.d.ts").then((response) => {
+                response.text().then(function (text) {
+                    extraLibs.push({ content: text, filePath: 'file://opencascade.d.ts' });
+                });
+            }).catch(error => {
+              console.log('DERPPP')
+              console.log(error.message)
+            });
 
-            // // Three.js Typescript definitions...
-            // fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
-            //     response.text().then(function (text) {
-            //         extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
-            //     });
-            // }).catch(error => console.log(error.message));
+            // Three.js Typescript definitions...
+            // This d.ts file is moved into /public by the script "move-ts-defs" in package.json
+            fetch("/Three.d.ts").then((response) => {
+                response.text().then(function (text) {
+                    extraLibs.push({ content: text, filePath: 'file://Three.d.ts' });
+                });
+            }).catch(error => console.log(error.message));
 
-            // // CascadeStudio Typescript Definitions...
-            // fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
-            //     response.text().then(function (text) {
-            //         extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/StandardLibraryIntellisense.d.ts' });
-            //         monaco.editor.createModel("", "typescript"); //text
-            //         monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
-            //     });
-            // }).catch(error => console.log(error.message));
+            // CascadeStudio Typescript Definitions...
+            // This .ts file is moved into /public by the script "move-ts-defs" in package.json
+            fetch("StandardLibraryIntellisense.ts").then((response) => {
+                response.text().then(function (text) {
+                    extraLibs.push({ content: text, filePath: 'file://StandardLibraryIntellisense.d.ts' });
+                    monaco.editor.createModel("", "typescript"); //text
+                    monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
+                });
+            }).catch(error => console.log(error.message));
 
             // Check for code serialization as an array
             codeContainer = container;
@@ -527,9 +530,15 @@ function clearExternalFiles() {
 }
 
 /** This decodes a base64 and zipped string to the original version of that string */
-function decode(string) { return RawDeflate.inflate(window.atob(decodeURIComponent(string))); }
+// function decode(string) { return RawDeflate.inflate(window.atob(decodeURIComponent(string))); }
+function decode(string) { return ''; }
 /** This function encodes a string to a base64 and zipped version of that string */
-function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
+// function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
+function encode(string) {
+  // TODO update react state instead of logging, on second thought do it at whatever calls this function
+  console.log('save code', string)
+  return ''
+}
 /** This function promotes the project to localStorage, allowing it to persist between sessions.
  * This also saves externally imported files. */
 function makeMainProject() {
