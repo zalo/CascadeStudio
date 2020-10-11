@@ -10,7 +10,8 @@ import { CascadeEnvironment } from './CascadeView'
 var myLayout, monacoEditor, threejsViewport,
     consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
-    mainProject = false, messageHandlers = {}, startup;
+    mainProject = false, messageHandlers = {}, startup,
+    isInitialized = false;
 
 let starterCode =
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -34,12 +35,20 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
 export function initialize(codeUpdateCallback = () => {}, initCode) {
-    this.searchParams = new URLSearchParams(window.location.search);
+  // this.searchParams = new URLSearchParams(window.location.search);
+  // if(isInitialized) {
+  //   console.log(Object.keys(monacoEditor))
+  //   return
+  // }
+  //   isInitialized = true
 
     // Load the initial Project from - LocalStorage (mainProject), URL, or the Gallery
-    let loadFromURL     = this.searchParams.has("code");
-    let loadfromGallery = this.searchParams.has("project");
-    let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
+    // let loadFromURL     = this.searchParams.has("code");
+    // let loadfromGallery = this.searchParams.has("project");
+    // let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
+    let loadFromURL     = null
+    let loadfromGallery = null
+    let loadfromStorage = null
 
     // Set up the Windowing/Docking/Layout System  ---------------------------------------
     mainProject = (loadFromURL || loadfromGallery) ? false : true;
@@ -139,7 +148,6 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
                     extraLibs.push({ content: text, filePath: 'file://opencascade.d.ts' });
                 });
             }).catch(error => {
-              console.log('DERPPP')
               console.log(error.message)
             });
 
@@ -153,7 +161,7 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
 
             // CascadeStudio Typescript Definitions...
             // This .ts file is moved into /public by the script "move-ts-defs" in package.json
-            fetch("StandardLibraryIntellisense.ts").then((response) => {
+            fetch("/StandardLibraryIntellisense.ts").then((response) => {
                 response.text().then(function (text) {
                     extraLibs.push({ content: text, filePath: 'file://StandardLibraryIntellisense.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
@@ -309,7 +317,11 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
             floatingGUIContainer.id = "threejsViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
             if (!loadfromGallery || galleryProject) {
+              if(!isInitialized) {
                 gui = new ControlKit({ parentDomElementId: "threejsViewportContainer" });
+                isInitialized = true
+              }
+
                 gui.clearPanels = function () {
                     let curNode = this._node._element;
                     while (curNode.firstChild) {
