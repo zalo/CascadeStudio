@@ -7,6 +7,9 @@ var sceneShapes: oc.TopoDS_Shape[];
  * @example```sceneShapes.push(externalShapes['myStep.step']);``` */
 var externalShapes: { [filename: string]: oc.TopoDS_Shape };
 
+/** Type definition for Int */
+type integer = number;
+
 /** Starts sketching a 2D shape which can contain lines, arcs, bezier splines, and fillets.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let sketch = new Sketch([0,0]).LineTo([100,0]).Fillet(20).LineTo([100,100]).End(true).Face();```*/
@@ -129,7 +132,7 @@ function Offset(shape: oc.TopoDS_Shape, offsetDistance: number, tolerance?: numb
  * `name` needs to be unique!
  * 
  * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)*/
-function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean): number;
+function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean, step?: number, precision?: integer): number;
 /** Creates a button that will trigger `callback` when clicked.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```Button("Yell", ()=>{ console.log("Help!  I've been clicked!"); });```*/
