@@ -1,3 +1,8 @@
+import GoldenLayout from 'golden-layout'
+import * as monaco from 'monaco-editor'
+import ControlKit from 'controlkit'
+import { CascadeEnvironment } from './CascadeView'
+
 // This script governs the layout and intialization of all of the sub-windows
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
@@ -5,14 +10,14 @@
 var myLayout, monacoEditor, threejsViewport,
     consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
-    mainProject = false, messageHandlers = {},
-    workerWorking = false, startup;
+    mainProject = false, messageHandlers = {}, startup,
+    isInitialized = false;
 
-let starterCode = 
+let starterCode =
 `// Welcome to Cascade Studio!   Here are some useful functions:
 //  Translate(), Rotate(), Scale(), Union(), Difference(), Intersection()
 //  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon()
-//  Offset(), Extrude(), RotatedExtrude(), Revolve(), Pipe(), Loft(), 
+//  Offset(), Extrude(), RotatedExtrude(), Revolve(), Pipe(), Loft(),
 //  FilletEdges(), ChamferEdges(),
 //  Slider(), Button(), Checkbox()
 
@@ -29,13 +34,21 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
-function initialize() {
-    this.searchParams = new URLSearchParams(window.location.search);
+export function initialize(codeUpdateCallback = () => {}, initCode) {
+  // this.searchParams = new URLSearchParams(window.location.search);
+  // if(isInitialized) {
+  //   console.log(Object.keys(monacoEditor))
+  //   return
+  // }
+  //   isInitialized = true
 
     // Load the initial Project from - LocalStorage (mainProject), URL, or the Gallery
-    let loadFromURL     = this.searchParams.has("code");
-    let loadfromGallery = this.searchParams.has("project");
-    let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
+    // let loadFromURL     = this.searchParams.has("code");
+    // let loadfromGallery = this.searchParams.has("project");
+    // let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
+    let loadFromURL     = null
+    let loadfromGallery = null
+    let loadfromStorage = null
 
     // Set up the Windowing/Docking/Layout System  ---------------------------------------
     mainProject = (loadFromURL || loadfromGallery) ? false : true;
@@ -48,21 +61,21 @@ function initialize() {
             myLayout.destroy();
             myLayout = null;
         }
-        myLayout = new GoldenLayout(JSON.parse(galleryProject));
+        myLayout = new GoldenLayout(JSON.parse(galleryProject), document.getElementById( 'cascade-container'));
 
     // Else load a project from the URL or create a new one from scratch
-    } else if (!mainProject || !loadfromStorage) {
-        let codeStr = starterCode;
+    } else if (!mainProject || !loadfromStorage || true) {
+        let codeStr = initCode ? initCode : starterCode;
         GUIState = {};
-        if (loadFromURL) {
-            codeStr  = decode(this.searchParams.get("code"));
-            GUIState = JSON.parse(decode(this.searchParams.get("gui")));
-        } else if (stuntedInitialization) {
-            // Begin passing on the initialization logic, this is a dead timeline
-            codeStr = '';
-        } else {
-            makeMainProject();
-        }
+        // if (loadFromURL) {
+        //     // codeStr  = decode(this.searchParams.get("code"));
+        //     // GUIState = JSON.parse(decode(this.searchParams.get("gui")));
+        // } else if (stuntedInitialization) {
+        //     // Begin passing on the initialization logic, this is a dead timeline
+        //     codeStr = '';
+        // } else {
+        //     makeMainProject();
+        // }
 
         // Define the Default Golden Layout
         // Code on the left, Model on the right
@@ -100,11 +113,11 @@ function initialize() {
                 showMaximiseIcon: false,
                 showCloseIcon: false
             }
-        });
+        }, document.getElementById( 'cascade-container'));
 
     // Else load the project wholesale from local storage
     } else {
-        myLayout = new GoldenLayout(JSON.parse(loadfromStorage));
+        myLayout = new GoldenLayout(JSON.parse(loadfromStorage), document.getElementById( 'cascade-container'));
     }
 
     // Set up saving code changes to the localStorage
@@ -128,23 +141,29 @@ function initialize() {
             var extraLibs = [];
             let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
             // opencascade.js Typescript Definitions...
-            fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
+            // fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
+            // This d.ts file is moved into /public by the script "move-ts-defs" in package.json
+            fetch("/opencascade.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://opencascade.d.ts' });
                 });
-            }).catch(error => console.log(error.message));
+            }).catch(error => {
+              console.log(error.message)
+            });
 
             // Three.js Typescript definitions...
-            fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
+            // This d.ts file is moved into /public by the script "move-ts-defs" in package.json
+            fetch("/Three.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://Three.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // CascadeStudio Typescript Definitions...
-            fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
+            // This .ts file is moved into /public by the script "move-ts-defs" in package.json
+            fetch("/StandardLibraryIntellisense.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/StandardLibraryIntellisense.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://StandardLibraryIntellisense.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 });
@@ -187,23 +206,23 @@ function initialize() {
             let mergedViewState = Object.assign(monacoEditor.saveViewState(), {
                 "contributionsState": {
                     "editor.contrib.folding": {
-                        "collapsedRegions": collapsed, 
+                        "collapsedRegions": collapsed,
                         "lineCount": codeLines.length,
-                        "provider": "indent" 
+                        "provider": "indent"
                     },
-                    "editor.contrib.wordHighlighter": false 
+                    "editor.contrib.wordHighlighter": false
                 }
             });
             monacoEditor.restoreViewState(mergedViewState);
             // End Collapsing All Functions -----------------------------------------------------
-            
-            /** This function triggers the evaluation of the editor code 
+
+            /** This function triggers the evaluation of the editor code
              *  inside the CAD Worker thread.*/
             monacoEditor.evaluateCode = (saveToURL = false) => {
                 // Don't evaluate if the `workerWorking` flag is true
                 if (workerWorking) { return; }
 
-                // Set the "workerWorking" flag, so we don't submit 
+                // Set the "workerWorking" flag, so we don't submit
                 // multiple jobs to the worker thread simultaneously
                 workerWorking = true;
 
@@ -212,6 +231,7 @@ function initialize() {
 
                 // Retrieve the code from the editor window as a string
                 let newCode = monacoEditor.getValue();
+                codeUpdateCallback(newCode)
 
                 // Clear Inline Monaco Editor Error Highlights
                 monaco.editor.setModelMarkers(monacoEditor.getModel(), 'test', []);
@@ -230,7 +250,7 @@ function initialize() {
                 threejsViewport.clearTransformHandles();
 
                 // Set up receiving files from the worker thread
-                // This lets users download arbitrary information 
+                // This lets users download arbitrary information
                 // from the CAD engine via the `saveFile()` function
                 messageHandlers["saveFile"] = (payload) => {
                     let link = document.createElement("a");
@@ -249,7 +269,7 @@ function initialize() {
                     }
                 });
 
-                // After evaluating, assemble all of the objects in the "workspace" 
+                // After evaluating, assemble all of the objects in the "workspace"
                 // and begin saving them out
                 cascadeStudioWorker.postMessage({
                     "type": "combineAndRenderShapes",
@@ -259,16 +279,16 @@ function initialize() {
                 // Saves the current code to the project
                 container.setState({ code: newCode });
 
-                // Determine whether to save the code + gui (no external files) 
+                // Determine whether to save the code + gui (no external files)
                 // to the URL depending on the current mode of the editor.
                 if (!loadfromGallery && saveToURL) {
                     if (mainProject) {
                         console.log("Saved to local storage and URL!");
                     } else {
-                        console.log("Saved to URL!"); //Generation Complete! 
+                        console.log("Saved to URL!"); //Generation Complete!
                     }
-                    window.history.replaceState({}, 'Cascade Studio',
-                        "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
+                    // window.history.replaceState({}, 'Cascade Studio',
+                    //     "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
                 }
 
                 // Print a friendly message (to which we'll append progress updates)
@@ -297,7 +317,11 @@ function initialize() {
             floatingGUIContainer.id = "threejsViewportContainer";
             container.getElement().get(0).appendChild(floatingGUIContainer);
             if (!loadfromGallery || galleryProject) {
+              if(!isInitialized) {
                 gui = new ControlKit({ parentDomElementId: "threejsViewportContainer" });
+                isInitialized = true
+              }
+
                 gui.clearPanels = function () {
                     let curNode = this._node._element;
                     while (curNode.firstChild) {
@@ -306,7 +330,7 @@ function initialize() {
                     this._panels = [];
                 }.bind(gui);
             }
-                
+
             threejsViewport = new CascadeEnvironment(container);
         });
     });
@@ -411,7 +435,7 @@ function initialize() {
         document.getElementById('topnav').offsetHeight);
     if (mainProject) { makeMainProject(); }
 
-    // If the Main Page loads before the CAD Worker, register a 
+    // If the Main Page loads before the CAD Worker, register a
     // callback to start the model evaluation when the CAD is ready.
     messageHandlers["startupCallback"] = () => {
         startup = function () {
@@ -450,9 +474,11 @@ function initialize() {
         guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
     }
     messageHandlers["resetWorking"] = () => { workerWorking = false; }
+    // run code as the last part of the init process
+    monacoEditor.evaluateCode()
 }
 
-/** This function serializes the Project's current state 
+/** This function serializes the Project's current state
  * into a `.json` file and starts downloading it. */
 function saveProject() {
     let currentCode = codeContainer.getState().code;
@@ -461,7 +487,7 @@ function saveProject() {
     }
     let link = document.createElement("a");
     link.download = "CascadeStudioProject.json";
-    link.href     = "data:application/json;utf8," + 
+    link.href     = "data:application/json;utf8," +
                   encodeURIComponent(JSON.stringify(myLayout.toConfig(), null, 2));
     link.click();
 }
@@ -487,10 +513,10 @@ function loadProject () {
     });
 }
 
-/** This function triggers the CAD WebWorker to 
+/** This function triggers the CAD WebWorker to
  * load one or more  .stl, .step, or .iges files. */
 function loadFiles(fileElementID = "files") {
-    // Ask the worker thread to load these files... 
+    // Ask the worker thread to load these files...
     // I can already feel this not working...
     let files = document.getElementById(fileElementID).files;
     cascadeStudioWorker.postMessage({
@@ -506,7 +532,7 @@ function loadFiles(fileElementID = "files") {
     };
 }
 
-/** This function clears all Externally Loaded files 
+/** This function clears all Externally Loaded files
  * from the `externalFiles` dict and localStorage. */
 function clearExternalFiles() {
     cascadeStudioWorker.postMessage({
@@ -516,9 +542,13 @@ function clearExternalFiles() {
 }
 
 /** This decodes a base64 and zipped string to the original version of that string */
-function decode(string) { return RawDeflate.inflate(window.atob(decodeURIComponent(string))); }
+// function decode(string) { return RawDeflate.inflate(window.atob(decodeURIComponent(string))); }
+function decode(string) { return ''; }
 /** This function encodes a string to a base64 and zipped version of that string */
-function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
+// function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
+function encode(string) {
+  return ''
+}
 /** This function promotes the project to localStorage, allowing it to persist between sessions.
  * This also saves externally imported files. */
 function makeMainProject() {
@@ -532,12 +562,12 @@ function makeMainProject() {
 /** This function returns true if item is indexable like an array. */
 function isArrayLike(item) {
     return (
-        Array.isArray(item) || 
+        Array.isArray(item) ||
         (!!item &&
           typeof item === "object" &&
-          item.hasOwnProperty("length") && 
-          typeof item.length === "number" && 
-          item.length > 0 && 
+          item.hasOwnProperty("length") &&
+          typeof item.length === "number" &&
+          item.length > 0 &&
           (item.length - 1) in item
         )
     );
