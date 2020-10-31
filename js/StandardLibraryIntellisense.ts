@@ -131,7 +131,15 @@ function Offset(shape: oc.TopoDS_Shape, offsetDistance: number, tolerance?: numb
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40);```
  * `name` needs to be unique!
  * 
- * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)*/
+ * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)
+ * 
+ * @param step controls the amount that the keyboard arrow keys will increment or decrement a value. Defaults to 1/100 (0.01).
+ * @param precision controls how many decimal places the slider can have (i.e. "0" is integers, "1" includes tenths, etc.). Defaults to 2 decimal places (0.00).
+ * 
+ * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false);```
+ * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false, 0.01);```
+ * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false, 0.01, 2);```
+ */
 function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean, step?: number, precision?: integer): number;
 /** Creates a button that will trigger `callback` when clicked.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
