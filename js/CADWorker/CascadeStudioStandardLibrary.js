@@ -554,7 +554,16 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
       offset = new oc.BRepOffsetAPI_MakeOffsetShape();
       offset.PerformByJoin(shape, offsetDistance, tolerance);
     }
-    return new oc.TopoDS_Shape(offset.Shape());
+    let offsetShape = new oc.TopoDS_Shape(offset.Shape());
+
+    // Convert Shell to Solid as is expected
+    if (offsetShape.ShapeType() == 3) {
+      let solidOffset = new oc.BRepBuilderAPI_MakeSolid();
+      solidOffset.Add(offsetShape);
+      offsetShape = new oc.TopoDS_Solid(solidOffset.Solid());
+    }
+    
+    return offsetShape;
   });
   
   if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
