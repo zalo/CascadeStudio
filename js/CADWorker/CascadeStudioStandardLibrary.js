@@ -881,10 +881,15 @@ function SaveFile(filename, fileURL) {
   });
 }
 
-function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false) {
+function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false, step, precision) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
+  if (!step) { step = 0.01; }
+  if (typeof precision === "undefined") {
+    precision = 2;
+  } else if (precision % 1) { console.error("Slider precision must be an integer"); }
+  
   GUIState[name + "Range"] = [min, max];
-  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime } });
+  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime, step: step, dp: precision } });
   return GUIState[name];
 }
 
