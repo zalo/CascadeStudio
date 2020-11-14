@@ -97,9 +97,11 @@ var Environment = function (goldenContainer) {
   }
 
   // Resize the container, canvas, and renderer when the window resizes
+  const getIdeHeight = () => document.getElementsByClassName('cadhub-main-header')[0] ? window.innerHeight - document.getElementsByClassName('cadhub-main-header')[0].offsetHeight-
+    document.getElementsByClassName('cadhub-ide-toolbar')[0].offsetHeight : window.innerHeight - 96
+
   this.onWindowResize = function () {
-      this.goldenContainer.layoutManager.updateSize(window.innerWidth, window.innerHeight -
-        document.getElementsByClassName('topnav')[0].offsetHeight);
+      this.goldenContainer.layoutManager.updateSize(window.innerWidth, getIdeHeight());
       this.camera.aspect  = this.goldenContainer.width / this.goldenContainer.height;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(this.goldenContainer.width, this.goldenContainer.height);
