@@ -34,6 +34,10 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
+export function getEditor() {
+  return monacoEditor
+}
+
 export function initialize(codeUpdateCallback = () => {}, initCode) {
   // this.searchParams = new URLSearchParams(window.location.search);
   // if(isInitialized) {
