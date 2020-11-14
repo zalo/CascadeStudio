@@ -7,7 +7,7 @@ import { CascadeEnvironment } from './CascadeView'
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
-var myLayout, monacoEditor, threejsViewport,
+var myLayout, monacoEditor,
     consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
     mainProject = false, messageHandlers = {}, startup,
@@ -33,6 +33,10 @@ Translate([0, 0, 50], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
 Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
+
+export function getEditor() {
+  return monacoEditor
+}
 
 export function initialize(codeUpdateCallback = () => {}, initCode) {
   // this.searchParams = new URLSearchParams(window.location.search);
@@ -139,7 +143,7 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
 
             // Import Typescript Intellisense Definitions for the relevant libraries...
             var extraLibs = [];
-            let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
+            // let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
             // opencascade.js Typescript Definitions...
             // fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
             // This d.ts file is moved into /public by the script "move-ts-defs" in package.json
@@ -195,9 +199,9 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
             let codeLines = state.code.split(/\r\n|\r|\n/);
             let collapsed = []; let curCollapse = null;
             for (let li = 0; li < codeLines.length; li++) {
-                if (codeLines[li].startsWith("function")) {
+                if (codeLines[li] && codeLines[li].startsWith("function")) {
                     curCollapse = { "startLineNumber": (li + 1) };
-                } else if (codeLines[li].startsWith("}") && curCollapse !== null) {
+                } else if (codeLines[li] && codeLines[li].startsWith("}") && curCollapse !== null) {
                     curCollapse["endLineNumber"] = (li + 1);
                     collapsed.push(curCollapse);
                     curCollapse = null;
@@ -366,7 +370,7 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
                 newline.style.fontSize = "1.2em";
                 if (message !== undefined) {
                     let messageText = JSON.stringify(message, getCircularReplacer());
-                    if (messageText.startsWith('"')) { messageText = messageText.slice(1, -1); }
+                    if (messageText && messageText.startsWith('"')) { messageText = messageText.slice(1, -1); }
                     newline.innerHTML = "&gt;  " + messageText;
                 } else {
                     newline.innerHTML = "undefined";
@@ -386,7 +390,7 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
                 newline.style.fontFamily = "monospace";
                 newline.style.fontSize = "1.2em";
                 let errorText = JSON.stringify(err, getCircularReplacer());
-                if (errorText.startsWith('"')) { errorText = errorText.slice(1, -1); }
+                if (errorText && errorText.startsWith('"')) { errorText = errorText.slice(1, -1); }
                 newline.innerHTML = "Line " + line + ": " + errorText;
                 consoleContainer.appendChild(newline);
                 consoleContainer.parentElement.scrollTop = consoleContainer.parentElement.scrollHeight;
@@ -424,15 +428,18 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
     //document.onblur = window.onblur; document.onfocus = window.onfocus;
 
     // Resize the layout when the browser resizes
-    window.onorientationchange = function (event) {
-        myLayout.updateSize(window.innerWidth, window.innerHeight -
-            document.getElementsByClassName('topnav')[0].offsetHeight);
+    const getIdeHeight = () => window.innerHeight - 320 - 44 - 200
+    // document.getElementsByClassName('cadhub-main-header')[0].offsetHeight-
+    // document.getElementsByClassName('cadhub-ide-toolbar')[0].offsetHeight
+    const onResize = (event) => {
+      myLayout.updateSize(window.innerWidth, getIdeHeight());
     };
+    window.onorientationchange = onResize
+    window.onresize = onResize
 
     // Initialize the Layout
     myLayout.init();
-    myLayout.updateSize(window.innerWidth, window.innerHeight -
-        document.getElementById('topnav').offsetHeight);
+    myLayout.updateSize(window.innerWidth, getIdeHeight());
     if (mainProject) { makeMainProject(); }
 
     // If the Main Page loads before the CAD Worker, register a

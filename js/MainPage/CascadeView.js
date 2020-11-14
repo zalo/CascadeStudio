@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter'
 import { initializeHandleGizmos } from './CascadeViewHandles'
 import texture from '../../textures/dullFrontLitMetal.png'
 
@@ -95,9 +97,11 @@ var Environment = function (goldenContainer) {
   }
 
   // Resize the container, canvas, and renderer when the window resizes
+  const getIdeHeight = () => document.getElementsByClassName('cadhub-main-header')[0] ? window.innerHeight - document.getElementsByClassName('cadhub-main-header')[0].offsetHeight-
+    document.getElementsByClassName('cadhub-ide-toolbar')[0].offsetHeight : window.innerHeight - 96
+
   this.onWindowResize = function () {
-      this.goldenContainer.layoutManager.updateSize(window.innerWidth, window.innerHeight -
-        document.getElementsByClassName('topnav')[0].offsetHeight);
+      this.goldenContainer.layoutManager.updateSize(window.innerWidth, getIdeHeight());
       this.camera.aspect  = this.goldenContainer.width / this.goldenContainer.height;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(this.goldenContainer.width, this.goldenContainer.height);
@@ -271,7 +275,7 @@ export function CascadeEnvironment(goldenContainer) {
 
   /**  Save the current shape to an ASCII .stl */
   this.saveShapeSTL = (filename = "CascadeStudioPart.stl") => {
-    this.stlExporter = new THREE.STLExporter();
+    this.stlExporter = new STLExporter();
     let result = this.stlExporter.parse(this.mainObject);
     let link = document.createElement("a");
     link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
@@ -281,7 +285,7 @@ export function CascadeEnvironment(goldenContainer) {
 
   /**  Save the current shape to .obj */
   this.saveShapeOBJ = (filename = "CascadeStudioPart.obj") => {
-    this.objExporter = new THREE.OBJExporter();
+    this.objExporter = new OBJExporter();
     let result = this.objExporter.parse(this.mainObject);
     let link = document.createElement("a");
     link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
