@@ -7,7 +7,7 @@ import { CascadeEnvironment } from './CascadeView'
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
-var myLayout, monacoEditor, threejsViewport,
+var myLayout, monacoEditor,
     consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
     mainProject = false, messageHandlers = {}, startup,
@@ -432,8 +432,6 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
     // document.getElementsByClassName('cadhub-main-header')[0].offsetHeight-
     // document.getElementsByClassName('cadhub-ide-toolbar')[0].offsetHeight
     const onResize = (event) => {
-      console.log('ever called')
-      console.log(getIdeHeight(), window.innerHeight)
       myLayout.updateSize(window.innerWidth, getIdeHeight());
     };
     window.onorientationchange = onResize

@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter'
 import { initializeHandleGizmos } from './CascadeViewHandles'
 import texture from '../../textures/dullFrontLitMetal.png'
 
@@ -271,7 +273,7 @@ export function CascadeEnvironment(goldenContainer) {
 
   /**  Save the current shape to an ASCII .stl */
   this.saveShapeSTL = (filename = "CascadeStudioPart.stl") => {
-    this.stlExporter = new THREE.STLExporter();
+    this.stlExporter = new STLExporter();
     let result = this.stlExporter.parse(this.mainObject);
     let link = document.createElement("a");
     link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
@@ -281,7 +283,7 @@ export function CascadeEnvironment(goldenContainer) {
 
   /**  Save the current shape to .obj */
   this.saveShapeOBJ = (filename = "CascadeStudioPart.obj") => {
-    this.objExporter = new THREE.OBJExporter();
+    this.objExporter = new OBJExporter();
     let result = this.objExporter.parse(this.mainObject);
     let link = document.createElement("a");
     link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
