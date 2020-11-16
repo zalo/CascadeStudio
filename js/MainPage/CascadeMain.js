@@ -147,9 +147,9 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
             // opencascade.js Typescript Definitions...
             // fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
             // This d.ts file is moved into /public by the script "move-ts-defs" in package.json
-            fetch("/opencascade.d.ts").then((response) => {
+            fetch("/CADWorker/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://opencascade.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://CADWorker/node_modules/opencascade.js/dist/oc.d.ts' });
                 });
             }).catch(error => {
               console.log(error.message)
@@ -157,9 +157,9 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
 
             // Three.js Typescript definitions...
             // This d.ts file is moved into /public by the script "move-ts-defs" in package.json
-            fetch("/Three.d.ts").then((response) => {
+            fetch("/CADWorker/node_modules/three/build/three.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://Three.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://CADWorker/node_modules/three/build/three.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
