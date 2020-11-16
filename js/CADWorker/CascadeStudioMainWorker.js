@@ -23,15 +23,15 @@ console.error = function (err, url, line, colno, errorObj) {
 
 // Import the set of scripts we'll need to perform all the CAD operations
 importScripts(
-  '../../node_modules/three/build/three.min.js',
+  './node_modules/three/build/three.min.js',
   './CascadeStudioStandardLibrary.js',
   './CascadeStudioShapeToMesh.js',
-  '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
-  '../../node_modules/opentype.js/dist/opentype.min.js');
+  './node_modules/opencascade.js/dist/opencascade.wasm.js',
+  './node_modules/opentype.js/dist/opentype.min.js');
 
 // Preload the Various Fonts that are available via Text3D
-var preloadedFonts = ['../../fonts/Roboto.ttf',
-  '../../fonts/Papyrus.ttf', '../../fonts/Consolas.ttf'];
+var preloadedFonts = ['./fonts/Roboto.ttf',
+  './fonts/Papyrus.ttf', './fonts/Consolas.ttf'];
 var fonts = {};
 preloadedFonts.forEach((fontURL) => {
   opentype.load(fontURL, function (err, font) {
@@ -46,7 +46,7 @@ var messageHandlers = {};
 new opencascade({
   locateFile(path) {
     if (path.endsWith('.wasm')) {
-      return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
+      return "./node_modules/opencascade.js/dist/opencascade.wasm.wasm";
     }
     return path;
   }
