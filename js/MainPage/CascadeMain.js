@@ -38,7 +38,7 @@ export function getEditor() {
   return monacoEditor
 }
 
-export function initialize(codeUpdateCallback = () => {}, initCode) {
+export function initialize(codeUpdateCallback = () => {}, initCode, onInit) {
   // this.searchParams = new URLSearchParams(window.location.search);
   // if(isInitialized) {
   //   console.log(Object.keys(monacoEditor))
@@ -297,6 +297,7 @@ export function initialize(codeUpdateCallback = () => {}, initCode) {
 
                 // Print a friendly message (to which we'll append progress updates)
                 console.log("Generating Model");
+                onInit()
             };
 
             // Force the F5 Key to refresh the model instead of refreshing the page
