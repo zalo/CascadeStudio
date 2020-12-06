@@ -248,40 +248,39 @@ var CascadeEnvironment = function (goldenContainer) {
   }
 
   /** Save the current shape to .stl */
-  this.saveShapeSTEP = (filename = "CascadeStudioPart.step") => {
+  this.saveShapeSTEP = () => {
     // Ask the worker thread for a STEP file of the current space
-    cascadeStudioWorker.postMessage({
-      "type": "saveShapeSTEP",
-      payload: filename
-    });
+    cascadeStudioWorker.postMessage({"type": "saveShapeSTEP"});
 
-    // Receive the STEP File from the Worker Thread
-    messageHandlers["saveShapeSTEP"] = (stepURL) => {
-      let link      = document.createElement("a");
-      link.href     = stepURL;
-      link.download = filename;
-      link.click();
+    // Receive the STEP file content from the Worker Thread
+    messageHandlers["saveShapeSTEP"] = async (stepContent) => {
+      const fileHandle = await getNewFileHandle("STEP files", "text/plain", "step");
+      writeFile(fileHandle, stepContent).then(() => {
+        console.log("Saved STEP to " + fileHandle.name);
+      });
     };
   }
 
   /**  Save the current shape to an ASCII .stl */
-  this.saveShapeSTL = (filename = "CascadeStudioPart.stl") => {
+  this.saveShapeSTL = async () => {
     this.stlExporter = new THREE.STLExporter();
     let result = this.stlExporter.parse(this.mainObject);
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
-		link.download = filename;
-		link.click();
+    
+    const fileHandle = await getNewFileHandle("STL files", "text/plain", "stl");
+    writeFile(fileHandle, result).then(() => {
+      console.log("Saved STL to " + fileHandle.name);
+    });
   }
 
   /**  Save the current shape to .obj */
-  this.saveShapeOBJ = (filename = "CascadeStudioPart.obj") => {
+  this.saveShapeOBJ = async () => {
     this.objExporter = new THREE.OBJExporter();
     let result = this.objExporter.parse(this.mainObject);
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
-		link.download = filename;
-		link.click();
+    
+    const fileHandle = await getNewFileHandle("OBJ files", "text/plain", "obj");
+    writeFile(fileHandle, result).then(() => {
+      console.log("Saved OBJ to " + fileHandle.name);
+    });
   }
 
   /** Set up the the Mouse Move Callback */

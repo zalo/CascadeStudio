@@ -67,11 +67,8 @@
         <h1 hidden></h1> <!-- Puts the Lighthouse Score over 90 heheh-->
         <div id="topnav" class="topnav">
             <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.6</a>
-            <a href="#" id="main-proj-button" title="Sets this project to save in local storage." onmouseup="makeMainProject();">Make Main Project</a>
             <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
-            <label for="project-file" title="Load Project from .json">Load Project
-                <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="loadProject();"/>
-            </label>
+            <a href="#" title="Load Project from .json" onmouseup="loadProject();">Load Project</a>
             <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
             <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
             <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
