@@ -76,7 +76,6 @@
                 <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="loadFiles();"/>
             </label>
             <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
-            <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear(); window.history.replaceState({}, 'Cascade Studio','?');">Reset Project</a>
         </div>
         <div id="appbody" style="height:auto">
             <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">

@@ -32,10 +32,9 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 function initialize(projectContent = null) {
     this.searchParams = new URLSearchParams(window.location.search);
 
-    // Load the initial Project from - LocalStorage, URL, or the Gallery
+    // Load the initial Project from - URL, or the Gallery
     let loadFromURL     = this.searchParams.has("code");
     let loadfromGallery = this.searchParams.has("project");
-    let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
 
     // Set up the Windowing/Docking/Layout System  ---------------------------------------
     let stuntedInitialization = loadfromGallery && !galleryProject;
@@ -50,7 +49,7 @@ function initialize(projectContent = null) {
         myLayout = new GoldenLayout(JSON.parse(projectContent || galleryProject));
 
     // Else load a project from the URL or create a new one from scratch
-    } else if (!loadfromStorage) {
+    } else {
         let codeStr = starterCode;
         GUIState = {};
         if (loadFromURL) {
@@ -99,14 +98,17 @@ function initialize(projectContent = null) {
             }
         });
 
-    // Else load the project wholesale from local storage
-    } else {
-        myLayout = new GoldenLayout(JSON.parse(loadfromStorage));
     }
 
     // Set up the Dockable Monaco Code Editor
     myLayout.registerComponent('codeEditor', function (container, state) {
         myLayout.on("initialised", () => {
+            // Destroy the existing editor if it exists
+            if (monacoEditor) {
+                monaco.editor.getModels().forEach(model => model.dispose());
+                monacoEditor = null;
+            }
+
             // Set the Monaco Language Options
             monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
                 allowNonTsExtensions: true,
@@ -296,6 +298,12 @@ function initialize(projectContent = null) {
         GUIState = state;
         container.setState(GUIState);
         myLayout.on("initialised", () => {
+            // Destroy the existing editor if it exists
+            if (threejsViewport) {
+                threejsViewport.active = false;
+                threejsViewport = null;
+            }
+
             let floatingGUIContainer = document.createElement("div");
             floatingGUIContainer.style.position = 'absolute';
             floatingGUIContainer.id = "controlKit";
@@ -508,8 +516,7 @@ async function saveProject() {
     });
 }
 
-/** This loads a .json file into the localStorage and refreshes the page with it.
- *  This will load that data as the new Main Project.*/
+/** This loads a .json file as the currentProject.*/
 const loadProject = async () => {
     // Load Project .json from a file
     [file.handle] = await getNewFileHandle(
@@ -546,7 +553,7 @@ function loadFiles(fileElementID = "files") {
 }
 
 /** This function clears all Externally Loaded files 
- * from the `externalFiles` dict and localStorage. */
+ * from the `externalFiles` dict. */
 function clearExternalFiles() {
     cascadeStudioWorker.postMessage({
         "type": "clearExternalFiles"

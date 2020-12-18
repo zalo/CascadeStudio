@@ -106,6 +106,7 @@ var Environment = function (goldenContainer) {
 
 /** This "inherits" from Environment (by including it as a sub object) */
 var CascadeEnvironment = function (goldenContainer) {
+  this.active          = true;
   this.goldenContainer = goldenContainer;
   this.environment     = new Environment(this.goldenContainer);
 
@@ -291,6 +292,9 @@ var CascadeEnvironment = function (goldenContainer) {
   }, false );
 
   this.animate = function animatethis() {
+    // Don't continue this callback if the View has been destroyed.
+    if (!this.active) { return; }
+    
     requestAnimationFrame(() => this.animate());
     
     // Lightly Highlight the faces of the object and the current face/edge index
