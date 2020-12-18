@@ -32,7 +32,7 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 function initialize(projectContent = null) {
     this.searchParams = new URLSearchParams(window.location.search);
 
-    // Load the initial Project from - URL, or the Gallery
+    // Load the initial Project from - "projectContent", the URL, or the Gallery
     let loadFromURL     = this.searchParams.has("code");
     let loadfromGallery = this.searchParams.has("project");
 
