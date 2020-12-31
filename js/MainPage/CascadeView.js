@@ -15,7 +15,7 @@ var Environment = function (goldenContainer) {
     this.curCanvas = document.createElement('canvas');
     this.goldenContainer.getElement().get(0).appendChild(this.curCanvas);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.curCanvas, antialias: true, webgl2: false });
-    this.renderer.setPixelRatio(1); this.renderer.setSize(this.parentWidth, this.parentHeight);
+    this.renderer.setPixelRatio(window.devicePixelRatio); this.renderer.setSize(this.parentWidth, this.parentHeight);
     this.goldenContainer.on('resize', this.onWindowResize.bind(this));
 
     // Create the Three.js Scene
