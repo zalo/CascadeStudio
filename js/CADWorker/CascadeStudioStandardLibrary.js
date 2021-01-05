@@ -674,9 +674,16 @@ function Sketch(startingPoint) {
   this.wires        = [];
   this.firstPoint   = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
   this.lastPoint    = this.firstPoint;
+  this.points = [startingPoint];
   this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
   this.fillets      = [];
   this.argsString   = ComputeHash(arguments, true);
+  console.log(this.points)
+
+  this.TangentialArcToAngle = function () {
+    console.log('hi')
+    return this;
+  }
 
   // Functions are: BSplineTo, Fillet, Wire, and Face
   this.Start = function (startingPoint) {
@@ -775,6 +782,7 @@ function Sketch(startingPoint) {
   }
 
   this.LineTo = function (nextPoint) {
+    this.points.push(nextPoint)
     this.argsString += ComputeHash(arguments, true);
     let endPoint = null;
     if (nextPoint.X) {
@@ -792,6 +800,91 @@ function Sketch(startingPoint) {
     this.lastPoint     = endPoint;
     this.currentIndex++;
     return this;
+  }
+
+  this.HorizontalLineTo = function(xNextPoint) {
+    const newPoint =  [xNextPoint, this.lastPoint.Y()]
+    return this.LineTo(newPoint)
+  }
+  this.HorizontalLineOfLength = function(xLength) {
+    const newPoint =  [this.lastPoint.X() + xLength, this.lastPoint.Y()]
+    return this.LineTo(newPoint)
+  }
+  
+  this.VerticalLineTo = function(yNextPoint) {
+    const newPoint =  [this.lastPoint.X(), yNextPoint]
+    return this.LineTo(newPoint)
+  }
+  this.VerticalLineOfLength = function(yLength) {
+    const newPoint =  [this.lastPoint.X(), this.lastPoint.Y() + yLength]
+    return this.LineTo(newPoint)
+  }
+  this.AngledLineOf = function(angle, {ofLength, ofVerticalLength, ofHorizontalLength}) {
+    const parsedInputs = [ofLength, ofVerticalLength, ofHorizontalLength].filter(value => typeof(value) !== 'undefined')
+    if(!parsedInputs.length) {
+      throw new Error('needs one parameter out of the following: ofLength, ofVerticalLength, ofHorizontalLength')
+    }
+    if(parsedInputs.length > 1) {
+      const usedParam = typeof(ofLength) !== 'undefined' ? 'ofLength' : 'ofVerticalLength'
+      console.warn(`more than one length param defined, '${usedParam}' will be used`)
+    }
+    let normalizedAngle = angle % 360
+    normalizedAngle = normalizedAngle < 0 ? normalizedAngle + 360 : normalizedAngle
+    const angleInRad = Math.PI*normalizedAngle/180
+    let quadrantSign = {x:1,y:1}
+    if (normalizedAngle > 90) {
+      quadrantSign.x = -1
+    }
+    if (normalizedAngle > 180) {
+      quadrantSign.y = -1
+    }
+    if (normalizedAngle > 270) {
+      quadrantSign.x = 1
+      quadrantSign.y = -1
+    }
+    let relativeX = 0
+    let relativeY = 0
+    let inputSign = 1
+    if (typeof(ofLength) !== 'undefined') {
+      relativeX = Math.cos(angleInRad)*ofLength
+      relativeY = Math.sin(angleInRad)*ofLength
+      inputSign = Math.sign(ofLength)
+    } else if( typeof(ofVerticalLength) !== 'undefined') {
+      relativeX = ofVerticalLength/Math.tan(angleInRad)
+      relativeY = ofVerticalLength
+      inputSign = Math.sign(ofVerticalLength)
+    } else if( typeof(ofHorizontalLength) !== 'undefined') {
+      relativeX = ofHorizontalLength
+      relativeY = Math.tan(angleInRad)*ofHorizontalLength
+      inputSign = Math.sign(ofHorizontalLength)
+    }
+    // normalized per quadrant and input sign of length
+    relativeX = Math.abs(relativeX)*inputSign*quadrantSign.x
+    relativeY = Math.abs(relativeY)*inputSign*quadrantSign.y
+
+    const newPoint =  [this.lastPoint.X()+relativeX, this.lastPoint.Y() + relativeY]
+    return this.LineTo(newPoint)
+
+  }
+  this.AngledLineTo = function(angle, {toXPoint, toYPoint}) {
+    if(typeof(toXPoint) === undefined && typeof(toYPoint) === undefined) {
+      throw new Error('you need to define one of the following params: toXPoint, toYPoint')
+    }
+    if(toXPoint && toYPoint) {
+      console.warn('both toXPoint and toYPoint define, toXPoint will be used')
+    }
+    // normalizing angle to something between 0 and 180 since the line has to go to specific coordinate (x or y)
+    // there is no difference between 5 and 180 degrees
+    let normalizedAngle = angle % 180
+    normalizedAngle = normalizedAngle < 0 ? normalizedAngle + 180 : normalizedAngle
+    // normalizedAngle = normalizedAngle > 180 ? normalizedAngle - 180 : normalizedAngle
+    if(toYPoint) {
+      const ofVerticalLength = toYPoint - this.lastPoint.Y()
+      return this.AngledLineOf(normalizedAngle, {ofVerticalLength})
+    }
+    const ofHorizontalLength = toXPoint - this.lastPoint.X()
+    const normalizedForX = normalizedAngle>90 ? normalizedAngle - 180 : normalizedAngle // needs to be between -90 and 90 of X coords
+    return this.AngledLineOf(normalizedForX, {ofHorizontalLength})
   }
 
   this.ArcTo = function (pointOnArc, arcEnd) {

@@ -27,6 +27,12 @@ class Sketch {
     AddWire (wire                : oc. TopoDS_Wire) : Sketch;
     
     LineTo  (nextPoint           : number[]       ) : Sketch;
+    HorizontalLineTo(xNextPoint: number): Sketch
+    HorizontalLineOfLength(xLength: number): Sketch
+    VerticalLineTo(yNextPoint: number): Sketch
+    VerticalLineOfLength(yLength: number): Sketch
+    AngledLineOf(angle: number, lengthOptions: {ofLength?: number, ofVerticalLength?: number, ofHorizontalLength?: number}): Sketch
+    AngledLineTo(angle: number, point: {toXPoint?: number, toYPoint?: number}): Sketch
     ArcTo   (pointOnArc          : number[], arcEnd : number[]) : Sketch;
     BezierTo(bezierControlPoints : number[][]): Sketch;
     BSplineTo(bsplinePoints      : number[][]): Sketch; 
