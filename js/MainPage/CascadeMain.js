@@ -518,6 +518,9 @@ async function saveProject() {
 
 /** This loads a .json file as the currentProject.*/
 const loadProject = async () => {
+    // Don't allow loading while the worker is working to prevent race conditions.
+    if (workerWorking) { return; }
+
     // Load Project .json from a file
     [file.handle] = await getNewFileHandle(
         'Cascade Studio project files',
