@@ -675,15 +675,11 @@ function Sketch(startingPoint) {
   this.firstPoint   = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
   this.lastPoint    = this.firstPoint;
   this.points = [startingPoint];
+  this.taggedLines = {}
   this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
   this.fillets      = [];
   this.argsString   = ComputeHash(arguments, true);
   console.log(this.points)
-
-  this.TangentialArcToAngle = function () {
-    console.log('hi')
-    return this;
-  }
 
   // Functions are: BSplineTo, Fillet, Wire, and Face
   this.Start = function (startingPoint) {
@@ -887,6 +883,26 @@ function Sketch(startingPoint) {
     return this.AngledLineOf(normalizedForX, {ofHorizontalLength})
   }
 
+  this.Tag = function (tagName) {
+    const [x, y] = this.points[this.points.length-2]
+    const pointA = [x, y]
+    const pointB = [this.lastPoint.X(), this.lastPoint.Y()]
+    this.taggedLines[tagName] = [pointA, pointB]
+
+    return this
+  }
+
+  this.AngledLineToTaggedLineIntersect = function(angle=0, tagName='', offset=0){
+    const line1 = this.taggedLines[tagName]
+    const intersectedPoint = intersectionWithParallelLine({
+      line1,
+      line1Offset: offset,
+      line2Point: [this.lastPoint.X(), this.lastPoint.Y()],
+      line2Angle: angle,
+    })
+    return this.LineTo(intersectedPoint)
+  }
+
   this.ArcTo = function (pointOnArc, arcEnd) {
     this.argsString += ComputeHash(arguments, true);
     let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
@@ -897,6 +913,14 @@ function Sketch(startingPoint) {
     this.lastPoint     = nextPoint;
     this.currentIndex++;
     return this;
+  }
+
+  this.TangentialArcToAngle = function (radius, angle, {obtuse = true, arcType = 'shortest'} = {}) {
+    const [x, y] = this.points[this.points.length-2]
+    const pointA = {x, y}
+    const pointB = {x: this.lastPoint.X(), y: this.lastPoint.Y()}
+    const {onArc, endPoint} = calculate3PointsForTangentialArc(radius, angle, pointB, pointA, {obtuse, arcType})
+    return this.ArcTo([onArc.x,onArc.y], [endPoint.x,endPoint.y])
   }
 
   // Constructs an order-N Bezier Curve where the first N-1 points are control points

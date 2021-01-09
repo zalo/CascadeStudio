@@ -13,6 +13,16 @@ type integer = number;
 /** Starts sketching a 2D shape which can contain lines, arcs, bezier splines, and fillets.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let sketch = new Sketch([0,0]).LineTo([100,0]).Fillet(20).LineTo([100,100]).End(true).Face();```*/
+
+export interface Coordinate {
+    x: number
+    y: number
+  }
+  
+  type ArcType = 'shortest' | 'longest' | 'clockwise' | 'counterCW'
+  
+  type Point = [number, number]
+
 class Sketch {
     constructor(startingPoint: number[]);
 
@@ -33,6 +43,10 @@ class Sketch {
     VerticalLineOfLength(yLength: number): Sketch
     AngledLineOf(angle: number, lengthOptions: {ofLength?: number, ofVerticalLength?: number, ofHorizontalLength?: number}): Sketch
     AngledLineTo(angle: number, point: {toXPoint?: number, toYPoint?: number}): Sketch
+    Tag(tagName: string): Sketch
+    AngledLineToTaggedLineIntersect(angle: number, tagName: string, offset: number): Sketch
+
+    TangentialArcToAngle(radius: number, angle: number, options?: {obtuse?: boolean, arcType?: ArcType}): Sketch
     ArcTo   (pointOnArc          : number[], arcEnd : number[]) : Sketch;
     BezierTo(bezierControlPoints : number[][]): Sketch;
     BSplineTo(bsplinePoints      : number[][]): Sketch; 

@@ -140,3 +140,162 @@ function stringToHash(string) {
 function CantorPairing(x, y) {
   return ((x + y) * (x + y + 1)) / 2 + y;
 }
+
+function normalizeRad(angle) {
+  const draft = angle % (Math.PI * 2)
+  return draft < Math.PI * 2 ? draft + Math.PI * 2 : draft
+}
+
+function deltaAngle({
+  fromAngle,
+  toAngle,
+}) {
+  // gives the angle from angleA to B (shortest path)
+  // positive number means counterClockwise 🔄
+  const normFromAngle = normalizeRad(fromAngle)
+  const normToAngle = normalizeRad(toAngle)
+  const provisional = normToAngle - normFromAngle
+  if (provisional > -Math.PI && provisional <= Math.PI) return provisional
+
+  if (provisional > Math.PI) return provisional - Math.PI * 2
+  if (provisional < -Math.PI) return provisional + Math.PI * 2
+}
+
+
+function calculate3PointsForTangentialArc(
+  radius,
+  angle,
+  arcStartPoint,
+  previousPoint,
+  { arcType = 'shortest', obtuse = true }
+) {
+  const ang = normalizeRad((angle * Math.PI) / 180)
+  const angleOfPreviousLineRad = Math.atan2(
+    arcStartPoint.y - previousPoint.y,
+    arcStartPoint.x - previousPoint.x
+  )
+  let clockwise = true
+  const temp = deltaAngle({
+    fromAngle: angleOfPreviousLineRad,
+    toAngle: ang,
+  })
+  if (['clockwise', 'counterCW'].includes(arcType)) {
+    clockwise = arcType === 'clockwise'
+  } else {
+    if (temp < 0) {
+      clockwise = arcType === 'shortest' ? obtuse : !obtuse
+    } else {
+      clockwise = arcType !== 'shortest' ? obtuse : !obtuse
+    }
+  }
+
+  const onRightHandSide = clockwise === obtuse
+  const angleToCircleCenter = onRightHandSide
+    ? angleOfPreviousLineRad - Math.PI / 2
+    : angleOfPreviousLineRad + Math.PI / 2
+  const circleCenter = {
+    x: arcStartPoint.x + Math.cos(angleToCircleCenter) * radius,
+    y: arcStartPoint.y + Math.sin(angleToCircleCenter) * radius,
+  }
+  const angleFromCircleCenter = angleToCircleCenter + Math.PI // flip 180
+  const perpendicularAngle = clockwise ? ang + Math.PI / 2 : ang - Math.PI / 2 // angle from the circle center to the final point
+  const rotationDirection = deltaAngle({
+    fromAngle: angleFromCircleCenter,
+    toAngle: perpendicularAngle,
+  })
+  let midPointAngle = angleFromCircleCenter + rotationDirection / 2
+  midPointAngle =
+    (clockwise && rotationDirection > 0) ||
+    (!clockwise && rotationDirection < 0)
+      ? midPointAngle + Math.PI
+      : midPointAngle
+  midPointAngle = normalizeRad(midPointAngle)
+  const onArc = {
+    x: circleCenter.x + Math.cos(midPointAngle) * radius,
+    y: circleCenter.y + Math.sin(midPointAngle) * radius,
+  }
+  const endPoint = {
+    x: circleCenter.x + Math.cos(perpendicularAngle) * radius,
+    y: circleCenter.y + Math.sin(perpendicularAngle) * radius,
+  }
+  return {
+    circleCenter,
+    startPoint: arcStartPoint,
+    onArc,
+    endPoint,
+  }
+}
+
+function offsetLine(
+  offset,
+  [x1, y1],
+  [x2, y2]
+) {
+  if (x1 === x2) {
+    const direction = Math.sign(y1 - y2)
+    return [
+      [x1 + offset * direction, y1],
+      [x2 + offset * direction, y2],
+    ]
+  }
+  if (y1 === y2) {
+    const direction = Math.sign(x2 - x1)
+    return [
+      [x1, y1 + offset * direction],
+      [x2, y2 + offset * direction],
+    ]
+  }
+  const xOffset = offset / Math.sin(Math.atan2(y1 - y2, x1 - x2))
+  return [
+    [x1 + xOffset, y1],
+    [x2 + xOffset, y2],
+  ]
+}
+
+function calculateIntersectionOfTwoLines({
+  line1,
+  line2Angle,
+  line2Point,
+}) {
+  const line2PointB = [
+    line2Point[0] + Math.cos((line2Angle * Math.PI) / 180) * 10,
+    line2Point[1] + Math.sin((line2Angle * Math.PI) / 180) * 10,
+  ]
+  return intersect(line1[0], line1[1], line2Point, line2PointB)
+}
+
+function intersect(
+  [x11, y11],
+  [x12, y12],
+  [x21, y21],
+  [x22, y22]
+) {
+  const slope = ([x1, y1], [x2, y2]) =>
+    (y1 - y2) / (x1 - x2)
+  const constant = (p1, p2) =>
+    p1[1] - slope(p1, p2) * p1[0]
+  const getY = (forX, p1, p2) =>
+    slope(p1, p2) * forX + constant(p1, p2)
+
+  if (x11 === x12) return [x11, getY(x11, [x21, y21], [x22, y22])]
+  if (x21 === x22) return [x21, getY(x21, [x11, y11], [x12, y12])]
+
+  const x =
+    (constant([x21, y21], [x22, y22]) - constant([x11, y11], [x12, y12])) /
+    (slope([x11, y11], [x12, y12]) - slope([x21, y21], [x22, y22]))
+  const y = getY(x, [x11, y11], [x12, y12])
+  return [x, y]
+}
+
+function intersectionWithParallelLine({
+  line1,
+  line1Offset,
+  line2Angle,
+  line2Point,
+}) {
+  return calculateIntersectionOfTwoLines({
+    line1: offsetLine(line1Offset, line1[0], line1[1]),
+    line2Angle,
+    line2Point,
+  })
+}
