@@ -1,7 +1,7 @@
 // Miscellaneous Helper Functions used in the Standard Library
 
 // Caching functions to speed up evaluation of slow redundant operations
-var argCache = {}; var usedHashes = {}; var opNumber = 0;
+var argCache = {}; var usedHashes = {}; var opNumber = 0; var currentOp = ''; var currentLineNumber = 0;
 
 /** Hashes input arguments and checks the cache for that hash.  
  * It returns a copy of the cached object if it exists, but will 
@@ -9,6 +9,8 @@ var argCache = {}; var usedHashes = {}; var opNumber = 0;
  * added to the cache if `GUIState["Cache?"]` is true. */
 function CacheOp(args, cacheMiss) {
   //toReturn = cacheMiss();
+  currentOp = args.callee.name;
+  currentLineNumber = getCallingLocation()[0];
   postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": args.callee.name } }); // Poor Man's Progress Indicator
   let toReturn = null;
   let curHash = ComputeHash(args); usedHashes[curHash] = curHash;
@@ -100,14 +102,23 @@ function getCallingLocation() {
   //console.log(errorStack);
   //console.log(navigator.userAgent);
   let lineAndColumn = [0, 0];
+
+  let matchingString = ", <anonymous>:";
   if (navigator.userAgent.includes("Chrom")) {
-    lineAndColumn = errorStack.split("\n")[5].split(", <anonymous>:")[1].split(':');
+    matchingString = ", <anonymous>:";
   }else if (navigator.userAgent.includes("Moz")) {
-    lineAndColumn = errorStack.split("\n")[4].split("eval:")[1].split(':');
+    matchingString = "eval:";
   } else {
     lineAndColumn[0] = "-1";
     lineAndColumn[1] = "-1";
+    return lineAndColumn;
   }
+
+  errorStack.split("\n").forEach((line) => {
+    if (line.includes(matchingString)) {
+      lineAndColumn = line.split(matchingString)[1].split(':');
+    }
+  });
   lineAndColumn[0] = parseFloat(lineAndColumn[0]);
   lineAndColumn[1] = parseFloat(lineAndColumn[1]);
 

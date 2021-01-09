@@ -72,7 +72,10 @@ function Evaluate(payload) {
   try {
     eval(payload.code);
   } catch (e) {
-    setTimeout(() => { throw e; }, 0);
+    setTimeout(() => {
+      e.message = "Line " + currentLineNumber + ": "  + currentOp + "() encountered  " + e.message;
+      throw e;
+    }, 0);
   } finally {
     postMessage({ type: "resetWorking" });
     // Clean Cache; remove unused Objects
