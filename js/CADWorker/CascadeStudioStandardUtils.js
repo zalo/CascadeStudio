@@ -299,3 +299,106 @@ function intersectionWithParallelLine({
     line2Point,
   })
 }
+
+function distanceBetweenPoints(pointA, pointB) {
+  return Math.sqrt(
+    Math.pow(pointB[1] - pointA[1], 2) + Math.pow(pointB[0] - pointA[0], 2)
+  )
+}
+
+function getTangentFromPoint({
+  point,
+  center,
+  radius,
+  clockwise = true,
+}) {
+  const distancePointToCenter = distanceBetweenPoints(point, center)
+
+  let deltaAngle = Math.acos(radius / distancePointToCenter)
+  if (clockwise) {
+    deltaAngle *= -1
+  }
+  const angleFromCenterToPoint = Math.atan2(
+    point[1] - center[1],
+    point[0] - center[0]
+  )
+  const finalAngle = normalizeRad(angleFromCenterToPoint + deltaAngle)
+  const tangentPoint = [
+    center[0] + Math.cos(finalAngle) * radius,
+    center[1] + Math.sin(finalAngle) * radius,
+  ]
+  const angle =
+    (Math.atan2(tangentPoint[1] - point[1], tangentPoint[0] - point[0]) * 180) /
+    Math.PI
+  return {
+    point: tangentPoint,
+    angle,
+  }
+}
+
+function getTangentialPointOfTwoCircles({
+  fromCenter,
+  fromRadius,
+  toCenter,
+  toRadius,
+  fromClockwise = true,
+  toClockwise = true,
+}) {
+  // Math partly derived from https://gieseanw.wordpress.com/2012/09/12/finding-external-tangent-points-for-two-circles/
+  // but only for the non-transverse case.
+  const sq = (val) => Math.pow(val, 2)
+  const clockwiseSign = toClockwise ? 1 : -1
+  const isTransverseTangent = toClockwise !== fromClockwise
+  const isTransverseTangentSign = isTransverseTangent ? 1 : -1
+  const radiusDiff = Math.abs(toRadius + fromRadius * isTransverseTangentSign)
+  const distanceBetweenCenters = distanceBetweenPoints(fromCenter, toCenter)
+  const distanceBetweenTangentPoints = Math.sqrt(
+    sq(distanceBetweenCenters) - sq(radiusDiff)
+  )
+  const angleBetweenCenters = Math.atan2(
+    toCenter[1] - fromCenter[1],
+    toCenter[0] - fromCenter[0]
+  )
+  const distanceBetweenToCenterAndFromTangent = Math.sqrt(
+    sq(toRadius) + sq(distanceBetweenTangentPoints)
+  )
+  let angleBetweenCircleCentersAndFromCenterToFromTanget = Math.acos(
+    (sq(fromRadius) +
+      sq(distanceBetweenCenters) -
+      sq(distanceBetweenToCenterAndFromTangent)) /
+      (2 * fromRadius * distanceBetweenCenters)
+  )
+  if (isTransverseTangent) {
+    angleBetweenCircleCentersAndFromCenterToFromTanget = Math.acos(
+      radiusDiff / distanceBetweenCenters
+    )
+  }
+  const angleOfTangentialRadii =
+    angleBetweenCircleCentersAndFromCenterToFromTanget * clockwiseSign +
+    angleBetweenCenters
+
+  const fromTangent = [
+    fromCenter[0] + Math.cos(angleOfTangentialRadii) * fromRadius,
+    fromCenter[1] + Math.sin(angleOfTangentialRadii) * fromRadius,
+  ]
+  const toTangentFlipForTransverseTangent = isTransverseTangent ? Math.PI : 0
+  const toTangent = [
+    toCenter[0] +
+      Math.cos(angleOfTangentialRadii + toTangentFlipForTransverseTangent) *
+        toRadius,
+    toCenter[1] +
+      Math.sin(angleOfTangentialRadii + toTangentFlipForTransverseTangent) *
+        toRadius,
+  ]
+  const AngleOfTangentLine =
+    (Math.atan2(toTangent[1] - fromTangent[1], toTangent[0] - fromTangent[0]) *
+      180) /
+    Math.PI
+
+  return {
+    fromTangent,
+    toTangent,
+    length: distanceBetweenTangentPoints,
+    angle: AngleOfTangentLine,
+  }
+}

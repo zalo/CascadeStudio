@@ -14,10 +14,6 @@ type integer = number;
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let sketch = new Sketch([0,0]).LineTo([100,0]).Fillet(20).LineTo([100,100]).End(true).Face();```*/
 
-export interface Coordinate {
-    x: number
-    y: number
-  }
   
   type ArcType = 'shortest' | 'longest' | 'clockwise' | 'counterCW'
   
@@ -37,16 +33,15 @@ class Sketch {
     AddWire (wire                : oc. TopoDS_Wire) : Sketch;
     
     LineTo  (nextPoint           : number[]       ) : Sketch;
-    HorizontalLineTo(xNextPoint: number): Sketch
-    HorizontalLineOfLength(xLength: number): Sketch
-    VerticalLineTo(yNextPoint: number): Sketch
-    VerticalLineOfLength(yLength: number): Sketch
-    AngledLineOf(angle: number, lengthOptions: {ofLength?: number, ofVerticalLength?: number, ofHorizontalLength?: number}): Sketch
-    AngledLineTo(angle: number, point: {toXPoint?: number, toYPoint?: number}): Sketch
-    Tag(tagName: string): Sketch
-    AngledLineToTaggedLineIntersect(angle: number, tagName: string, offset: number): Sketch
-
-    TangentialArcToAngle(radius: number, angle: number, options?: {obtuse?: boolean, arcType?: ArcType}): Sketch
+    HorizontalLineTo(xNextPoint: number): Sketch;
+    HorizontalLineOfLength(xLength: number): Sketch;
+    VerticalLineTo(yNextPoint: number): Sketch;
+    VerticalLineOfLength(yLength: number): Sketch;
+    AngledLineOf(angle: number, lengthOptions: {ofLength?: number, ofVerticalLength?: number, ofHorizontalLength?: number}): Sketch;
+    AngledLineTo(angle: number, point: {toXPoint?: number, toYPoint?: number}): Sketch;
+    Tag(tagName: string): Sketch;
+    AngledLineToTaggedLineIntersect(angle: number, tagName: string, offset: number): Sketch;
+    TangentialArcToAngle(radius: number, angle: number, options?: {obtuse?: boolean, arcType?: ArcType}): Sketch;
     ArcTo   (pointOnArc          : number[], arcEnd : number[]) : Sketch;
     BezierTo(bezierControlPoints : number[][]): Sketch;
     BSplineTo(bsplinePoints      : number[][]): Sketch; 
@@ -242,3 +237,20 @@ function CacheOp(arguments: IArguments, cacheMiss: () => oc.TopoDS_Shape): oc.To
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let box = CacheOp(arguments, () => { let box = Box(x,y,z); sceneShapes = Remove(sceneShapes, box); return box; });``` */
 function Remove(array: any[], toRemove: any): any[];
+
+const Helpers: Helpers2
+interface Helpers2 {
+  getTangentialPointOfTwoCircles: (arg: {
+    fromCenter: Point
+    fromRadius: number
+    fromClockwise?: boolean
+    toCenter: Point
+    toRadius: number
+    toClockwise?: boolean
+  }) => ({
+    fromTangent: Point
+    toTangent: Point
+    angle: number
+    length: number
+  })
+}

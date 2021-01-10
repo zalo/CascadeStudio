@@ -679,7 +679,6 @@ function Sketch(startingPoint) {
   this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
   this.fillets      = [];
   this.argsString   = ComputeHash(arguments, true);
-  console.log(this.points)
 
   // Functions are: BSplineTo, Fillet, Wire, and Face
   this.Start = function (startingPoint) {
@@ -1018,4 +1017,8 @@ function Checkbox(name = "Toggle", defaultValue = false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   postMessage({ "type": "addCheckbox", payload: { name: name, default: defaultValue } });
   return GUIState[name];
+}
+
+const Helpers = {
+  getTangentialPointOfTwoCircles,
 }
