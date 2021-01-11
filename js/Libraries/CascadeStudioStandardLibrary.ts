@@ -454,19 +454,22 @@ function Translate(offset: number[], shapes: oc.TopoDS_Shape, keepOriginal?: boo
  * @example```let leaningCylinder = Rotate([0, 1, 0], 45, Cylinder(25, 50));```*/
 function Rotate(axis: number[], degrees: number, shapes: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape {
   let rotated = null;
-  if (degrees === 0) { rotated = new oc.TopoDS_Shape(shapes); }
-  rotated = CacheOp(arguments, () => {
-    let newRot;
-    let transformation = new oc.gp_Trsf();
-    transformation.SetRotation(
-      new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), new oc.gp_Dir(
-        new oc.gp_Vec(axis[0], axis[1], axis[2]))), degrees * 0.0174533);
-    let rotation = new oc.TopLoc_Location(transformation);
-    if (!isArrayLike(shapes)) {
-      newRot = new oc.TopoDS_Shape(shapes.Moved(rotation));
-    } else if (shapes.length >= 1) {      // Do the normal rotation
-      for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-        shapes[shapeIndex].Move(rotation);
+  if (degrees === 0) {
+    rotated = new oc.TopoDS_Shape(shapes);
+  } else {
+    rotated = CacheOp(arguments, () => {
+      let newRot;
+      let transformation = new oc.gp_Trsf();
+      transformation.SetRotation(
+        new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0), new oc.gp_Dir(
+          new oc.gp_Vec(axis[0], axis[1], axis[2]))), degrees * 0.0174533);
+      let rotation = new oc.TopLoc_Location(transformation);
+      if (!isArrayLike(shapes)) {
+        newRot = new oc.TopoDS_Shape(shapes.Moved(rotation));
+      } else if (shapes.length >= 1) {      // Do the normal rotation
+        for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
+          shapes[shapeIndex].Move(rotation);
+        }
       }
       return newRot;
     });
@@ -1045,7 +1048,7 @@ class Sketch {
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false, 0.01);```
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false, 0.01, 2);```
  */
-function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean, step: number, precision: number): number {
+function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean, step?: number, precision?: number): number {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   if (!step) { step = 0.01; }
   if (typeof precision === "undefined") {
@@ -1053,7 +1056,7 @@ function Slider(name: string, defaultValue: number, min: number, max: number, re
   } else if (precision % 1) { console.error("Slider precision must be an integer"); }
   
   GUIState[name + "Range"] = [min, max];
-  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime, step: step, dp: precision } });
+  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime, step: step, dp: precision } }, null);
   return GUIState[name];
 }
 
