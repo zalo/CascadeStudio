@@ -15,15 +15,16 @@ var Environment = function (goldenContainer) {
     this.curCanvas = document.createElement('canvas');
     this.goldenContainer.getElement().get(0).appendChild(this.curCanvas);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.curCanvas, antialias: true, webgl2: false });
-    this.renderer.setPixelRatio(1); this.renderer.setSize(this.parentWidth, this.parentHeight);
+    this.renderer.setPixelRatio(window.devicePixelRatio); this.renderer.setSize(this.parentWidth, this.parentHeight);
     this.goldenContainer.on('resize', this.onWindowResize.bind(this));
 
     // Create the Three.js Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x222222);          //0xa0a0a0
-    this.scene.fog        = new THREE.Fog  (0x222222, 200, 600);//0xa0a0a0
+    this.backgroundColor  = 0x222222; //0xa0a0a0
+    this.scene.background = new THREE.Color(this.backgroundColor);          
+    this.scene.fog        = new THREE.Fog  (this.backgroundColor, 200, 600);
 
-    this.camera = new THREE.PerspectiveCamera (45, 1, 1, 2000);
+    this.camera = new THREE.PerspectiveCamera (45, 1, 1, 5000);
                 //new THREE.OrthographicCamera(300 / - 2, 300 / 2, 300 / 2, 300 / - 2, 1, 1000);
                 // Consider an Orthographic Camera.  It doesn't look so hot with the Matcap Material.
     this.camera.position.set(50, 100, 150);
@@ -105,12 +106,14 @@ var Environment = function (goldenContainer) {
 
 /** This "inherits" from Environment (by including it as a sub object) */
 var CascadeEnvironment = function (goldenContainer) {
+  this.active          = true;
   this.goldenContainer = goldenContainer;
   this.environment     = new Environment(this.goldenContainer);
 
   // State for the Hover Highlighting
   this.raycaster       = new THREE.Raycaster();
   this.highlightedObj  = null;
+  this.fogDist         = 200;
 
   // State for the Handles
   this.handles         = [];
@@ -233,6 +236,12 @@ var CascadeEnvironment = function (goldenContainer) {
     }.bind(line);
     this.mainObject.add(line);
     // End Adding Highlightable Edges
+
+    // Expand fog distance to enclose the current object; always expand
+    //  otherwise you can lose the object if it gets smaller again)
+    this.boundingBox = new THREE.Box3().setFromObject(this.mainObject);
+    this.fogDist = Math.max(this.fogDist, this.boundingBox.min.distanceTo(this.boundingBox.max)*1.5);
+    this.environment.scene.fog = new THREE.Fog(this.environment.backgroundColor, this.fogDist, this.fogDist + 400);
     
     this.environment.scene.add(this.mainObject);
     this.environment.viewDirty = true;
@@ -240,40 +249,39 @@ var CascadeEnvironment = function (goldenContainer) {
   }
 
   /** Save the current shape to .stl */
-  this.saveShapeSTEP = (filename = "CascadeStudioPart.step") => {
+  this.saveShapeSTEP = () => {
     // Ask the worker thread for a STEP file of the current space
-    cascadeStudioWorker.postMessage({
-      "type": "saveShapeSTEP",
-      payload: filename
-    });
+    cascadeStudioWorker.postMessage({"type": "saveShapeSTEP"});
 
-    // Receive the STEP File from the Worker Thread
-    messageHandlers["saveShapeSTEP"] = (stepURL) => {
-      let link      = document.createElement("a");
-      link.href     = stepURL;
-      link.download = filename;
-      link.click();
+    // Receive the STEP file content from the Worker Thread
+    messageHandlers["saveShapeSTEP"] = async (stepContent) => {
+      const fileHandle = await getNewFileHandle("STEP files", "text/plain", "step");
+      writeFile(fileHandle, stepContent).then(() => {
+        console.log("Saved STEP to " + fileHandle.name);
+      });
     };
   }
 
   /**  Save the current shape to an ASCII .stl */
-  this.saveShapeSTL = (filename = "CascadeStudioPart.stl") => {
+  this.saveShapeSTL = async () => {
     this.stlExporter = new THREE.STLExporter();
     let result = this.stlExporter.parse(this.mainObject);
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
-		link.download = filename;
-		link.click();
+    
+    const fileHandle = await getNewFileHandle("STL files", "text/plain", "stl");
+    writeFile(fileHandle, result).then(() => {
+      console.log("Saved STL to " + fileHandle.name);
+    });
   }
 
   /**  Save the current shape to .obj */
-  this.saveShapeOBJ = (filename = "CascadeStudioPart.obj") => {
+  this.saveShapeOBJ = async () => {
     this.objExporter = new THREE.OBJExporter();
     let result = this.objExporter.parse(this.mainObject);
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL( new Blob([result], { type: 'text/plain' }) );
-		link.download = filename;
-		link.click();
+    
+    const fileHandle = await getNewFileHandle("OBJ files", "text/plain", "obj");
+    writeFile(fileHandle, result).then(() => {
+      console.log("Saved OBJ to " + fileHandle.name);
+    });
   }
 
   /** Set up the the Mouse Move Callback */
@@ -284,6 +292,9 @@ var CascadeEnvironment = function (goldenContainer) {
   }, false );
 
   this.animate = function animatethis() {
+    // Don't continue this callback if the View has been destroyed.
+    if (!this.active) { return; }
+    
     requestAnimationFrame(() => this.animate());
     
     // Lightly Highlight the faces of the object and the current face/edge index

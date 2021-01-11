@@ -453,8 +453,9 @@ function Translate(offset: number[], shapes: oc.TopoDS_Shape, keepOriginal?: boo
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let leaningCylinder = Rotate([0, 1, 0], 45, Cylinder(25, 50));```*/
 function Rotate(axis: number[], degrees: number, shapes: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape {
-  if (degrees === 0) { return shapes; }
-  let rotated = CacheOp(arguments, () => {
+  let rotated = null;
+  if (degrees === 0) { rotated = new oc.TopoDS_Shape(shapes); }
+  rotated = CacheOp(arguments, () => {
     let newRot;
     let transformation = new oc.gp_Trsf();
     transformation.SetRotation(
@@ -467,9 +468,9 @@ function Rotate(axis: number[], degrees: number, shapes: oc.TopoDS_Shape, keepOr
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
         shapes[shapeIndex].Move(rotation);
       }
-    }
-    return newRot;
-  });
+      return newRot;
+    });
+  }
   if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shapes); }
   sceneShapes.push(rotated);
   return rotated;
@@ -658,7 +659,16 @@ function Offset(shape: oc.TopoDS_Shape, offsetDistance: number, tolerance?: numb
       offset = new oc.BRepOffsetAPI_MakeOffsetShape();
       offset.PerformByJoin(shape, offsetDistance, tolerance);
     }
-    return new oc.TopoDS_Shape(offset.Shape());
+    let offsetShape = new oc.TopoDS_Shape(offset.Shape());
+
+    // Convert Shell to Solid as is expected
+    if (offsetShape.ShapeType() == 3) {
+      let solidOffset = new oc.BRepBuilderAPI_MakeSolid();
+      solidOffset.Add(offsetShape);
+      offsetShape = new oc.TopoDS_Solid(solidOffset.Solid());
+    }
+    
+    return offsetShape;
   });
   
   if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
@@ -1026,11 +1036,24 @@ class Sketch {
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40);```
  * `name` needs to be unique!
  * 
- * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)*/
-function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean): number {
+ * `callback` triggers whenever the mouse is let go, and `realTime` will cause the slider to update every frame that there is movement (but it's buggy!)
+ * 
+ * @param step controls the amount that the keyboard arrow keys will increment or decrement a value. Defaults to 1/100 (0.01).
+ * @param precision controls how many decimal places the slider can have (i.e. "0" is integers, "1" includes tenths, etc.). Defaults to 2 decimal places (0.00).
+ * 
+ * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false);```
+ * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false, 0.01);```
+ * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false, 0.01, 2);```
+ */
+function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean, step: number, precision: number): number {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
+  if (!step) { step = 0.01; }
+  if (typeof precision === "undefined") {
+    precision = 2;
+  } else if (precision % 1) { console.error("Slider precision must be an integer"); }
+  
   GUIState[name + "Range"] = [min, max];
-  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime } }, null);
+  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime, step: step, dp: precision } });
   return GUIState[name];
 }
 

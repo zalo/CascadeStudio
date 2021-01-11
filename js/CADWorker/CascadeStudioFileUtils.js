@@ -123,7 +123,7 @@ function importSTL(fileName, fileText) {
   }
 }
 
-/** This function returns `currentShape` as a data URL containing a `.STEP` file.  
+/** This function returns `currentShape` `.STEP` file content.  
  * `currentShape` is set upon the successful completion of `combineAndRenderShapes()`.  */
 function saveShapeSTEP (filename = "CascadeStudioPart.step") {
   let writer = new oc.STEPControl_Writer();
@@ -137,8 +137,8 @@ function saveShapeSTEP (filename = "CascadeStudioPart.step") {
       let stepFileText = oc.FS.readFile("/" + filename, { encoding:"utf8" });
       oc.FS.unlink("/" + filename);
 
-      // Return a data url containing the contents of the STEP File
-      return URL.createObjectURL( new Blob([stepFileText], { type: 'text/plain' }) );
+      // Return the contents of the STEP File
+      return stepFileText;
     }else{
       console.error("WRITE STEP FILE FAILED.");
     }
