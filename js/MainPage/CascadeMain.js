@@ -289,7 +289,7 @@ function initialize(projectContent = null) {
                     codeContainer.setTitle('* ' + file.handle.name);
                 }
                 return true;
-            }
+            };
         });
     });
 
