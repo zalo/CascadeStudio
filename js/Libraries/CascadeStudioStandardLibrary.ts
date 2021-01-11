@@ -460,7 +460,7 @@ function Rotate(axis: number[], degrees: number, shapes: oc.TopoDS_Shape, keepOr
     rotated = CacheOp(arguments, () => {
       let newRot;
       let transformation = new oc.gp_Trsf_1();
-      transformation.SetRotation(
+      transformation.SetRotation_1(
         new oc.gp_Ax1_2(new oc.gp_Pnt_3(0, 0, 0), new oc.gp_Dir_2(
           new oc.gp_Vec_4(axis[0], axis[1], axis[2]))), degrees * 0.0174533);
       let rotation = new oc.TopLoc_Location_2(transformation);
