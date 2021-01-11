@@ -67,11 +67,8 @@
         <h1 hidden></h1> <!-- Puts the Lighthouse Score over 90 heheh-->
         <div id="topnav" class="topnav">
             <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.6</a>
-            <a href="#" id="main-proj-button" title="Sets this project to save in local storage." onmouseup="makeMainProject();">Make Main Project</a>
             <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
-            <label for="project-file" title="Load Project from .json">Load Project
-                <input id="project-file" name="project-file" type="file" accept=".json" style="display:none;" oninput="loadProject();"/>
-            </label>
+            <a href="#" title="Load Project from .json" onmouseup="loadProject();">Load Project</a>
             <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
             <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
             <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
@@ -79,7 +76,6 @@
                 <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="loadFiles();"/>
             </label>
             <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
-            <a href="" title="Resets the project and localstorage." onmouseup="window.localStorage.clear(); window.history.replaceState({}, 'Cascade Studio','?');">Reset Project</a>
         </div>
         <div id="appbody" style="height:auto">
             <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">

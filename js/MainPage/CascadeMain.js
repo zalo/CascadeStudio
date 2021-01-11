@@ -3,10 +3,10 @@
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
 var myLayout, monacoEditor, threejsViewport,
-    consoleContainer, consoleGolden, gui,
+    consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
-    mainProject = false, messageHandlers = {},
-    workerWorking = false, startup;
+    messageHandlers = {}, workerWorking = false,
+    startup, file = {}, realConsoleLog;
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -29,29 +29,27 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
-function initialize() {
+function initialize(projectContent = null) {
     this.searchParams = new URLSearchParams(window.location.search);
 
-    // Load the initial Project from - LocalStorage (mainProject), URL, or the Gallery
+    // Load the initial Project from - "projectContent", the URL, or the Gallery
     let loadFromURL     = this.searchParams.has("code");
     let loadfromGallery = this.searchParams.has("project");
-    let loadfromStorage = window.localStorage.getItem('studioState-0.0.3');
 
     // Set up the Windowing/Docking/Layout System  ---------------------------------------
-    mainProject = (loadFromURL || loadfromGallery) ? false : true;
     let stuntedInitialization = loadfromGallery && !galleryProject;
 
     // Load a project from the Gallery
-    if (loadfromGallery && galleryProject) {
+    if (projectContent || loadfromGallery && galleryProject) {
         // Destroy old config, load new one
         if(myLayout != null){
             myLayout.destroy();
             myLayout = null;
         }
-        myLayout = new GoldenLayout(JSON.parse(galleryProject));
+        myLayout = new GoldenLayout(JSON.parse(projectContent || galleryProject));
 
     // Else load a project from the URL or create a new one from scratch
-    } else if (!mainProject || !loadfromStorage) {
+    } else {
         let codeStr = starterCode;
         GUIState = {};
         if (loadFromURL) {
@@ -60,8 +58,6 @@ function initialize() {
         } else if (stuntedInitialization) {
             // Begin passing on the initialization logic, this is a dead timeline
             codeStr = '';
-        } else {
-            makeMainProject();
         }
 
         // Define the Default Golden Layout
@@ -73,7 +69,7 @@ function initialize() {
                 content: [{
                     type: 'component',
                     componentName: 'codeEditor',
-                    title: 'Code Editor',
+                    title: '* Untitled',
                     componentState: { code: codeStr },
                     width: 50.0,
                     isClosable: false
@@ -102,21 +98,17 @@ function initialize() {
             }
         });
 
-    // Else load the project wholesale from local storage
-    } else {
-        myLayout = new GoldenLayout(JSON.parse(loadfromStorage));
     }
-
-    // Set up saving code changes to the localStorage
-    myLayout.on('stateChanged', function () {
-        if (myLayout.toConfig() !== null && mainProject) {
-            window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
-        }
-    });
 
     // Set up the Dockable Monaco Code Editor
     myLayout.registerComponent('codeEditor', function (container, state) {
         myLayout.on("initialised", () => {
+            // Destroy the existing editor if it exists
+            if (monacoEditor) {
+                monaco.editor.getModels().forEach(model => model.dispose());
+                monacoEditor = null;
+            }
+
             // Set the Monaco Language Options
             monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
                 allowNonTsExtensions: true,
@@ -147,6 +139,18 @@ function initialize() {
                 extraLibs.push({ content: payload.contents, filePath: 'file://' + payload.url });
                 monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 //console.log("Imported a library from: " + payload.url);
+            }
+
+            // Check for code serialization as an array
+            codeContainer = container;
+            if (isArrayLike(state.code)) {
+                let codeString = "";
+                for (let i = 0; i < state.code.length; i++) {
+                    codeString += state.code[i] + "\n";
+                }
+                codeString = codeString.slice(0,-1);
+                state.code = codeString;
+                container.setState({ code: codeString });
             }
 
             // Initialize the Monaco Code Editor inside this dockable container
@@ -249,11 +253,7 @@ function initialize() {
                 // Determine whether to save the code + gui (no external files) 
                 // to the URL depending on the current mode of the editor.
                 if (!loadfromGallery && saveToURL) {
-                    if (mainProject) {
-                        console.log("Saved to local storage and URL!");
-                    } else {
-                        console.log("Saved to URL!"); //Generation Complete! 
-                    }
+                    console.log("Saved to URL!"); //Generation Complete! 
                     window.history.replaceState({}, 'Cascade Studio',
                         "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
                 }
@@ -262,15 +262,33 @@ function initialize() {
                 console.log("Generating Model");
             };
 
-            // Force the F5 Key to refresh the model instead of refreshing the page
             document.onkeydown = function (e) {
+                // Force the F5 Key to refresh the model instead of refreshing the page
                 if ((e.which || e.keyCode) == 116) {
                     e.preventDefault();
                     monacoEditor.evaluateCode(true);
                     return false;
                 }
+                // Save the project on Ctrl+S
+                if (String.fromCharCode(e.keyCode).toLowerCase() === 's' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    saveProject();
+                    monacoEditor.evaluateCode(true);
+                }
                 return true;
             };
+
+            document.onkeyup = function (e) {
+                if (!file.handle || e.which === 0) {
+                    return true;
+                }
+                if (file.content == monacoEditor.getValue()) {
+                    codeContainer.setTitle(file.handle.name);
+                } else {
+                    codeContainer.setTitle('* ' + file.handle.name);
+                }
+                return true;
+            }
         });
     });
 
@@ -279,12 +297,24 @@ function initialize() {
         GUIState = state;
         container.setState(GUIState);
         myLayout.on("initialised", () => {
+            // Destroy the existing editor if it exists
+            if (threejsViewport) {
+                threejsViewport.active = false;
+                threejsViewport = null;
+            }
+
             let floatingGUIContainer = document.createElement("div");
             floatingGUIContainer.style.position = 'absolute';
-            floatingGUIContainer.id = "threejsViewportContainer";
+            floatingGUIContainer.id = "controlKit";
             container.getElement().get(0).appendChild(floatingGUIContainer);
             if (!loadfromGallery || galleryProject) {
-                gui = new ControlKit({ parentDomElementId: "threejsViewportContainer" });
+                if (!gui) {
+                    gui = new ControlKit({ parentDomElementId: "controlKit" });
+                } else {
+                    // We are loading a new project, controlKit needs to have
+                    // it's node ovirriden with the new element
+                    gui._node._element = $('#controlKit')[0];
+                }
                 gui.clearPanels = function () {
                     let curNode = this._node._element;
                     while (curNode.firstChild) {
@@ -319,9 +349,9 @@ function initialize() {
         };
 
         // Overwrite the existing logging/error behaviour to print messages to the Console window
-        if (!stuntedInitialization) {
+        if (!stuntedInitialization && !realConsoleLog) {
             let alternatingColor = true;
-            let realConsoleLog = console.log;
+            realConsoleLog = console.log;
             console.log = function (message) {
                 let newline = document.createElement("div");
                 newline.style.fontFamily = "monospace";
@@ -396,7 +426,6 @@ function initialize() {
     myLayout.init();
     myLayout.updateSize(window.innerWidth, window.innerHeight -
         document.getElementById('topnav').offsetHeight);
-    if (mainProject) { makeMainProject(); }
 
     // If the Main Page loads before the CAD Worker, register a 
     // callback to start the model evaluation when the CAD is ready.
@@ -426,7 +455,9 @@ function initialize() {
         GUIState[payload.name + "Range"] = [payload.min, payload.max];
         guiPanel.addSlider(GUIState, payload.name, payload.name + 'Range', {
             onFinish: () => { monacoEditor.evaluateCode(); },
-            onChange: () => { if (payload.realTime) { monacoEditor.evaluateCode(); } }
+            onChange: () => { if (payload.realTime) { monacoEditor.evaluateCode(); } },
+            step: payload.step,
+            dp: payload.dp
         });
     }
     messageHandlers["addButton"] = (payload) => {
@@ -439,35 +470,69 @@ function initialize() {
     messageHandlers["resetWorking"] = () => { workerWorking = false; }
 }
 
+async function getNewFileHandle(desc, mime, ext, open = false) {
+    const options = {
+      types: [
+        {
+          description: desc,
+          accept: {
+            [mime]: ['.' + ext],
+          },
+        },
+      ],
+    };
+    if (open) {
+        return await window.showOpenFilePicker(options);
+    } else {
+        return await window.showSaveFilePicker(options);
+    }
+}
+
+async function writeFile(fileHandle, contents) {
+    // Create a FileSystemWritableFileStream to write to.
+    const writable = await fileHandle.createWritable();
+    // Write the contents of the file to the stream.
+    await writable.write(contents);
+    // Close the file and write the contents to disk.
+    await writable.close();
+}
+
 /** This function serializes the Project's current state 
- * into a `.json` file and starts downloading it. */
-function saveProject () {
-    let link = document.createElement("a");
-    link.download = "CascadeStudioProject.json";
-    link.href     = "data:application/json;utf8," + 
-                  encodeURIComponent(JSON.stringify(myLayout.toConfig(), null, ' '));
-    link.click();
-}
-
-/** This function asynchronously reads the text content of a file. */
-const loadFileAsync = async (file) => {
-    return new Promise((resolve, reject) => {
-      let reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsText(file);
-    })
-}
-
-/** This loads a .json file into the localStorage and refreshes the page with it.
- *  This will load that data as the new Main Project.*/
-function loadProject () {
-    // Get Project .json
-    loadFileAsync(document.getElementById("project-file").files[0]).then((jsonFile) => {
-        window.localStorage.setItem('studioState-0.0.3', jsonFile);
-        window.history.replaceState({}, 'Cascade Studio','?');
-        location.reload();
+ * into a `.json` file and saves it to the selected location. */
+async function saveProject() {
+    let currentCode = monacoEditor.getValue();
+    if (!file.handle) {
+        file.handle = await getNewFileHandle(
+            "Cascade Studio project files",
+            "application/json",
+            "json"
+        );
+    }
+    writeFile(file.handle, JSON.stringify(myLayout.toConfig(), null, 2)).then(() => {
+        codeContainer.setTitle(file.handle.name);
+        console.log("Saved project to " + file.handle.name);
+        file.content = currentCode;
     });
+}
+
+/** This loads a .json file as the currentProject.*/
+const loadProject = async () => {
+    // Don't allow loading while the worker is working to prevent race conditions.
+    if (workerWorking) { return; }
+
+    // Load Project .json from a file
+    [file.handle] = await getNewFileHandle(
+        'Cascade Studio project files',
+        'application/json',
+        'json',
+        open = true
+    );
+    let fileSystemFile = await file.handle.getFile();
+    let jsonContent = await fileSystemFile.text();
+    window.history.replaceState({}, 'Cascade Studio','?');
+    initialize(projectContent=jsonContent);
+    codeContainer.setTitle(file.handle.name);
+    file.content = monacoEditor.getValue();
 }
 
 /** This function triggers the CAD WebWorker to 
@@ -490,7 +555,7 @@ function loadFiles(fileElementID = "files") {
 }
 
 /** This function clears all Externally Loaded files 
- * from the `externalFiles` dict and localStorage. */
+ * from the `externalFiles` dict. */
 function clearExternalFiles() {
     cascadeStudioWorker.postMessage({
         "type": "clearExternalFiles"
@@ -502,13 +567,17 @@ function clearExternalFiles() {
 function decode(string) { return RawDeflate.inflate(window.atob(decodeURIComponent(string))); }
 /** This function encodes a string to a base64 and zipped version of that string */
 function encode(string) { return encodeURIComponent(window.btoa(RawDeflate.deflate(string))); }
-/** This function promotes the project to localStorage, allowing it to persist between sessions.
- * This also saves externally imported files. */
-function makeMainProject() {
-    mainProject = true;
-    let mainProjButton = document.getElementById("main-proj-button");
-    if (mainProjButton) { mainProjButton.remove(); }
-    if (myLayout && mainProject) {
-        window.localStorage.setItem('studioState-0.0.3', JSON.stringify(myLayout.toConfig()));
-    }
+
+/** This function returns true if item is indexable like an array. */
+function isArrayLike(item) {
+    return (
+        Array.isArray(item) || 
+        (!!item &&
+          typeof item === "object" &&
+          item.hasOwnProperty("length") && 
+          typeof item.length === "number" && 
+          item.length > 0 && 
+          (item.length - 1) in item
+        )
+    );
 }

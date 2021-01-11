@@ -55,9 +55,9 @@ Save your completed models to .step, .stl. or .obj, or copy the url and share it
   <a title="Loft Example" href="https://zalo.github.io/CascadeStudio/?code=fZE9C8IwEIb3%2ForDKULEVu0gIg6uDiJuwSHGqy2GniQRFPG%2FmzRa%2FMIMubyXu%2FcJF40OCqkwgyn8XUvSlz3VTIjeIOfQbOmGg4B3GQ4PESuj8FfOnLA7SfSDOPDEtZG11dIhEykP1aPgsSLXpDLfGF1H3uP1AT7dy1rim0o%2Fid0X5vCLmac8%2F80c%2BzivjNLIAqH1Svp9WFDhQIIlXe3AlvKI4EpDp33pI4IyZC1YVK6i2iZVAWxeojps6cw6oXfWeRpeGy8mmj%2FgcTAxDNuRwe0O&gui=q1ZKzs8tyM9LzSvxS8xNVbJSSk4sTk5MSQ3LTC1X0lHyTS3OCEotVrIy0DOE84IS89KBSqMN9AwMdYxidZRCMnNKlKx0DS0gTJi8rpGBjpEBUN4tMycntcReyaqkqDRVR8knPw3GqQUA"><img src="./icon/Loft.png" height="192"></a>
 </p>
 
-## [Community](https://github.com/zalo/CascadeStudio/issues)
+## [Community](https://github.com/zalo/CascadeStudio/discussions)
 
-Model code is saved to the URL upon every successful evaluation, so you can copy and paste that link to others to view your model.  Until [Github Discussions](https://github.blog/2020-05-06-new-from-satellite-2020-github-codespaces-github-discussions-securing-code-in-private-repositories-and-more/#discussions) comes out of beta, feel free to use the ["Issues" tab](https://github.com/zalo/CascadeStudio/issues) to share your creations and examples, as well as to report bugs and comments.
+Model code is saved to the URL upon every successful evaluation, so you can copy and paste that link to others to view your model.  [Github Discussions](https://github.com/zalo/CascadeStudio/discussions) is out of beta! So feel free to share your creations and examples here.
 
 ## Contributing
 

@@ -14,7 +14,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
       ForEachFace(shape, (faceIndex, myFace) => {
         let aLocation = new oc.TopLoc_Location_1();
         let myT = oc.BRep_Tool.Triangulation(myFace, aLocation);
-        if (myT.IsNull()) { console.error("Encountered Null Face!"); return; }
+        if (myT.IsNull()) { console.error("Encountered Null Face!"); argCache = {}; return; }
 
         let this_face = {
           vertex_coord: [],
