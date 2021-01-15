@@ -1,11 +1,34 @@
+/* eslint-disable prettier/prettier */
+import { CascadeEnvironment } from "./CascadeView";
+import GoldenLayout from "golden-layout";
+import "golden-layout/src/css/goldenlayout-base.css";
+import "golden-layout/src/css/goldenlayout-dark-theme.css";
+import ControlKit from "controlkit";
+import * as monaco from "monaco-editor";
+
+import '../../static_node_modules/rawflate/rawdeflate'
+import '../../static_node_modules/rawflate/rawinflate'
+
+import {
+    messageHandlers,
+    workerWorking,
+    setWorkerWorking,
+    monacoEditor,
+    setMonacoEditor,
+    threejsViewport,
+    setThreejsViewport,
+} from "./CascadeState";
+import cascadeStudioWorker from './CascadeWorkerInit';
+
+
+
 // This script governs the layout and intialization of all of the sub-windows
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
-var myLayout, monacoEditor, threejsViewport,
+var myLayout,
     consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
-    messageHandlers = {}, workerWorking = false,
     startup, file = {}, realConsoleLog;
 
 let starterCode = 
@@ -29,7 +52,7 @@ Translate([-25, 0, 40], Text3D("Hi!"));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
-function initialize(projectContent = null) {
+export function initialize(projectContent = null) {
     this.searchParams = new URLSearchParams(window.location.search);
 
     // Load the initial Project from - "projectContent", the URL, or the Gallery
@@ -106,7 +129,7 @@ function initialize(projectContent = null) {
             // Destroy the existing editor if it exists
             if (monacoEditor) {
                 monaco.editor.getModels().forEach(model => model.dispose());
-                monacoEditor = null;
+                setMonacoEditor(null);
             }
 
             // Set the Monaco Language Options
@@ -118,29 +141,17 @@ function initialize(projectContent = null) {
 
             // Import Typescript Intellisense Definitions for the relevant libraries...
             var extraLibs = [];
-            let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
-            // opencascade.js Typescript Definitions...
-            fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
-                });
-            }).catch(error => console.log(error.message));
+            const typescriptDefinitionFiles = ["opencascade.d.ts", "Three.d.ts", "js/StandardLibraryIntellisense.ts"]
 
-            // Three.js Typescript definitions...
-            fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
-                });
-            }).catch(error => console.log(error.message));
-
-            // CascadeStudio Typescript Definitions...
-            fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
-                response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/StandardLibraryIntellisense.d.ts' });
+            Promise.all(typescriptDefinitionFiles.map(fileLocation => fetch(fileLocation)))
+                .then(async responses => {
+                    const files = await Promise.all(responses.map(response => response.text()))
+                    extraLibs = files.map((file, index) => {
+                        return ({ content: file, filePath: 'file://' + typescriptDefinitionFiles[index] })
+                    })
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
-                });
-            }).catch(error => console.log(error.message));
+                }).catch(error => console.log(error.message));
 
             // Check for code serialization as an array
             codeContainer = container;
@@ -155,7 +166,7 @@ function initialize(projectContent = null) {
             }
 
             // Initialize the Monaco Code Editor inside this dockable container
-            monacoEditor = monaco.editor.create(container.getElement().get(0), {
+            const newMonacoEditor = monaco.editor.create(container.getElement().get(0), {
                 value: state.code,
                 language: "typescript",
                 theme: "vs-dark",
@@ -163,6 +174,7 @@ function initialize(projectContent = null) {
                 minimap: { enabled: false }//,
                 //model: null
             });
+            setMonacoEditor(newMonacoEditor);
 
             // Collapse all Functions in the Editor to suppress library clutter -----------------
             let codeLines = state.code.split(/\r\n|\r|\n/);
@@ -197,7 +209,7 @@ function initialize(projectContent = null) {
 
                 // Set the "workerWorking" flag, so we don't submit 
                 // multiple jobs to the worker thread simultaneously
-                workerWorking = true;
+                setWorkerWorking(true);
 
                 // Refresh these every so often to ensure we're always getting intellisense
                 monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
@@ -301,7 +313,7 @@ function initialize(projectContent = null) {
             // Destroy the existing editor if it exists
             if (threejsViewport) {
                 threejsViewport.active = false;
-                threejsViewport = null;
+                setThreejsViewport(null)
             }
 
             let floatingGUIContainer = document.createElement("div");
@@ -313,8 +325,8 @@ function initialize(projectContent = null) {
                     gui = new ControlKit({ parentDomElementId: "controlKit" });
                 } else {
                     // We are loading a new project, controlKit needs to have
-                    // it's node ovirriden with the new element
-                    gui._node._element = $('#controlKit')[0];
+                    // it's node overridden with the new element
+                    gui._node._element = document.getElementById('controlKit');
                 }
                 gui.clearPanels = function () {
                     let curNode = this._node._element;
@@ -325,7 +337,7 @@ function initialize(projectContent = null) {
                 }.bind(gui);
             }
                 
-            threejsViewport = new CascadeEnvironment(container);
+            setThreejsViewport(new CascadeEnvironment(container));
         });
     });
 
@@ -371,7 +383,10 @@ function initialize(projectContent = null) {
             };
             // Call this console.log when triggered from the WASM
             messageHandlers["log"  ] = (payload) => { console.log(payload); };
-            messageHandlers["error"] = (payload) => { workerWorking = false; console.error(payload); };
+            messageHandlers["error"] = (payload) => { 
+                setWorkerWorking(false);
+                console.error(payload); 
+            };
 
             // Print Errors in Red
             window.onerror = function (err, url, line, colno, errorObj) {
@@ -468,10 +483,10 @@ function initialize(projectContent = null) {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
         guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
     }
-    messageHandlers["resetWorking"] = () => { workerWorking = false; }
+    messageHandlers["resetWorking"] = () => setWorkerWorking(false)
 }
 
-async function getNewFileHandle(desc, mime, ext, open = false) {
+export async function getNewFileHandle(desc, mime, ext, open = false) {
     const options = {
       types: [
         {
@@ -489,7 +504,7 @@ async function getNewFileHandle(desc, mime, ext, open = false) {
     }
 }
 
-async function writeFile(fileHandle, contents) {
+export async function writeFile(fileHandle, contents) {
     // Create a FileSystemWritableFileStream to write to.
     const writable = await fileHandle.createWritable();
     // Write the contents of the file to the stream.
@@ -500,7 +515,7 @@ async function writeFile(fileHandle, contents) {
 
 /** This function serializes the Project's current state 
  * into a `.json` file and saves it to the selected location. */
-async function saveProject() {
+export async function saveProject() {
     let currentCode = monacoEditor.getValue();
     if (!file.handle) {
         file.handle = await getNewFileHandle(
@@ -520,7 +535,7 @@ async function saveProject() {
 }
 
 /** This loads a .json file as the currentProject.*/
-const loadProject = async () => {
+export const loadProject = async () => {
     // Don't allow loading while the worker is working to prevent race conditions.
     if (workerWorking) { return; }
 
@@ -534,14 +549,14 @@ const loadProject = async () => {
     let fileSystemFile = await file.handle.getFile();
     let jsonContent = await fileSystemFile.text();
     window.history.replaceState({}, 'Cascade Studio','?');
-    initialize(projectContent=jsonContent);
+    new initialize(jsonContent);
     codeContainer.setTitle(file.handle.name);
     file.content = monacoEditor.getValue();
 }
 
 /** This function triggers the CAD WebWorker to 
  * load one or more  .stl, .step, or .iges files. */
-function loadFiles(fileElementID = "files") {
+export function loadFiles(fileElementID = "files") {
     // Ask the worker thread to load these files... 
     // I can already feel this not working...
     let files = document.getElementById(fileElementID).files;
@@ -560,7 +575,7 @@ function loadFiles(fileElementID = "files") {
 
 /** This function clears all Externally Loaded files 
  * from the `externalFiles` dict. */
-function clearExternalFiles() {
+export function clearExternalFiles() {
     cascadeStudioWorker.postMessage({
         "type": "clearExternalFiles"
     });

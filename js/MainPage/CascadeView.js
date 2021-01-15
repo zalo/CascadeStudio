@@ -1,8 +1,55 @@
+import * as THREE from "three";
+import { STLExporter } from "three/examples/jsm/exporters/STLExporter";
+import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter";
+import { initializeHandleGizmos } from "./CascadeViewHandles";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import {
+  messageHandlers,
+  setWorkerWorking,
+  threejsViewport
+} from "./CascadeState";
+import cascadeStudioWorker from "./CascadeWorkerInit";
+import {
+  getNewFileHandle,
+  writeFile,
+  loadProject,
+  saveProject,
+  loadFiles,
+  clearExternalFiles
+} from "./CascadeMain";
 // This file governs the 3D Viewport which displays the 3D Model
 // It is also in charge of saving to STL and OBJ
 
 /** Create the base class for a 3D Viewport.
  *  This includes the floor, the grid, the fog, the camera, and lights */
+
+function setupIdeButtonListeners() {
+  document.getElementById("save-step").addEventListener("click", () => {
+    threejsViewport.saveShapeSTEP();
+  });
+  document.getElementById("save-stl").addEventListener("click", () => {
+    threejsViewport.saveShapeSTL();
+  });
+  document.getElementById("save-obj").addEventListener("click", () => {
+    threejsViewport.saveShapeOBJ();
+  });
+  document.getElementById("load-project").addEventListener("click", () => {
+    loadProject();
+  });
+  document.getElementById("save-project").addEventListener("click", () => {
+    saveProject();
+  });
+  document.getElementById("files").addEventListener("click", () => {
+    loadFiles();
+  });
+  document
+    .getElementById("clear-external-files")
+    .addEventListener("click", () => {
+      clearExternalFiles();
+    });
+}
+setupIdeButtonListeners();
+
 var Environment = function (goldenContainer) {
   this.goldenContainer = goldenContainer;
 
@@ -71,7 +118,7 @@ var Environment = function (goldenContainer) {
     this.scene.add(this.grid);
 
     // Set up the orbit controls used for Cascade Studio
-    this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(0, 45, 0);
     this.controls.panSpeed  = 2;
     this.controls.zoomSpeed = 1;
@@ -105,7 +152,7 @@ var Environment = function (goldenContainer) {
 }
 
 /** This "inherits" from Environment (by including it as a sub object) */
-var CascadeEnvironment = function (goldenContainer) {
+export function CascadeEnvironment (goldenContainer) {
   this.active          = true;
   this.goldenContainer = goldenContainer;
   this.environment     = new Environment(this.goldenContainer);
@@ -133,7 +180,7 @@ var CascadeEnvironment = function (goldenContainer) {
 
   // A callback to load the Triangulated Shape from the Worker and add it to the Scene
   messageHandlers["combineAndRenderShapes"] = ([facelist, edgelist]) => {
-    workerWorking = false;     // Untick this flag to allow Evaluations again
+    setWorkerWorking(false);   // Untick this flag to allow Evaluations again
     if (!facelist) { return;}  // Do nothing if the results are null
 
     // The old mainObject is dead!  Long live the mainObject!
@@ -264,7 +311,7 @@ var CascadeEnvironment = function (goldenContainer) {
 
   /**  Save the current shape to an ASCII .stl */
   this.saveShapeSTL = async () => {
-    this.stlExporter = new THREE.STLExporter();
+    this.stlExporter = new STLExporter();
     let result = this.stlExporter.parse(this.mainObject);
     
     const fileHandle = await getNewFileHandle("STL files", "text/plain", "stl");
@@ -275,7 +322,7 @@ var CascadeEnvironment = function (goldenContainer) {
 
   /**  Save the current shape to .obj */
   this.saveShapeOBJ = async () => {
-    this.objExporter = new THREE.OBJExporter();
+    this.objExporter = new OBJExporter();
     let result = this.objExporter.parse(this.mainObject);
     
     const fileHandle = await getNewFileHandle("OBJ files", "text/plain", "obj");

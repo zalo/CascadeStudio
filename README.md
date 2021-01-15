@@ -61,8 +61,6 @@ Model code is saved to the URL upon every successful evaluation, so you can copy
 
 ## Contributing
 
-Cascade Studio is entirely static assets and vanilla javascript, so running it locally is as simple as running a server from the root directory (such as the [VS Code Live Server](https://github.com/ritwickdey/vscode-live-server), [Python live-server](https://pypi.org/project/live-server/), or [Node live-server](https://www.npmjs.com/package/live-server) ).
-
 Pull Requests to this repo are automatically hosted to Vercel instances, so other users will be able to test and benefit from your modifications as soon as the PR is submitted.
 
 ## Credits
@@ -78,3 +76,45 @@ Cascade Studio uses:
  - [rawinflate/rawdeflate](https://github.com/dankogai/js-deflate) (URL Code Serialization)
 
 Cascade Studio is maintained by [Johnathon Selstad @zalo](https://github.com/zalo)
+
+
+## Building and running on localhost
+
+Quick start:
+```sh
+yarn install
+yarn dev
+```
+
+
+Install dependencies:
+
+```sh
+yarn install
+```
+
+To create a production build:
+
+```sh
+yarn build-prod
+```
+
+To create a development build:
+
+```sh
+yarn build-dev
+```
+
+## Running
+
+```sh
+yarn dev
+```
+
+## Testing
+
+To run unit tests:
+
+```sh
+yarn test
+```

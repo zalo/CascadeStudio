@@ -1,9 +1,79 @@
-// Define the persistent global variables
-var oc = null, externalShapes = {}, sceneShapes = [],
-  GUIState, fullShapeEdgeHashes = {}, fullShapeFaceHashes = {},
-  currentShape;
+import "babel-polyfill";
+import { initOpenCascade } from "../../static_node_modules/opencascade.js";
+
+import {
+  oc,
+  setOc,
+  messageHandlers,
+  setGUIState,
+  currentShape,
+  setCurrentShape,
+  opNumber,
+  setOpNumber,
+  currentLineNumber,
+  argCache,
+  currentOp,
+  usedHashes,
+  setUsedHashes
+} from "./CascadeStudioWorkerState";
+import * as remainingGlobals from "./CascadeStudioWorkerState";
+import {
+  sceneShapes,
+  resetSceneShapes
+} from "./CascadeStudioSceneShapesService";
+import * as sceneShapesService from "./CascadeStudioSceneShapesService";
+import { ShapeToMesh } from "./CascadeStudioShapeToMesh.js";
+import * as standardLibraryModule from "./CascadeStudioStandardLibrary.js";
+const { ForEachEdge, ForEachFace } = standardLibraryModule;
 
 // Capture Logs and Errors and forward them to the main thread
+
+const runCode = code => {
+  // making the following available to eval
+  const { externalShapes } = remainingGlobals;
+  const { RemoveFromSceneShapes, sceneShapes } = sceneShapesService;
+  const {
+    BSpline,
+    Box,
+    Button,
+    ChamferEdges,
+    Checkbox,
+    Circle,
+    Cone,
+    Cylinder,
+    Difference,
+    Extrude,
+    FilletEdges,
+    ForEachEdge,
+    ForEachFace,
+    ForEachShell,
+    ForEachSolid,
+    ForEachVertex,
+    ForEachWire,
+    GetNumSolidsInCompound,
+    GetSolidFromCompound,
+    GetWire,
+    Intersection,
+    Loft,
+    Offset,
+    Pipe,
+    Polygon,
+    RemoveInternalEdges,
+    Revolve,
+    Rotate,
+    RotatedExtrude,
+    Scale,
+    Sketch,
+    Slider,
+    Sphere,
+    Text3D,
+    Transform,
+    Translate,
+    Union
+  } = standardLibraryModule;
+  eval(code);
+};
+
 let realConsoleLog   = console.log;
 let realConsoleError = console.error;
 console.log = function (message) {
@@ -21,38 +91,9 @@ console.error = function (err, url, line, colno, errorObj) {
   realConsoleError.apply(console, arguments);
 }; // This is actually accessed via worker.onerror in the main thread
 
-// Import the set of scripts we'll need to perform all the CAD operations
-importScripts(
-  '../../node_modules/three/build/three.min.js',
-  './CascadeStudioStandardLibrary.js',
-  './CascadeStudioShapeToMesh.js',
-  '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
-  '../../node_modules/opentype.js/dist/opentype.min.js');
-
-// Preload the Various Fonts that are available via Text3D
-var preloadedFonts = ['../../fonts/Roboto.ttf',
-  '../../fonts/Papyrus.ttf', '../../fonts/Consolas.ttf'];
-var fonts = {};
-preloadedFonts.forEach((fontURL) => {
-  opentype.load(fontURL, function (err, font) {
-    if (err) { console.log(err); }
-    let fontName = fontURL.split("./fonts/")[1].split(".ttf")[0];
-    fonts[fontName] = font;
-  });
-});
-
-// Load the full Open Cascade Web Assembly Module
-var messageHandlers = {};
-new opencascade({
-  locateFile(path) {
-    if (path.endsWith('.wasm')) {
-      return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
-    }
-    return path;
-  }
-}).then((openCascade) => {
+initOpenCascade().then(openCascade => {
   // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
-  oc = openCascade;
+  setOc(openCascade);
 
   // Ping Pong Messages Back and Forth based on their registration in messageHandlers
   onmessage = function (e) {
@@ -63,14 +104,13 @@ new opencascade({
   // Initial Evaluation after everything has been loaded...
   postMessage({ type: "startupCallback" });
 });
-
 /** This function evaluates `payload.code` (the contents of the Editor Window)
  *  and sets the GUI State. */
 function Evaluate(payload) {
-  opNumber = 0; // This keeps track of the progress of the evaluation
-  GUIState = payload.GUIState;
+  setOpNumber(0);
+  setGUIState(payload.GUIState);
   try {
-    eval(payload.code);
+    runCode(payload.code);
   } catch (e) {
     setTimeout(() => {
       e.message = "Line " + currentLineNumber + ": "  + currentOp + "() encountered  " + e.message;
@@ -81,7 +121,7 @@ function Evaluate(payload) {
     // Clean Cache; remove unused Objects
     for (let hash in argCache) {
       if (!usedHashes.hasOwnProperty(hash)) { delete argCache[hash]; } }
-    usedHashes = {};
+    setUsedHashes({});
   }
 }
 messageHandlers["Evaluate"] = Evaluate;
@@ -90,11 +130,12 @@ messageHandlers["Evaluate"] = Evaluate;
  * and converts it to a mesh (and a set of edges) with `ShapeToMesh()`, and sends it off to be rendered. */
 function combineAndRenderShapes(payload) {
   // Initialize currentShape as an empty Compound Solid
-  currentShape     = new oc.TopoDS_Compound();
+  setCurrentShape(new oc.TopoDS_Compound());
   let sceneBuilder = new oc.BRep_Builder();
   sceneBuilder.MakeCompound(currentShape);
   let fullShapeEdgeHashes = {}; let fullShapeFaceHashes = {};
-  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": "Combining Shapes" } });
+  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "Combining Shapes" } });
+  setOpNumber(opNumber + 1);
 
   // If there are sceneShapes, iterate through them and add them to currentShape
   if (sceneShapes.length > 0) {
@@ -120,10 +161,11 @@ function combineAndRenderShapes(payload) {
     }
 
     // Use ShapeToMesh to output a set of triangulated faces and discretized edges to the 3D Viewport
-    postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": "Triangulating Faces" } });
+    postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "Triangulating Faces" } });
+    setOpNumber(opNumber + 1);
     let facesAndEdges = ShapeToMesh(currentShape,
       payload.maxDeviation||0.1, fullShapeEdgeHashes, fullShapeFaceHashes);
-    sceneShapes = [];
+    resetSceneShapes();
     postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } }); // Finish the progress
     return facesAndEdges;
   } else {
@@ -132,6 +174,3 @@ function combineAndRenderShapes(payload) {
   postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } });
 }
 messageHandlers["combineAndRenderShapes"] = combineAndRenderShapes;
-
-// Import the File IO Utilities
-importScripts('./CascadeStudioFileUtils.js');

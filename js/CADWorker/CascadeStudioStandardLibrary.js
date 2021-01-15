@@ -9,14 +9,27 @@
 // (Optional) If base functions appear to be missing, fork opencascade.js and add them to this file: 
 //  - https://github.com/donalffons/opencascade.js/blob/master/opencascade.idl
 //  - Upon push, Github Actions will build a new version of the library and commit it back to the repo
-//  - From there, you can graft those into CascadeStudio/node_modules/opencascade.js/dist (following its existing conventions)
+//  - From there, you can graft those into CascadeStudio/static_node_modules/opencascade.js/dist (following its existing conventions)
 
 /** Import Misc. Utilities that aren't part of the Exposed Library */
-importScripts('./CascadeStudioStandardUtils.js');
+import {
+  CacheOp,
+  ComputeHash,
+  stringToHash,
+  convertToPnt,
+  getCallingLocation,
+  isArrayLike
+} from "./CascadeStudioStandardUtils.js";
+import { oc, GUIState, setArgCache } from "./CascadeStudioWorkerState";
+import {
+  sceneShapes,
+  RemoveFromSceneShapes
+} from "./CascadeStudioSceneShapesService";
+import { fonts } from "./CascadeStudioFontLoader";
 
-function Box(x, y, z, centered) {
+export function Box(x, y, z, centered) {
   if (!centered) { centered = false;}
-  let curBox = CacheOp(arguments, () => {
+  let curBox = CacheOp(Box, () => {
     // Construct a Box Primitive
     let box = new oc.BRepPrimAPI_MakeBox(x, y, z).Shape();
     if (centered) {
@@ -30,8 +43,8 @@ function Box(x, y, z, centered) {
   return curBox;
 }
 
-function Sphere(radius) {
-  let curSphere = CacheOp(arguments, () => {
+export function Sphere(radius) {
+  let curSphere = CacheOp(Sphere, () => {
     // Construct a Sphere Primitive
     let spherePlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0), oc.gp.prototype.DZ());
     return new oc.BRepPrimAPI_MakeSphere(spherePlane, radius).Shape();
@@ -41,8 +54,8 @@ function Sphere(radius) {
   return curSphere;
 }
 
-function Cylinder(radius, height, centered) {
-  let curCylinder = CacheOp(arguments, () => {
+export function Cylinder(radius, height, centered) {
+  let curCylinder = CacheOp(Cylinder, () => {
     let cylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, centered ? -height / 2 : 0), new oc.gp_Dir(0, 0, 1));
     return new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, radius, height).Shape();
   });
@@ -50,16 +63,16 @@ function Cylinder(radius, height, centered) {
   return curCylinder;
 }
 
-function Cone(radius1, radius2, height) {
-  let curCone = CacheOp(arguments, () => {
+export function Cone(radius1, radius2, height) {
+  let curCone = CacheOp(Cone, () => {
     return new oc.BRepPrimAPI_MakeCone(radius1, radius2, height).Shape();
   });
   sceneShapes.push(curCone);
   return curCone;
 }
 
-function Polygon(points, wire) {
-  let curPolygon = CacheOp(arguments, () => {
+export function Polygon(points, wire) {
+  let curPolygon = CacheOp(Polygon, () => {
     let gpPoints = [];
     for (let ind = 0; ind < points.length; ind++) {
       gpPoints.push(convertToPnt(points[ind]));
@@ -88,8 +101,8 @@ function Polygon(points, wire) {
   return curPolygon;
 }
 
-function Circle(radius, wire) {
-  let curCircle = CacheOp(arguments, () => {
+export function Circle(radius, wire) {
+  let curCircle = CacheOp(Circle, () => {
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0),
       new oc.gp_Dir(0, 0, 1)), radius).Value();
     let edge = new oc.BRepBuilderAPI_MakeEdge(circle).Edge();
@@ -101,8 +114,8 @@ function Circle(radius, wire) {
   return curCircle;
 }
 
-function BSpline(inPoints, closed) {
-  let curSpline = CacheOp(arguments, () => {
+export function BSpline(inPoints, closed) {
+  let curSpline = CacheOp(BSpline, () => {
     let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed ? 1 : 0));
     for (let pIndex = 1; pIndex <= inPoints.length; pIndex++) {
       ptList.SetValue(pIndex, convertToPnt(inPoints[pIndex - 1]));
@@ -117,14 +130,11 @@ function BSpline(inPoints, closed) {
   return curSpline;
 }
 
-function Text3D(text, size, height, fontName) {
-  if (!size   ) { size    = 36; }
-  if (!height && height !== 0.0) { height  = 0.15; }
-  if (!fontName) { fontName = "Consolas"; }
+export function Text3D(text, size = 36, height = 0.15, fontName = "Consolas") {
 
-  let textArgs = JSON.stringify(arguments);
-  let curText = CacheOp(arguments, () => {
-    if (fonts[fontName] === undefined) { argCache = {}; console.log("Font not loaded or found yet!  Try again..."); return; }
+  let textArgs = JSON.stringify({ text, size, height, fontName });
+  let curText = CacheOp(Text3D, () => {
+    if (fonts[fontName] === undefined) { setArgCache({}); console.log("Font not loaded or found yet!  Try again..."); return; }
     let textFaces = [];
     let commands = fonts[fontName].getPath(text, 0, 0, size).commands;
     for (let idx = 0; idx < commands.length; idx++) {
@@ -188,7 +198,7 @@ function Text3D(text, size, height, fontName) {
     } else {
       textFaces[textFaces.length - 1].hash = stringToHash(textArgs);
       let textSolid = Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
-      sceneShapes = Remove(sceneShapes, textSolid);
+      RemoveFromSceneShapes(textSolid);
       return textSolid;
     }
   });
@@ -198,24 +208,24 @@ function Text3D(text, size, height, fontName) {
 }
 
 // These foreach functions are not cache friendly right now!
-function ForEachSolid(shape, callback) {
+export function ForEachSolid(shape, callback) {
   let solid_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SOLID);
   for (anExplorer.Init(shape, oc.TopAbs_SOLID); anExplorer.More(); anExplorer.Next()) {
     callback(solid_index++, oc.TopoDS.prototype.Solid(anExplorer.Current()));
   }
 }
-function GetNumSolidsInCompound(shape) {
+export function GetNumSolidsInCompound(shape) {
   if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
   let solidsFound = 0;
   ForEachSolid(shape, (i, s) => { solidsFound++; });
   return solidsFound;
 }
-function GetSolidFromCompound(shape, index, keepOriginal) {
+export function GetSolidFromCompound(shape, index, keepOriginal) {
   if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
   if (!index) { index = 0;}
 
-  let sol = CacheOp(arguments, () => {
+  let sol = CacheOp(GetSolidFromCompound, () => {
     let innerSolid = {}; let solidsFound = 0;
     ForEachSolid(shape, (i, s) => {
       if (i === index) { innerSolid = new oc.TopoDS_Solid(s); } solidsFound++;
@@ -225,13 +235,13 @@ function GetSolidFromCompound(shape, index, keepOriginal) {
     return innerSolid;
   });
 
-  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shape); }
+  if (!keepOriginal) { RemoveFromSceneShapes(shape); }
   sceneShapes.push(sol);
 
   return sol;
 }
 
-function ForEachShell(shape, callback) {
+export function ForEachShell(shape, callback) {
   let shell_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_SHELL);
   for (anExplorer.Init(shape, oc.TopAbs_SHELL); anExplorer.More(); anExplorer.Next()) {
@@ -239,7 +249,7 @@ function ForEachShell(shape, callback) {
   }
 }
 
-function ForEachFace(shape, callback) {
+export function ForEachFace(shape, callback) {
   let face_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_FACE);
   for (anExplorer.Init(shape, oc.TopAbs_FACE); anExplorer.More(); anExplorer.Next()) {
@@ -247,18 +257,18 @@ function ForEachFace(shape, callback) {
   }
 }
 
-function ForEachWire(shape, callback) {
+export function ForEachWire(shape, callback) {
   let wire_index = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_WIRE);
   for (anExplorer.Init(shape, oc.TopAbs_WIRE); anExplorer.More(); anExplorer.Next()) {
     callback(wire_index++, oc.TopoDS.prototype.Wire(anExplorer.Current()));
   }
 }
-function GetWire(shape, index, keepOriginal) {
+export function GetWire(shape, index, keepOriginal) {
   if (!shape || shape.ShapeType() > 4 || shape.IsNull()) { console.error("Not a wire shape!"); return shape; }
   if (!index) { index = 0;}
 
-  let wire = CacheOp(arguments, () => {
+  let wire = CacheOp(GetWire, () => {
     let innerWire = {}; let wiresFound = 0;
     ForEachWire(shape, (i, s) => {
       if (i === index) { innerWire = new oc.TopoDS_Wire(s); } wiresFound++;
@@ -268,13 +278,13 @@ function GetWire(shape, index, keepOriginal) {
     return innerWire;
   });
 
-  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shape); }
+  if (!keepOriginal) { RemoveFromSceneShapes(shape); }
   sceneShapes.push(wire);
 
   return wire;
 }
 
-function ForEachEdge(shape, callback) {
+export function ForEachEdge(shape, callback) {
   let edgeHashes = {};
   let edgeIndex = 0;
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_EDGE);
@@ -289,15 +299,15 @@ function ForEachEdge(shape, callback) {
   return edgeHashes;
 }
 
-function ForEachVertex(shape, callback) {
+export function ForEachVertex(shape, callback) {
   let anExplorer = new oc.TopExp_Explorer(shape, oc.TopAbs_VERTEX);
   for (anExplorer.Init(shape, oc.TopAbs_VERTEX); anExplorer.More(); anExplorer.Next()) {
     callback(oc.TopoDS.prototype.Vertex(anExplorer.Current()));
   }
 }
 
-function FilletEdges(shape, radius, edgeList, keepOriginal) { 
-  let curFillet = CacheOp(arguments, () => {
+export function FilletEdges(shape, radius, edgeList, keepOriginal) { 
+  let curFillet = CacheOp(FilletEdges, () => {
     let mkFillet = new oc.BRepFilletAPI_MakeFillet(shape);
     let foundEdges = 0;
     ForEachEdge(shape, (index, edge) => {
@@ -310,12 +320,12 @@ function FilletEdges(shape, radius, edgeList, keepOriginal) {
     return new oc.TopoDS_Solid(mkFillet.Shape());
   });
   sceneShapes.push(curFillet);
-  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shape); }
+  if (!keepOriginal) { RemoveFromSceneShapes(shape); }
   return curFillet;
 }
 
-function ChamferEdges(shape, distance, edgeList, keepOriginal) { 
-  let curChamfer = CacheOp(arguments, () => {
+export function ChamferEdges(shape, distance, edgeList, keepOriginal) { 
+  let curChamfer = CacheOp(ChamferEdges, () => {
     let mkChamfer = new oc.BRepFilletAPI_MakeChamfer(shape);
     let foundEdges = 0;
     ForEachEdge(shape, (index, edge) => {
@@ -328,14 +338,13 @@ function ChamferEdges(shape, distance, edgeList, keepOriginal) {
     return new oc.TopoDS_Solid(mkChamfer.Shape());
   });
   sceneShapes.push(curChamfer);
-  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shape); }
+  if (!keepOriginal) { RemoveFromSceneShapes(shape); }
   return curChamfer;
 }
 
-function Transform(translation, rotation, scale, shapes) {
-  let args = arguments;
-  return CacheOp(arguments, () => {
-    if (args.length == 4) {
+export function Transform(translation, rotation, scale, shapes) {
+  return CacheOp(Transform, () => {
+    if (typeof shapes !== "undefined") {
       // Create the transform gizmo and add it to the scene
       postMessage({ "type": "createTransformHandle", payload: { translation: translation, rotation: rotation, scale: scale, lineAndColumn: getCallingLocation() } });
       // Transform the Object(s)
@@ -348,8 +357,8 @@ function Transform(translation, rotation, scale, shapes) {
   });
 }
 
-function Translate(offset, shapes, keepOriginal) {
-  let translated = CacheOp(arguments, () => {
+export function Translate(offset, shapes, keepOriginal) {
+  let translated = CacheOp(Translate, () => {
     let transformation = new oc.gp_Trsf();
     transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
     let translation = new oc.TopLoc_Location(transformation);
@@ -364,18 +373,18 @@ function Translate(offset, shapes, keepOriginal) {
     }
   });
 
-  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shapes); }
+  if (!keepOriginal) { RemoveFromSceneShapes(shapes); }
   sceneShapes.push(translated);
 
   return translated;
 }
 
-function Rotate(axis, degrees, shapes, keepOriginal) {
+export function Rotate(axis, degrees, shapes, keepOriginal) {
   let rotated = null;
   if (degrees === 0) {
     rotated = new oc.TopoDS_Shape(shapes);
   } else {
-    rotated = CacheOp(arguments, () => {
+    rotated = CacheOp(Rotate, () => {
       let newRot;
       let transformation = new oc.gp_Trsf();
       transformation.SetRotation(
@@ -392,13 +401,13 @@ function Rotate(axis, degrees, shapes, keepOriginal) {
       return newRot;
     });
   }
-  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shapes); }
+  if (!keepOriginal) { RemoveFromSceneShapes(shapes); }
   sceneShapes.push(rotated);
   return rotated;
 }
 
-function Scale(scale, shapes, keepOriginal) {
-  let scaled = CacheOp(arguments, () => {
+export function Scale(scale, shapes, keepOriginal) {
+  let scaled = CacheOp(Scale, () => {
     let transformation = new oc.gp_Trsf();
     transformation.SetScaleFactor(scale);
     let scaling = new oc.TopLoc_Location(transformation);
@@ -413,16 +422,16 @@ function Scale(scale, shapes, keepOriginal) {
     }
   });
 
-  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shapes); }
+  if (!keepOriginal) { RemoveFromSceneShapes(shapes); }
   sceneShapes.push(scaled);
 
   return scaled;
 }
 
 // TODO: These ops can be more cache optimized since they're multiple sequential ops
-function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
+export function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
-  let curUnion = CacheOp(arguments, () => {
+  let curUnion = CacheOp(Union, () => {
     let combined = new oc.TopoDS_Shape(objectsToJoin[0]);
     if (objectsToJoin.length > 1) {
       for (let i = 0; i < objectsToJoin.length; i++) {
@@ -444,15 +453,14 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   });
 
   for (let i = 0; i < objectsToJoin.length; i++) {
-    if (!keepObjects) { sceneShapes = Remove(sceneShapes, objectsToJoin[i]); }
+    if (!keepObjects) { RemoveFromSceneShapes(objectsToJoin[i]); }
   }
   sceneShapes.push(curUnion);
   return curUnion;
 }
 
-function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdges) {
-  if (!fuzzValue) { fuzzValue = 0.1; }
-  let curDifference = CacheOp(arguments, () => {
+export function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue = 0.1, keepEdges) {
+  let curDifference = CacheOp(Difference, () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
     
     let difference = new oc.TopoDS_Shape(mainBody);
@@ -471,7 +479,7 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
       difference = fusor.Shape();
     }
 
-    difference.hash = ComputeHash(arguments);
+    difference.hash = ComputeHash(Difference);
     if (GetNumSolidsInCompound(difference) === 1) {
       difference = GetSolidFromCompound(difference, 0);
     }
@@ -479,17 +487,17 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
     return difference;
   });
 
-  if (!keepObjects) { sceneShapes = Remove(sceneShapes, mainBody); }
+  if (!keepObjects) { RemoveFromSceneShapes(mainBody); }
   for (let i = 0; i < objectsToSubtract.length; i++) {
-    if (!keepObjects) { sceneShapes = Remove(sceneShapes, objectsToSubtract[i]); }
+    if (!keepObjects) { RemoveFromSceneShapes(objectsToSubtract[i]); }
   }
   sceneShapes.push(curDifference);
   return curDifference;
 }
 
-function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
+export function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
-  let curIntersection = CacheOp(arguments, () => {
+  let curIntersection = CacheOp(Intersection, () => {
     let intersected = new oc.TopoDS_Shape(objectsToIntersect[0]);
     if (objectsToIntersect.length > 1) {
       for (let i = 0; i < objectsToIntersect.length; i++) {
@@ -511,40 +519,40 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
   });
 
   for (let i = 0; i < objectsToIntersect.length; i++) {
-    if (!keepObjects) { sceneShapes = Remove(sceneShapes, objectsToIntersect[i]); }
+    if (!keepObjects) { RemoveFromSceneShapes(objectsToIntersect[i]); }
   }
   sceneShapes.push(curIntersection);
   return curIntersection;
 }
 
-function Extrude(face, direction, keepFace) {
-  let curExtrusion = CacheOp(arguments, () => {
+export function Extrude(face, direction, keepFace) {
+  let curExtrusion = CacheOp(Extrude, () => {
     return new oc.BRepPrimAPI_MakePrism(face,
       new oc.gp_Vec(direction[0], direction[1], direction[2])).Shape();
   });
   
-  if (!keepFace) { sceneShapes = Remove(sceneShapes, face); }
+  if (!keepFace) { RemoveFromSceneShapes(face); }
   sceneShapes.push(curExtrusion);
   return curExtrusion;
 }
 
-function RemoveInternalEdges(shape, keepShape) {
-  let cleanShape = CacheOp(arguments, () => {
+export function RemoveInternalEdges(shape, keepShape) {
+  let cleanShape = CacheOp(RemoveInternalEdges, () => {
     let fusor = new oc.ShapeUpgrade_UnifySameDomain(shape);
     fusor.Build();
     return fusor.Shape();
   });
   
-  if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
+  if (!keepShape) { RemoveFromSceneShapes(shape); }
   sceneShapes.push(cleanShape);
   return cleanShape;
 }
 
-function Offset(shape, offsetDistance, tolerance, keepShape) {
+export function Offset(shape, offsetDistance, tolerance, keepShape) {
   if (!shape || shape.IsNull()) { console.error("Offset received Null Shape!"); }
   if (!tolerance) { tolerance = 0.1; }
   if (offsetDistance === 0.0) { return shape; }
-  let curOffset = CacheOp(arguments, () => {
+  let curOffset = CacheOp(Offset, () => {
     let offset = null;
     if (shape.ShapeType() === 5) {
       offset = new oc.BRepOffsetAPI_MakeOffset();
@@ -566,15 +574,15 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
     return offsetShape;
   });
   
-  if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
+  if (!keepShape) { RemoveFromSceneShapes(shape); }
   sceneShapes.push(curOffset);
   return curOffset;
 }
 
-function Revolve(shape, degrees, direction, keepShape, copy) {
+export function Revolve(shape, degrees, direction, keepShape, copy) {
   if (!degrees  ) { degrees   = 360.0; }
   if (!direction) { direction = [0, 0, 1]; }
-  let curRevolution = CacheOp(arguments, () => {
+  let curRevolution = CacheOp(Revolve, () => {
     if (degrees >= 360.0) {
       return new oc.BRepPrimAPI_MakeRevol(shape,
         new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0),
@@ -588,22 +596,22 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
     }
   });
   
-  if (!keepShape) { sceneShapes = Remove(sceneShapes, shape); }
+  if (!keepShape) { RemoveFromSceneShapes(shape); }
   sceneShapes.push(curRevolution);
   return curRevolution;
 }
 
-function RotatedExtrude(wire, height, rotation, keepWire) {
+export function RotatedExtrude(wire, height, rotation, keepWire) {
   if (!wire || wire.IsNull()) { console.error("RotatedExtrude received Null Wire!"); }
-  let curExtrusion = CacheOp(arguments, () => {
+  let curExtrusion = CacheOp(RotatedExtrude, () => {
     let upperPolygon = Rotate([0, 0, 1], rotation, Translate([0, 0, height], wire, true));
-    sceneShapes = Remove(sceneShapes, upperPolygon);
+    RemoveFromSceneShapes(upperPolygon);
 
     // Define the straight spine going up the middle of the sweep
     let spineWire = BSpline([
       [0, 0, 0],
       [0, 0, height]], false);
-    sceneShapes = Remove(sceneShapes, spineWire); // Don't render these
+    RemoveFromSceneShapes(spineWire); // Don't render these
 
     // Define the guiding helical auxiliary spine (which controls the rotation)
     let steps = 30;
@@ -617,7 +625,7 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     }
 
     let aspineWire = BSpline(aspinePoints, false);
-    sceneShapes = Remove(sceneShapes, aspineWire); // Don't render these
+    RemoveFromSceneShapes(aspineWire); // Don't render these
 
     // Sweep the face wires along the spine to create the extrusion
     let pipe = new oc.BRepOffsetAPI_MakePipeShell(spineWire);
@@ -628,13 +636,13 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     pipe.MakeSolid();
     return new oc.TopoDS_Shape(pipe.Shape());
   });
-  if (!keepWire) { sceneShapes = Remove(sceneShapes, wire); }
+  if (!keepWire) { RemoveFromSceneShapes(wire); }
   sceneShapes.push(curExtrusion);
   return curExtrusion;
 }
 
-function Loft(wires, keepWires) {
-  let curLoft = CacheOp(arguments, () => {
+export function Loft(wires, keepWires) {
+  let curLoft = CacheOp(Loft, () => {
     let pipe = new oc.BRepOffsetAPI_ThruSections(true);
 
     // Construct a Loft that passes through the wires
@@ -645,22 +653,22 @@ function Loft(wires, keepWires) {
   });
 
   wires.forEach((wire) => {
-    if (!keepWires) { sceneShapes = Remove(sceneShapes, wire); }
+    if (!keepWires) { RemoveFromSceneShapes(wire); }
   });
   sceneShapes.push(curLoft);
   return curLoft;
 }
 
-function Pipe(shape, wirePath, keepInputs) {
-  let curPipe = CacheOp(arguments, () => {
+export function Pipe(shape, wirePath, keepInputs) {
+  let curPipe = CacheOp(Pipe, () => {
     let pipe = new oc.BRepOffsetAPI_MakePipe(wirePath, shape);
     pipe.Build();
     return new oc.TopoDS_Shape(pipe.Shape());
   });
   
   if (!keepInputs) {
-    sceneShapes = Remove(sceneShapes, shape);
-    sceneShapes = Remove(sceneShapes, wirePath);
+    RemoveFromSceneShapes(shape);
+    RemoveFromSceneShapes(wirePath);
   }
   sceneShapes.push(curPipe);
   return curPipe;
@@ -668,7 +676,7 @@ function Pipe(shape, wirePath, keepInputs) {
 
 // This is a utility class for drawing wires/shapes with lines, arcs, and splines
 // This is unique, it needs to be called with the "new" keyword prepended
-function Sketch(startingPoint) {
+export function Sketch(startingPoint) {
   this.currentIndex = 0;
   this.faces        = [];
   this.wires        = [];
@@ -676,19 +684,19 @@ function Sketch(startingPoint) {
   this.lastPoint    = this.firstPoint;
   this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
   this.fillets      = [];
-  this.argsString   = ComputeHash(arguments, true);
+  this.argsString   = ComputeHash(Sketch, true);
 
   // Functions are: BSplineTo, Fillet, Wire, and Face
   this.Start = function (startingPoint) {
     this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
     this.lastPoint   = this.firstPoint;
     this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.Start, true);
     return this;
   }
 
   this.End = function (closed, reversed) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.End, true);
 
     if (closed &&
        (this.firstPoint.X() !== this.lastPoint.X() ||
@@ -718,7 +726,7 @@ function Sketch(startingPoint) {
   }
 
   this.Wire = function (reversed) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.Wire, true);
     //let wire = this.wires[this.wires.length - 1];
     this.applyFillets();
     this.faces[this.faces.length - 1].hash = stringToHash(this.argsString);
@@ -728,7 +736,7 @@ function Sketch(startingPoint) {
     return wire;
   }
   this.Face = function (reversed) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.Face, true);
     this.applyFillets();
     let face = this.faces[this.faces.length - 1];
     if (reversed) { face = face.Reversed(); }
@@ -767,7 +775,7 @@ function Sketch(startingPoint) {
   }
 
   this.AddWire = function (wire) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.AddWire, true);
     // This adds another wire (or edge??) to the currently constructing shape...
     this.wireBuilder.Add(wire);
     if (endPoint) { this.lastPoint = endPoint; } // Yike what to do here...?
@@ -775,7 +783,7 @@ function Sketch(startingPoint) {
   }
 
   this.LineTo = function (nextPoint) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.LineTo, true);
     let endPoint = null;
     if (nextPoint.X) {
       if (this.lastPoint.X() === nextPoint.X() &&
@@ -795,7 +803,7 @@ function Sketch(startingPoint) {
   }
 
   this.ArcTo = function (pointOnArc, arcEnd) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.ArcTo, true);
     let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
     let nextPoint      = new oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
     let arcCurve       = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
@@ -809,7 +817,7 @@ function Sketch(startingPoint) {
   // Constructs an order-N Bezier Curve where the first N-1 points are control points
   // and the last point is the endpoint of the curve
   this.BezierTo = function (bezierControlPoints) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.BezierTo, true);
     let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
@@ -827,7 +835,7 @@ function Sketch(startingPoint) {
 
   /* Constructs a BSpline from the previous point through this set of points */
   this.BSplineTo = function (bsplinePoints) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.BSplineTo, true);
     let ptList = new oc.TColgp_Array1OfPnt(1, bsplinePoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bsplinePoints.length; bInd++){
@@ -843,13 +851,13 @@ function Sketch(startingPoint) {
   }
 
   this.Fillet = function (radius) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.Fillet, true);
     this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
     return this;
   }
 
   this.Circle = function (center, radius, reversed) {
-    this.argsString += ComputeHash(arguments, true);
+    this.argsString += ComputeHash(this.Circle, true);
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(convertToPnt(center),
     new oc.gp_Dir(0, 0, 1)), radius).Value();
     let edge = new oc.BRepBuilderAPI_MakeEdge(circle).Edge();
@@ -881,7 +889,7 @@ function SaveFile(filename, fileURL) {
   });
 }
 
-function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false, step, precision) {
+export function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime=false, step, precision) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   if (!step) { step = 0.01; }
   if (typeof precision === "undefined") {
@@ -893,11 +901,11 @@ function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime
   return GUIState[name];
 }
 
-function Button(name = "Action") {
+export function Button(name = "Action") {
   postMessage({ "type": "addButton", payload: { name: name } });
 }
 
-function Checkbox(name = "Toggle", defaultValue = false) {
+export function Checkbox(name = "Toggle", defaultValue = false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   postMessage({ "type": "addCheckbox", payload: { name: name, default: defaultValue } });
   return GUIState[name];

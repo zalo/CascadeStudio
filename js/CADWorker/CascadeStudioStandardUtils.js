@@ -1,19 +1,34 @@
+import {
+  oc,
+  GUIState,
+  opNumber,
+  setOpNumber,
+  setCurrentLineNumber,
+  argCache,
+  setCurrentOp,
+  usedHashes
+} from "./CascadeStudioWorkerState";
 // Miscellaneous Helper Functions used in the Standard Library
 
-// Caching functions to speed up evaluation of slow redundant operations
-var argCache = {}; var usedHashes = {}; var opNumber = 0; var currentOp = ''; var currentLineNumber = 0;
+function getCalleeName(fn) {
+  var ret = fn.toString();
+  ret = ret.substr("function ".length);
+  ret = ret.substr(0, ret.indexOf("("));
+  return ret;
+}
 
 /** Hashes input arguments and checks the cache for that hash.  
  * It returns a copy of the cached object if it exists, but will 
  * call the `cacheMiss()` callback otherwise. The result will be 
  * added to the cache if `GUIState["Cache?"]` is true. */
-function CacheOp(args, cacheMiss) {
+export function CacheOp(callee, cacheMiss) {
   //toReturn = cacheMiss();
-  currentOp = args.callee.name;
-  currentLineNumber = getCallingLocation()[0];
-  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": args.callee.name } }); // Poor Man's Progress Indicator
+  setCurrentOp(getCalleeName(callee));
+  setCurrentLineNumber(getCallingLocation()[0]);
+  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": getCalleeName(callee) } }); // Poor Man's Progress Indicator
+  setOpNumber(opNumber + 1);
   let toReturn = null;
-  let curHash = ComputeHash(args); usedHashes[curHash] = curHash;
+  let curHash = ComputeHash(callee); usedHashes[curHash] = curHash;
   let check = CheckCache(curHash);
   if (check && GUIState["Cache?"]) {
     //console.log("HIT    "+ ComputeHash(args) +  ", " +ComputeHash(args, true));
@@ -40,12 +55,12 @@ function AddToCache(hash, shape) {
 
 /** This function computes a 32-bit integer hash given a set of `arguments`.  
  * If `raw` is true, the raw set of sanitized arguments will be returned instead. */
-function ComputeHash(args, raw) {
-  let argsString = JSON.stringify(args);
+export function ComputeHash(callee, raw) {
+  let argsString = JSON.stringify(getCalleeName(callee));
   argsString = argsString.replace(/(\"ptr\"\:(-?[0-9]*?)\,)/g, '');
   argsString = argsString.replace(/(\"ptr\"\:(-?[0-9]*))/g, '');
   if (argsString.includes("ptr")) { console.error("YOU DONE MESSED UP YOUR REGEX."); }
-  let hashString = args.callee.name + argsString;// + GUIState["MeshRes"];
+  let hashString = getCalleeName(callee) + argsString;// + GUIState["MeshRes"];
   if (raw) { return hashString; }
   return stringToHash(hashString);
 }
@@ -73,16 +88,9 @@ function recursiveTraverse(x, callback) {
   }
 }
 
-/** This function returns a version of the `inputArray` without the `objectToRemove`. */
-function Remove(inputArray, objectToRemove) {
-  return inputArray.filter((el) => {
-    return el.hash !== objectToRemove.hash ||
-           el.ptr  !== objectToRemove.ptr;
-  });
-}
 
 /** This function returns true if item is indexable like an array. */
-function isArrayLike(item) {
+export function isArrayLike(item) {
   return (
       Array.isArray(item) || 
       (!!item &&
@@ -97,7 +105,7 @@ function isArrayLike(item) {
 
 /**  Mega Brittle Line Number Finding algorithm for Handle Backpropagation; only works in Chrome and FF.
  * Eventually this should be replaced with Microsoft's Typescript interpreter, but that's a big dependency...*/
-function getCallingLocation() {
+export function getCallingLocation() {
   let errorStack = (new Error).stack;
   //console.log(errorStack);
   //console.log(navigator.userAgent);
@@ -128,7 +136,7 @@ function getCallingLocation() {
 /** This function converts either single dimensional 
  * array or a gp_Pnt to a gp_Pnt.  Does not accept 
  * `TopoDS_Vertex`'s yet! */
-function convertToPnt(pnt) {
+export function convertToPnt(pnt) {
   let point = pnt; // Accept raw gp_Points if we got 'em
   if (point.length) {
     point = new oc.gp_Pnt(point[0], point[1], (point[2])?point[2]:0);
@@ -137,7 +145,7 @@ function convertToPnt(pnt) {
 }
 
 /** This function converts a string to a 32bit integer. */
-function stringToHash(string) { 
+export function stringToHash(string) { 
     let hash = 0; 
     if (string.length == 0) return hash; 
     for (let i = 0; i < string.length; i++) { 

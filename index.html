@@ -10,80 +10,27 @@
         <meta name="viewport"           content="width=device-width, initial-scale=1.0">
         <meta name="theme-color"        content="#1e1e1e">
 
-        <!-- Include these early and directly so they happen first -->
-        <script>
-            // Install Cascade Studio as a Progressive Web App for Offline Access
-            // This needs to be put before ANY HTTP Requests are made, so it can cache them.
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('service-worker.js').then(function(registration) {
-                    registration.update(); // Always update the registration for the latest assets
-                }, function() {
-                    console.log('Could not register Cascade Studio for offline use!');
-                });
-            } else {
-                console.log('Browser does not support offline access!');
-            }
-
-            // Begins loading the CAD Kernel Web Worker
-            if (window.Worker) {
-                var cascadeStudioWorker = new Worker('./js/CADWorker/CascadeStudioMainWorker.js');
-                // Ping Pong Messages Back and Forth based on their registration in messageHandlers
-                var messageHandlers = {};
-                cascadeStudioWorker.onmessage = function (e) {
-                    if(e.data.type in messageHandlers){
-                        let response = messageHandlers[e.data.type](e.data.payload);
-                        if (response) { cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
-                    }
-                }
-            }
-        </script>
-
         <link rel='shortcut icon'      href='./icon/favicon.ico' type='image/x-icon' >
         <link rel="manifest"           href="./manifest.webmanifest">
         <link rel="apple-touch-icon"   href="./icon/apple-touch-icon.png">
 
-        <script type="text/javascript" src="./node_modules/three/build/three.min.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/DragControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/OrbitControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/TransformControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/exporters/STLExporter.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/exporters/OBJExporter.js"></script>
-
-        <script type="text/javascript" src="./node_modules/controlkit/bin/controlKit.min.js"></script>
-
-        <script type="text/javascript" src="./node_modules/jquery/dist/jquery.min.js"></script>
-        <script type="text/javascript" src="./node_modules/golden-layout/dist/goldenlayout.min.js"></script>
-        <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-base.css" />
-        <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-dark-theme.css" />
-        <link type="text/css" rel="stylesheet" href="./css/main.css" />
-
-        <script type="text/javascript" src="./node_modules/rawflate/rawdeflate.js"></script>
-        <script type="text/javascript" src="./node_modules/rawflate/rawinflate.js"></script>
-        <script type="text/javascript" src="./js/MainPage/CascadeViewHandles.js"></script>
-        <script type="text/javascript" src="./js/MainPage/CascadeView.js"></script>
     </head>
 
-    <body onload="initialize();" style="margin:0px; background-color:rgb(34, 34, 34); "><!--overflow:hidden; position:fixed;-->
+    <body style="margin:0px; background-color:rgb(34, 34, 34); "><!--overflow:hidden; position:fixed;-->
         <h1 hidden></h1> <!-- Puts the Lighthouse Score over 90 heheh-->
         <div id="topnav" class="topnav">
             <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.6</a>
-            <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
-            <a href="#" title="Load Project from .json" onmouseup="loadProject();">Load Project</a>
-            <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
-            <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
-            <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
+            <a href="#" id="save-project" title="Save Project to .json">Save Project</a>
+            <a href="#" id="load-project" title="Load Project from .json">Load Project</a>
+            <a href="#" id="save-step">Save STEP</a>
+            <a href="#" id="save-stl">Save STL</a>
+            <a href="#" id="save-obj">Save OBJ</a>
             <label for="files" title="Import STEP, IGES, or (ASCII) STL from File">Import STEP/IGES/STL
-                <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="loadFiles();"/>
+                <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;"/>
             </label>
-            <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
+            <a href="#" id="clear-external-files" title="Clears the external step/iges/stl files stored in the project.">Clear Imported Files</a>
         </div>
         <div id="appbody" style="height:auto">
-            <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">
-            <script>var require = { paths: { 'vs': 'node_modules/monaco-editor/min/vs' } };</script>
-            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/loader.js"></script>
-            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
-            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
-            <script type="text/javascript" src="./js/MainPage/CascadeMain.js"></script>
         </div>
 
     </body>

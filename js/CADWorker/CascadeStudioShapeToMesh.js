@@ -1,4 +1,7 @@
-function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
+import { oc, setArgCache } from "./CascadeStudioWorkerState";
+import { ForEachEdge, ForEachFace } from "./CascadeStudioStandardLibrary.js";
+
+export function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
     let facelist = [], edgeList = [];
     try {
       shape = new oc.TopoDS_Shape(shape);
@@ -14,7 +17,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
       ForEachFace(shape, (faceIndex, myFace) => {
         let aLocation = new oc.TopLoc_Location();
         let myT = oc.BRep_Tool.prototype.Triangulation(myFace, aLocation);
-        if (myT.IsNull()) { console.error("Encountered Null Face!"); argCache = {}; return; }
+        if (myT.IsNull()) { console.error("Encountered Null Face!"); setArgCache({}); return; }
 
         let this_face = {
           vertex_coord: [],

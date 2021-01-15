@@ -221,4 +221,4 @@ function CacheOp(arguments: IArguments, cacheMiss: () => oc.TopoDS_Shape): oc.To
  /** Remove this object from this array.  Useful for preventing objects being added to `sceneShapes` (in cached functions).
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let box = CacheOp(arguments, () => { let box = Box(x,y,z); sceneShapes = Remove(sceneShapes, box); return box; });``` */
-function Remove(array: any[], toRemove: any): any[];
+function RemoveFromSceneShapes(toRemove: any): any[];

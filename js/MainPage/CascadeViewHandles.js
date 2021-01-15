@@ -1,13 +1,17 @@
+import * as THREE from "three";
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls'
+import { messageHandlers, monacoEditor } from "./CascadeState";
+
 // This file handles Transformation Gizmos
 
 /** Adds Handle Gizmo Functionality to the Cascade View */
-function initializeHandleGizmos(threejsViewport){
+export function initializeHandleGizmos(threejsViewport){
   /** Create a Transformation Gizmo in the Scene View */
   messageHandlers["createTransformHandle"] = function (payload) {
     if (payload.lineAndColumn[0] <= 0) {
       console.error("Transform Gizmo not supported in this browser!  Use Chrome or Firefox!"); return null;
     }
-    let handle = new THREE.TransformControls(this.environment.camera,
+    let handle = new TransformControls(this.environment.camera,
       this.environment.renderer.domElement);
     handle.setTranslationSnap(1);
     handle.setRotationSnap(THREE.MathUtils.degToRad(1));

@@ -1,4 +1,17 @@
 // File Import and Export Utilities
+import {
+  oc,
+  messageHandlers,
+  externalShapes,
+  resetExternalShapes,
+  GUIState,
+  currentShape
+} from "./CascadeStudioWorkerState";
+import {
+  sceneShapes,
+  resetSceneShapes
+} from "./CascadeStudioSceneShapesService";
+import { stringToHash } from "./CascadeStudioStandardUtils.js";
 
 /** This function synchronously loads the "files" in the 
  * current project into the `externalFiles` dictionary upon startup.*/
@@ -25,7 +38,7 @@ const loadFileSync = async (file) => {
  * `externalShapes` dictionary and renders them to the viewport. */
 function loadFiles(files) {
   let extFiles = {};
-  sceneShapes = [];
+  resetSceneShapes();
   for (let i = 0; i < files.length; i++) {
     var lastImportedShape = null;
     loadFileSync(files[i]).then(async (fileText) => {
@@ -149,4 +162,4 @@ function saveShapeSTEP (filename = "CascadeStudioPart.step") {
 messageHandlers["saveShapeSTEP"] = saveShapeSTEP;
 
 /** Removes the externally imported shapes/files from the project. */ 
-messageHandlers["clearExternalFiles"] = () => { externalShapes = {}; };
+messageHandlers["clearExternalFiles"] = resetExternalShapes;
