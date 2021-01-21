@@ -509,6 +509,9 @@ async function saveProject() {
             "json"
         );
     }
+
+    codeContainer.setState({ code: currentCode.split(/\r\n|\r|\n/) });
+
     writeFile(file.handle, JSON.stringify(myLayout.toConfig(), null, 2)).then(() => {
         codeContainer.setTitle(file.handle.name);
         console.log("Saved project to " + file.handle.name);
