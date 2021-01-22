@@ -7,19 +7,17 @@ const CopyPlugin = require("copy-webpack-plugin");
 const config = {
   entry: {
     main: ["babel-polyfill", "./js/MainPage/index.js"],
-    workerLibrary: "./js/CADWorker/CascadeStudioStandardLibrary.js"
   },
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "[name].bundle.js"
+    filename: "[name].bundle.js",
   },
-  watch: true,
   module: {
     rules: [
       {
         test: /\.js$/,
         use: "babel-loader",
-        exclude: /node_modules/
+        exclude: /node_modules/,
       },
       {
         test: /\.css$/,
@@ -28,11 +26,11 @@ const config = {
           {
             loader: "css-loader",
             options: {
-              importLoaders: 1
-            }
+              importLoaders: 1,
+            },
           },
-          "postcss-loader"
-        ]
+          "postcss-loader",
+        ],
       },
       {
         test: /\.(woff(2)?|ttf|eot)(\?v=\d+\.\d+\.\d+)?$/,
@@ -41,44 +39,54 @@ const config = {
             loader: "file-loader",
             options: {
               name: "[name].[ext]",
-              outputPath: "fonts/"
-            }
-          }
-        ]
+              outputPath: "fonts/",
+            },
+          },
+        ],
       },
       {
         test: /opencascade\.wasm\.wasm$/,
         type: "javascript/auto",
-        loader: "file-loader"
-      }
-    ]
+        loader: "file-loader",
+      },
+    ],
   },
   node: {
-    fs: "empty"
+    fs: "empty",
   },
   plugins: [
     new HtmlWebpackPlugin({
-      appMountId: "app",
-      filename: "index.html",
-      template: "index.html"
+      template: path.resolve(__dirname, "index.html"),
     }),
     new MonacoWebpackPlugin(),
     new CopyPlugin({
       patterns: [
         {
           from: "js/StandardLibraryIntellisense.ts",
-          to: "js/StandardLibraryIntellisense.ts"
+          to: "js/StandardLibraryIntellisense.ts",
         },
         {
           from: "static_node_modules/opencascade.js/dist/oc.d.ts",
-          to: "opencascade.d.ts"
+          to: "opencascade.d.ts",
         },
         {
           from: "node_modules/three/src/Three.d.ts",
-          to: "Three.d.ts"
-        }
-      ]
-    })
+          to: "Three.d.ts",
+        },
+        {
+          from: "fonts",
+          to: "fonts",
+        },
+        {
+          from: "icon",
+          to: "icon",
+        },
+        {
+          from: "textures",
+          to: "textures",
+        },
+      ],
+    }),
   ],
   optimization: {
     runtimeChunk: "single",
@@ -87,11 +95,11 @@ const config = {
         vendor: {
           test: /[\\/]node_modules[\\/]/,
           name: "vendors",
-          chunks: "all"
-        }
-      }
-    }
-  }
+          chunks: "all",
+        },
+      },
+    },
+  },
 };
 
 module.exports = config;
