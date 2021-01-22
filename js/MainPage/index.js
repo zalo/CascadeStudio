@@ -2,7 +2,7 @@ import "../../css/main.css";
 import { initialize } from "./CascadeMain";
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("service-worker.js").then(
+  navigator.serviceWorker.register("service-worker.bundle.js").then(
     (registration) => {
       registration.update(); // Always update the registration for the latest assets
     },

@@ -3,7 +3,6 @@ import {
   oc,
   messageHandlers,
   externalShapes,
-  resetExternalShapes,
   GUIState,
   currentShape
 } from "./CascadeStudioWorkerState";
@@ -15,7 +14,7 @@ import { stringToHash } from "./CascadeStudioStandardUtils.js";
 
 /** This function synchronously loads the "files" in the 
  * current project into the `externalFiles` dictionary upon startup.*/
-function loadPrexistingExternalFiles(externalFileDict) {
+export function loadPrexistingExternalFiles(externalFileDict) {
   console.log("Loading Pre-Existing external files...");
   for (let key in externalFileDict) {
     if (key.includes(".stl")) {
@@ -25,7 +24,6 @@ function loadPrexistingExternalFiles(externalFileDict) {
     }
   }
 }
-messageHandlers["loadPrexistingExternalFiles"] = loadPrexistingExternalFiles;
 
 /** This function synchronously reads the text contents of a file. */
 const loadFileSync = async (file) => {
@@ -36,7 +34,7 @@ const loadFileSync = async (file) => {
 
 /** This function synchronously loads a list of files into the 
  * `externalShapes` dictionary and renders them to the viewport. */
-function loadFiles(files) {
+export function loadFiles(files) {
   let extFiles = {};
   resetSceneShapes();
   for (let i = 0; i < files.length; i++) {
@@ -66,7 +64,6 @@ function loadFiles(files) {
     });
   };
 }
-messageHandlers["loadFiles"] = loadFiles;
 
 /** This function parses the ASCII contents of a `.STEP` or `.IGES` 
  * File as a Shape into the `externalShapes` dictionary. */
@@ -138,7 +135,7 @@ function importSTL(fileName, fileText) {
 
 /** This function returns `currentShape` `.STEP` file content.  
  * `currentShape` is set upon the successful completion of `combineAndRenderShapes()`.  */
-function saveShapeSTEP (filename = "CascadeStudioPart.step") {
+export function saveShapeSTEP (filename = "CascadeStudioPart.step") {
   let writer = new oc.STEPControl_Writer();
   // Convert to a .STEP File
   let transferResult = writer.Transfer(currentShape, 0);
@@ -159,7 +156,3 @@ function saveShapeSTEP (filename = "CascadeStudioPart.step") {
     console.error("TRANSFER TO STEP WRITER FAILED.");
   }
 }
-messageHandlers["saveShapeSTEP"] = saveShapeSTEP;
-
-/** Removes the externally imported shapes/files from the project. */ 
-messageHandlers["clearExternalFiles"] = resetExternalShapes;

@@ -14,13 +14,19 @@ import {
   argCache,
   currentOp,
   usedHashes,
-  setUsedHashes
+  setUsedHashes,
+  resetExternalShapes
 } from "./CascadeStudioWorkerState";
 import * as remainingGlobals from "./CascadeStudioWorkerState";
 import {
   sceneShapes,
   resetSceneShapes
 } from "./CascadeStudioSceneShapesService";
+import {
+  saveShapeSTEP,
+  loadFiles,
+  loadPrexistingExternalFiles
+} from "./CascadeStudioFileUtils";
 import * as sceneShapesService from "./CascadeStudioSceneShapesService";
 import { ShapeToMesh } from "./CascadeStudioShapeToMesh.js";
 import * as standardLibraryModule from "./CascadeStudioStandardLibrary.js";
@@ -125,6 +131,11 @@ function Evaluate(payload) {
   }
 }
 messageHandlers["Evaluate"] = Evaluate;
+messageHandlers["saveShapeSTEP"] = saveShapeSTEP;
+/** Removes the externally imported shapes/files from the project. */ 
+messageHandlers["clearExternalFiles"] = resetExternalShapes;
+messageHandlers["loadFiles"] = loadFiles;
+messageHandlers["loadPrexistingExternalFiles"] = loadPrexistingExternalFiles;
 
 /**This function accumulates all the shapes in `sceneShapes` into the `TopoDS_Compound` `currentShape`
  * and converts it to a mesh (and a set of edges) with `ShapeToMesh()`, and sends it off to be rendered. */
