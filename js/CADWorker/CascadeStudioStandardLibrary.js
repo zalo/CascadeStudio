@@ -29,7 +29,7 @@ import { fonts } from "./CascadeStudioFontLoader";
 
 export function Box(x, y, z, centered) {
   if (!centered) { centered = false;}
-  let curBox = CacheOp(Box, () => {
+  let curBox = CacheOp(Box, { x, y, z, centered }, () => {
     // Construct a Box Primitive
     let box = new oc.BRepPrimAPI_MakeBox(x, y, z).Shape();
     if (centered) {
@@ -44,7 +44,7 @@ export function Box(x, y, z, centered) {
 }
 
 export function Sphere(radius) {
-  let curSphere = CacheOp(Sphere, () => {
+  let curSphere = CacheOp(Sphere, { radius }, () => {
     // Construct a Sphere Primitive
     let spherePlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0), oc.gp.prototype.DZ());
     return new oc.BRepPrimAPI_MakeSphere(spherePlane, radius).Shape();
@@ -55,7 +55,7 @@ export function Sphere(radius) {
 }
 
 export function Cylinder(radius, height, centered) {
-  let curCylinder = CacheOp(Cylinder, () => {
+  let curCylinder = CacheOp(Cylinder, { radius, height, centered }, () => {
     let cylinderPlane = new oc.gp_Ax2(new oc.gp_Pnt(0, 0, centered ? -height / 2 : 0), new oc.gp_Dir(0, 0, 1));
     return new oc.BRepPrimAPI_MakeCylinder(cylinderPlane, radius, height).Shape();
   });
@@ -64,7 +64,7 @@ export function Cylinder(radius, height, centered) {
 }
 
 export function Cone(radius1, radius2, height) {
-  let curCone = CacheOp(Cone, () => {
+  let curCone = CacheOp(Cone, { radius1, radius2, height }, () => {
     return new oc.BRepPrimAPI_MakeCone(radius1, radius2, height).Shape();
   });
   sceneShapes.push(curCone);
@@ -72,7 +72,7 @@ export function Cone(radius1, radius2, height) {
 }
 
 export function Polygon(points, wire) {
-  let curPolygon = CacheOp(Polygon, () => {
+  let curPolygon = CacheOp(Polygon, { points, wire }, () => {
     let gpPoints = [];
     for (let ind = 0; ind < points.length; ind++) {
       gpPoints.push(convertToPnt(points[ind]));
@@ -102,7 +102,7 @@ export function Polygon(points, wire) {
 }
 
 export function Circle(radius, wire) {
-  let curCircle = CacheOp(Circle, () => {
+  let curCircle = CacheOp(Circle, { radius, wire }, () => {
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(new oc.gp_Pnt(0, 0, 0),
       new oc.gp_Dir(0, 0, 1)), radius).Value();
     let edge = new oc.BRepBuilderAPI_MakeEdge(circle).Edge();
@@ -115,7 +115,7 @@ export function Circle(radius, wire) {
 }
 
 export function BSpline(inPoints, closed) {
-  let curSpline = CacheOp(BSpline, () => {
+  let curSpline = CacheOp(BSpline, { inPoints, closed }, () => {
     let ptList = new oc.TColgp_Array1OfPnt(1, inPoints.length + (closed ? 1 : 0));
     for (let pIndex = 1; pIndex <= inPoints.length; pIndex++) {
       ptList.SetValue(pIndex, convertToPnt(inPoints[pIndex - 1]));
@@ -133,7 +133,7 @@ export function BSpline(inPoints, closed) {
 export function Text3D(text, size = 36, height = 0.15, fontName = "Consolas") {
 
   let textArgs = JSON.stringify({ text, size, height, fontName });
-  let curText = CacheOp(Text3D, () => {
+  let curText = CacheOp(Text3D, { text, size, height, fontName }, () => {
     if (fonts[fontName] === undefined) { setArgCache({}); console.log("Font not loaded or found yet!  Try again..."); return; }
     let textFaces = [];
     let commands = fonts[fontName].getPath(text, 0, 0, size).commands;
@@ -225,7 +225,10 @@ export function GetSolidFromCompound(shape, index, keepOriginal) {
   if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
   if (!index) { index = 0;}
 
-  let sol = CacheOp(GetSolidFromCompound, () => {
+  let sol = CacheOp(
+    GetSolidFromCompound,
+    { shape, index, keepOriginal },
+    () => {
     let innerSolid = {}; let solidsFound = 0;
     ForEachSolid(shape, (i, s) => {
       if (i === index) { innerSolid = new oc.TopoDS_Solid(s); } solidsFound++;
@@ -268,7 +271,7 @@ export function GetWire(shape, index, keepOriginal) {
   if (!shape || shape.ShapeType() > 4 || shape.IsNull()) { console.error("Not a wire shape!"); return shape; }
   if (!index) { index = 0;}
 
-  let wire = CacheOp(GetWire, () => {
+  let wire = CacheOp(GetWire, { shape, index, keepOriginal }, () => {
     let innerWire = {}; let wiresFound = 0;
     ForEachWire(shape, (i, s) => {
       if (i === index) { innerWire = new oc.TopoDS_Wire(s); } wiresFound++;
@@ -307,7 +310,10 @@ export function ForEachVertex(shape, callback) {
 }
 
 export function FilletEdges(shape, radius, edgeList, keepOriginal) { 
-  let curFillet = CacheOp(FilletEdges, () => {
+  let curFillet = CacheOp(
+    FilletEdges,
+    { shape, radius, edgeList, keepOriginal },
+    () => {
     let mkFillet = new oc.BRepFilletAPI_MakeFillet(shape);
     let foundEdges = 0;
     ForEachEdge(shape, (index, edge) => {
@@ -325,7 +331,10 @@ export function FilletEdges(shape, radius, edgeList, keepOriginal) {
 }
 
 export function ChamferEdges(shape, distance, edgeList, keepOriginal) { 
-  let curChamfer = CacheOp(ChamferEdges, () => {
+  let curChamfer = CacheOp(
+    ChamferEdges,
+    { shape, distance, edgeList, keepOriginal },
+    () => {
     let mkChamfer = new oc.BRepFilletAPI_MakeChamfer(shape);
     let foundEdges = 0;
     ForEachEdge(shape, (index, edge) => {
@@ -343,7 +352,7 @@ export function ChamferEdges(shape, distance, edgeList, keepOriginal) {
 }
 
 export function Transform(translation, rotation, scale, shapes) {
-  return CacheOp(Transform, () => {
+  return CacheOp(Transform, { translation, rotation, scale, shapes }, () => {
     if (typeof shapes !== "undefined") {
       // Create the transform gizmo and add it to the scene
       postMessage({ "type": "createTransformHandle", payload: { translation: translation, rotation: rotation, scale: scale, lineAndColumn: getCallingLocation() } });
@@ -358,7 +367,7 @@ export function Transform(translation, rotation, scale, shapes) {
 }
 
 export function Translate(offset, shapes, keepOriginal) {
-  let translated = CacheOp(Translate, () => {
+  let translated = CacheOp(Translate, { offset, shapes, keepOriginal }, () => {
     let transformation = new oc.gp_Trsf();
     transformation.SetTranslation(new oc.gp_Vec(offset[0], offset[1], offset[2]));
     let translation = new oc.TopLoc_Location(transformation);
@@ -384,7 +393,7 @@ export function Rotate(axis, degrees, shapes, keepOriginal) {
   if (degrees === 0) {
     rotated = new oc.TopoDS_Shape(shapes);
   } else {
-    rotated = CacheOp(Rotate, () => {
+    rotated = CacheOp(Rotate, { axis, degrees, shapes, keepOriginal }, () => {
       let newRot;
       let transformation = new oc.gp_Trsf();
       transformation.SetRotation(
@@ -407,7 +416,7 @@ export function Rotate(axis, degrees, shapes, keepOriginal) {
 }
 
 export function Scale(scale, shapes, keepOriginal) {
-  let scaled = CacheOp(Scale, () => {
+  let scaled = CacheOp(Scale, { scale, shapes, keepOriginal }, () => {
     let transformation = new oc.gp_Trsf();
     transformation.SetScaleFactor(scale);
     let scaling = new oc.TopLoc_Location(transformation);
@@ -431,7 +440,10 @@ export function Scale(scale, shapes, keepOriginal) {
 // TODO: These ops can be more cache optimized since they're multiple sequential ops
 export function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
-  let curUnion = CacheOp(Union, () => {
+  let curUnion = CacheOp(
+    Union,
+    { objectsToJoin, keepObjects, fuzzValue, keepEdges },
+    () => {
     let combined = new oc.TopoDS_Shape(objectsToJoin[0]);
     if (objectsToJoin.length > 1) {
       for (let i = 0; i < objectsToJoin.length; i++) {
@@ -460,7 +472,17 @@ export function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
 }
 
 export function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue = 0.1, keepEdges) {
-  let curDifference = CacheOp(Difference, () => {
+  const args = {
+    mainBody,
+    objectsToSubtract,
+    keepObjects,
+    fuzzValue,
+    keepEdges,
+  };
+  let curDifference = CacheOp(
+    Difference,
+    args,
+    () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
     
     let difference = new oc.TopoDS_Shape(mainBody);
@@ -479,7 +501,7 @@ export function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue =
       difference = fusor.Shape();
     }
 
-    difference.hash = ComputeHash(Difference);
+    difference.hash = ComputeHash(Difference, args);
     if (GetNumSolidsInCompound(difference) === 1) {
       difference = GetSolidFromCompound(difference, 0);
     }
@@ -497,7 +519,10 @@ export function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue =
 
 export function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
-  let curIntersection = CacheOp(Intersection, () => {
+  let curIntersection = CacheOp(
+    Intersection,
+    { objectsToIntersect, keepObjects, fuzzValue, keepEdges },
+    () => {
     let intersected = new oc.TopoDS_Shape(objectsToIntersect[0]);
     if (objectsToIntersect.length > 1) {
       for (let i = 0; i < objectsToIntersect.length; i++) {
@@ -526,7 +551,7 @@ export function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdg
 }
 
 export function Extrude(face, direction, keepFace) {
-  let curExtrusion = CacheOp(Extrude, () => {
+  let curExtrusion = CacheOp(Extrude, { face, direction, keepFace }, () => {
     return new oc.BRepPrimAPI_MakePrism(face,
       new oc.gp_Vec(direction[0], direction[1], direction[2])).Shape();
   });
@@ -537,7 +562,7 @@ export function Extrude(face, direction, keepFace) {
 }
 
 export function RemoveInternalEdges(shape, keepShape) {
-  let cleanShape = CacheOp(RemoveInternalEdges, () => {
+  let cleanShape = CacheOp(RemoveInternalEdges, { shape, keepShape }, () => {
     let fusor = new oc.ShapeUpgrade_UnifySameDomain(shape);
     fusor.Build();
     return fusor.Shape();
@@ -552,7 +577,10 @@ export function Offset(shape, offsetDistance, tolerance, keepShape) {
   if (!shape || shape.IsNull()) { console.error("Offset received Null Shape!"); }
   if (!tolerance) { tolerance = 0.1; }
   if (offsetDistance === 0.0) { return shape; }
-  let curOffset = CacheOp(Offset, () => {
+  let curOffset = CacheOp(
+    Offset,
+    { shape, offsetDistance, tolerance, keepShape },
+    () => {
     let offset = null;
     if (shape.ShapeType() === 5) {
       offset = new oc.BRepOffsetAPI_MakeOffset();
@@ -582,7 +610,10 @@ export function Offset(shape, offsetDistance, tolerance, keepShape) {
 export function Revolve(shape, degrees, direction, keepShape, copy) {
   if (!degrees  ) { degrees   = 360.0; }
   if (!direction) { direction = [0, 0, 1]; }
-  let curRevolution = CacheOp(Revolve, () => {
+  let curRevolution = CacheOp(
+    Revolve,
+    { shape, degrees, direction, keepShape, copy },
+    () => {
     if (degrees >= 360.0) {
       return new oc.BRepPrimAPI_MakeRevol(shape,
         new oc.gp_Ax1(new oc.gp_Pnt(0, 0, 0),
@@ -603,7 +634,10 @@ export function Revolve(shape, degrees, direction, keepShape, copy) {
 
 export function RotatedExtrude(wire, height, rotation, keepWire) {
   if (!wire || wire.IsNull()) { console.error("RotatedExtrude received Null Wire!"); }
-  let curExtrusion = CacheOp(RotatedExtrude, () => {
+  let curExtrusion = CacheOp(
+    RotatedExtrude,
+    { wire, height, rotation, keepWire },
+    () => {
     let upperPolygon = Rotate([0, 0, 1], rotation, Translate([0, 0, height], wire, true));
     RemoveFromSceneShapes(upperPolygon);
 
@@ -642,7 +676,7 @@ export function RotatedExtrude(wire, height, rotation, keepWire) {
 }
 
 export function Loft(wires, keepWires) {
-  let curLoft = CacheOp(Loft, () => {
+  let curLoft = CacheOp(Loft, { wires, keepWires }, () => {
     let pipe = new oc.BRepOffsetAPI_ThruSections(true);
 
     // Construct a Loft that passes through the wires
@@ -660,7 +694,7 @@ export function Loft(wires, keepWires) {
 }
 
 export function Pipe(shape, wirePath, keepInputs) {
-  let curPipe = CacheOp(Pipe, () => {
+  let curPipe = CacheOp(Pipe, { shape, wirePath, keepInputs }, () => {
     let pipe = new oc.BRepOffsetAPI_MakePipe(wirePath, shape);
     pipe.Build();
     return new oc.TopoDS_Shape(pipe.Shape());
@@ -684,19 +718,19 @@ export function Sketch(startingPoint) {
   this.lastPoint    = this.firstPoint;
   this.wireBuilder  = new oc.BRepBuilderAPI_MakeWire();
   this.fillets      = [];
-  this.argsString   = ComputeHash(Sketch, true);
+  this.argsString = ComputeHash(Sketch, { startingPoint }, true);
 
   // Functions are: BSplineTo, Fillet, Wire, and Face
   this.Start = function (startingPoint) {
     this.firstPoint  = new oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
     this.lastPoint   = this.firstPoint;
     this.wireBuilder = new oc.BRepBuilderAPI_MakeWire();
-    this.argsString += ComputeHash(this.Start, true);
+    this.argsString += ComputeHash(this.Start, { startingPoint }, true);
     return this;
   }
 
   this.End = function (closed, reversed) {
-    this.argsString += ComputeHash(this.End, true);
+    this.argsString += ComputeHash(this.End, { closed, reversed }, true);
 
     if (closed &&
        (this.firstPoint.X() !== this.lastPoint.X() ||
@@ -726,7 +760,7 @@ export function Sketch(startingPoint) {
   }
 
   this.Wire = function (reversed) {
-    this.argsString += ComputeHash(this.Wire, true);
+    this.argsString += ComputeHash(this.Wire, { reversed }, true);
     //let wire = this.wires[this.wires.length - 1];
     this.applyFillets();
     this.faces[this.faces.length - 1].hash = stringToHash(this.argsString);
@@ -736,7 +770,7 @@ export function Sketch(startingPoint) {
     return wire;
   }
   this.Face = function (reversed) {
-    this.argsString += ComputeHash(this.Face, true);
+    this.argsString += ComputeHash(this.Face, { reversed }, true);
     this.applyFillets();
     let face = this.faces[this.faces.length - 1];
     if (reversed) { face = face.Reversed(); }
@@ -775,7 +809,7 @@ export function Sketch(startingPoint) {
   }
 
   this.AddWire = function (wire) {
-    this.argsString += ComputeHash(this.AddWire, true);
+    this.argsString += ComputeHash(this.AddWire, { wire }, true);
     // This adds another wire (or edge??) to the currently constructing shape...
     this.wireBuilder.Add(wire);
     if (endPoint) { this.lastPoint = endPoint; } // Yike what to do here...?
@@ -783,7 +817,7 @@ export function Sketch(startingPoint) {
   }
 
   this.LineTo = function (nextPoint) {
-    this.argsString += ComputeHash(this.LineTo, true);
+    this.argsString += ComputeHash(this.LineTo, { nextPoint }, true);
     let endPoint = null;
     if (nextPoint.X) {
       if (this.lastPoint.X() === nextPoint.X() &&
@@ -803,7 +837,7 @@ export function Sketch(startingPoint) {
   }
 
   this.ArcTo = function (pointOnArc, arcEnd) {
-    this.argsString += ComputeHash(this.ArcTo, true);
+    this.argsString += ComputeHash(this.ArcTo, { pointOnArc, arcEnd }, true);
     let onArc          = new oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
     let nextPoint      = new oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
     let arcCurve       = new oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
@@ -817,7 +851,11 @@ export function Sketch(startingPoint) {
   // Constructs an order-N Bezier Curve where the first N-1 points are control points
   // and the last point is the endpoint of the curve
   this.BezierTo = function (bezierControlPoints) {
-    this.argsString += ComputeHash(this.BezierTo, true);
+    this.argsString += ComputeHash(
+      this.BezierTo,
+      { bezierControlPoints },
+      true
+    );
     let ptList = new oc.TColgp_Array1OfPnt(1, bezierControlPoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
@@ -835,7 +873,7 @@ export function Sketch(startingPoint) {
 
   /* Constructs a BSpline from the previous point through this set of points */
   this.BSplineTo = function (bsplinePoints) {
-    this.argsString += ComputeHash(this.BSplineTo, true);
+    this.argsString += ComputeHash(this.BSplineTo, { bsplinePoints }, true);
     let ptList = new oc.TColgp_Array1OfPnt(1, bsplinePoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bsplinePoints.length; bInd++){
@@ -851,13 +889,17 @@ export function Sketch(startingPoint) {
   }
 
   this.Fillet = function (radius) {
-    this.argsString += ComputeHash(this.Fillet, true);
+    this.argsString += ComputeHash(this.Fillet, { radius }, true);
     this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
     return this;
   }
 
   this.Circle = function (center, radius, reversed) {
-    this.argsString += ComputeHash(this.Circle, true);
+    this.argsString += ComputeHash(
+      this.Circle,
+      { center, radius, reversed },
+      true
+    );
     let circle = new oc.GC_MakeCircle(new oc.gp_Ax2(convertToPnt(center),
     new oc.gp_Dir(0, 0, 1)), radius).Value();
     let edge = new oc.BRepBuilderAPI_MakeEdge(circle).Edge();
