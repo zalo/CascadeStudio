@@ -3,15 +3,15 @@ const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MonacoWebpackPlugin = require("monaco-editor-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
+const ServiceWorkerWebpackPlugin = require("serviceworker-webpack-plugin");
 
 const config = {
   entry: {
-    main: ["babel-polyfill", "./js/MainPage/index.js"],
-    "service-worker": ["babel-polyfill", "./service-worker.js"]
+    main: ["babel-polyfill", "./js/MainPage/index.js"]
   },
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "[name].bundle.js"
+    filename: "[name].bundle[hash].js"
   },
   module: {
     rules: [
@@ -58,6 +58,9 @@ const config = {
   plugins: [
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "index.html")
+    }),
+    new ServiceWorkerWebpackPlugin({
+      entry: path.join(__dirname, 'service-worker.js'),
     }),
     new MonacoWebpackPlugin(),
     new CopyPlugin({
