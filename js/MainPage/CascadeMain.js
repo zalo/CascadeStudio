@@ -141,7 +141,7 @@ export function initialize(projectContent = null) {
 
             // Import Typescript Intellisense Definitions for the relevant libraries...
             var extraLibs = [];
-            const typescriptDefinitionFiles = ["opencascade.d.ts", "Three.d.ts", "js/StandardLibraryIntellisense.ts"]
+            const typescriptDefinitionFiles = ["/opencascade.d.ts", "/Three.d.ts", "/js/StandardLibraryIntellisense.ts"]
 
             Promise.all(typescriptDefinitionFiles.map(fileLocation => fetch(fileLocation)))
                 .then(async responses => {

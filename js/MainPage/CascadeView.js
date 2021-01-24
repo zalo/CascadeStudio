@@ -169,7 +169,7 @@ export function CascadeEnvironment (goldenContainer) {
 
   // Load the Shiny Dull Metal Matcap Material
   this.loader = new THREE.TextureLoader(); this.loader.setCrossOrigin ('');
-  this.matcap = this.loader.load ('textures/dullFrontLitMetal.png', (tex) => this.environment.viewDirty = true );
+  this.matcap = this.loader.load ('/textures/dullFrontLitMetal.png', (tex) => this.environment.viewDirty = true );
   this.matcapMaterial = new THREE.MeshMatcapMaterial({
                           color: new THREE.Color(0xf5f5f5),
                           matcap: this.matcap,
