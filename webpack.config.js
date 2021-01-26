@@ -4,6 +4,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MonacoWebpackPlugin = require("monaco-editor-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 const ServiceWorkerWebpackPlugin = require("serviceworker-webpack-plugin");
+const TerserPlugin = require('terser-webpack-plugin');
 
 const config = {
   entry: {
@@ -102,7 +103,15 @@ const config = {
           chunks: "all"
         }
       }
-    }
+    },
+    minimize: true,
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          keep_fnames: true
+        }
+      })
+    ]
   }
 };
 
