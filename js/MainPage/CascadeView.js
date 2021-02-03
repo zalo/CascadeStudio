@@ -39,7 +39,7 @@ function setupIdeButtonListeners() {
   document.getElementById("save-project").addEventListener("click", () => {
     saveProject();
   });
-  document.getElementById("files").addEventListener("click", () => {
+  document.getElementById("files").addEventListener("change", () => {
     loadFiles();
   });
   document
