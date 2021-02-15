@@ -120,7 +120,7 @@ function BSpline(inPoints, closed) {
 function Text3D(text, size, height, fontName) {
   if (!size   ) { size    = 36; }
   if (!height && height !== 0.0) { height  = 0.15; }
-  if (!fontName) { fontName = "Consolas"; }
+  if (!fontName) { fontName = "Roboto"; }
 
   let textArgs = JSON.stringify(arguments);
   let curText = CacheOp(arguments, () => {

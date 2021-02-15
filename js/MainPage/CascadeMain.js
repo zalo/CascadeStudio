@@ -25,7 +25,7 @@ let cylinderX  = Rotate([1,0,0], 90, Cylinder(holeRadius, 200, true));
 
 Translate([0, 0, 50], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
 
-Translate([-25, 0, 40], Text3D("Hi!"));
+Translate([-25, 0, 40], Text3D("Hi!", 36, 0.15, 'Consolas'));
 
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
