@@ -135,16 +135,19 @@ function Text3D(text, size, height, fontName) {
         var currentWire = new oc.BRepBuilderAPI_MakeWire();
       } else if (commands[idx].type === "Z") {
         // End the current Glyph and Finish the Path
+        try {
+          let faceBuilder = null;
+          if (textFaces.length > 0) {
+            faceBuilder = new oc.BRepBuilderAPI_MakeFace(
+              textFaces[textFaces.length - 1], currentWire.Wire());
+          } else {
+            faceBuilder = new oc.BRepBuilderAPI_MakeFace(currentWire.Wire());
+          }
 
-        let faceBuilder = null;
-        if (textFaces.length > 0) {
-          faceBuilder = new oc.BRepBuilderAPI_MakeFace(
-            textFaces[textFaces.length - 1], currentWire.Wire());
-        } else {
-          faceBuilder = new oc.BRepBuilderAPI_MakeFace(currentWire.Wire());
+          textFaces.push(faceBuilder.Face());
+        } catch (e) {
+          console.error("ERROR: OCC encountered malformed characters when constructing faces from this font (likely self-intersections)!  Try using a more robust font like 'Roboto'.")
         }
-
-        textFaces.push(faceBuilder.Face());
       } else if (commands[idx].type === "L") {
         let nextPoint = new oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
         if (lastPoint.X() === nextPoint.X() && lastPoint.Y() === nextPoint.Y()) { continue; }
