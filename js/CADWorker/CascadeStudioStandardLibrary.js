@@ -146,7 +146,7 @@ function Text3D(text, size, height, fontName) {
 
           textFaces.push(faceBuilder.Face());
         } catch (e) {
-          console.error("ERROR: OCC encountered malformed characters when constructing faces from this font (likely self-intersections)!  Try using a more robust font like 'Roboto'.")
+          console.error("ERROR: OCC encountered malformed characters when constructing faces from this font (likely self-intersections)!  Try using a more robust font like 'Roboto'.");
         }
       } else if (commands[idx].type === "L") {
         let nextPoint = new oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
