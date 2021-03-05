@@ -1,5 +1,21 @@
-function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
+function LengthOfCurve(geomAdaptor, UMin, UMax, segments = 5) {
+  let point1 = new THREE.Vector3(), point2 = new THREE.Vector3(), arcLength = 0, gpPnt = new oc.gp_Pnt();
+  for (let s = UMin; s <= UMax; s += (UMax - UMin) / segments){
+    geomAdaptor.D0(s, gpPnt);
+    point1.set(gpPnt.X(), gpPnt.Y(), gpPnt.Z());
+    if (s == UMin) {
+      point2.copy(point1);
+    } else {
+      arcLength += point1.distanceTo(point2);
+    }
+    point2.copy(point1);
+  }
+  return arcLength;
+}
+
+function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
     let facelist = [], edgeList = [];
+    let msCalculatingUVs = 0;
     try {
       shape = new oc.TopoDS_Shape(shape);
 
@@ -18,6 +34,7 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
 
         let this_face = {
           vertex_coord: [],
+          uv_coord: [],
           normal_coord: [],
           tri_indexes: [],
           number_of_triangles: 0,
@@ -34,6 +51,51 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
           this_face.vertex_coord[(i * 3) + 0] = p.X();
           this_face.vertex_coord[(i * 3) + 1] = p.Y();
           this_face.vertex_coord[(i * 3) + 2] = p.Z();
+        }
+
+        // write uv buffer
+        if (myT.get().HasUVNodes()) {
+          let startMS = performance.now();
+
+          // Get UV Bounds
+          let UMin = 0, UMax = 0, VMin = 0, VMax = 0;
+
+          let UVNodes = myT.get().UVNodes(), UVNodesLength = UVNodes.Length();
+          this_face.uv_coord = new Array(UVNodesLength * 2);
+          for(let i = 0; i < UVNodesLength; i++) {
+            let p = UVNodes.Value(i + 1);
+            let x = p.X(), y = p.Y();
+            this_face.uv_coord[(i * 2) + 0] = x;
+            this_face.uv_coord[(i * 2) + 1] = y;
+
+            // Compute UV Bounds
+            if(i == 0){ UMin = x; UMax = x; VMin = y; VMax = y; }
+            if (x < UMin) { UMin = x; } else if (x > UMax) { UMax = x; }
+            if (y < VMin) { VMin = y; } else if (y > VMax) { VMax = y; }
+          }
+
+          // Compute the Arclengths of the Isoparametric Curves of the face
+          let ULength = 1.0, VLength = 1.0;
+          let surface = oc.BRep_Tool.prototype.Surface(myFace).get();
+          let UIso_Handle = surface.UIso(UMin + ((UMax - UMin) * 0.5));
+          let VIso_Handle = surface.VIso(VMin + ((VMax - VMin) * 0.5));
+          let UAdaptor = new oc.GeomAdaptor_Curve(VIso_Handle);
+          let VAdaptor = new oc.GeomAdaptor_Curve(UIso_Handle);
+          ULength = LengthOfCurve(UAdaptor, UMin, UMax);
+          VLength = LengthOfCurve(VAdaptor, VMin, VMax);
+
+          // Normalize each face so that UVs are appropriately Parameterized
+          for (let i = 0; i < UVNodesLength; i++) {
+            let x = this_face.uv_coord[(i * 2) + 0],
+                y = this_face.uv_coord[(i * 2) + 1];
+            
+            x = ((x - UMin)/(UMax - UMin)) * ULength * 0.01;
+            y = ((y - VMin)/(VMax - VMin)) * VLength * 0.01;
+
+            this_face.uv_coord[(i * 2) + 0] = x;
+            this_face.uv_coord[(i * 2) + 1] = y;
+          }
+          msCalculatingUVs += performance.now() - startMS;
         }
 
         // write normal buffer
@@ -102,6 +164,8 @@ function ShapeToMesh (shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHas
         });
         triangulations.push(myT);
       });
+      console.log("Total UV Calculation took: " + msCalculatingUVs + "ms");
+
       // Nullify Triangulations between runs so they're not stored in the cache
       for (let i = 0; i < triangulations.length; i++) { triangulations[i].Nullify(); }
 
