@@ -139,7 +139,8 @@ var CascadeEnvironment = function (goldenContainer) {
                           map: this.matcap,
                           polygonOffset: true, // Push the mesh back for line drawing
                           polygonOffsetFactor: 2.0,
-                          polygonOffsetUnits: 1.0
+                          polygonOffsetUnits: 1.0,
+                          side: THREE.DoubleSide
                         });
 
   // A callback to load the Triangulated Shape from the Worker and add it to the Scene
