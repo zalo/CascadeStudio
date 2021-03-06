@@ -166,15 +166,18 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
       });
 
       // Scale each face's UVs to Worldspace and pack them into a 0-1 Atlas with potpack
+      let padding = 2;
+      for (let f = 0; f < uv_boxes.length; f++) {  uv_boxes[f].w += padding; uv_boxes[f].h += padding; }
       let packing_stats = potpack(uv_boxes);
       for (let f = 0; f < uv_boxes.length; f++) {
-        let this_face = facelist[uv_boxes[f].index];
+        let box = uv_boxes[f];
+        let this_face = facelist[box.index];
         for (let q = 0; q < this_face.uv_coord.length/2; q++) {
           let x = this_face.uv_coord[(q * 2) + 0],
               y = this_face.uv_coord[(q * 2) + 1];
           
-          x = ((x * uv_boxes[f].w) + uv_boxes[f].x) / Math.max(packing_stats.w, packing_stats.h);
-          y = ((y * uv_boxes[f].h) + uv_boxes[f].y) / Math.max(packing_stats.w, packing_stats.h);
+          x = ((x * (box.w - padding)) + (box.x + (padding*0.5))) / Math.max(packing_stats.w, packing_stats.h);
+          y = ((y * (box.h - padding)) + (box.y + (padding*0.5))) / Math.max(packing_stats.w, packing_stats.h);
 
           this_face.uv_coord[(q * 2) + 0] = x;
           this_face.uv_coord[(q * 2) + 1] = y;

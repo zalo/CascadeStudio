@@ -122,25 +122,13 @@ var CascadeEnvironment = function (goldenContainer) {
 
   // Load the Shiny Dull Metal Matcap Material
   this.loader = new THREE.TextureLoader(); this.loader.setCrossOrigin ('');
-  this.matcap = this.loader.load('./textures/uv_grid_opengl.jpg', (tex) => {
-    this.environment.viewDirty = true;
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-  } );
-  //this.matcapMaterial = new THREE.MeshMatcapMaterial({
-  //                        color: new THREE.Color(0xf5f5f5),
-  //                        matcap: this.matcap,
-  //                        polygonOffset: true, // Push the mesh back for line drawing
-  //                        polygonOffsetFactor: 2.0,
-  //                        polygonOffsetUnits: 1.0
-  //                      });
-  this.matcapMaterial = new THREE.MeshStandardMaterial({
+  this.matcap = this.loader.load('./textures/dullFrontLitMetal.png', (tex) => { this.environment.viewDirty = true; } );
+  this.matcapMaterial = new THREE.MeshMatcapMaterial({
                           color: new THREE.Color(0xf5f5f5),
-                          map: this.matcap,
+                          matcap: this.matcap,
                           polygonOffset: true, // Push the mesh back for line drawing
                           polygonOffsetFactor: 2.0,
-                          polygonOffsetUnits: 1.0,
-                          side: THREE.DoubleSide
+                          polygonOffsetUnits: 1.0
                         });
 
   // A callback to load the Triangulated Shape from the Worker and add it to the Scene

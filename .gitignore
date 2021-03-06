@@ -107,7 +107,7 @@ CascadeStudio/
 node_modules/opencascade.js/dist/opencascade.js
 # Add the above line for now, can take it out if necessary
 
-# Potpack
+# potpack
 !node_modules/potpack/
 !node_modules/potpack/index.js
 
