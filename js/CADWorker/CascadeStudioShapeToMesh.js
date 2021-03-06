@@ -54,6 +54,7 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
         }
 
         // Write UV buffer
+        let orient = myFace.Orientation();
         if (myT.get().HasUVNodes()) {
           // Get UV Bounds
           let UMin = 0, UMax = 0, VMin = 0, VMax = 0;
@@ -91,6 +92,7 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
             
             x = ((x - UMin)/(UMax - UMin));
             y = ((y - VMin)/(VMax - VMin));
+            if (orient !== oc.TopAbs_FORWARD) { x = 1.0 - x; }
 
             this_face.uv_coord[(i * 2) + 0] = x;
             this_face.uv_coord[(i * 2) + 1] = y;
@@ -110,7 +112,6 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
         }
         
         // Write triangle buffer
-        let orient = myFace.Orientation();
         let triangles = myT.get().Triangles();
         this_face.tri_indexes = new Array(triangles.Length() * 3);
         let validFaceTriCount = 0;

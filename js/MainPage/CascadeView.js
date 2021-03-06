@@ -189,6 +189,7 @@ var CascadeEnvironment = function (goldenContainer) {
         geometry.vertices         = vertices;
         geometry.faces            = triangles;
         geometry.faceVertexUvs[0] = uvs;
+        geometry.faceVertexUvs[1] = uvs;
     let model = new THREE.Mesh(geometry, this.matcapMaterial);
     model.castShadow = true;
     model.name = "Model Faces";
