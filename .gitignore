@@ -107,6 +107,10 @@ CascadeStudio/
 node_modules/opencascade.js/dist/opencascade.js
 # Add the above line for now, can take it out if necessary
 
+# potpack
+!node_modules/potpack/
+!node_modules/potpack/index.js
+
 jspm_packages/
 
 # TypeScript v1 declaration files

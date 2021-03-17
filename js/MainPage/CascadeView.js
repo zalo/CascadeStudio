@@ -122,7 +122,7 @@ var CascadeEnvironment = function (goldenContainer) {
 
   // Load the Shiny Dull Metal Matcap Material
   this.loader = new THREE.TextureLoader(); this.loader.setCrossOrigin ('');
-  this.matcap = this.loader.load ('./textures/dullFrontLitMetal.png', (tex) => this.environment.viewDirty = true );
+  this.matcap = this.loader.load('./textures/dullFrontLitMetal.png', (tex) => { this.environment.viewDirty = true; } );
   this.matcapMaterial = new THREE.MeshMatcapMaterial({
                           color: new THREE.Color(0xf5f5f5),
                           matcap: this.matcap,
@@ -143,7 +143,7 @@ var CascadeEnvironment = function (goldenContainer) {
     this.mainObject.rotation.x = -Math.PI / 2;
 
     // Add Triangulated Faces to Object
-    let vertices = []; let triangles = []; let vInd = 0; let globalFaceIndex = 0;
+    let vertices = []; let triangles = []; let uvs = []; let vInd = 0; let globalFaceIndex = 0;
     facelist.forEach((face) => {
       // Sort Vertices into three.js Vector3 List
       for (let i = 0; i < face.vertex_coord.length; i += 3) {
@@ -154,27 +154,42 @@ var CascadeEnvironment = function (goldenContainer) {
       // Sort Triangles into a three.js Face List
       for (let i = 0; i < face.tri_indexes.length; i += 3) {
         triangles.push(new THREE.Face3(face.tri_indexes[i] + vInd,face.tri_indexes[i + 1] + vInd, face.tri_indexes[i + 2] + vInd, 
-                      [new THREE.Vector3(face.normal_coord[(face.tri_indexes[i     ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i     ] * 3) + 1], 
-                                         face.normal_coord[(face.tri_indexes[i     ] * 3) + 2]),
-                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 1 ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 1], 
-                                         face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 2]),
-                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 2 ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 1], 
-                                         face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 2])],
+                      [new THREE.Vector3(face.normal_coord[(face.tri_indexes[i    ] * 3)    ], 
+                                         face.normal_coord[(face.tri_indexes[i    ] * 3) + 1], 
+                                         face.normal_coord[(face.tri_indexes[i    ] * 3) + 2]),
+                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 1] * 3)    ], 
+                                         face.normal_coord[(face.tri_indexes[i + 1] * 3) + 1], 
+                                         face.normal_coord[(face.tri_indexes[i + 1] * 3) + 2]),
+                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 2] * 3)    ], 
+                                         face.normal_coord[(face.tri_indexes[i + 2] * 3) + 1], 
+                                         face.normal_coord[(face.tri_indexes[i + 2] * 3) + 2])],
                        new THREE.Color(face.face_index, globalFaceIndex, 0)
         ));
       }
+
+      // Write UVs according to that list of triangles
+      for (let i = 0; i < face.tri_indexes.length; i+=3) {
+        uvs.push([
+            new THREE.Vector2(face.uv_coord[ (face.tri_indexes[i    ])*2], 
+                              face.uv_coord[((face.tri_indexes[i    ])*2)+1]),
+            new THREE.Vector2(face.uv_coord[ (face.tri_indexes[i + 1])*2], 
+                              face.uv_coord[((face.tri_indexes[i + 1])*2)+1]),
+            new THREE.Vector2(face.uv_coord[ (face.tri_indexes[i + 2])*2], 
+                              face.uv_coord[((face.tri_indexes[i + 2])*2)+1]),
+        ]);
+      }
+
       globalFaceIndex++;
       vInd += face.vertex_coord.length / 3;
     });
 
     // Compile the connected vertices and faces into a model
     // And add to the scene
-    let geometry          = new THREE.Geometry();
-        geometry.vertices = vertices;
-        geometry.faces    = triangles;
+    let geometry                  = new THREE.Geometry();
+        geometry.vertices         = vertices;
+        geometry.faces            = triangles;
+        geometry.faceVertexUvs[0] = uvs;
+        geometry.faceVertexUvs[1] = uvs;
     let model = new THREE.Mesh(geometry, this.matcapMaterial);
     model.castShadow = true;
     model.name = "Model Faces";

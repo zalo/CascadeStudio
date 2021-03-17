@@ -27,7 +27,8 @@ importScripts(
   './CascadeStudioStandardLibrary.js',
   './CascadeStudioShapeToMesh.js',
   '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
-  '../../node_modules/opentype.js/dist/opentype.min.js');
+  '../../node_modules/opentype.js/dist/opentype.min.js',
+  '../../node_modules/potpack/index.js');
 
 // Preload the Various Fonts that are available via Text3D
 var preloadedFonts = ['../../fonts/Roboto.ttf',
