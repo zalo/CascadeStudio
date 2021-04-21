@@ -15,7 +15,6 @@ function LengthOfCurve(geomAdaptor, UMin, UMax, segments = 5) {
 
 function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
     let facelist = [], edgeList = [];
-    let msCalculatingUVs = 0;
     try {
       shape = new oc.TopoDS_Shape(shape);
 
