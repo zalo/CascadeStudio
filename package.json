@@ -18,6 +18,6 @@
 		"jquery": "^3.5.1",
 		"monaco-editor": "^0.20.0",
 		"opencascade.js": "^0.1.15",
-		"three": "^0.118.3"
+		"three": "^0.129.0"
 	}
 }
