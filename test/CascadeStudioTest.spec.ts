@@ -14,6 +14,6 @@ it("compares page screenshot", async ({ page, browserName }) => {
     await page.waitForFunction(() => !window.workerWorking, null, { timeout: config.timeout - 3000 });
     await page.waitForTimeout(1000);
     let screenshot = await page.screenshot();
-    expect(screenshot).toMatchSnapshot(`test-${browserName}.png`, { threshold: 0.1 });
+    expect(screenshot).toMatchSnapshot(`test-${browserName}.png`, { threshold: 0.0 });
     console.log("Test Completed in " + (process.hrtime(start))+"s");
 });
