@@ -12,7 +12,7 @@ it("compares page screenshot", async ({ page, browserName }) => {
     await page.goto("http://localhost:8000/", { waitUntil: 'load' });
     //await page.waitForFunction(() =>  window.workerWorking, null, { timeout: config.timeout - 3000 });
     //await page.waitForFunction(() => !window.workerWorking, null, { timeout: config.timeout - 3000 });
-    await page.waitForTimeout(15000);
+    await page.waitForTimeout(25000);
     let screenshot = await page.screenshot();
     expect(screenshot).toMatchSnapshot(`test-${browserName}.png`, { threshold: 0.2 });
     console.log("Test Completed in " + (process.hrtime(start))+"s");
