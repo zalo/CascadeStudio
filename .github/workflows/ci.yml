@@ -36,7 +36,7 @@ jobs:
 
       - name: Run Server and Tests
         run: |
-          start cmd.exe /K python "test/server.py"
+          start python "test/server.py"
           cd test
           npx folio --param screenshotOnFailure --param browserName=chromium
 
