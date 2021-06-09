@@ -37,9 +37,9 @@ jobs:
 
       - name: Run Server
         run: |
-          nohup python "test/server.py"
-          sleep 1
-          cd test
+          nohup python "test/server.py" &
+          sleep 1 &&
+          cd test &&&
           npx folio --param screenshotOnFailure --param browserName=chromium
 
       - name: Upload Failing Screenshots
