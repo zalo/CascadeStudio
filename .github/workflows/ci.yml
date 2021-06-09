@@ -36,7 +36,7 @@ jobs:
 
       - name: Run Server and Tests
         run: |
-          nohup python "test/server.py" &
+          start cmd.exe /K python "test/server.py"
           cd test
           npx folio --param screenshotOnFailure --param browserName=chromium
 
