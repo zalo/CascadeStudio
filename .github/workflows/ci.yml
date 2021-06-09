@@ -45,11 +45,11 @@ jobs:
         if: failure()
         with:
           name: Screenshots
-          path: tests/test-results
+          path: test/test-results
 
       - name: Upload Failing Screenshots
         uses: actions/upload-artifact@v2
         if: failure()
         with:
           name: Screenshots
-          path: tests/__snapshots__
+          path: test/__snapshots__
