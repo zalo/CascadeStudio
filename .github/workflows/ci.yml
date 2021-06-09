@@ -35,7 +35,7 @@ jobs:
         run: |
           start python "test/server.py"
           cd test
-          npx folio --param screenshotOnFailure --param browserName=chromium
+          npx folio --param browserName=chromium
 
       - name: Upload Failing Screenshots
         uses: actions/upload-artifact@v2
