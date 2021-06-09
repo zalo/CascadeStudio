@@ -5,8 +5,9 @@
 var myLayout, monacoEditor, threejsViewport,
     consoleContainer, consoleGolden, codeContainer, gui,
     guiPanel, GUIState, count = 0, //focused = true,
-    messageHandlers = {}, workerWorking = false,
+    messageHandlers = {},
     startup, file = {}, realConsoleLog;
+window.workerWorking = false;
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
@@ -192,12 +193,12 @@ function initialize(projectContent = null) {
             /** This function triggers the evaluation of the editor code 
              *  inside the CAD Worker thread.*/
             monacoEditor.evaluateCode = (saveToURL = false) => {
-                // Don't evaluate if the `workerWorking` flag is true
-                if (workerWorking) { return; }
+                // Don't evaluate if the `window.workerWorking` flag is true
+                if (window.workerWorking) { return; }
 
-                // Set the "workerWorking" flag, so we don't submit 
+                // Set the "window.workerWorking" flag, so we don't submit 
                 // multiple jobs to the worker thread simultaneously
-                workerWorking = true;
+                window.workerWorking = true;
 
                 // Refresh these every so often to ensure we're always getting intellisense
                 monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
@@ -371,7 +372,7 @@ function initialize(projectContent = null) {
             };
             // Call this console.log when triggered from the WASM
             messageHandlers["log"  ] = (payload) => { console.log(payload); };
-            messageHandlers["error"] = (payload) => { workerWorking = false; console.error(payload); };
+            messageHandlers["error"] = (payload) => { window.workerWorking = false; console.error(payload); };
 
             // Print Errors in Red
             window.onerror = function (err, url, line, colno, errorObj) {
@@ -466,7 +467,7 @@ function initialize(projectContent = null) {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default; }
         guiPanel.addCheckbox(GUIState, payload.name, { onChange: () => { monacoEditor.evaluateCode() } });
     }
-    messageHandlers["resetWorking"] = () => { workerWorking = false; }
+    messageHandlers["resetWorking"] = () => { window.workerWorking = false; }
 }
 
 async function getNewFileHandle(desc, mime, ext, open = false) {
@@ -520,7 +521,7 @@ async function saveProject() {
 /** This loads a .json file as the currentProject.*/
 const loadProject = async () => {
     // Don't allow loading while the worker is working to prevent race conditions.
-    if (workerWorking) { return; }
+    if (window.workerWorking) { return; }
 
     // Load Project .json from a file
     [file.handle] = await getNewFileHandle(
