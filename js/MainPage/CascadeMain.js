@@ -24,7 +24,7 @@ let cylinderZ  =                     Cylinder(holeRadius, 200, true);
 let cylinderY  = Rotate([0,1,0], 90, Cylinder(holeRadius, 200, true));
 let cylinderX  = Rotate([1,0,0], 90, Cylinder(holeRadius, 200, true));
 
-Translate([0, 0, 51], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
+Translate([0, 0, 50], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
 
 Translate([-25, 0, 40], Text3D("Hi!", 36, 0.15, 'Consolas'));
 

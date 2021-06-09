@@ -54,7 +54,7 @@ var Environment = function (goldenContainer) {
     // Create the ground mesh
     this.groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000),
       new THREE.MeshPhongMaterial({
-        color: 0x080808, depthWrite: true, dithering: true,
+        color: 0x080808, depthWrite: true, dithering: false,
         polygonOffset: true, // Push the mesh back for line drawing
         polygonOffsetFactor: 6.0, polygonOffsetUnits: 1.0
       }));
