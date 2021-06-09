@@ -38,8 +38,11 @@ jobs:
       - name: Run Server
         run: |
           nohup python "test/server.py" &
-          sleep 1 &&
-          cd test &&&
+          sleep 1
+
+      - name: Run Tests
+        run: |
+          cd test
           npx folio --param screenshotOnFailure --param browserName=chromium
 
       - name: Upload Failing Screenshots
@@ -48,6 +51,7 @@ jobs:
         with:
           name: Screenshots
           path: tests/test-results
+
       - name: Upload Failing Screenshots
         uses: actions/upload-artifact@v2
         if: failure()
