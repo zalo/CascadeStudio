@@ -4,7 +4,6 @@
 import http.server
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import socketserver
-from flatbuffers import flexbuffers
 
 PORT = 8000
 
