@@ -31,9 +31,6 @@ jobs:
           cd test
           npm install
 
-      - name: Check the Current Directory
-        run: ls
-
       - name: Run Server and Tests
         run: |
           start python "test/server.py"
@@ -47,9 +44,6 @@ jobs:
           name: Screenshots
           path: test/test-results
 
-      - name: Upload Failing Screenshots
-        uses: actions/upload-artifact@v2
+      - name: Where to go from here
         if: failure()
-        with:
-          name: Screenshots
-          path: test/__snapshots__
+        run: echo "~~~*** Test failed!  See the README.md in CascadeStudio/test for more information ***~~~"
