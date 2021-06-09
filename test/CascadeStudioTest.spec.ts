@@ -1,7 +1,7 @@
 import { config } from 'folio';
 import { it, expect } from "@playwright/test";
 
-config.timeout = 30000;
+config.timeout = 60000;
 
 it("compares page screenshot", async ({ page, browserName }) => {
     let start = process.hrtime();
@@ -9,9 +9,7 @@ it("compares page screenshot", async ({ page, browserName }) => {
         console.log(msg.message);
         console.log(msg.stack);
     });
-    await page.setDefaultNavigationTimeout(0);
-    await page.setDefaultTimeout(0);
-    await page.goto("http://localhost:8000/", { timeout: 0 });
+    await page.goto("http://localhost:8000/", { waitUntil: 'load' });
     await page.waitForFunction(() =>  window.workerWorking, null, { timeout: config.timeout - 3000 });
     await page.waitForFunction(() => !window.workerWorking, null, { timeout: config.timeout - 3000 });
     await page.waitForTimeout(1000);

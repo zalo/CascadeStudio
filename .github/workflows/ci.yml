@@ -30,19 +30,13 @@ jobs:
         run: |
           cd test
           npm install
-          cd ..
 
       - name: Check the Current Directory
         run: ls
 
-      - name: Run Server
+      - name: Run Server and Tests
         run: |
-          nohup python "test/server.py" &
-          sleep 1
-
-      - name: Run Tests
-        run: |
-          cd test
+          nohup python "server.py" &
           npx folio --param screenshotOnFailure --param browserName=chromium
 
       - name: Upload Failing Screenshots
