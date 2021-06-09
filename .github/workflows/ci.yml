@@ -2,8 +2,6 @@ name: CascadeStudio - End To End Test
 
 on:
   push:
-    branches:
-      - master
 
 jobs:
   test:
@@ -50,3 +48,9 @@ jobs:
         with:
           name: Screenshots
           path: tests/test-results
+      - name: Upload Failing Screenshots
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: Screenshots
+          path: tests/__snapshots__
