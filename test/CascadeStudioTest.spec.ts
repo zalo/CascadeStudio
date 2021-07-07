@@ -1,7 +1,7 @@
 import { config } from 'folio';
 import { it, expect } from "@playwright/test";
 
-config.timeout = 60000;
+config.timeout = 120000;
 
 it("compares page screenshot", async ({ page, browserName }) => {
     let start = process.hrtime();
