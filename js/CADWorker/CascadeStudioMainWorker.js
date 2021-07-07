@@ -99,7 +99,7 @@ fetch('../../node_modules/opencascade.js/dist/opencascade.full.js')
 
     // Import the Javascript from a blob URL
     importScripts(URL.createObjectURL(new Blob([data], { type: 'text/javascript' })));
-    console.log("Actually start loading CAD Kernel...");
+    //console.log("Actually start loading CAD Kernel...");
     new Module({
       locateFile(path) {
         if (path.endsWith('.wasm')) {
