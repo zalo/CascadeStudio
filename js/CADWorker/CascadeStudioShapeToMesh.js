@@ -1,14 +1,16 @@
 function LengthOfCurve(geomAdaptor, UMin, UMax, segments = 5) {
-  let point1 = new THREE.Vector3(), point2 = new THREE.Vector3(), arcLength = 0, gpPnt = new oc.gp_Pnt();
+  let point1 = [0.0, 0.0, 0.0], point2 = [0.0, 0.0, 0.0],
+    arcLength = 0, gpPnt = new oc.gp_Pnt();
   for (let s = UMin; s <= UMax; s += (UMax - UMin) / segments){
     geomAdaptor.D0(s, gpPnt);
-    point1.set(gpPnt.X(), gpPnt.Y(), gpPnt.Z());
+    point1[0] = gpPnt.X(); point1[1] = gpPnt.Y(); point1[2] = gpPnt.Z();
     if (s == UMin) {
-      point2.copy(point1);
+      point2[0] = point1[0]; point2[1] = point1[1]; point2[2] = point1[2];
     } else {
-      arcLength += point1.distanceTo(point2);
+      let xDiff = point2[0] - point1[0], yDiff = point2[1] - point1[1], zDiff = point2[2] - point1[2];
+      arcLength += Math.sqrt((xDiff * xDiff) + (yDiff * yDiff) + (zDiff * zDiff));//point1.distanceTo(point2);
     }
-    point2.copy(point1);
+    point2[0] = point1[0]; point2[1] = point1[1]; point2[2] = point1[2];
   }
   return arcLength;
 }

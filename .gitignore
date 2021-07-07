@@ -107,6 +107,14 @@ CascadeStudio/
 node_modules/opencascade.js/dist/opencascade.js
 # Add the above line for now, can take it out if necessary
 
+# TypeScript Compiler Bin
+!node_modules/typescript/
+!node_modules/typescript/*/
+!node_modules/typescript/bin/
+!node_modules/typescript/bin/*
+!node_modules/typescript/lib/
+!node_modules/typescript/lib/*
+
 # potpack
 !node_modules/potpack/
 !node_modules/potpack/index.js
