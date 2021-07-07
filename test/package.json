@@ -1,0 +1,5 @@
+{
+	"dependencies": {
+		"@playwright/test": "^0.1111.0"
+	}
+}

@@ -6,6 +6,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# webpack bundle output file
+dist/*
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
@@ -111,6 +114,10 @@ node_modules/opencascade.js/dist/opencascade.js
 !node_modules/typescript/bin/*
 !node_modules/typescript/lib/
 !node_modules/typescript/lib/*
+
+# potpack
+!node_modules/potpack/
+!node_modules/potpack/index.js
 
 jspm_packages/
 

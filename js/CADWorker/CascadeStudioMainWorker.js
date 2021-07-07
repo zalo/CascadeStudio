@@ -27,7 +27,8 @@ importScripts(
   './CascadeStudioShapeToMesh.js',
   '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
   '../../node_modules/opentype.js/dist/opentype.min.js',
-  '../../node_modules/typescript/bin/typescript.min.js');
+  '../../node_modules/typescript/bin/typescript.min.js',
+  '../../node_modules/potpack/index.js');
 
 let importedLibraries = {};
 /** This function imports a typescript file to the current workspace.
