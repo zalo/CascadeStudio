@@ -1,6 +1,6 @@
 function LengthOfCurve(geomAdaptor, UMin, UMax, segments = 5) {
   let point1 = [0.0, 0.0, 0.0], point2 = [0.0, 0.0, 0.0],
-    arcLength = 0, gpPnt = new oc.gp_Pnt();
+    arcLength = 0, gpPnt = new oc.gp_Pnt_1();
   for (let s = UMin; s <= UMax; s += (UMax - UMin) / segments){
     geomAdaptor.D0(s, gpPnt);
     point1[0] = gpPnt.X(); point1[1] = gpPnt.Y(); point1[2] = gpPnt.Z();
@@ -55,7 +55,7 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
         }
 
         // Write UV buffer
-        let orient = myFace.Orientation();
+        let orient = myFace.Orientation_1();
         if (myT.get().HasUVNodes()) {
           // Get UV Bounds
           let UMin = 0, UMax = 0, VMin = 0, VMax = 0;
@@ -75,11 +75,11 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
           }
 
           // Compute the Arclengths of the Isoparametric Curves of the face
-          let surface = oc.BRep_Tool.prototype.Surface(myFace).get();
+          let surface = oc.BRep_Tool.Surface_2(myFace).get();
           let UIso_Handle = surface.UIso(UMin + ((UMax - UMin) * 0.5));
           let VIso_Handle = surface.VIso(VMin + ((VMax - VMin) * 0.5));
-          let UAdaptor = new oc.GeomAdaptor_Curve(VIso_Handle);
-          let VAdaptor = new oc.GeomAdaptor_Curve(UIso_Handle);
+          let UAdaptor = new oc.GeomAdaptor_Curve_2(VIso_Handle);
+          let VAdaptor = new oc.GeomAdaptor_Curve_2(UIso_Handle);
           uv_boxes.push({
             w: LengthOfCurve(UAdaptor, UMin, UMax),
             h: LengthOfCurve(VAdaptor, VMin, VMax),
@@ -112,7 +112,6 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
         }
 
         // Write triangle buffer
-        let orient = myFace.Orientation_1();
         let triangles = myT.get().Triangles();
         this_face.tri_indexes = new Array(triangles.Length() * 3);
         let validFaceTriCount = 0;
