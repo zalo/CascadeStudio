@@ -76,5 +76,6 @@ Cascade Studio uses:
  - [Monaco Editor](https://github.com/microsoft/monaco-editor) (Text Editing and Intellisense)
  - [opentype.js](https://github.com/opentypejs/opentype.js) (Font Parsing)
  - [rawinflate/rawdeflate](https://github.com/dankogai/js-deflate) (URL Code Serialization)
+ - [potpack](https://github.com/mapbox/potpack) (Texture Atlas Packing)
 
 Cascade Studio is maintained by [Johnathon Selstad @zalo](https://github.com/zalo)

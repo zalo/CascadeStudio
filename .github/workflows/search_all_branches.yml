@@ -1,0 +1,23 @@
+name: "Search All Branches"
+
+on: 
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'String or Regex to Search for:'
+        required: true
+
+jobs:
+  search:
+    name: Search all Branches
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        # Fetch all history for all branches
+        fetch-depth: 0
+
+    - name: Search Results
+      run: git rev-list --all | xargs git grep "${{ github.event.inputs.query }}"

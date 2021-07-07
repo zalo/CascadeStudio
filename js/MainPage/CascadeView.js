@@ -54,7 +54,7 @@ var Environment = function (goldenContainer) {
     // Create the ground mesh
     this.groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000),
       new THREE.MeshPhongMaterial({
-        color: 0x080808, depthWrite: true,
+        color: 0x080808, depthWrite: true, dithering: true,
         polygonOffset: true, // Push the mesh back for line drawing
         polygonOffsetFactor: 6.0, polygonOffsetUnits: 1.0
       }));
@@ -122,7 +122,7 @@ var CascadeEnvironment = function (goldenContainer) {
 
   // Load the Shiny Dull Metal Matcap Material
   this.loader = new THREE.TextureLoader(); this.loader.setCrossOrigin ('');
-  this.matcap = this.loader.load ('./textures/dullFrontLitMetal.png', (tex) => this.environment.viewDirty = true );
+  this.matcap = this.loader.load('./textures/dullFrontLitMetal.png', (tex) => { this.environment.viewDirty = true; } );
   this.matcapMaterial = new THREE.MeshMatcapMaterial({
                           color: new THREE.Color(0xf5f5f5),
                           matcap: this.matcap,
@@ -133,7 +133,7 @@ var CascadeEnvironment = function (goldenContainer) {
 
   // A callback to load the Triangulated Shape from the Worker and add it to the Scene
   messageHandlers["combineAndRenderShapes"] = ([facelist, edgelist]) => {
-    workerWorking = false;     // Untick this flag to allow Evaluations again
+    window.workerWorking = false;     // Untick this flag to allow Evaluations again
     if (!facelist) { return;}  // Do nothing if the results are null
 
     // The old mainObject is dead!  Long live the mainObject!
@@ -143,38 +143,41 @@ var CascadeEnvironment = function (goldenContainer) {
     this.mainObject.rotation.x = -Math.PI / 2;
 
     // Add Triangulated Faces to Object
-    let vertices = []; let triangles = []; let vInd = 0; let globalFaceIndex = 0;
+    let vertices = [], normals = [],  triangles = [], uvs = [], colors = []; let vInd = 0; let globalFaceIndex = 0;
     facelist.forEach((face) => {
-      // Sort Vertices into three.js Vector3 List
-      for (let i = 0; i < face.vertex_coord.length; i += 3) {
-        vertices.push(new THREE.Vector3(face.vertex_coord[i    ],
-                                        face.vertex_coord[i + 1],
-                                        face.vertex_coord[i + 2]));
-      }
+      // Copy Vertices into three.js Vector3 List
+      vertices.push(...face.vertex_coord);
+      normals .push(...face.normal_coord);
+      uvs     .push(...face.    uv_coord);
+
       // Sort Triangles into a three.js Face List
       for (let i = 0; i < face.tri_indexes.length; i += 3) {
-        triangles.push(new THREE.Face3(face.tri_indexes[i] + vInd,face.tri_indexes[i + 1] + vInd, face.tri_indexes[i + 2] + vInd, 
-                      [new THREE.Vector3(face.normal_coord[(face.tri_indexes[i     ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i     ] * 3) + 1], 
-                                         face.normal_coord[(face.tri_indexes[i     ] * 3) + 2]),
-                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 1 ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 1], 
-                                         face.normal_coord[(face.tri_indexes[i + 1 ] * 3) + 2]),
-                       new THREE.Vector3(face.normal_coord[(face.tri_indexes[i + 2 ] * 3)    ], 
-                                         face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 1], 
-                                         face.normal_coord[(face.tri_indexes[i + 2 ] * 3) + 2])],
-                       new THREE.Color(face.face_index, globalFaceIndex, 0)
-        ));
+          triangles.push(
+              face.tri_indexes[i + 0] + vInd,
+              face.tri_indexes[i + 1] + vInd,
+              face.tri_indexes[i + 2] + vInd);
       }
+
+      // Use Vertex Color to label this face's indices for raycast picking
+      for (let i = 0; i < face.vertex_coord.length; i += 3) {
+        colors.push(face.face_index, globalFaceIndex, 0);
+      }
+
       globalFaceIndex++;
       vInd += face.vertex_coord.length / 3;
     });
 
     // Compile the connected vertices and faces into a model
     // And add to the scene
-    let geometry          = new THREE.Geometry();
-        geometry.vertices = vertices;
-        geometry.faces    = triangles;
+    let geometry = new THREE.BufferGeometry();
+        geometry.setIndex(triangles);
+        geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+        geometry.setAttribute( 'normal', new THREE.Float32BufferAttribute( normals, 3 ) );
+        geometry.setAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
+        geometry.setAttribute( 'uv' , new THREE.Float32BufferAttribute( uvs, 2 ) );
+        geometry.setAttribute( 'uv2' , new THREE.Float32BufferAttribute( uvs, 2 ) );
+        geometry.computeBoundingSphere();
+        geometry.computeBoundingBox();
     let model = new THREE.Mesh(geometry, this.matcapMaterial);
     model.castShadow = true;
     model.name = "Model Faces";
@@ -306,7 +309,7 @@ var CascadeEnvironment = function (goldenContainer) {
       if (this.environment.controls.state < 0 && intersects.length > 0) {
         let isLine = intersects[0].object.type === "LineSegments";
         let newIndex = isLine ? intersects[0].object.getEdgeMetadataAtLineIndex(intersects[0].index).localEdgeIndex : 
-                                intersects[0].face.color.r;
+                                intersects[0].object.geometry.attributes.color.getX(intersects[0].face.a);
         if (this.highlightedObj != intersects[0].object || this.highlightedIndex !== newIndex) {
           if (this.highlightedObj) {
             this.highlightedObj.material.color.setHex(this.highlightedObj.currentHex);

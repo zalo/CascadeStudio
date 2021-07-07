@@ -173,7 +173,7 @@ function BSpline(points:number[][], closed?:boolean) : oc.TopoDS_Shape {
 function Text3D(text: string, size?: number, height?: number, fontName?: string) : oc.TopoDS_Shape {
   if (!size   ) { size    = 36; }
   if (!height && height !== 0.0) { height  = 0.15; }
-  if (!fontName) { fontName = "Consolas"; }
+  if (!fontName) { fontName = "Roboto"; }
 
   let textArgs = JSON.stringify(arguments);
   let curText = CacheOp(arguments, () => {
@@ -188,16 +188,19 @@ function Text3D(text: string, size?: number, height?: number, fontName?: string)
         var currentWire = new oc.BRepBuilderAPI_MakeWire_1();
       } else if (commands[idx].type === "Z") {
         // End the current Glyph and Finish the Path
+        try {
+          let faceBuilder = null;
+          if (textFaces.length > 0) {
+            faceBuilder = new oc.BRepBuilderAPI_MakeFace_22(
+              textFaces[textFaces.length - 1], currentWire.Wire());
+          } else {
+            faceBuilder = new oc.BRepBuilderAPI_MakeFace_15(currentWire.Wire(), false);
+          }
 
-        let faceBuilder = null;
-        if (textFaces.length > 0) {
-          faceBuilder = new oc.BRepBuilderAPI_MakeFace_22(
-            textFaces[textFaces.length - 1], currentWire.Wire());
-        } else {
-          faceBuilder = new oc.BRepBuilderAPI_MakeFace_15(currentWire.Wire(), false);
+          textFaces.push(faceBuilder.Face());
+        } catch (e) {
+          console.error("ERROR: OCC encountered malformed characters when constructing faces from this font (likely self-intersections)!  Try using a more robust font like 'Roboto'.");
         }
-
-        textFaces.push(faceBuilder.Face());
       } else if (commands[idx].type === "L") {
         let nextPoint = new oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
         if (lastPoint.X() === nextPoint.X() && lastPoint.Y() === nextPoint.Y()) { continue; }

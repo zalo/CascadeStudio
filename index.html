@@ -11,6 +11,7 @@
         <meta name="theme-color"        content="#1e1e1e">
 
         <!-- Include these early and directly so they happen first -->
+        <link rel="prefetch" href="./js/CADWorker/CascadeStudioMainWorker.js">
         <script>
             // Install Cascade Studio as a Progressive Web App for Offline Access
             // This needs to be put before ANY HTTP Requests are made, so it can cache them.
@@ -61,12 +62,32 @@
         <script type="text/javascript" src="./node_modules/rawflate/rawinflate.js"></script>
         <script type="text/javascript" src="./js/MainPage/CascadeViewHandles.js"></script>
         <script type="text/javascript" src="./js/MainPage/CascadeView.js"></script>
+
+        <!-- Speed up loading by prefetching URLs here -->
+        <link rel="prefetch" href="./js/CADWorker/CascadeStudioShapeToMesh.js">
+        <link rel="prefetch" href="./node_modules/opencascade.js/dist/oc.d.ts">
+        <link rel="prefetch" href="./node_modules/three/build/three.d.ts">
+        <link rel="prefetch" href="./node_modules/typescript/lib/lib.es5.d.ts">
+        <link rel="prefetch" href="./node_modules/typescript/lib/lib.webworker.d.ts">
+        <link rel="prefetch" href="./node_modules/opencascade.js/dist/opencascade.wasm.js">
+        <link rel="prefetch" href="./node_modules/monaco-editor/min/vs/language/typescript/tsMode.js">
+        <link rel="prefetch" href="./node_modules/typescript/bin/typescript.min.js">
+        <link rel="prefetch" href="./node_modules/monaco-editor/min/vs/basic-languages/typescript/typescript.js">
+        <link rel="prefetch" href="./node_modules/opentype.js/dist/opentype.min.js">
+        <link rel="prefetch" href="./textures/dullFrontLitMetal.png">
+        <link rel="prefetch" href="./node_modules/monaco-editor/min/vs/base/worker/workerMain.js">
+        <link rel="prefetch" href="./manifest.webmanifest">
+        <link rel="prefetch" href="./js/Libraries/CascadeStudioStandardLibrary.ts">
+        <link rel="prefetch" href="./node_modules/monaco-editor/min/vs/language/typescript/tsWorker.js">
+        <link rel="prefetch" href="./js/Libraries/CascadeStudioStandardUtils.ts">
+        <link rel="prefetch" href="./js/CADWorker/CascadeStudioFileUtils.js">
+    
     </head>
 
     <body onload="initialize();" style="margin:0px; background-color:rgb(34, 34, 34); "><!--overflow:hidden; position:fixed;-->
         <h1 hidden></h1> <!-- Puts the Lighthouse Score over 90 heheh-->
         <div id="topnav" class="topnav">
-            <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.6</a>
+            <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.7</a>
             <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
             <a href="#" title="Load Project from .json" onmouseup="loadProject();">Load Project</a>
             <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
