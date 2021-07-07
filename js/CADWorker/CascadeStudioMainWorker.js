@@ -72,7 +72,7 @@ preloadedFonts.forEach((fontURL) => {
 
 // Load the full Open Cascade Web Assembly Module
 var messageHandlers = {};
-fetch('../../node_modules/opencascade.js/dist/opencascade.wasm.js')
+fetch('../../node_modules/opencascade.js/dist/opencascade.full.js')
   .then(response => response.text())
   .then((data) => {
 
@@ -95,15 +95,15 @@ fetch('../../node_modules/opencascade.js/dist/opencascade.wasm.js')
       throw new BindingError(message.slice(0, -2));`);
 
     // Remove this export line from the end so it works in browsers
-    data = data.split("export default opencascade;")[0];
+    data = data.split("export default Module;")[0];
 
     // Import the Javascript from a blob URL
     importScripts(URL.createObjectURL(new Blob([data], { type: 'text/javascript' })));
     console.log("Actually start loading CAD Kernel...");
-    new opencascade({
+    new Module({
       locateFile(path) {
         if (path.endsWith('.wasm')) {
-          return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
+          return "../../node_modules/opencascade.js/dist/opencascade.full.wasm";
         }
         return path;
       }
