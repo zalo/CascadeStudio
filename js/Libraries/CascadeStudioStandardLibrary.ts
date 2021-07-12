@@ -520,7 +520,7 @@ function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValu
       for (let i = 0; i < objectsToJoin.length; i++) {
         if (i > 0) {
           let combinedFuse = new oc.BRepAlgoAPI_Fuse_3(combined, objectsToJoin[i]);
-          //combinedFuse.SetFuzzyValue(fuzzValue);
+          combinedFuse.SetFuzzyValue(fuzzValue);
           combinedFuse.Build();
           combined = combinedFuse.Shape();
         }
@@ -556,7 +556,7 @@ function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shap
       for (let i = 0; i < objectsToSubtract.length; i++) {
         if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
         let differenceCut = new oc.BRepAlgoAPI_Cut_3(difference, objectsToSubtract[i]);
-        //differenceCut.SetFuzzyValue(fuzzValue);
+        differenceCut.SetFuzzyValue(fuzzValue);
         differenceCut.Build();
         difference = differenceCut.Shape();
       }
@@ -595,7 +595,7 @@ function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boole
       for (let i = 0; i < objectsToIntersect.length; i++) {
         if (i > 0) {
           let intersectedCommon = new oc.BRepAlgoAPI_Common_3(intersected, objectsToIntersect[i]);
-          //intersectedCommon.SetFuzzyValue(fuzzValue);
+          intersectedCommon.SetFuzzyValue(fuzzValue);
           intersectedCommon.Build();
           intersected = intersectedCommon.Shape();
         }
