@@ -25,7 +25,6 @@ console.error = function (err, url, line, colno, errorObj) {
 importScripts(
   //'../../node_modules/three/build/three.min.js',
   './CascadeStudioShapeToMesh.js',
-  '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
   '../../node_modules/opentype.js/dist/opentype.min.js',
   '../../node_modules/typescript/bin/typescript.min.js',
   '../../node_modules/potpack/index.js');
@@ -42,6 +41,8 @@ function ImportLibrary(urls, forceReload) {
           importedLibraries[url] = ts.transpileModule(response.target.responseText,
             { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
           eval.call(null, importedLibraries[url]);
+          //let importedLibrary = new Function(importedLibraries[url]);
+          //importedLibrary.call(null,[]);
           postMessage({ "type": "addLibrary", payload: { url: url, contents: response.target.responseText } });
         } else {
           console.error("Could not find library at this URL! URL: "+ response.target.responseURL +",  Status Code: "+response.target.status);
@@ -71,26 +72,56 @@ preloadedFonts.forEach((fontURL) => {
 
 // Load the full Open Cascade Web Assembly Module
 var messageHandlers = {};
-new opencascade({
-  locateFile(path) {
-    if (path.endsWith('.wasm')) {
-      return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
-    }
-    return path;
-  }
-}).then((openCascade) => {
-  // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
-  oc = openCascade;
+fetch('../../node_modules/opencascade.js/dist/opencascade.full.js')
+  .then(response => response.text())
+  .then((data) => {
 
-  // Ping Pong Messages Back and Forth based on their registration in messageHandlers
-  onmessage = function (e) {
-    let response = messageHandlers[e.data.type](e.data.payload);
-    if (response) { postMessage({ "type": e.data.type, payload: response }); };
-  }
+    // Patch in an intelligible overload finding mechanism
+    data = data.replace("classType.registeredClass.constructor_body[argCount-1]=function constructor_body()", 
+    `classType.registeredClass.argTypes = argTypes;
+    classType.registeredClass.constructor_body[argCount-1]=function constructor_body()`);
+    data = data.replace('throw new BindingError(name+" has no accessible constructor")', 
+      `let message = name + " overload not specified!  Consider using one of these overloads: ";
+      let matches = Object.values(registeredPointers).filter((item) => (item.pointerType && item.pointerType.name.includes(legalFunctionName+"_")));
+      for(let ii = 0; ii < matches.length; ii++){
+        message += matches[ii].pointerType.name.slice(0, -1) + "(";
+        let argTypes = matches[ii].pointerType.registeredClass.argTypes;
+        for(let jj = 1; jj < argTypes.length; jj++){
+          message += argTypes[jj].name + ", ";
+        }
+        if(argTypes.length > 1) { message = message.slice(0, -2); }
+        message += "), ";
+      }
+      throw new BindingError(message.slice(0, -2));`);
 
-  // Initial Evaluation after everything has been loaded...
-  postMessage({ type: "startupCallback" });
-});
+    // Remove this export line from the end so it works in browsers
+    data = data.split("export default Module;")[0];
+
+    // Import the Javascript from a blob URL
+    importScripts(URL.createObjectURL(new Blob([data], { type: 'text/javascript' })));
+    //console.log("Actually start loading CAD Kernel...");
+    new Module({
+      locateFile(path) {
+        if (path.endsWith('.wasm')) {
+          return "../../node_modules/opencascade.js/dist/opencascade.full.wasm";
+        }
+        return path;
+      }
+    }).then((openCascade) => {
+      // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
+      oc = openCascade;
+    
+      // Ping Pong Messages Back and Forth based on their registration in messageHandlers
+      onmessage = function (e) {
+        let response = messageHandlers[e.data.type](e.data.payload);
+        if (response) { postMessage({ "type": e.data.type, payload: response }); };
+      }
+    
+      // Initial Evaluation after everything has been loaded...
+      postMessage({ type: "startupCallback" });
+    });
+  });
+
 
 /** This function evaluates `payload.code` (the contents of the Editor Window)
  *  and sets the GUI State. */

@@ -76,7 +76,7 @@ function importSTEPorIGES(fileName, fileText) {
     let stepShape           = reader.OneShape();         // Obtain the results of translation in one OCCT shape
     
     // Add to the externalShapes dictionary
-    externalShapes[fileName] = new oc.TopoDS_Shape(stepShape);
+    externalShapes[fileName] = new oc.BRepBuilderAPI_Copy_2(stepShape, true, false).Shape();
     externalShapes[fileName].hash = stringToHash(fileName);
     console.log("Shape Import complete! Use sceneShapes.push(externalShapes['"+fileName+"']); to add it to the scene!");
     
@@ -98,17 +98,17 @@ function importSTL(fileName, fileText) {
 
   // Choose the correct OpenCascade file parsers to read the STL file
   var reader    = new oc.StlAPI_Reader();
-  let readShape = new oc.TopoDS_Shape ();
+  let readShape = new oc.TopoDS_Shape();
 
   if (reader.Read(readShape, fileName)) {
     console.log(fileName + " loaded successfully!     Converting to OCC now...");
     
     // Convert Shell to Solid as is expected
     let solidSTL = new oc.BRepBuilderAPI_MakeSolid();
-    solidSTL.Add(new oc.TopoDS_Shape(readShape));
+    solidSTL.Add(new oc.BRepBuilderAPI_Copy_2(readShape, true, false).Shape());
 
     // Add to the externalShapes dictionary
-    externalShapes[fileName] = new oc.TopoDS_Shape(solidSTL.Solid());
+    externalShapes[fileName] = new oc.BRepBuilderAPI_Copy_2(solidSTL.Solid(), true, false).Shape();
     externalShapes[fileName].hash = stringToHash(fileName);
     console.log("Shape Import complete! Use sceneShapes.push(externalShapes['" + fileName + "']); to see it!");
     

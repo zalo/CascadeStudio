@@ -120,6 +120,7 @@ self.addEventListener("fetch", function(event) {
   // Try to acquire the resource from the network
   function useNetwork(request, failureCallback) {
     let cachePolicy = request.url.includes("service-worker.js") ? "no-cache" : "default";
+    //if(request.url.endsWith(".wasm")) { return failureCallback(event.request, failureResponse); }
     return fetch(request, { cache: cachePolicy })
       .then(function (response) {
         //console.log("Using network for: " + request.url);

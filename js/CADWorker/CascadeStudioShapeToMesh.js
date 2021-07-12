@@ -1,6 +1,6 @@
 function LengthOfCurve(geomAdaptor, UMin, UMax, segments = 5) {
   let point1 = [0.0, 0.0, 0.0], point2 = [0.0, 0.0, 0.0],
-    arcLength = 0, gpPnt = new oc.gp_Pnt();
+    arcLength = 0, gpPnt = new oc.gp_Pnt_1();
   for (let s = UMin; s <= UMax; s += (UMax - UMin) / segments){
     geomAdaptor.D0(s, gpPnt);
     point1[0] = gpPnt.X(); point1[1] = gpPnt.Y(); point1[2] = gpPnt.Z();
@@ -17,11 +17,11 @@ function LengthOfCurve(geomAdaptor, UMin, UMax, segments = 5) {
 
 function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
     let facelist = [], edgeList = [];
-    try {
-      shape = new oc.TopoDS_Shape(shape);
+    //try {
+      //shape = new oc.BRepBuilderAPI_Copy_2(shape, true, false).Shape();
 
       // Set up the Incremental Mesh builder, with a precision
-      new oc.BRepMesh_IncrementalMesh(shape, maxDeviation, false, maxDeviation * 5);
+      new oc.BRepMesh_IncrementalMesh_2(shape, maxDeviation, false, maxDeviation * 5, false);
 
       // Construct the edge hashes to assign proper indices to the edges
       let fullShapeEdgeHashes2 = {};
@@ -29,8 +29,8 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
       // Iterate through the faces and triangulate each one
       let triangulations = []; let uv_boxes = []; let curFace = 0;
       ForEachFace(shape, (faceIndex, myFace) => {
-        let aLocation = new oc.TopLoc_Location();
-        let myT = oc.BRep_Tool.prototype.Triangulation(myFace, aLocation);
+        let aLocation = new oc.TopLoc_Location_1();
+        let myT = oc.BRep_Tool.Triangulation(myFace, aLocation);
         if (myT.IsNull()) { console.error("Encountered Null Face!"); argCache = {}; return; }
 
         let this_face = {
@@ -42,7 +42,7 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
           face_index: fullShapeFaceHashes[myFace.HashCode(100000000)]
         };
 
-        let pc = new oc.Poly_Connect(myT);
+        let pc = new oc.Poly_Connect_2(myT);
         let Nodes = myT.get().Nodes();
 
         // Write vertex buffer
@@ -55,7 +55,7 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
         }
 
         // Write UV buffer
-        let orient = myFace.Orientation();
+        let orient = myFace.Orientation_1();
         if (myT.get().HasUVNodes()) {
           // Get UV Bounds
           let UMin = 0, UMax = 0, VMin = 0, VMax = 0;
@@ -75,11 +75,11 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
           }
 
           // Compute the Arclengths of the Isoparametric Curves of the face
-          let surface = oc.BRep_Tool.prototype.Surface(myFace).get();
+          let surface = oc.BRep_Tool.Surface_2(myFace).get();
           let UIso_Handle = surface.UIso(UMin + ((UMax - UMin) * 0.5));
           let VIso_Handle = surface.VIso(VMin + ((VMax - VMin) * 0.5));
-          let UAdaptor = new oc.GeomAdaptor_Curve(VIso_Handle);
-          let VAdaptor = new oc.GeomAdaptor_Curve(UIso_Handle);
+          let UAdaptor = new oc.GeomAdaptor_Curve_2(VIso_Handle);
+          let VAdaptor = new oc.GeomAdaptor_Curve_2(UIso_Handle);
           uv_boxes.push({
             w: LengthOfCurve(UAdaptor, UMin, UMax),
             h: LengthOfCurve(VAdaptor, VMin, VMax),
@@ -101,9 +101,8 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
         }
 
         // Write normal buffer
-        let myNormal = new oc.TColgp_Array1OfDir(Nodes.Lower(), Nodes.Upper());
-        let SST = new oc.StdPrs_ToolTriangulatedShape();
-        SST.Normal(myFace, pc, myNormal);
+        let myNormal = new oc.TColgp_Array1OfDir_2(Nodes.Lower(), Nodes.Upper());
+        oc.StdPrs_ToolTriangulatedShape.Normal(myFace, pc, myNormal);
         this_face.normal_coord = new Array(myNormal.Length() * 3);
         for(let i = 0; i < myNormal.Length(); i++) {
           let d = myNormal.Value(i + 1).Transformed(aLocation.Transformation());
@@ -111,7 +110,7 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
           this_face.normal_coord[(i * 3)+ 1] = d.Y();
           this_face.normal_coord[(i * 3)+ 2] = d.Z();
         }
-        
+
         // Write triangle buffer
         let triangles = myT.get().Triangles();
         this_face.tri_indexes = new Array(triangles.Length() * 3);
@@ -121,7 +120,7 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
           let n1 = t.Value(1);
           let n2 = t.Value(2);
           let n3 = t.Value(3);
-          if(orient !== oc.TopAbs_FORWARD) {
+          if(orient !== oc.TopAbs_Orientation.TopAbs_FORWARD) {
             let tmp = n1;
             n1 = n2;
             n2 = tmp;
@@ -145,7 +144,7 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
               edge_index: -1
             };
 
-            let myP = oc.BRep_Tool.prototype.PolygonOnTriangulation(myEdge, myT, aLocation);
+            let myP = oc.BRep_Tool.PolygonOnTriangulation_1(myEdge, myT, aLocation);
             let edgeNodes = myP.get().Nodes();
 
             // write vertex buffer
@@ -203,9 +202,9 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
             edge_index: -1
           };
 
-          let aLocation = new oc.TopLoc_Location();
-          let adaptorCurve = new oc.BRepAdaptor_Curve(myEdge);
-          let tangDef = new oc.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.1);
+          let aLocation = new oc.TopLoc_Location_1();
+          let adaptorCurve = new oc.BRepAdaptor_Curve_2(myEdge);
+          let tangDef = new oc.GCPnts_TangentialDeflection_2(adaptorCurve, maxDeviation, 0.1, 2, 1.0e-9, 1.0e-7);
 
           // write vertex buffer
           this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
@@ -223,12 +222,13 @@ function ShapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHash
         }
       });
 
-    } catch(err) {
-      setTimeout(() => {
-        err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
-        throw err; 
-      }, 0);
-    }
+    //}// catch (err) {
+     // throw err;
+     // //setTimeout(() => {
+     // //  //err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
+     // //  throw err; 
+     // //}, 0);
+    //}
 
     return [facelist, edgeList];
   }

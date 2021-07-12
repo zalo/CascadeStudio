@@ -123,7 +123,7 @@ function initialize(projectContent = null) {
             var extraLibs = [];
             let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
             let extraLibPaths = [
-                '/node_modules/opencascade.js/dist/oc.d.ts',
+                '/node_modules/opencascade.js/dist/opencascade.full.d.ts',
                 '/node_modules/three/build/three.d.ts',
                 '/node_modules/typescript/lib/lib.es5.d.ts',
                 '/node_modules/typescript/lib/lib.webworker.d.ts'
