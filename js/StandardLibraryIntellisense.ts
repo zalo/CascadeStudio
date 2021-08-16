@@ -89,9 +89,10 @@ function Union(objectsToJoin: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValu
  * The original shapes are removed unless `keepObjects` is true.  Returns a Compound Shape unless onlyFirstSolid is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let floatingCorners = Difference(Box(50, 50, 50, true), [Sphere(38)]);```*/
-function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?:number, keepEdges?: boolean): oc.TopoDS_Shape;
+function Difference(mainBody: oc.TopoDS_Shape, objectsToSubtract: oc.TopoDS_Shape[], keepObjects?: boolean | boolean[], fuzzValue?:number, keepEdges?: boolean): oc.TopoDS_Shape;
 /** Takes only the intersection of a list of shapes.
- * The original shapes are removed unless `keepObjects` is true.
+ * The original shapes are removed unless `keepObjects` is true. 
+ * `keepObjects` can also be a list [keepMainBody: boolean, keepObjectsToSubtract: boolean]
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let roundedBox = Intersection([Box(50, 50, 50, true), Sphere(38)]);```*/
 function Intersection(objectsToIntersect: oc.TopoDS_Shape[], keepObjects?: boolean, fuzzValue?: number, keepEdges?: boolean): oc.TopoDS_Shape;
