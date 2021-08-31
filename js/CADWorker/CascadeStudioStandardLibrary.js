@@ -482,10 +482,18 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
     return difference;
   });
 
-  if (!keepObjects) { sceneShapes = Remove(sceneShapes, mainBody); }
-  for (let i = 0; i < objectsToSubtract.length; i++) {
-    if (!keepObjects) { sceneShapes = Remove(sceneShapes, objectsToSubtract[i]); }
+  if (Array.isArray(keepObjects)) {
+    if (!keepObjects[0]) { sceneShapes = Remove(sceneShapes, mainBody); }
+    for (let i = 0; i < objectsToSubtract.length; i++) {
+      if (!keepObjects[1]) { sceneShapes = Remove(sceneShapes, objectsToSubtract[i]); }
+    }
+  } else {
+    if (!keepObjects) { sceneShapes = Remove(sceneShapes, mainBody); }
+    for (let i = 0; i < objectsToSubtract.length; i++) {
+      if (!keepObjects) { sceneShapes = Remove(sceneShapes, objectsToSubtract[i]); }
+    }
   }
+
   sceneShapes.push(curDifference);
   return curDifference;
 }
