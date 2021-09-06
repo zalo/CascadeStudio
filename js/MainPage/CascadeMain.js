@@ -518,6 +518,18 @@ async function saveProject() {
     });
 }
 
+async function downloadFile(data, name, mime, ext) {
+    const blob = new Blob([data], { type: mime });
+    const a = document.createElement("a");
+    a.download = name + "." + ext;
+    a.style.display = "none";
+    a.href = window.URL.createObjectURL(blob);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(a.href);
+}
+
 /** This loads a .json file as the currentProject.*/
 const loadProject = async () => {
     // Don't allow loading while the worker is working to prevent race conditions.
