@@ -13,7 +13,7 @@
 	"license": "MIT",
 	"bundleDependencies": false,
 	"dependencies": {
-		"controlkit": "^0.1.9",
+		"tweakpane": "^3.0.5",
 		"golden-layout": "^1.5.9",
 		"jquery": "^3.5.1",
 		"monaco-editor": "^0.20.0",

@@ -72,7 +72,7 @@ Cascade Studio uses:
  - [opencascade.js](https://github.com/donalffons/opencascade.js) (CAD Kernel)
  - [Golden Layout](https://github.com/golden-layout/golden-layout) (Windowing System)
  - [three.js](https://github.com/mrdoob/three.js/) (3D Rendering Engine)
- - [controlkit.js](https://github.com/automat/controlkit.js) (Buttons/Sliders),
+ - [tweakpane.js](https://github.com/cocopon/tweakpane) (Buttons/Sliders),
  - [Monaco Editor](https://github.com/microsoft/monaco-editor) (Text Editing and Intellisense)
  - [opentype.js](https://github.com/opentypejs/opentype.js) (Font Parsing)
  - [rawinflate/rawdeflate](https://github.com/dankogai/js-deflate) (URL Code Serialization)

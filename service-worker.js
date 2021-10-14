@@ -20,7 +20,7 @@ var offlineFundamentals = [
   "node_modules/three/examples/js/controls/TransformControls.js",
   "node_modules/three/examples/js/exporters/STLExporter.js",
   "node_modules/three/examples/js/exporters/OBJExporter.js",
-  "node_modules/controlkit/bin/controlKit.js",
+  "node_modules/tweakpane/dist/tweakpane.js",
   "node_modules/jquery/dist/jquery.min.js",
   "node_modules/opentype.js/dist/opentype.min.js",
   "node_modules/golden-layout/dist/goldenlayout.min.js",
