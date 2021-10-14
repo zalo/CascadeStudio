@@ -194,6 +194,11 @@ function Translate(offset: number[], shape: oc.TopoDS_Shape, keepOriginal?: bool
  * @example```let leaningCylinder = Rotate([0, 1, 0], 45, Cylinder(25, 50));```*/
 function Rotate(axis: number[], degrees: number, shape: oc.TopoDS_Shape, keepOriginal?: boolean): oc.TopoDS_Shape;
 
+/** Mirror this shape about 3-coordinate normal vector
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let mirrored = Mirror([0, 0, 1] , Text3D("Hello!"));```*/
+function Mirror(vector: number[], shape: oc.TopoDS_Shape, keepShape?: boolean): oc.TopoDS_Shape;
+
 /** Scale a shape to be `scale` times its current size.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```let scaledCylinder = Scale(50, Cylinder(0.5, 1));```*/
