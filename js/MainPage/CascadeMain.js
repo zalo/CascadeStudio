@@ -4,7 +4,7 @@
 
 var myLayout, monacoEditor, threejsViewport,
     consoleContainer, consoleGolden, codeContainer, gui,
-    GUIState, count = 0, //focused = true,
+    GUIState, guiSeparatorAdded = false, userGui = false, count = 0, //focused = true,
     messageHandlers = {},
     startup, file = {}, realConsoleLog;
 window.workerWorking = false;
@@ -211,18 +211,19 @@ function initialize(projectContent = null) {
 
                 // Refresh the GUI Panel
                 if (gui) {
-                    gui.dispose()
+                    gui.dispose();
                 }
 
                 gui = new Tweakpane.Pane({
                     title: 'Cascade Control Panel',
                     container: document.getElementById('guiPanel')
                 });
-
+                guiSeparatorAdded = false;
+                userGui = false;
                 messageHandlers["addButton"]({ name: "Evaluate", label: "Function", callback: () => { monacoEditor.evaluateCode(true) } })
                 messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2, step: 0.01, dp: 2 });
                 messageHandlers["addCheckbox"]({ name: "Cache?", default: true });
-
+                userGui = true;
                 // Remove any existing Transform Handles that could be laying around
                 threejsViewport.clearTransformHandles();
 
@@ -450,6 +451,8 @@ function initialize(projectContent = null) {
         if (payload.dp) {
             params.format = v => v.toFixed(payload.dp);
         }
+
+        addGuiSeparator();
         const slider = gui.addInput(
             GUIState,
             payload.name,
@@ -465,11 +468,13 @@ function initialize(projectContent = null) {
         }
     }
     messageHandlers["addButton"] = (payload) => {
+        addGuiSeparator();
         gui.addButton({ title: payload.name, label: payload.label }).on('click', payload.callback);
     }
 
     messageHandlers["addCheckbox"] = (payload) => {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default || false; }
+        addGuiSeparator();
         gui.addInput(GUIState, payload.name).on('change', () => {
             delayReloadEditor();
         })
@@ -477,6 +482,7 @@ function initialize(projectContent = null) {
 
     messageHandlers["addTextbox"] = (payload) => {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default || ''; }
+        addGuiSeparator();
         const input = gui.addInput(GUIState, payload.name)
         if (payload.realTime) {
             input.on('change', e => {
@@ -490,6 +496,8 @@ function initialize(projectContent = null) {
     messageHandlers['addList'] = (payload) => {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default || ''; }
         const options = payload.options || {}
+
+        addGuiSeparator();
         const input = gui.addInput(GUIState, payload.name, { options })
         if (payload.realTime) {
             input.on('change', e => {
@@ -501,6 +509,13 @@ function initialize(projectContent = null) {
     }
 
     messageHandlers["resetWorking"] = () => { window.workerWorking = false; }
+}
+
+function addGuiSeparator() {
+    if (userGui && !guiSeparatorAdded) {
+        guiSeparatorAdded = true;
+        gui.addSeparator();
+    }
 }
 
 /* Workaround for Tweakpane errors when tearing down gui during change event callbacks */
