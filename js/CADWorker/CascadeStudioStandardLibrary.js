@@ -903,8 +903,8 @@ function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime
   return GUIState[name];
 }
 
-function Button(name = "Action", callback) {
-  postMessage({ "type": "addButton", payload: { name: name, callback: callback } });
+function Button(name = "Action") {
+  postMessage({ "type": "addButton", payload: { name: name } });
 }
 
 function Checkbox(name = "Toggle", defaultValue = false) {
