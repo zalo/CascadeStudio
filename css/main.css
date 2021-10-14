@@ -32,3 +32,21 @@
   background: rgb(19, 19, 19); color: white;
   overflow: auto;
 }
+
+/* TweakPane theme */
+:root {
+  --tp-font-family: Arial, sans-serif;
+  --tp-base-background-color: #2e2e2e;
+  --tp-button-background-color: hsl(0, 0%, 25%);
+  --tp-button-background-color-active: hsl(0, 0%, 40%);
+  --tp-button-background-color-focus: hsl(0, 0%, 35%);
+  --tp-button-background-color-hover: hsl(0, 0%, 30%);
+  --tp-button-foreground-color: #eeeeee;
+  --tp-label-foreground-color: #aeb5b8;
+}
+.tp-rotv {
+  text-shadow: 1px 1px #000;
+}
+.tp-rotv button {
+  text-shadow: inherit;
+}
