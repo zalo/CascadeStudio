@@ -154,6 +154,21 @@ function Button(name: string) : void;
  * `callback` triggers when the button is clicked.*/
 function Checkbox(name: string, defaultValue: boolean): boolean;
 
+/** Creates a text box input element that returns a string
+ * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let text = TextInput("Banner", "Hello!", false);```
+ */
+function TextInput(name: string, defaultValue: string, realTime?: boolean): string;
+
+/** Creates a dropdown list element that returns the value of the selected item
+ *
+ * @param options Object with a list of key and value pairs to display in dropdown
+ * @example```let position = Dropdown("Position", 0, { top: 0, center: 5, bottom: 10 }, false);```
+ * @example```let iconSelection = Dropdown("Icon", "heart", { Heart: "heart", Key: "key", Cog: "cog" }, false);```
+ */
+function Dropdown(name: string, defaultValue: string, options: { [key: string]: string }, realTime?: boolean): string;
+function Dropdown(name: string, defaultValue: number, options: { [key: string]: number }, realTime?: boolean): number;
+
 /** BETA: Transform a shape using an in-view transformation gizmo.
  * 
  * Shortcuts: `T` - Translate, `R` - Rotate, `S` - Scale, `W`/`L` - Toggle World/Local Space

@@ -899,7 +899,6 @@ function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime
     precision = 2;
   } else if (precision % 1) { console.error("Slider precision must be an integer"); }
   
-  GUIState[name + "Range"] = [min, max];
   postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime, step: step, dp: precision } });
   return GUIState[name];
 }
@@ -911,5 +910,17 @@ function Button(name = "Action") {
 function Checkbox(name = "Toggle", defaultValue = false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
   postMessage({ "type": "addCheckbox", payload: { name: name, default: defaultValue } });
+  return GUIState[name];
+}
+
+function TextInput(name = "Text", defaultValue = "", realTime = false) {
+  if (!(name in GUIState)) { GUIState[name] = defaultValue; }
+  postMessage({ "type": "addTextbox", payload: { name: name, default: defaultValue, realTime: realTime } });
+  return GUIState[name];
+}
+
+function Dropdown(name = "Dropdown", defaultValue = "", options = {}, realTime = false) {
+  if (!(name in GUIState)) { GUIState[name] = defaultValue; }
+  postMessage({ "type": "addDropdown", payload: { name: name, default: defaultValue, options: options, realTime: realTime } });
   return GUIState[name];
 }
