@@ -162,11 +162,11 @@ function TextInput(name: string, defaultValue: string, realTime?: boolean): stri
 /** Creates a dropdown list element that returns the value of the selected item
  *
  * @param options Object with a list of key and value pairs to display in dropdown
- * @example```let position = List("Position", 0, { top: 0, center: 5, bottom: 10 }, false);```
- * @example```let iconSelection = List("Icon", "heart", { Heart: "heart", Key: "key", Cog: "cog" }, false);```
+ * @example```let position = Dropdown("Position", 0, { top: 0, center: 5, bottom: 10 }, false);```
+ * @example```let iconSelection = Dropdown("Icon", "heart", { Heart: "heart", Key: "key", Cog: "cog" }, false);```
  */
-function List(name: string, defaultValue: string, options: { [key: string]: string }, realTime?: boolean): string;
-function List(name: string, defaultValue: number, options: { [key: string]: number }, realTime?: boolean): number;
+function Dropdown(name: string, defaultValue: string, options: { [key: string]: string }, realTime?: boolean): string;
+function Dropdown(name: string, defaultValue: number, options: { [key: string]: number }, realTime?: boolean): number;
 
 /** BETA: Transform a shape using an in-view transformation gizmo.
  * 

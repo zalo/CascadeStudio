@@ -919,8 +919,8 @@ function TextInput(name = "Text", defaultValue = "", realTime = false) {
   return GUIState[name];
 }
 
-function List(name = "List", defaultValue = "", options = {}, realTime = false) {
+function Dropdown(name = "Dropdown", defaultValue = "", options = {}, realTime = false) {
   if (!(name in GUIState)) { GUIState[name] = defaultValue; }
-  postMessage({ "type": "addList", payload: { name: name, default: defaultValue, options: options, realTime: realTime } });
+  postMessage({ "type": "addDropdown", payload: { name: name, default: defaultValue, options: options, realTime: realTime } });
   return GUIState[name];
 }

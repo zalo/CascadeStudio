@@ -15,7 +15,7 @@ let starterCode =
 //  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon()
 //  Offset(), Extrude(), RotatedExtrude(), Revolve(), Pipe(), Loft(), 
 //  FilletEdges(), ChamferEdges(),
-//  Slider(), Button(), Checkbox(), TextInput(), List()
+//  Slider(), Button(), Checkbox(), TextInput(), Dropdown()
 
 let holeRadius = Slider("Radius", 30 , 20 , 40);
 
@@ -493,7 +493,7 @@ function initialize(projectContent = null) {
         }
     }
 
-    messageHandlers['addList'] = (payload) => {
+    messageHandlers['addDropdown'] = (payload) => {
         if (!(payload.name in GUIState)) { GUIState[payload.name] = payload.default || ''; }
         const options = payload.options || {}
 
