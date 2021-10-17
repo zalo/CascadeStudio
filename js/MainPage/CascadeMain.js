@@ -15,7 +15,7 @@ let starterCode =
 //  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon()
 //  Offset(), Extrude(), RotatedExtrude(), Revolve(), Pipe(), Loft(), 
 //  FilletEdges(), ChamferEdges(),
-//  Slider(), Button(), Checkbox()
+//  Slider(), Checkbox(), TextInput(), Dropdown()
 
 let holeRadius = Slider("Radius", 30 , 20 , 40);
 

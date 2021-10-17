@@ -142,7 +142,8 @@ function Offset(shape: oc.TopoDS_Shape, offsetDistance: number, tolerance?: numb
  * @example```let currentSliderValue = Slider("Radius", 30 , 20 , 40, false, 0.01, 2);```
  */
 function Slider(name: string, defaultValue: number, min: number, max: number, realTime?: boolean, step?: number, precision?: integer): number;
-/** Creates a button that will trigger `callback` when clicked.
+/** @deprecated Callbacks can no longer be triggered from the CAD Worker Thread.
+ * Creates a button ~~that will trigger `callback` when clicked.~~
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```Button("Yell", ()=>{ console.log("Help!  I've been clicked!"); });```*/
 function Button(name: string) : void;
