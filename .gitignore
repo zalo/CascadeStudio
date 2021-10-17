@@ -93,11 +93,12 @@ CascadeStudio/
 !node_modules/opentype.js/dist/
 !node_modules/opentype.js/dist/*
 
-# ControlKit Bin
-!node_modules/controlkit/
-!node_modules/controlkit/*/
-!node_modules/controlkit/bin/
-!node_modules/controlkit/bin/*
+# Tweakpane Bin
+!node_modules/tweakpane/
+!node_modules/tweakpane/*/
+!node_modules/tweakpane/dist/
+!node_modules/tweakpane/dist/*
+!node_modules/tweakpane/dist/types/**/*
 
 # opencascade.js Bin
 !node_modules/opencascade.js/
