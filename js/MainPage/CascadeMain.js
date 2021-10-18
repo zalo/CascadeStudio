@@ -31,23 +31,20 @@ Translate([-25, 0, 40], Text3D("Hi!", 36, 0.15, 'Consolas'));
 // Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
 
 function initialize(projectContent = null) {
-    this.searchParams = new URLSearchParams(window.location.search);
+    this.searchParams = new URLSearchParams(window.location.search || window.location.hash.substr(1))
 
-    // Load the initial Project from - "projectContent", the URL, or the Gallery
-    let loadFromURL     = this.searchParams.has("code");
-    let loadfromGallery = this.searchParams.has("project");
-
+    // Load the initial Project from - "projectContent", or the URL
+    let loadFromURL     = this.searchParams.has("code")
     // Set up the Windowing/Docking/Layout System  ---------------------------------------
-    let stuntedInitialization = loadfromGallery && !galleryProject;
 
     // Load a project from the Gallery
-    if (projectContent || loadfromGallery && galleryProject) {
+    if (projectContent) {
         // Destroy old config, load new one
         if(myLayout != null){
             myLayout.destroy();
             myLayout = null;
         }
-        myLayout = new GoldenLayout(JSON.parse(projectContent || galleryProject));
+        myLayout = new GoldenLayout(JSON.parse(projectContent));
 
     // Else load a project from the URL or create a new one from scratch
     } else {
@@ -56,9 +53,6 @@ function initialize(projectContent = null) {
         if (loadFromURL) {
             codeStr  = decode(this.searchParams.get("code"));
             GUIState = JSON.parse(decode(this.searchParams.get("gui")));
-        } else if (stuntedInitialization) {
-            // Begin passing on the initialization logic, this is a dead timeline
-            codeStr = '';
         }
 
         // Define the Default Golden Layout
@@ -259,10 +253,11 @@ function initialize(projectContent = null) {
 
                 // Determine whether to save the code + gui (no external files) 
                 // to the URL depending on the current mode of the editor.
-                if (!loadfromGallery && saveToURL) {
+                if (saveToURL) {
                     console.log("Saved to URL!"); //Generation Complete! 
                     window.history.replaceState({}, 'Cascade Studio',
-                        "?code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)));
+                      new URL(location.pathname + "#code=" + encode(newCode) + "&gui=" + encode(JSON.stringify(GUIState)), location.href).href
+                    );
                 }
 
                 // Print a friendly message (to which we'll append progress updates)
@@ -340,7 +335,7 @@ function initialize(projectContent = null) {
         };
 
         // Overwrite the existing logging/error behaviour to print messages to the Console window
-        if (!stuntedInitialization && !realConsoleLog) {
+        if (!realConsoleLog) {
             let alternatingColor = true;
             realConsoleLog = console.log;
             console.log = function (message) {
@@ -434,10 +429,10 @@ function initialize(projectContent = null) {
             monacoEditor.evaluateCode();
         }
         // Call the startup if we're ready when the wasm is ready
-        if (!stuntedInitialization) { startup(); }
+        startup();
     }
     // Otherwise, enqueue that call for when the Main Page is ready
-    if (!stuntedInitialization && startup) { startup(); }
+    if (startup) { startup(); }
 
     // Register callbacks from the CAD Worker to add Sliders, Buttons, and Checkboxes to the UI
     // TODO: Enqueue these so the sliders are added/removed at the same time to eliminate flashing
