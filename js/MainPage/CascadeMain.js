@@ -11,7 +11,7 @@ window.workerWorking = false;
 
 let starterCode = 
 `// Welcome to Cascade Studio!   Here are some useful functions:
-//  Translate(), Rotate(), Scale(), Union(), Difference(), Intersection()
+//  Translate(), Rotate(), Scale(), Mirror(), Union(), Difference(), Intersection()
 //  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon()
 //  Offset(), Extrude(), RotatedExtrude(), Revolve(), Pipe(), Loft(), 
 //  FilletEdges(), ChamferEdges(),

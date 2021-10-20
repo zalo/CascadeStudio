@@ -400,6 +400,31 @@ function Rotate(axis, degrees, shapes, keepOriginal) {
   return rotated;
 }
 
+function Mirror(vector, shapes, keepOriginal) {
+  if (!vector) { vector = [1, 0, 0]; }
+  const mirrored = CacheOp(arguments, () => {
+    const mirrorTransform   = new oc.gp_Trsf();
+    const mirrorPlaneOrigin = new oc.gp_Pnt(0, 0, 0);
+    const mirrorPlaneNormal = new oc.gp_Dir(vector[0], vector[1], vector[2]);
+    mirrorTransform.SetMirror(new oc.gp_Ax2(mirrorPlaneOrigin, mirrorPlaneNormal));
+    const mirroring = new oc.TopLoc_Location(mirrorTransform);
+
+    if (!isArrayLike(shapes)) {
+      return new oc.TopoDS_Shape(shapes.Moved(mirroring).Reversed());
+    } else if (shapes.length >= 1) {
+      let newMirroring = [];
+      for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
+        newMirroring.push(new oc.TopoDS_Shape(shapes[shapeIndex].Moved(mirroring).Reversed()));
+      }
+      return newMirroring;
+    }
+  })
+  if (!keepOriginal) { sceneShapes = Remove(sceneShapes, shapes); }
+  sceneShapes.push(mirrored);
+
+  return mirrored;
+}
+
 function Scale(scale, shapes, keepOriginal) {
   let scaled = CacheOp(arguments, () => {
     let transformation = new oc.gp_Trsf();
