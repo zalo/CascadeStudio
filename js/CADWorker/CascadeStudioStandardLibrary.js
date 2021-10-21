@@ -407,14 +407,13 @@ function Mirror(vector, shapes, keepOriginal) {
     const mirrorPlaneOrigin = new oc.gp_Pnt(0, 0, 0);
     const mirrorPlaneNormal = new oc.gp_Dir(vector[0], vector[1], vector[2]);
     mirrorTransform.SetMirror(new oc.gp_Ax2(mirrorPlaneOrigin, mirrorPlaneNormal));
-    const mirroring = new oc.TopLoc_Location(mirrorTransform);
 
     if (!isArrayLike(shapes)) {
-      return new oc.TopoDS_Shape(shapes.Moved(mirroring).Reversed());
+      return new oc.BRepBuilderAPI_Transform(shapes, mirrorTransform).Shape();
     } else if (shapes.length >= 1) {
       let newMirroring = [];
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-        newMirroring.push(new oc.TopoDS_Shape(shapes[shapeIndex].Moved(mirroring).Reversed()));
+        newMirroring.push(new oc.BRepBuilderAPI_Transform(shapes, mirrorTransform).Shape());
       }
       return newMirroring;
     }
