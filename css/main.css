@@ -47,18 +47,18 @@
 .gui-panel {
   position: absolute;
   right: 0;
-  height: 100%;
-}
-.tp-rotv {
   max-height: 100%;
   overflow-y: auto;
-  text-shadow: 1px 1px #000;
 }
-.tp-rotv::-webkit-scrollbar {
+.gui-panel::-webkit-scrollbar {
   width: 10px;
+  background: var(--tp-base-background-color);
 }
-.tp-rotv::-webkit-scrollbar-thumb {
+.gui-panel::-webkit-scrollbar-thumb {
   background: #777;
+}
+.tp-rotv {
+  text-shadow: 1px 1px #000;
 }
 .tp-rotv button {
   text-shadow: inherit;
