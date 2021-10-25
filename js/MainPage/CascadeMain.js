@@ -306,8 +306,7 @@ function initialize(projectContent = null) {
             }
 
             let floatingGUIContainer = document.createElement("div");
-            floatingGUIContainer.style.position = 'absolute';
-            floatingGUIContainer.style.right = '0';
+            floatingGUIContainer.className = 'gui-panel';
             floatingGUIContainer.id = "guiPanel";
             container.getElement().get(0).appendChild(floatingGUIContainer);
             threejsViewport = new CascadeEnvironment(container);
