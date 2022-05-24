@@ -113,25 +113,25 @@ function initialize(projectContent = null) {
 
             // Import Typescript Intellisense Definitions for the relevant libraries...
             var extraLibs = [];
-            let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
+            let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
             // opencascade.js Typescript Definitions...
-            fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
+            fetch(prefix + "node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + 'node_modules/opencascade.js/dist/oc.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Three.js Typescript definitions...
-            fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
+            fetch(prefix + "node_modules/three/build/three.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + 'node_modules/three/build/three.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // CascadeStudio Typescript Definitions...
-            fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
+            fetch(prefix + "js/StandardLibraryIntellisense.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/StandardLibraryIntellisense.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + 'js/StandardLibraryIntellisense.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 });
