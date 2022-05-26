@@ -126,7 +126,7 @@ function combineAndRenderShapes(payload) {
       payload.maxDeviation||0.1, fullShapeEdgeHashes, fullShapeFaceHashes);
     sceneShapes = [];
     postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } }); // Finish the progress
-    return facesAndEdges;
+    return [facesAndEdges, payload.sceneOptions];
   } else {
     console.error("There were no scene shapes returned!");
   }

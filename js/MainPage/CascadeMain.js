@@ -217,6 +217,8 @@ function initialize(projectContent = null) {
                 messageHandlers["addButton"]({ name: "Evaluate", label: "Function", callback: () => { monacoEditor.evaluateCode(true) } });
                 messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2, step: 0.01, dp: 2 });
                 messageHandlers["addCheckbox"]({ name: "Cache?", default: true });
+                messageHandlers["addCheckbox"]({ name: "GroundPlane?", default: true });
+                messageHandlers["addCheckbox"]({ name: "Grid?", default: true });
                 userGui = true;
                 // Remove any existing Transform Handles that could be laying around
                 threejsViewport.clearTransformHandles();
@@ -245,7 +247,8 @@ function initialize(projectContent = null) {
                 // and begin saving them out
                 cascadeStudioWorker.postMessage({
                     "type": "combineAndRenderShapes",
-                    payload: { maxDeviation: GUIState["MeshRes"] }
+		//TODO: GUIState[] wird bei übergabe evtl. referenziert und nicht kopiert (Checkboxen sind nach reload false obwohl standard true ist.)
+                    payload: { maxDeviation: GUIState["MeshRes"], sceneOptions: { groundPlaneVisible: GUIState["GroundPlane?"], gridVisible: GUIState["Grid?"] } }
                 });
 
                 // Saves the current code to the project
