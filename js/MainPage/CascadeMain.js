@@ -113,25 +113,25 @@ function initialize(projectContent = null) {
 
             // Import Typescript Intellisense Definitions for the relevant libraries...
             var extraLibs = [];
-            let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio" : "";
+            let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
             // opencascade.js Typescript Definitions...
-            fetch(prefix + "/node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
+            fetch(prefix + "node_modules/opencascade.js/dist/oc.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/opencascade.js/dist/oc.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + 'node_modules/opencascade.js/dist/oc.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // Three.js Typescript definitions...
-            fetch(prefix + "/node_modules/three/build/three.d.ts").then((response) => {
+            fetch(prefix + "node_modules/three/build/three.d.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/node_modules/three/build/three.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + 'node_modules/three/build/three.d.ts' });
                 });
             }).catch(error => console.log(error.message));
 
             // CascadeStudio Typescript Definitions...
-            fetch(prefix + "/js/StandardLibraryIntellisense.ts").then((response) => {
+            fetch(prefix + "js/StandardLibraryIntellisense.ts").then((response) => {
                 response.text().then(function (text) {
-                    extraLibs.push({ content: text, filePath: 'file://' + prefix + '/js/StandardLibraryIntellisense.d.ts' });
+                    extraLibs.push({ content: text, filePath: 'file://' + prefix + 'js/StandardLibraryIntellisense.d.ts' });
                     monaco.editor.createModel("", "typescript"); //text
                     monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
                 });
@@ -217,6 +217,8 @@ function initialize(projectContent = null) {
                 messageHandlers["addButton"]({ name: "Evaluate", label: "Function", callback: () => { monacoEditor.evaluateCode(true) } });
                 messageHandlers["addSlider"]({ name: "MeshRes", default: 0.1, min: 0.01, max: 2, step: 0.01, dp: 2 });
                 messageHandlers["addCheckbox"]({ name: "Cache?", default: true });
+                messageHandlers["addCheckbox"]({ name: "GroundPlane?", default: true });
+                messageHandlers["addCheckbox"]({ name: "Grid?", default: true });
                 userGui = true;
                 // Remove any existing Transform Handles that could be laying around
                 threejsViewport.clearTransformHandles();
@@ -245,7 +247,8 @@ function initialize(projectContent = null) {
                 // and begin saving them out
                 cascadeStudioWorker.postMessage({
                     "type": "combineAndRenderShapes",
-                    payload: { maxDeviation: GUIState["MeshRes"] }
+                // TODO: GUIState[] may be referenced upon transfer and not copied (checkboxes are false after reload although the default is true
+                    payload: { maxDeviation: GUIState["MeshRes"], sceneOptions: { groundPlaneVisible: GUIState["GroundPlane?"], gridVisible: GUIState["Grid?"] } }
                 });
 
                 // Saves the current code to the project

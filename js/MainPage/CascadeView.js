@@ -51,25 +51,6 @@ var Environment = function (goldenContainer) {
     this.renderer.shadowMap.type       = THREE.PCFSoftShadowMap;
     //this.scene.add(new THREE.CameraHelper(this.light2.shadow.camera));
 
-    // Create the ground mesh
-    this.groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000),
-      new THREE.MeshPhongMaterial({
-        color: 0x080808, depthWrite: true, dithering: true,
-        polygonOffset: true, // Push the mesh back for line drawing
-        polygonOffsetFactor: 6.0, polygonOffsetUnits: 1.0
-      }));
-    this.groundMesh.position.y = -0.1;
-    this.groundMesh.rotation.x = - Math.PI / 2;
-    this.groundMesh.receiveShadow = true;
-    this.scene.add(this.groundMesh);
-
-    // Create the Ground Grid; one line every 100 units
-    this.grid = new THREE.GridHelper(2000, 20, 0xcccccc, 0xcccccc);
-    this.grid.position.y = -0.01;
-    this.grid.material.opacity = 0.3;
-    this.grid.material.transparent = true;
-    this.scene.add(this.grid);
-
     // Set up the orbit controls used for Cascade Studio
     this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(0, 45, 0);
@@ -132,12 +113,40 @@ var CascadeEnvironment = function (goldenContainer) {
                         });
 
   // A callback to load the Triangulated Shape from the Worker and add it to the Scene
-  messageHandlers["combineAndRenderShapes"] = ([facelist, edgelist]) => {
+  messageHandlers["combineAndRenderShapes"] = ([[facelist, edgelist],sceneOptions]) => {
     window.workerWorking = false;     // Untick this flag to allow Evaluations again
     if (!facelist) { return;}  // Do nothing if the results are null
 
     // The old mainObject is dead!  Long live the mainObject!
     this.environment.scene.remove(this.mainObject);
+
+    this.environment.scene.remove(this.groundMesh);
+    if (sceneOptions.groundPlaneVisible)
+	{
+	    // Create the ground mesh
+	    this.groundMesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000),
+	      new THREE.MeshPhongMaterial({
+	        color: 0x080808, depthWrite: true, dithering: true,
+	        polygonOffset: true, // Push the mesh back for line drawing
+	        polygonOffsetFactor: 6.0, polygonOffsetUnits: 1.0
+	      }));
+	    this.groundMesh.position.y = -0.1;
+	    this.groundMesh.rotation.x = - Math.PI / 2;
+	    this.groundMesh.receiveShadow = true;
+	    this.environment.scene.add(this.groundMesh);
+	}
+
+        this.environment.scene.remove(this.grid);
+	if (sceneOptions.gridVisible)
+	{
+	    // Create the Ground Grid; one line every 100 units
+	    this.grid = new THREE.GridHelper(2000, 20, 0xcccccc, 0xcccccc);
+	    this.grid.position.y = -0.01;
+	    this.grid.material.opacity = 0.3;
+	    this.grid.material.transparent = true;
+	    this.environment.scene.add(this.grid);
+	}
+
     this.mainObject            = new THREE.Group();
     this.mainObject.name       = "shape";
     this.mainObject.rotation.x = -Math.PI / 2;
@@ -198,7 +207,7 @@ var CascadeEnvironment = function (goldenContainer) {
         lineVertices.push(new THREE.Vector3(edge.vertex_coord[i    ],
                                             edge.vertex_coord[i + 1],
                                             edge.vertex_coord[i + 2]));
-                  
+
         lineVertices.push(new THREE.Vector3(edge.vertex_coord[i     + 3],
                                             edge.vertex_coord[i + 1 + 3],
                                             edge.vertex_coord[i + 2 + 3]));
