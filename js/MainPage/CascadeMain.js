@@ -247,7 +247,7 @@ function initialize(projectContent = null) {
                 // and begin saving them out
                 cascadeStudioWorker.postMessage({
                     "type": "combineAndRenderShapes",
-		//TODO: GUIState[] wird bei übergabe evtl. referenziert und nicht kopiert (Checkboxen sind nach reload false obwohl standard true ist.)
+                // TODO: GUIState[] may be referenced upon transfer and not copied (checkboxes are false after reload although the default is true
                     payload: { maxDeviation: GUIState["MeshRes"], sceneOptions: { groundPlaneVisible: GUIState["GroundPlane?"], gridVisible: GUIState["Grid?"] } }
                 });
 
