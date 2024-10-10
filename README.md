@@ -16,7 +16,7 @@
 
 ## A Full Live-Scripted CAD Kernel and IDE in the Browser.
 
-Use code to create 3D Models with features ranging from simple primitives + CSG to complex revolves, sweeps, and fillets.  Cascade Studio exposes the full power of the [OpenCascade](http://opencascade.com/) kernel, while providing a concise standard library for simple operations.
+Use code to create 3D Models with features ranging from simple primitives + CSG to complex revolves, sweeps, and fillets.  Cascade Studio exposes the full power of the [OpenCascade](https://github.com/Open-Cascade-SAS/OCCT) kernel, while providing a concise standard library for simple operations.
 
 Save your completed models to .step, .stl. or .obj, or copy the url and share it with the community.
 
