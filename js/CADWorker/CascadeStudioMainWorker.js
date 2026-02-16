@@ -116,7 +116,11 @@ class CascadeStudioWorker {
       // Route incoming messages to registered handlers
       onmessage = function (e) {
         let response = self.messageHandlers[e.data.type](e.data.payload);
-        if (response) { postMessage({ "type": e.data.type, payload: response }); }
+        if (response) {
+          const msg = { "type": e.data.type, payload: response };
+          if (e.data.requestId) { msg.requestId = e.data.requestId; }
+          postMessage(msg);
+        }
       };
 
       // Signal that the worker is ready

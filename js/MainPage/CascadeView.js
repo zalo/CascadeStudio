@@ -89,7 +89,7 @@ class Environment {
 /** CAD-specific 3D viewport that extends Environment with shape rendering,
  *  edge/face highlighting, export functionality, and transform gizmos. */
 class CascadeEnvironment {
-  constructor(goldenContainer, cascadeStudioWorker, messageHandlers, getNewFileHandle, writeFile, downloadFile) {
+  constructor(goldenContainer, messageBus, getNewFileHandle, writeFile, downloadFile) {
     this.active          = true;
     this.goldenContainer = goldenContainer;
     this.environment     = new Environment(this.goldenContainer);
@@ -119,13 +119,13 @@ class CascadeEnvironment {
     });
 
     // Store dependencies for export methods
-    this._cascadeStudioWorker = cascadeStudioWorker;
+    this._messageBus = messageBus;
     this._getNewFileHandle = getNewFileHandle;
     this._writeFile = writeFile;
     this._downloadFile = downloadFile;
 
     // Register the shape rendering callback
-    this._registerRenderCallback(messageHandlers);
+    this._registerRenderCallback(messageBus);
 
     // Set up mouse tracking
     this.mouse = { x: 0, y: 0 };
@@ -135,7 +135,7 @@ class CascadeEnvironment {
     }, false);
 
     // Initialize the Handle Manager
-    this.handleManager = new HandleManager(this);
+    this.handleManager = new HandleManager(this, messageBus);
 
     // Start the animation loop
     this._animate();
@@ -143,8 +143,8 @@ class CascadeEnvironment {
   }
 
   /** Register the callback that receives triangulated shapes from the worker. */
-  _registerRenderCallback(messageHandlers) {
-    messageHandlers["combineAndRenderShapes"] = ([[facelist, edgelist], sceneOptions]) => {
+  _registerRenderCallback(messageBus) {
+    messageBus.on("combineAndRenderShapes", ([[facelist, edgelist], sceneOptions]) => {
       window.workerWorking = false;
       if (!facelist) { return; }
 
@@ -279,14 +279,14 @@ class CascadeEnvironment {
       this.environment.scene.add(this.mainObject);
       this.environment.viewDirty = true;
       console.log("Generation Complete!");
-    };
+    });
   }
 
   /** Save the current shape to .step. */
   saveShapeSTEP() {
-    this._cascadeStudioWorker.postMessage({ "type": "saveShapeSTEP" });
+    this._messageBus.send("saveShapeSTEP");
 
-    window.messageHandlers["saveShapeSTEP"] = async (stepContent) => {
+    this._messageBus.on("saveShapeSTEP", async (stepContent) => {
       if (window.showSaveFilePicker) {
         const fileHandle = await this._getNewFileHandle("STEP files", "text/plain", "step");
         this._writeFile(fileHandle, stepContent).then(() => {
@@ -295,7 +295,7 @@ class CascadeEnvironment {
       } else {
         await this._downloadFile(stepContent, "Untitled", "model/step", "step");
       }
-    };
+    });
   }
 
   /** Save the current shape to an ASCII .stl. */

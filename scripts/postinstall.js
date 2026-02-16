@@ -32,3 +32,19 @@ if (fs.existsSync(glInput)) {
   }
   console.log('  Copied golden-layout CSS files');
 }
+
+// Bundle openscad-parser CJS → ESM for buildless browser use
+const opInput = path.join(root, 'node_modules', 'openscad-parser', 'dist', 'index.js');
+const opOutput = path.join(root, 'lib', 'openscad-parser', 'openscad-parser.js');
+
+if (fs.existsSync(opInput)) {
+  const opDir = path.dirname(opOutput);
+  if (!fs.existsSync(opDir)) { fs.mkdirSync(opDir, { recursive: true }); }
+
+  const shim = path.join(root, 'scripts', 'node-shims.js');
+  execSync(`npx esbuild ${opInput} --bundle --format=esm --outfile=${opOutput} --sourcemap --alias:fs=${shim} --alias:path=${shim} --alias:os=${shim}`, {
+    cwd: root,
+    stdio: 'inherit',
+  });
+  console.log('  Bundled openscad-parser ESM to', opOutput);
+}

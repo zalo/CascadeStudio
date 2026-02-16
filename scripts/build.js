@@ -24,7 +24,7 @@ execSync([
   '--bundle --minify --sourcemap',
   '--format=esm --target=es2020',
   '--outdir=./build --entry-names=[name]',
-  '--external:fs --external:path',
+  '--external:fs --external:path --external:os',
   '--loader:.wasm=file',
   '--define:ESBUILD=true',
 ].join(' '), { cwd: root, stdio: 'inherit' });
@@ -88,6 +88,7 @@ fs.writeFileSync(path.join(buildDir, 'index.html'), `<!DOCTYPE html>
         <meta name="author"             content="Johnathon Selstad">
         <meta name="viewport"           content="width=device-width, initial-scale=1.0">
         <meta name="theme-color"        content="#1e1e1e">
+        <meta name="cascade-api"        content="window.CascadeAPI">
 
         <!-- Service Worker for offline access (must be first) -->
         <script>
@@ -136,6 +137,10 @@ fs.writeFileSync(path.join(buildDir, 'index.html'), `<!DOCTYPE html>
                 <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="window.loadFiles();"/>
             </label>
             <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="window.clearExternalFiles();">Clear Imported Files</a>
+            <select id="editorMode" title="Editor Language Mode" style="margin-left:10px; background:#333; color:#ccc; border:1px solid #555; padding:2px 4px; font-size:12px;">
+                <option value="cascadestudio">CascadeStudio JS</option>
+                <option value="openscad">OpenSCAD</option>
+            </select>
         </div>
         <div id="appbody" style="height:auto">
             <script type="module" src="./main.js"></script>
