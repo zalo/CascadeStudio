@@ -1,138 +1,232 @@
-// Define the persistent global variables
-var oc = null, externalShapes = {}, sceneShapes = [],
-  GUIState, fullShapeEdgeHashes = {}, fullShapeFaceHashes = {},
-  currentShape;
+// CascadeStudio Main Worker - ES Module
 
-// Capture Logs and Errors and forward them to the main thread
-let realConsoleLog   = console.log;
-let realConsoleError = console.error;
-console.log = function (message) {
-  //postMessage({ type: "log", payload: message });
-  setTimeout(() => { postMessage({ type: "log", payload: message }); }, 0);
-  realConsoleLog.apply(console, arguments);
-};
-console.error = function (err, url, line, colno, errorObj) {
-  postMessage({ type: "resetWorking" });
-  setTimeout(() => {
-    err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
-    throw err; 
-  }, 0);
-  
-  realConsoleError.apply(console, arguments);
-}; // This is actually accessed via worker.onerror in the main thread
+import { CascadeStudioStandardLibrary } from './CascadeStudioStandardLibrary.js';
+import { CascadeStudioMesher } from './CascadeStudioShapeToMesh.js';
+import { CascadeStudioFileIO } from './CascadeStudioFileUtils.js';
 
-// Import the set of scripts we'll need to perform all the CAD operations
-importScripts(
-  '../../node_modules/three/build/three.min.js',
-  './CascadeStudioStandardLibrary.js',
-  './CascadeStudioShapeToMesh.js',
-  '../../node_modules/opencascade.js/dist/opencascade.wasm.js',
-  '../../node_modules/opentype.js/dist/opentype.min.js',
-  '../../node_modules/potpack/index.js');
+/** Main CAD worker class. Initializes OpenCascade WASM, loads dependencies,
+ *  and orchestrates evaluation/rendering of user CAD code. */
+class CascadeStudioWorker {
+  constructor() {
+    // Define persistent global variables on self for eval() access
+    self.oc = null;
+    self.externalShapes = {};
+    self.sceneShapes = [];
+    self.GUIState = {};
+    self.fullShapeEdgeHashes = {};
+    self.fullShapeFaceHashes = {};
+    self.currentShape = null;
+    self.messageHandlers = self.messageHandlers || {};
 
-// Preload the Various Fonts that are available via Text3D
-var preloadedFonts = ['../../fonts/Roboto.ttf',
-  '../../fonts/Papyrus.ttf', '../../fonts/Consolas.ttf'];
-var fonts = {};
-preloadedFonts.forEach((fontURL) => {
-  opentype.load(fontURL, function (err, font) {
-    if (err) { console.log(err); }
-    let fontName = fontURL.split("./fonts/")[1].split(".ttf")[0];
-    fonts[fontName] = font;
-  });
-});
+    // Store original console methods
+    this.realConsoleLog = console.log;
+    this.realConsoleError = console.error;
 
-// Load the full Open Cascade Web Assembly Module
-var messageHandlers = {};
-new opencascade({
-  locateFile(path) {
-    if (path.endsWith('.wasm')) {
-      return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
+    // Forward logs and errors to the main thread
+    this._setupConsoleOverrides();
+
+    // Shim importScripts for module workers so Emscripten detects ENVIRONMENT_IS_WORKER
+    // (Module workers don't have importScripts, causing Emscripten to fall into ENVIRONMENT_IS_SHELL)
+    if (typeof importScripts === 'undefined') {
+      self.importScripts = function() { throw new Error('importScripts is not supported in module workers'); };
     }
-    return path;
-  }
-}).then((openCascade) => {
-  // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
-  oc = openCascade;
 
-  // Ping Pong Messages Back and Forth based on their registration in messageHandlers
-  onmessage = function (e) {
-    let response = messageHandlers[e.data.type](e.data.payload);
-    if (response) { postMessage({ "type": e.data.type, payload: response }); };
+    // Register message handlers
+    self.messageHandlers["Evaluate"] = this.evaluate.bind(this);
+    self.messageHandlers["combineAndRenderShapes"] = this.combineAndRenderShapes.bind(this);
   }
 
-  // Initial Evaluation after everything has been loaded...
-  postMessage({ type: "startupCallback" });
-});
+  /** Override console.log/error to forward messages to the main thread. */
+  _setupConsoleOverrides() {
+    const realLog = this.realConsoleLog;
+    const realError = this.realConsoleError;
 
-/** This function evaluates `payload.code` (the contents of the Editor Window)
- *  and sets the GUI State. */
-function Evaluate(payload) {
-  opNumber = 0; // This keeps track of the progress of the evaluation
-  GUIState = payload.GUIState;
-  try {
-    eval(payload.code);
-  } catch (e) {
-    setTimeout(() => {
-      e.message = "Line " + currentLineNumber + ": "  + currentOp + "() encountered  " + e.message;
+    console.log = function (message) {
+      setTimeout(() => { postMessage({ type: "log", payload: message }); }, 0);
+      realLog.apply(console, arguments);
+    };
+
+    console.error = function (err, url, line, colno, errorObj) {
+      postMessage({ type: "resetWorking" });
+      setTimeout(() => {
+        if (err && err.message) {
+          err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
+          throw err;
+        } else {
+          throw new Error("INTERNAL OPENCASCADE ERROR: " + err);
+        }
+      }, 0);
+      realError.apply(console, arguments);
+    };
+  }
+
+  /** Asynchronously load all dependencies and initialize OpenCascade WASM. */
+  async init() {
+    let opencascade, opentype, potpack;
+
+    try {
+      const ocMod = await import('../../node_modules/opencascade.js/dist/opencascade.wasm.module.js');
+      opencascade = ocMod.default;
+    } catch(e) {
+      postMessage({ type: "log", payload: "ERROR loading opencascade: " + e.message });
       throw e;
-    }, 0);
-  } finally {
-    postMessage({ type: "resetWorking" });
-    // Clean Cache; remove unused Objects
-    for (let hash in argCache) {
-      if (!usedHashes.hasOwnProperty(hash)) { delete argCache[hash]; } }
-    usedHashes = {};
-  }
-}
-messageHandlers["Evaluate"] = Evaluate;
+    }
 
-/**This function accumulates all the shapes in `sceneShapes` into the `TopoDS_Compound` `currentShape`
- * and converts it to a mesh (and a set of edges) with `ShapeToMesh()`, and sends it off to be rendered. */
-function combineAndRenderShapes(payload) {
-  // Initialize currentShape as an empty Compound Solid
-  currentShape     = new oc.TopoDS_Compound();
-  let sceneBuilder = new oc.BRep_Builder();
-  sceneBuilder.MakeCompound(currentShape);
-  let fullShapeEdgeHashes = {}; let fullShapeFaceHashes = {};
-  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": "Combining Shapes" } });
+    try {
+      const otMod = await import('../../node_modules/opentype.js/dist/opentype.module.js');
+      opentype = otMod.default;
+    } catch(e) {
+      postMessage({ type: "log", payload: "ERROR loading opentype: " + e.message });
+      throw e;
+    }
 
-  // If there are sceneShapes, iterate through them and add them to currentShape
-  if (sceneShapes.length > 0) {
-    for (let shapeInd = 0; shapeInd < sceneShapes.length; shapeInd++) {
-      if (!sceneShapes[shapeInd] || !sceneShapes[shapeInd].IsNull || sceneShapes[shapeInd].IsNull()) {
-        console.error("Null Shape detected in sceneShapes; skipping: " + JSON.stringify(sceneShapes[shapeInd]));
-        continue;
-      }
-      if (!sceneShapes[shapeInd].ShapeType) {
-        console.error("Non-Shape detected in sceneShapes; " +
-          "are you sure it is a TopoDS_Shape and not something else that needs to be converted to one?");
-        console.error(JSON.stringify(sceneShapes[shapeInd]));
-        continue;
-      }
+    try {
+      const ppMod = await import('../../node_modules/three/examples/jsm/libs/potpack.module.js');
+      potpack = ppMod.potpack;
+    } catch(e) {
+      postMessage({ type: "log", payload: "ERROR loading potpack: " + e.message });
+      throw e;
+    }
 
-      // Scan the edges and faces and add to the edge list
-      Object.assign(fullShapeEdgeHashes, ForEachEdge(sceneShapes[shapeInd], (index, edge) => { }));
-      ForEachFace(sceneShapes[shapeInd], (index, face) => {
-        fullShapeFaceHashes[face.HashCode(100000000)] = index;
+    self.potpack = potpack;
+
+    // Instantiate class-based modules (populates self.* for eval() access)
+    this.standardLibrary = new CascadeStudioStandardLibrary();
+    this.mesher = new CascadeStudioMesher();
+    this.fileIO = new CascadeStudioFileIO();
+
+    // Preload fonts available via Text3D
+    this._loadFonts(opentype);
+
+    // Load the full OpenCascade WebAssembly Module
+    // NOTE: Emscripten's Module object has a .then() method that returns itself,
+    // creating an infinite thenable resolution loop with `await`. We use a proper
+    // Promise with onRuntimeInitialized instead.
+    try {
+      const openCascade = await new Promise((resolve) => {
+        new opencascade({
+          locateFile(path) {
+            if (path.endsWith('.wasm')) {
+              return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
+            }
+            return path;
+          },
+          onRuntimeInitialized() {
+            // Delete the Emscripten thenable to prevent infinite resolution
+            // loop when this Module object is passed to Promise.resolve()
+            delete this.then;
+            resolve(this);
+          }
+        });
       });
 
-      sceneBuilder.Add(currentShape, sceneShapes[shapeInd]);
+      // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
+      self.oc = openCascade;
+
+      // Route incoming messages to registered handlers
+      onmessage = function (e) {
+        let response = self.messageHandlers[e.data.type](e.data.payload);
+        if (response) { postMessage({ "type": e.data.type, payload: response }); }
+      };
+
+      // Signal that the worker is ready
+      postMessage({ type: "startupCallback" });
+    } catch(e) {
+      postMessage({ type: "log", payload: "ERROR loading OpenCascade WASM: " + e.message });
+      throw e;
     }
-
-    // Use ShapeToMesh to output a set of triangulated faces and discretized edges to the 3D Viewport
-    postMessage({ "type": "Progress", "payload": { "opNumber": opNumber++, "opType": "Triangulating Faces" } });
-    let facesAndEdges = ShapeToMesh(currentShape,
-      payload.maxDeviation||0.1, fullShapeEdgeHashes, fullShapeFaceHashes);
-    sceneShapes = [];
-    postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } }); // Finish the progress
-    return [facesAndEdges, payload.sceneOptions];
-  } else {
-    console.error("There were no scene shapes returned!");
   }
-  postMessage({ "type": "Progress", "payload": { "opNumber": opNumber, "opType": "" } });
-}
-messageHandlers["combineAndRenderShapes"] = combineAndRenderShapes;
 
-// Import the File IO Utilities
-importScripts('./CascadeStudioFileUtils.js');
+  /** Preload the various fonts available via Text3D. */
+  _loadFonts(opentype) {
+    const preloadedFonts = [
+      '../../fonts/Roboto.ttf',
+      '../../fonts/Papyrus.ttf',
+      '../../fonts/Consolas.ttf'
+    ];
+    self.loadedFonts = {};
+    preloadedFonts.forEach((fontURL) => {
+      // { isUrl: true } forces XHR instead of require('fs') since workers lack `window`
+      opentype.load(fontURL, function (err, font) {
+        if (err) { console.log(err); }
+        let fontName = fontURL.split("./fonts/")[1] || fontURL.split("/fonts/")[1];
+        fontName = fontName.split(".ttf")[0];
+        self.loadedFonts[fontName] = font;
+      }, { isUrl: true });
+    });
+  }
+
+  /** Evaluate user CAD code (the contents of the Editor Window) and set the GUI State. */
+  evaluate(payload) {
+    self.opNumber = 0;
+    self.GUIState = payload.GUIState;
+    try {
+      eval(payload.code);
+    } catch (e) {
+      setTimeout(() => {
+        e.message = "Line " + self.currentLineNumber + ": " + self.currentOp + "() encountered  " + e.message;
+        throw e;
+      }, 0);
+    } finally {
+      postMessage({ type: "resetWorking" });
+      // Clean cache; remove unused objects
+      for (let hash in self.argCache) {
+        if (!self.usedHashes.hasOwnProperty(hash)) { delete self.argCache[hash]; }
+      }
+      self.usedHashes = {};
+    }
+  }
+
+  /** Accumulate all shapes in `sceneShapes` into a compound,
+   *  triangulate with ShapeToMesh, and return for rendering. */
+  combineAndRenderShapes(payload) {
+    let oc = self.oc;
+    // Initialize currentShape as an empty Compound Solid
+    self.currentShape = new oc.TopoDS_Compound();
+    let sceneBuilder = new oc.BRep_Builder();
+    sceneBuilder.MakeCompound(self.currentShape);
+    let fullShapeEdgeHashes = {}; let fullShapeFaceHashes = {};
+    postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Combining Shapes" } });
+
+    // If there are sceneShapes, iterate through them and add them to currentShape
+    if (self.sceneShapes.length > 0) {
+      for (let shapeInd = 0; shapeInd < self.sceneShapes.length; shapeInd++) {
+        if (!self.sceneShapes[shapeInd] || !self.sceneShapes[shapeInd].IsNull || self.sceneShapes[shapeInd].IsNull()) {
+          console.error("Null Shape detected in sceneShapes; skipping: " + JSON.stringify(self.sceneShapes[shapeInd]));
+          continue;
+        }
+        if (!self.sceneShapes[shapeInd].ShapeType) {
+          console.error("Non-Shape detected in sceneShapes; " +
+            "are you sure it is a TopoDS_Shape and not something else that needs to be converted to one?");
+          console.error(JSON.stringify(self.sceneShapes[shapeInd]));
+          continue;
+        }
+
+        // Scan the edges and faces and add to the edge list
+        Object.assign(fullShapeEdgeHashes, self.ForEachEdge(self.sceneShapes[shapeInd], (index, edge) => { }));
+        self.ForEachFace(self.sceneShapes[shapeInd], (index, face) => {
+          fullShapeFaceHashes[face.HashCode(100000000)] = index;
+        });
+
+        sceneBuilder.Add(self.currentShape, self.sceneShapes[shapeInd]);
+      }
+
+      // Use ShapeToMesh to output triangulated faces and discretized edges to the 3D Viewport
+      postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Triangulating Faces" } });
+      let facesAndEdges = self.ShapeToMesh(self.currentShape,
+        payload.maxDeviation || 0.1, fullShapeEdgeHashes, fullShapeFaceHashes);
+      self.sceneShapes = [];
+      postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
+      return [facesAndEdges, payload.sceneOptions];
+    } else {
+      console.error("There were no scene shapes returned!");
+    }
+    postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
+  }
+}
+
+// Bootstrap the worker
+const worker = new CascadeStudioWorker();
+worker.init();
+
+export { CascadeStudioWorker };

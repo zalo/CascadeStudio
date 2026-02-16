@@ -2,7 +2,7 @@
 <html lang="en">
     <head>
         <title>Cascade Studio</title>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <meta charset="utf-8">
         <meta name="application-name"   content="Cascade Studio">
         <meta name="description"        content="A Full Live-Scripted CAD Kernel in the Browser">
         <meta name="keywords"           content="SCAD, OpenSCAD, CAD, OpenCascade, Scripting">
@@ -10,81 +10,66 @@
         <meta name="viewport"           content="width=device-width, initial-scale=1.0">
         <meta name="theme-color"        content="#1e1e1e">
 
-        <!-- Include these early and directly so they happen first -->
+        <!-- Service Worker for offline access (must be first) -->
         <script>
-            // Install Cascade Studio as a Progressive Web App for Offline Access
-            // This needs to be put before ANY HTTP Requests are made, so it can cache them.
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('service-worker.js').then(function(registration) {
-                    registration.update(); // Always update the registration for the latest assets
+                    registration.update();
                 }, function() {
                     console.log('Could not register Cascade Studio for offline use!');
                 });
-            } else {
-                console.log('Browser does not support offline access!');
-            }
-
-            // Begins loading the CAD Kernel Web Worker
-            if (window.Worker) {
-                var cascadeStudioWorker = new Worker('./js/CADWorker/CascadeStudioMainWorker.js');
-                // Ping Pong Messages Back and Forth based on their registration in messageHandlers
-                var messageHandlers = {};
-                cascadeStudioWorker.onmessage = function (e) {
-                    if(e.data.type in messageHandlers){
-                        let response = messageHandlers[e.data.type](e.data.payload);
-                        if (response) { cascadeStudioWorker.postMessage({ "type": e.data.type, payload: response }) };
-                    }
-                }
             }
         </script>
 
-        <link rel='shortcut icon'      href='./icon/favicon.ico' type='image/x-icon' >
-        <link rel="manifest"           href="./manifest.webmanifest">
-        <link rel="apple-touch-icon"   href="./icon/apple-touch-icon.png">
+        <!-- Import map for Three.js bare specifier (required by Three.js ESM submodules) -->
+        <script type="importmap">
+        {
+            "imports": {
+                "three": "./node_modules/three/build/three.module.js"
+            }
+        }
+        </script>
 
-        <script type="text/javascript" src="./node_modules/three/build/three.min.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/DragControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/OrbitControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/controls/TransformControls.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/exporters/STLExporter.js"></script>
-        <script type="text/javascript" src="./node_modules/three/examples/js/exporters/OBJExporter.js"></script>
+        <link rel="shortcut icon"    href="./icon/favicon.ico" type="image/x-icon">
+        <link rel="manifest"         href="./manifest.webmanifest">
+        <link rel="apple-touch-icon" href="./icon/apple-touch-icon.png">
 
-        <script type="text/javascript" src="./node_modules/tweakpane/dist/tweakpane.min.js"></script>
+        <!-- Golden Layout v2 CSS -->
+        <link rel="stylesheet" href="./lib/golden-layout/goldenlayout-base.css">
+        <link rel="stylesheet" href="./lib/golden-layout/goldenlayout-dark-theme.css">
+        <link rel="stylesheet" href="./css/main.css">
 
-        <script type="text/javascript" src="./node_modules/jquery/dist/jquery.min.js"></script>
-        <script type="text/javascript" src="./node_modules/golden-layout/dist/goldenlayout.min.js"></script>
-        <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-base.css" />
-        <link type="text/css" rel="stylesheet" href="./node_modules/golden-layout/src/css/goldenlayout-dark-theme.css" />
-        <link type="text/css" rel="stylesheet" href="./css/main.css" />
-
-        <script type="text/javascript" src="./node_modules/rawflate/rawdeflate.js"></script>
-        <script type="text/javascript" src="./node_modules/rawflate/rawinflate.js"></script>
-        <script type="text/javascript" src="./js/MainPage/CascadeViewHandles.js"></script>
-        <script type="text/javascript" src="./js/MainPage/CascadeView.js"></script>
+        <!-- Monaco Editor CSS + AMD loader (ESM workers too complex for buildless use) -->
+        <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">
+        <script>
+            var require = { paths: { 'vs': 'node_modules/monaco-editor/min/vs' } };
+            // Configure Monaco worker URLs for v0.52+
+            self.MonacoEnvironment = {
+                getWorkerUrl: function(moduleId, label) {
+                    return './node_modules/monaco-editor/min/vs/base/worker/workerMain.js';
+                }
+            };
+        </script>
+        <script src="./node_modules/monaco-editor/min/vs/loader.js"></script>
+        <script src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
     </head>
 
-    <body onload="initialize();" style="margin:0px; background-color:rgb(34, 34, 34); "><!--overflow:hidden; position:fixed;-->
-        <h1 hidden></h1> <!-- Puts the Lighthouse Score over 90 heheh-->
+    <body style="margin:0px; background-color:rgb(34, 34, 34);">
+        <h1 hidden></h1>
         <div id="topnav" class="topnav">
-            <a href="https://github.com/zalo/CascadeStudio">Cascade Studio 0.0.7</a>
-            <a href="#" title="Save Project to .json" onmouseup="saveProject();">Save Project</a>
-            <a href="#" title="Load Project from .json" onmouseup="loadProject();">Load Project</a>
-            <a href="#" onmouseup="threejsViewport.saveShapeSTEP();">Save STEP</a>
-            <a href="#" onmouseup="threejsViewport.saveShapeSTL();">Save STL</a>
-            <a href="#" onmouseup="threejsViewport.saveShapeOBJ();">Save OBJ</a>
+            <a href="https://github.com/zalo/CascadeStudio">Cascade Studio</a>
+            <a href="#" title="Save Project to .json" onmouseup="window.saveProject();">Save Project</a>
+            <a href="#" title="Load Project from .json" onmouseup="window.loadProject();">Load Project</a>
+            <a href="#" onmouseup="window.threejsViewport?.saveShapeSTEP();">Save STEP</a>
+            <a href="#" onmouseup="window.threejsViewport?.saveShapeSTL();">Save STL</a>
+            <a href="#" onmouseup="window.threejsViewport?.saveShapeOBJ();">Save OBJ</a>
             <label for="files" title="Import STEP, IGES, or (ASCII) STL from File">Import STEP/IGES/STL
-                <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="loadFiles();"/>
+                <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="window.loadFiles();"/>
             </label>
-            <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="clearExternalFiles();">Clear Imported Files</a>
+            <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="window.clearExternalFiles();">Clear Imported Files</a>
         </div>
         <div id="appbody" style="height:auto">
-            <link data-name="vs/editor/editor.main" rel="stylesheet" href="./node_modules/monaco-editor/min/vs/editor/editor.main.css">
-            <script>var require = { paths: { 'vs': 'node_modules/monaco-editor/min/vs' } };</script>
-            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/loader.js"></script>
-            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
-            <script type="text/javascript" src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>
-            <script type="text/javascript" src="./js/MainPage/CascadeMain.js"></script>
+            <script type="module" src="./js/MainPage/main.js"></script>
         </div>
-
     </body>
 </html>

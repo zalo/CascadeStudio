@@ -1,50 +1,76 @@
 # Monaco Editor
 
-[![Build Status](https://dev.azure.com/ms/monaco-editor/_apis/build/status/microsoft.monaco-editor?label=website)](https://dev.azure.com/ms/monaco-editor/_build/latest?definitionId=3)
+[![Versions](https://img.shields.io/npm/v/monaco-editor)](https://www.npmjs.com/package/monaco-editor)
+[![Versions](https://img.shields.io/npm/v/monaco-editor/next)](https://www.npmjs.com/package/monaco-editor)
+[![Feature Requests](https://img.shields.io/github/issues/microsoft/monaco-editor/feature-request.svg)](https://github.com/microsoft/monaco-editor/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
+[![Bugs](https://img.shields.io/github/issues/microsoft/monaco-editor/bug.svg)](https://github.com/microsoft/monaco-editor/issues?utf8=✓&q=is%3Aissue+is%3Aopen+label%3Abug)
 
-The Monaco Editor is the code editor which powers [VS Code](https://github.com/Microsoft/vscode), with the features better described [here](https://code.visualstudio.com/docs/editor/editingevolved).
+The Monaco Editor is the fully featured code editor from [VS Code](https://github.com/microsoft/vscode). Check out the [VS Code docs](https://code.visualstudio.com/docs/editor/editingevolved) to see some of the supported features.
 
-Please note that this repository contains no source code for the code editor, it only contains the scripts to package everything together and ship the `monaco-editor` npm module.
-
-![image](https://cloud.githubusercontent.com/assets/5047891/19600675/5eaae9e6-97a6-11e6-97ad-93903167d8ba.png)
+![image](https://user-images.githubusercontent.com/5047891/94183711-290c0780-fea3-11ea-90e3-c88ff9d21bd6.png)
 
 ## Try it out
 
-Try the editor out [on our website](https://microsoft.github.io/monaco-editor/index.html).
+Try out the editor and see various examples [in our interactive playground](https://microsoft.github.io/monaco-editor/playground.html).
+
+The playground is the best way to learn about how to use the editor, which features is supports, to try out different versions and to create minimal reproducible examples for bug reports.
 
 ## Installing
 
 ```
-$ npm install monaco-editor
+> npm install monaco-editor
 ```
 
 You will get:
-* inside `esm`: ESM version of the editor (compatible with e.g. webpack)
-* inside `dev`: AMD bundled, not minified
-* inside `min`: AMD bundled, and minified
-* inside `min-maps`: source maps for `min`
-* `monaco.d.ts`: this specifies the API of the editor (this is what is actually versioned, everything else is considered private and might break with any release).
+
+- inside `/esm`: ESM version of the editor (compatible with e.g. webpack)
+- inside `/dev`: AMD bundled, not minified
+- inside `/min`: AMD bundled, and minified
+- inside `/min-maps`: source maps for `min`
+- `monaco.d.ts`: this specifies the API of the editor (this is what is actually versioned, everything else is considered private and might break with any release).
 
 It is recommended to develop against the `dev` version, and in production to use the `min` version.
 
+## Concepts
+
+Monaco editor is best known for being the text editor that powers VS Code. However, it's a bit more nuanced. Some basic understanding about the underlying concepts is needed to use Monaco editor effectively.
+
+### Models
+
+Models are at the heart of Monaco editor. It's what you interact with when managing content. A model represents a file that has been opened. This could represent a file that exists on a file system, but it doesn't have to. For example, the model holds the text content, determines the language of the content, and tracks the edit history of the content.
+
+### URIs
+
+Each model is identified by a URI. This is why it's not possible for two models to have the same URI. Ideally when you represent content in Monaco editor, you should think of a virtual file system that matches the files your users are editing. For example, you could use `file:///` as a base path. If a model is created without a URI, its URI will be `inmemory://model/1`. The number increases as more models are created.
+
+### Editors
+
+An editor is a user facing view of the model. This is what gets attached to the DOM and what your users see visually. Typical editor operations are displaying a model, managing the view state, or executing actions or commands.
+
+### Providers
+
+Providers provide smart editor features. For example, this includes completion and hover information. It is not the same as, but often maps to [language server protocol](https://microsoft.github.io/language-server-protocol) features.
+
+Providers work on models. Some smart features depends on the file URI. For example, for TypeScript to resolve imports, or for JSON IntelliSense to determine which JSON schema to apply to which model. So it's important to choose proper model URIs.
+
+### Disposables
+
+Many Monaco related objects often implement the `.dispose()` method. This method is intended to perform cleanups when a resource is no longer needed. For example, calling `model.dispose()` will unregister it, freeing up the URI for a new model. Editors should be disposed to free up resources and remove their model listeners.
+
 ## Documentation
 
-* Learn how to integrate the editor with these [complete samples](https://github.com/Microsoft/monaco-editor-samples/).
-    * [Integrate the AMD version](./docs/integrate-amd.md).
-    * [Integrate the AMD version cross-domain](./docs/integrate-amd-cross.md)
-    * [Integrate the ESM version](./docs/integrate-esm.md)
-* Learn how to use the editor API and try out your own customizations in the [playground](https://microsoft.github.io/monaco-editor/playground.html).
-* Explore the [API docs](https://microsoft.github.io/monaco-editor/api/index.html) or read them straight from [`monaco.d.ts`](https://github.com/Microsoft/monaco-editor/blob/master/website/playground/monaco.d.ts.txt).
-* Read [this guide](https://github.com/Microsoft/monaco-editor/wiki/Accessibility-Guide-for-Integrators) to ensure the editor is accessible to all your users!
-* Create a Monarch tokenizer for a new programming language [in the Monarch playground](https://microsoft.github.io/monaco-editor/monarch.html).
-* Ask questions on [StackOverflow](https://stackoverflow.com/questions/tagged/monaco-editor)! Search open and closed issues, there are a lot of tips in there!
+- Learn how to integrate the editor with these [complete samples](./samples/).
+  - [Integrate the AMD version](./docs/integrate-amd.md).
+  - [Integrate the ESM version](./docs/integrate-esm.md)
+- Learn how to use the editor API and try out your own customizations in the [playground](https://microsoft.github.io/monaco-editor/playground.html).
+- Explore the [API docs](https://microsoft.github.io/monaco-editor/docs.html) or read them straight from [`monaco.d.ts`](https://github.com/microsoft/monaco-editor/blob/gh-pages/node_modules/monaco-editor/monaco.d.ts).
+- Read [this guide](https://github.com/microsoft/monaco-editor/wiki/Accessibility-Guide-for-Integrators) to ensure the editor is accessible to all your users!
+- Create a Monarch tokenizer for a new programming language [in the Monarch playground](https://microsoft.github.io/monaco-editor/monarch.html).
+- Ask questions on [StackOverflow](https://stackoverflow.com/questions/tagged/monaco-editor)! Search open and closed issues, there are a lot of tips in there!
 
 ## Issues
 
-Create [issues](https://github.com/Microsoft/monaco-editor/issues) in this repository for anything related to the Monaco Editor. Always mention **the version** of the editor when creating issues and **the browser** you're having trouble in. Please search for existing issues to avoid duplicates.
-
-## Known issues
-In IE 11, the editor must be surrounded in the body element, otherwise the hit testing performed for mouse operations does not work. You can inspect this using F12 and click on the body element and confirm that visually it surrounds the editor.
+Create [issues](https://github.com/microsoft/monaco-editor/issues) in this repository for anything related to the Monaco Editor. Please search for existing issues to avoid duplicates.
 
 ## FAQ
 
@@ -72,7 +98,7 @@ It is an AMD loader that we use in VS Code. Yes.
 
 ❓ **I see the warning "Could not create web worker". What should I do?**
 
-HTML5 does not allow pages loaded on `file://` to create web workers. Please load the editor with a web server on `http://` or `https://` schemes. Please also see the cross-domain case above.
+HTML5 does not allow pages loaded on `file://` to create web workers. Please load the editor with a web server on `http://` or `https://` schemes.
 
 ❓ **Is the editor supported in mobile browsers or mobile web app frameworks?**
 
@@ -80,21 +106,17 @@ No.
 
 ❓ **Why doesn't the editor support TextMate grammars?**
 
-* All the regular expressions in TM grammars are based on [oniguruma](https://github.com/kkos/oniguruma), a regular expression library written in C.
-* The only way to interpret the grammars and get anywhere near original fidelity is to use the exact same regular expression library (with its custom syntax constructs).
-* In VSCode, our runtime is node.js and we can use a node native module that exposes the library to JavaScript.
-* In Monaco, we are constrained to a browser environment where we cannot do anything similar.
-* We have experimented with Emscripten to compile the C library to asm.js, but performance was very poor even in Firefox (10x slower) and extremely poor in Chrome (100x slower).
-* We can revisit this once WebAssembly gets traction in the major browsers, but we will still need to consider the browser matrix we support, i.e. if we support IE11 and only Edge will add WebAssembly support, what will the experience be in IE11, etc.
+- Please see https://github.com/bolinfest/monaco-tm which puts together `monaco-editor`, `vscode-oniguruma` and `vscode-textmate` to get TM grammar support in the editor.
 
-## Development setup
+## Contributing / Local Development
 
-Please see [CONTRIBUTING](./CONTRIBUTING.md)
+We are welcoming contributions from the community!
+Please see [CONTRIBUTING](./CONTRIBUTING.md) for details how you can contribute effectively, how you can run the editor from sources and how you can debug and fix issues.
 
 ## Code of Conduct
 
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
-
 ## License
-Licensed under the [MIT](https://github.com/Microsoft/monaco-editor/blob/master/LICENSE.md) License.
+
+Licensed under the [MIT](https://github.com/microsoft/monaco-editor/blob/main/LICENSE.txt) License.
