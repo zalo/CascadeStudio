@@ -97,7 +97,8 @@ class EditorManager {
     let newCode = this.editor.getValue();
     monaco.editor.setModelMarkers(this.editor.getModel(), 'test', []);
 
-    // Refresh the GUI Panel
+    // Clear console and refresh the GUI Panel
+    this._app.console.clear();
     this._app.gui.reset();
     this._app.viewport.clearTransformHandles();
 

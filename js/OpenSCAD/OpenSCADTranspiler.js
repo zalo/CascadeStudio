@@ -250,8 +250,8 @@ class OpenSCADTranspiler {
       r1 = args.d1 ? `(${this._transpileExpr(args.d1)}) / 2` : (args.r1 ? this._transpileExpr(args.r1) : '1');
       r2 = args.d2 ? `(${this._transpileExpr(args.d2)}) / 2` : (args.r2 ? this._transpileExpr(args.r2) : '1');
     } else if (args.r1 || args.r2) {
-      r1 = args.r1 ? this._transpileExpr(args.r1) : '0';
-      r2 = args.r2 ? this._transpileExpr(args.r2) : '0';
+      r1 = args.r1 ? this._transpileExpr(args.r1) : (args.r2 ? this._transpileExpr(args.r2) : '1');
+      r2 = args.r2 ? this._transpileExpr(args.r2) : (args.r1 ? this._transpileExpr(args.r1) : '1');
     } else {
       r1 = r2 = args.r ? this._transpileExpr(args.r) : '1';
     }
@@ -302,11 +302,8 @@ class OpenSCADTranspiler {
       x = y = s;
     }
     const centered = args.center ? this._transpileExpr(args.center) : 'false';
-    // Convert to 4-point polygon
-    if (centered === 'true') {
-      return `Polygon([[-${x}/2, -${y}/2], [${x}/2, -${y}/2], [${x}/2, ${y}/2], [-${x}/2, ${y}/2]]);`;
-    }
-    return `Polygon([[0, 0], [${x}, 0], [${x}, ${y}], [0, ${y}]]);`;
+    // Convert to 4-point polygon, handling dynamic center values
+    return `(function() { let _x = ${x}, _y = ${y}; return (${centered}) ? Polygon([[-_x/2, -_y/2], [_x/2, -_y/2], [_x/2, _y/2], [-_x/2, _y/2]]) : Polygon([[0, 0], [_x, 0], [_x, _y], [0, _y]]); })();`;
   }
 
   _transpileText(stmt) {
@@ -513,7 +510,7 @@ class OpenSCADTranspiler {
       const end = this._transpileExpr(value.end);
       const step = value.step ? this._transpileExpr(value.step) : '1';
       const inner = this._indentBlock(this._transpileForArgs(args, idx + 1, body));
-      return `for (let ${varName} = ${begin}; ${varName} <= ${end}; ${varName} += ${step}) {\n${inner}\n}`;
+      return `for (let ${varName} = ${begin}; (${step}) > 0 ? ${varName} <= ${end} : ${varName} >= ${end}; ${varName} += ${step}) {\n${inner}\n}`;
     } else if (value && value.constructor.name === 'VectorExpr') {
       // List iteration: for(i=[1,2,3])
       const list = this._transpileExpr(value);
@@ -609,7 +606,7 @@ class OpenSCADTranspiler {
         const begin = this._transpileExpr(expr.begin);
         const end = this._transpileExpr(expr.end);
         const step = expr.step ? this._transpileExpr(expr.step) : '1';
-        return `Array.from({length: Math.floor((${end} - ${begin}) / ${step}) + 1}, (_, i) => ${begin} + i * ${step})`;
+        return `(function() { let _s = ${step}; if (_s === 0) return []; let _b = ${begin}, _e = ${end}; return Array.from({length: Math.max(0, Math.floor((_e - _b) / _s) + 1)}, (_, i) => _b + i * _s); })()`;
       }
 
       case 'FunctionCallExpr':
@@ -837,6 +834,7 @@ class OpenSCADTranspiler {
       const childCode = this._transpileStatement(child);
       lines.push(childCode);
       lines.push(`let ${v} = sceneShapes[sceneShapes.length - 1];`);
+      lines.push(`sceneShapes = Remove(sceneShapes, ${v});`);
     }
     lines.push(fn(varNames));
     return lines.join('\n');

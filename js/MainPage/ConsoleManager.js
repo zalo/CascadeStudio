@@ -97,13 +97,17 @@ class ConsoleManager {
     this._realConsoleLog = console.log;
     const self = this;
 
-    console.log = function (message) {
+    console.log = function (...args) {
       let messageText;
-      if (message !== undefined) {
-        messageText = JSON.stringify(message, ConsoleManager._circularReplacer());
-        if (messageText.startsWith('"')) { messageText = messageText.slice(1, -1); }
+      if (args.length === 0) {
+        messageText = "";
       } else {
-        messageText = "undefined";
+        messageText = args.map(arg => {
+          if (arg === undefined) return "undefined";
+          let s = JSON.stringify(arg, ConsoleManager._circularReplacer());
+          if (s && s.startsWith('"')) { s = s.slice(1, -1); }
+          return s;
+        }).join(' ');
       }
 
       self.logs.push(messageText);
@@ -115,7 +119,7 @@ class ConsoleManager {
       newline.innerHTML = "&gt;  " + messageText;
       self._consoleContainer.appendChild(newline);
       self._consoleContainer.parentElement.scrollTop = self._consoleContainer.parentElement.scrollHeight;
-      self._realConsoleLog.apply(console, arguments);
+      self._realConsoleLog.apply(console, args);
     };
   }
 

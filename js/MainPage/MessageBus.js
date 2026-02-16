@@ -23,7 +23,7 @@ class MessageBus {
       // Route to registered handler
       if (type in this._handlers) {
         let response = this._handlers[type](payload);
-        if (response) {
+        if (response !== undefined) {
           this._worker.postMessage({ type, payload: response });
         }
       }
@@ -50,11 +50,18 @@ class MessageBus {
   }
 
   /** Send a message and return a Promise that resolves with the response.
-   *  Requires the worker to propagate requestId back. */
-  request(type, payload) {
+   *  Requires the worker to propagate requestId back. Times out after 30s. */
+  request(type, payload, timeoutMs = 30000) {
     const requestId = this._nextRequestId++;
-    return new Promise((resolve) => {
-      this._pendingRequests[requestId] = resolve;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        delete this._pendingRequests[requestId];
+        reject(new Error(`MessageBus request '${type}' timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      this._pendingRequests[requestId] = (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      };
       this._worker.postMessage({ type, payload, requestId });
     });
   }

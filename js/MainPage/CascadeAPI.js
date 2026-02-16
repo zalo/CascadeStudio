@@ -10,14 +10,17 @@ class CascadeAPI {
     this._app = app;
   }
 
-  /** Install the API on window and add discovery meta tag. */
+  /** Install the API on window and update discovery meta tag. */
   install() {
     window.CascadeAPI = this;
-    // Add meta tag for agent discovery
-    const meta = document.createElement('meta');
-    meta.name = 'cascade-api';
+    // Update existing meta tag or create one for agent discovery
+    let meta = document.querySelector('meta[name="cascade-api"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'cascade-api';
+      document.head.appendChild(meta);
+    }
     meta.content = 'window.CascadeAPI';
-    document.head.appendChild(meta);
   }
 
   // --- Code Management ---
@@ -34,17 +37,25 @@ class CascadeAPI {
 
   /** Evaluate the current code and return a Promise that resolves when generation is complete. */
   evaluate() {
-    return new Promise((resolve) => {
-      // Listen for generation completion
+    if (this._evaluatePromise) { return this._evaluatePromise; }
+    this._evaluatePromise = new Promise((resolve) => {
+      // Wrap the existing handler to detect completion
       const originalHandler = this._app.messageBus.handlers["combineAndRenderShapes"];
       this._app.messageBus.on("combineAndRenderShapes", (payload) => {
-        // Restore original handler and call it
-        this._app.messageBus.on("combineAndRenderShapes", originalHandler);
+        // Restore original handler first
+        if (originalHandler) {
+          this._app.messageBus.on("combineAndRenderShapes", originalHandler);
+        } else {
+          this._app.messageBus.off("combineAndRenderShapes");
+        }
+        // Call original handler
         if (originalHandler) originalHandler(payload);
+        this._evaluatePromise = null;
         resolve();
       });
       this._app.editor.evaluateCode(false);
     });
+    return this._evaluatePromise;
   }
 
   // --- Results ---

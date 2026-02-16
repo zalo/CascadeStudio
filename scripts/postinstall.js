@@ -2,11 +2,12 @@
  * Postinstall script for CascadeStudio.
  * Bundles golden-layout ESM (which has extensionless imports) into a single browser-ready file.
  */
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
+const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const glInput = path.join(root, 'node_modules', 'golden-layout', 'dist', 'esm', 'index.js');
 const glOutput = path.join(root, 'lib', 'golden-layout', 'golden-layout.js');
 
@@ -15,10 +16,11 @@ if (fs.existsSync(glInput)) {
   const glDir = path.dirname(glOutput);
   if (!fs.existsSync(glDir)) { fs.mkdirSync(glDir, { recursive: true }); }
 
-  execSync(`npx esbuild ${glInput} --bundle --format=esm --outfile=${glOutput} --sourcemap`, {
-    cwd: root,
-    stdio: 'inherit',
-  });
+  execFileSync(npx, [
+    'esbuild', glInput,
+    '--bundle', '--format=esm',
+    '--outfile=' + glOutput, '--sourcemap'
+  ], { cwd: root, stdio: 'inherit' });
   console.log('  Bundled golden-layout ESM to', glOutput);
 
   // Copy CSS files
@@ -42,9 +44,13 @@ if (fs.existsSync(opInput)) {
   if (!fs.existsSync(opDir)) { fs.mkdirSync(opDir, { recursive: true }); }
 
   const shim = path.join(root, 'scripts', 'node-shims.js');
-  execSync(`npx esbuild ${opInput} --bundle --format=esm --outfile=${opOutput} --sourcemap --alias:fs=${shim} --alias:path=${shim} --alias:os=${shim}`, {
-    cwd: root,
-    stdio: 'inherit',
-  });
+  execFileSync(npx, [
+    'esbuild', opInput,
+    '--bundle', '--format=esm',
+    '--outfile=' + opOutput, '--sourcemap',
+    '--alias:fs=' + shim,
+    '--alias:path=' + shim,
+    '--alias:os=' + shim
+  ], { cwd: root, stdio: 'inherit' });
   console.log('  Bundled openscad-parser ESM to', opOutput);
 }

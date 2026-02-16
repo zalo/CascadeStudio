@@ -147,6 +147,7 @@ class CascadeEnvironment {
     messageBus.on("combineAndRenderShapes", ([[facelist, edgelist], sceneOptions]) => {
       window.workerWorking = false;
       if (!facelist) { return; }
+      if (!sceneOptions) { sceneOptions = {}; }
 
       // The old mainObject is dead! Long live the mainObject!
       this.environment.scene.remove(this.mainObject);

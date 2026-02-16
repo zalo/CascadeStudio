@@ -141,14 +141,18 @@ class CascadeStudioApp {
       });
     }
 
-    // Resize the layout when the browser resizes
-    const updateLayoutSize = () => {
+    // Resize the layout when the browser resizes (remove old listeners first)
+    if (this._updateLayoutSize) {
+      window.removeEventListener('resize', this._updateLayoutSize);
+      window.removeEventListener('orientationchange', this._updateLayoutSize);
+    }
+    this._updateLayoutSize = () => {
       const h = window.innerHeight - document.getElementById('topnav').offsetHeight;
       this.myLayout.setSize(window.innerWidth, h);
     };
-    window.addEventListener('resize', updateLayoutSize);
-    window.addEventListener('orientationchange', updateLayoutSize);
-    requestAnimationFrame(updateLayoutSize);
+    window.addEventListener('resize', this._updateLayoutSize);
+    window.addEventListener('orientationchange', this._updateLayoutSize);
+    requestAnimationFrame(this._updateLayoutSize);
 
     // Register startup callback from the CAD Worker
     this.messageBus.on("startupCallback", () => {
@@ -293,7 +297,12 @@ class CascadeStudioApp {
   /** Encode a string to a base64+compressed version. Uses fflate. */
   static encode(string) {
     const compressed = deflateSync(strToU8(string));
-    const binaryStr = String.fromCharCode(...compressed);
+    // Build binary string in chunks to avoid stack overflow with large data
+    let binaryStr = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < compressed.length; i += chunkSize) {
+      binaryStr += String.fromCharCode.apply(null, compressed.subarray(i, i + chunkSize));
+    }
     return encodeURIComponent(btoa(binaryStr));
   }
 

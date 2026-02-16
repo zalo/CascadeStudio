@@ -2,11 +2,12 @@
  * Build script for CascadeStudio.
  * Bundles JS with esbuild, copies Monaco/WASM/assets, generates build/index.html.
  */
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
+const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const buildDir = path.join(root, 'build');
 
 // Clean build directory
@@ -17,17 +18,17 @@ fs.mkdirSync(buildDir, { recursive: true });
 
 // 1. Bundle with esbuild
 console.log('Bundling with esbuild...');
-execSync([
-  'npx esbuild',
+execFileSync(npx, [
+  'esbuild',
   './js/MainPage/main.js',
   './js/CADWorker/CascadeStudioMainWorker.js',
-  '--bundle --minify --sourcemap',
-  '--format=esm --target=es2020',
-  '--outdir=./build --entry-names=[name]',
-  '--external:fs --external:path --external:os',
+  '--bundle', '--minify', '--sourcemap',
+  '--format=esm', '--target=es2020',
+  '--outdir=./build', '--entry-names=[name]',
+  '--external:fs', '--external:path', '--external:os',
   '--loader:.wasm=file',
   '--define:ESBUILD=true',
-].join(' '), { cwd: root, stdio: 'inherit' });
+], { cwd: root, stdio: 'inherit' });
 
 // 2. Copy Monaco Editor (AMD loader + min files)
 console.log('Copying Monaco Editor...');

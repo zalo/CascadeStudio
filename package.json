@@ -22,10 +22,13 @@
 		"tweakpane": "^4.0.5"
 	},
 	"devDependencies": {
-		"esbuild": "^0.24.0"
+		"@playwright/test": "^1.58.2",
+		"esbuild": "^0.24.0",
+		"http-server": "^14.1.1"
 	},
 	"scripts": {
 		"postinstall": "node scripts/postinstall.js",
-		"build": "node scripts/build.js"
+		"build": "node scripts/build.js",
+		"test": "playwright test"
 	}
 }

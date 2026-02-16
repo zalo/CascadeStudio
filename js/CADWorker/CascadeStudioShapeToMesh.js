@@ -69,7 +69,7 @@ class CascadeStudioMesher {
       CascadeStudioMesher.forEachFace(shape, (faceIndex, myFace) => {
         let aLocation = new oc.TopLoc_Location_1();
         let myT = oc.BRep_Tool.Triangulation(myFace, aLocation, 0 /* Poly_MeshPurpose_NONE */);
-        if (myT.IsNull()) { console.error("Encountered Null Face!"); self.argCache = {}; return; }
+        if (myT.IsNull()) { console.error("Encountered Null Face!"); for (let k in self.argCache) delete self.argCache[k]; return; }
 
         let this_face = {
           vertex_coord: [],
