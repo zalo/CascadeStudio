@@ -3,7 +3,7 @@
 // If you're looking for the internals of the CAD System, they're in /js/CADWorker
 // If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
-import { GoldenLayout } from '../../lib/golden-layout/golden-layout.js';
+import { createDockview } from '../../lib/dockview-core/dockview-core.js';
 import { CascadeEnvironment } from './CascadeView.js';
 import { MessageBus } from './MessageBus.js';
 import { EditorManager } from './EditorManager.js';
@@ -14,11 +14,48 @@ import { OpenSCADMonaco } from '../OpenSCAD/OpenSCADMonaco.js';
 import { CascadeAPI } from './CascadeAPI.js';
 import { deflateSync, inflateSync, strToU8, strFromU8 } from '../../node_modules/three/examples/jsm/libs/fflate.module.js';
 
+/** Adapter that wraps a dockview panel to provide a Golden-Layout-compatible container API.
+ *  This minimizes changes needed in EditorManager, ConsoleManager, and CascadeView. */
+class DockviewContainer {
+  constructor(element, panelApi) {
+    this.element = element;
+    this._panelApi = panelApi;
+    this._state = {};
+    this._resizeCallbacks = [];
+
+    panelApi.onDidDimensionsChange(() => {
+      this._resizeCallbacks.forEach(cb => cb());
+    });
+  }
+
+  get width()  { return this.element.offsetWidth; }
+  get height() { return this.element.offsetHeight; }
+
+  setState(obj) { this._state = obj; }
+  getState()    { return this._state; }
+  setTitle(title) { this._panelApi.setTitle(title); }
+
+  on(event, callback) {
+    if (event === 'resize') {
+      this._resizeCallbacks.push(callback);
+    }
+  }
+
+  // Stub for CascadeView's layoutManager access
+  get layoutManager() {
+    return {
+      eventHub: { emit: () => {} },
+      updateSize: () => {}
+    };
+  }
+}
+
 /** Main application class for Cascade Studio.
  *  Manages layout, editor, worker, and UI state. */
 class CascadeStudioApp {
   constructor() {
     this.myLayout = null;
+    this._dockviewApi = null;
     this.messageBus = null;
     this.editor = null;
     this.console = null;
@@ -82,73 +119,110 @@ class CascadeStudioApp {
     let searchParams = new URLSearchParams(window.location.search || window.location.hash.substr(1));
     let loadFromURL = searchParams.has("code");
 
-    // Load a project from the Gallery
+    let codeStr = CascadeStudioApp.STARTER_CODE;
+    this.gui.state = {};
+
     if (projectContent) {
-      if (this.myLayout != null) {
-        this.myLayout.destroy();
-        this.myLayout = null;
-      }
-      this.myLayout = new GoldenLayout(document.getElementById("appbody"));
-      this._registerComponents();
-      this.myLayout.loadLayout(JSON.parse(projectContent));
-
-    // Else load a project from the URL or create a new one from scratch
-    } else {
-      let codeStr = CascadeStudioApp.STARTER_CODE;
-      this.gui.state = {};
-      if (loadFromURL) {
-        codeStr  = CascadeStudioApp.decode(searchParams.get("code"));
-        this.gui.state = JSON.parse(CascadeStudioApp.decode(searchParams.get("gui")));
-      }
-
-      this.myLayout = new GoldenLayout(document.getElementById("appbody"));
-      this._registerComponents();
-
-      this.myLayout.loadLayout({
-        root: {
-          type: 'row',
-          content: [{
-            type: 'component',
-            componentType: 'codeEditor',
-            title: '* Untitled',
-            componentState: { code: codeStr },
-            width: 50.0,
-            isClosable: false
-          }, {
-            type: 'column',
-            content: [{
-              type: 'component',
-              componentType: 'cascadeView',
-              title: 'CAD View',
-              componentState: this.gui.state,
-              height: 80.0,
-              isClosable: false
-            }, {
-              type: 'component',
-              componentType: 'console',
-              title: 'Console',
-              componentState: {},
-              height: 20.0,
-              isClosable: false
-            }]
-          }]
-        },
-        header: {
-          popout: false,
-          maximise: false,
-          close: false
+      // Load from saved project — extract code and state from the serialized layout
+      try {
+        let parsed = JSON.parse(projectContent);
+        if (parsed._cascadeState) {
+          codeStr = parsed._cascadeState.code || codeStr;
+          this.gui.state = parsed._cascadeState.guiState || {};
         }
-      });
+      } catch (e) {
+        console.error("Failed to parse project:", e);
+      }
+    } else if (loadFromURL) {
+      codeStr = CascadeStudioApp.decode(searchParams.get("code"));
+      this.gui.state = JSON.parse(CascadeStudioApp.decode(searchParams.get("gui")));
     }
 
-    // Resize the layout when the browser resizes (remove old listeners first)
+    // Dispose previous layout
+    if (this._dockviewApi) {
+      this._dockviewApi.dispose();
+      this._dockviewApi = null;
+    }
+
+    const appBody = document.getElementById("appbody");
+    appBody.innerHTML = '';
+
+    // Set layout height
+    const topnavHeight = document.getElementById('topnav').offsetHeight;
+    appBody.style.height = (window.innerHeight - topnavHeight) + 'px';
+
+    this._dockviewApi = createDockview(appBody, {
+      className: 'dockview-theme-dark',
+      disableFloatingGroups: true,
+      createComponent: (options) => {
+        const element = document.createElement('div');
+        element.style.width = '100%';
+        element.style.height = '100%';
+        element.style.overflow = 'hidden';
+
+        return {
+          element,
+          init: (params) => {
+            const container = new DockviewContainer(element, params.api);
+
+            switch (options.name) {
+              case 'codeEditor':
+                container.setState({ code: params.params?.code || codeStr });
+                this.editor.initPanel(container, container.getState());
+                break;
+              case 'cascadeView':
+                container.setState(params.params?.guiState || this.gui.state);
+                this._initCascadeView(container, container.getState());
+                break;
+              case 'console':
+                this.console.initPanel(container);
+                break;
+            }
+          }
+        };
+      }
+    });
+
+    // Add panels
+    const editorPanel = this._dockviewApi.addPanel({
+      id: 'codeEditor',
+      component: 'codeEditor',
+      title: '* Untitled',
+      params: { code: codeStr }
+    });
+
+    const viewPanel = this._dockviewApi.addPanel({
+      id: 'cascadeView',
+      component: 'cascadeView',
+      title: 'CAD View',
+      params: { guiState: this.gui.state },
+      position: { referencePanel: 'codeEditor', direction: 'right' }
+    });
+
+    this._dockviewApi.addPanel({
+      id: 'console',
+      component: 'console',
+      title: 'Console',
+      position: { referencePanel: 'cascadeView', direction: 'below' }
+    });
+
+    // Set initial proportions (editor ~50%, view+console ~50%)
+    try {
+      const editorGroup = editorPanel.group;
+      const viewGroup = viewPanel.group;
+      if (editorGroup && viewGroup) {
+        editorGroup.api.setSize({ width: Math.floor(appBody.offsetWidth * 0.5) });
+      }
+    } catch (e) { /* setSize may not be available on initial render */ }
+
+    // Resize the layout when the browser resizes
     if (this._updateLayoutSize) {
       window.removeEventListener('resize', this._updateLayoutSize);
       window.removeEventListener('orientationchange', this._updateLayoutSize);
     }
     this._updateLayoutSize = () => {
       const h = window.innerHeight - document.getElementById('topnav').offsetHeight;
-      this.myLayout.setSize(window.innerWidth, h);
+      appBody.style.height = h + 'px';
     };
     window.addEventListener('resize', this._updateLayoutSize);
     window.addEventListener('orientationchange', this._updateLayoutSize);
@@ -170,35 +244,26 @@ class CascadeStudioApp {
     this.messageBus.on("resetWorking", () => { window.workerWorking = false; });
   }
 
-  /** Register all GL v2 components. Called before loadLayout(). */
-  _registerComponents() {
-    this.editor.registerComponent(this.myLayout);
-    this._registerCascadeView();
-    this.console.registerComponent(this.myLayout);
-  }
+  /** Initialize the Three.js 3D Viewport. */
+  _initCascadeView(container, state) {
+    this.gui.state = state;
+    container.setState(this.gui.state);
 
-  /** Register the dockable Three.js 3D Viewport component. */
-  _registerCascadeView() {
-    this.myLayout.registerComponent('cascadeView', (container, state) => {
-      this.gui.state = state;
-      container.setState(this.gui.state);
+    if (this.viewport) {
+      this.viewport.active = false;
+      this.viewport = null;
+    }
 
-      if (this.viewport) {
-        this.viewport.active = false;
-        this.viewport = null;
-      }
+    let floatingGUIContainer = document.createElement("div");
+    floatingGUIContainer.className = 'gui-panel';
+    floatingGUIContainer.id = "guiPanel";
+    container.element.appendChild(floatingGUIContainer);
 
-      let floatingGUIContainer = document.createElement("div");
-      floatingGUIContainer.className = 'gui-panel';
-      floatingGUIContainer.id = "guiPanel";
-      container.element.appendChild(floatingGUIContainer);
-
-      this.viewport = new CascadeEnvironment(
-        container, this.messageBus,
-        CascadeStudioApp.getNewFileHandle, CascadeStudioApp.writeFile, CascadeStudioApp.downloadFile
-      );
-      window.threejsViewport = this.viewport;
-    });
+    this.viewport = new CascadeEnvironment(
+      container, this.messageBus,
+      CascadeStudioApp.getNewFileHandle, CascadeStudioApp.writeFile, CascadeStudioApp.downloadFile
+    );
+    window.threejsViewport = this.viewport;
   }
 
   /** Serialize the project's current state into a .json file and save it. */
@@ -210,9 +275,19 @@ class CascadeStudioApp {
       );
     }
 
-    this.editor.container.setState({ code: currentCode.split(/\r\n|\r|\n/) });
+    // Save as a custom format with layout + cascade state
+    let projectData = {
+      _cascadeState: {
+        code: currentCode,
+        guiState: this.gui.state,
+        externalFiles: this.console.goldenContainer.getState()
+      }
+    };
+    if (this._dockviewApi) {
+      projectData._dockviewLayout = this._dockviewApi.toJSON();
+    }
 
-    CascadeStudioApp.writeFile(this.file.handle, JSON.stringify(this.myLayout.saveLayout(), null, 2)).then(() => {
+    CascadeStudioApp.writeFile(this.file.handle, JSON.stringify(projectData, null, 2)).then(() => {
       this.editor.container.setTitle(this.file.handle.name);
       console.log("Saved project to " + this.file.handle.name);
       this.file.content = currentCode;
@@ -328,6 +403,8 @@ CascadeStudioApp.STARTER_CODE =
 //  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon()
 //  Offset(), Extrude(), RotatedExtrude(), Revolve(), Pipe(), Loft(),
 //  FilletEdges(), ChamferEdges(),
+//  Edges(), Faces() — Select edges/faces by property for FilletEdges/ChamferEdges
+//  Volume(), SurfaceArea(), CenterOfMass() — Measurement functions
 //  Slider(), Checkbox(), TextInput(), Dropdown()
 
 let holeRadius = Slider("Radius", 30 , 20 , 40);

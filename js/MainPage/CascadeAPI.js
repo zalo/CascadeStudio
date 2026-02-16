@@ -165,6 +165,7 @@ class CascadeAPI {
           'Circle(radius, wire?)': 'Create a circle face or wire',
           'BSpline(points, closed?)': 'Create a BSpline curve',
           'Text3D(text, size, height, fontName?)': 'Create extruded 3D text',
+          'Wedge(dx, dy, dz, ltx)': 'Create a wedge (tapered box)',
           'Sketch(startingPoint)': 'Start a 2D sketch chain (.LineTo().ArcTo().End().Face())',
         },
         transforms: {
@@ -188,6 +189,7 @@ class CascadeAPI {
           'Offset(shape, distance, tolerance?, keepShape?)': 'Offset/shell a shape',
           'FilletEdges(shape, radius, edgeList, keepOriginal?)': 'Fillet edges',
           'ChamferEdges(shape, distance, edgeList, keepOriginal?)': 'Chamfer edges',
+          'Section(shape, planeOrigin?, planeNormal?)': 'Cross-section at plane',
           'RemoveInternalEdges(shape, keepShape?)': 'Remove internal edges',
         },
         iteration: {
@@ -203,6 +205,25 @@ class CascadeAPI {
           'TextInput(name, default?, realTime?)': 'Add a text input control',
           'Dropdown(name, default?, options?, realTime?)': 'Add a dropdown control',
           'Button(name)': 'Add a button',
+        },
+        selectors: {
+          'Edges(shape)': 'Create an EdgeSelector for chaining — .ofType(), .parallel(), .max(), .min(), .indices()',
+          'Faces(shape)': 'Create a FaceSelector for chaining — .ofType(), .parallel(), .max(), .min(), .indices()',
+          'EdgeSelector.ofType(type)': 'Filter edges by curve type: "Line", "Circle", "BSpline", etc.',
+          'EdgeSelector.parallel(axis)': 'Filter edges parallel to axis vector',
+          'EdgeSelector.perpendicular(axis)': 'Filter edges perpendicular to axis vector',
+          'EdgeSelector.max(axis)': 'Select edges at highest position along axis',
+          'EdgeSelector.min(axis)': 'Select edges at lowest position along axis',
+          'EdgeSelector.indices()': 'Return edge indices for FilletEdges/ChamferEdges',
+          'FaceSelector.ofType(type)': 'Filter faces by surface type: "Plane", "Cylinder", etc.',
+          'FaceSelector.max(axis)': 'Select face(s) at highest position along axis',
+          'FaceSelector.min(axis)': 'Select face(s) at lowest position along axis',
+        },
+        measurement: {
+          'Volume(shape)': 'Solid volume',
+          'SurfaceArea(shape)': 'Total surface area',
+          'CenterOfMass(shape)': 'Center of mass as [x,y,z]',
+          'EdgeLength(shape)': 'Total edge length',
         },
         utility: {
           'Remove(array, item)': 'Remove item from sceneShapes array',

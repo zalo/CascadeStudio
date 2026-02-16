@@ -88,7 +88,7 @@ fs.writeFileSync(path.join(buildDir, 'index.html'), `<!DOCTYPE html>
         <meta name="keywords"           content="SCAD, OpenSCAD, CAD, OpenCascade, Scripting">
         <meta name="author"             content="Johnathon Selstad">
         <meta name="viewport"           content="width=device-width, initial-scale=1.0">
-        <meta name="theme-color"        content="#1e1e1e">
+        <meta name="theme-color"        content="#1a1a2e">
         <meta name="cascade-api"        content="window.CascadeAPI">
 
         <!-- Service Worker for offline access (must be first) -->
@@ -106,9 +106,8 @@ fs.writeFileSync(path.join(buildDir, 'index.html'), `<!DOCTYPE html>
         <link rel="manifest"         href="./manifest.webmanifest">
         <link rel="apple-touch-icon" href="./icon/apple-touch-icon.png">
 
-        <!-- Golden Layout v2 CSS -->
-        <link rel="stylesheet" href="./lib/golden-layout/goldenlayout-base.css">
-        <link rel="stylesheet" href="./lib/golden-layout/goldenlayout-dark-theme.css">
+        <!-- Dockview CSS -->
+        <link rel="stylesheet" href="./lib/dockview-core/dockview.css">
         <link rel="stylesheet" href="./css/main.css">
 
         <!-- Monaco Editor CSS + AMD loader -->
@@ -125,25 +124,29 @@ fs.writeFileSync(path.join(buildDir, 'index.html'), `<!DOCTYPE html>
         <script src="./monaco-editor/min/vs/editor/editor.main.js"></script>
     </head>
 
-    <body style="margin:0px; background-color:rgb(34, 34, 34);">
+    <body>
         <h1 hidden></h1>
         <div id="topnav" class="topnav">
-            <a href="https://github.com/zalo/CascadeStudio">Cascade Studio</a>
-            <a href="#" title="Save Project to .json" onmouseup="window.saveProject();">Save Project</a>
-            <a href="#" title="Load Project from .json" onmouseup="window.loadProject();">Load Project</a>
-            <a href="#" onmouseup="window.threejsViewport?.saveShapeSTEP();">Save STEP</a>
-            <a href="#" onmouseup="window.threejsViewport?.saveShapeSTL();">Save STL</a>
-            <a href="#" onmouseup="window.threejsViewport?.saveShapeOBJ();">Save OBJ</a>
-            <label for="files" title="Import STEP, IGES, or (ASCII) STL from File">Import STEP/IGES/STL
-                <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="window.loadFiles();"/>
-            </label>
-            <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="window.clearExternalFiles();">Clear Imported Files</a>
-            <select id="editorMode" title="Editor Language Mode" style="margin-left:10px; background:#333; color:#ccc; border:1px solid #555; padding:2px 4px; font-size:12px;">
-                <option value="cascadestudio">CascadeStudio JS</option>
-                <option value="openscad">OpenSCAD</option>
-            </select>
+            <a href="https://github.com/zalo/CascadeStudio" class="topnav-brand">Cascade Studio</a>
+            <div class="topnav-actions">
+                <a href="#" title="Save Project to .json" onmouseup="window.saveProject();">Save Project</a>
+                <a href="#" title="Load Project from .json" onmouseup="window.loadProject();">Load Project</a>
+                <span class="topnav-separator"></span>
+                <a href="#" onmouseup="window.threejsViewport?.saveShapeSTEP();">Save STEP</a>
+                <a href="#" onmouseup="window.threejsViewport?.saveShapeSTL();">Save STL</a>
+                <a href="#" onmouseup="window.threejsViewport?.saveShapeOBJ();">Save OBJ</a>
+                <span class="topnav-separator"></span>
+                <label for="files" class="topnav-import" title="Import STEP, IGES, or (ASCII) STL from File">Import STEP/IGES/STL
+                    <input id="files" name="files" type="file" accept=".iges,.step,.igs,.stp,.stl" multiple style="display:none;" oninput="window.loadFiles();"/>
+                </label>
+                <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="window.clearExternalFiles();">Clear Imported</a>
+                <select id="editorMode" class="topnav-select" title="Editor Language Mode">
+                    <option value="cascadestudio">CascadeStudio JS</option>
+                    <option value="openscad">OpenSCAD</option>
+                </select>
+            </div>
         </div>
-        <div id="appbody" style="height:auto">
+        <div id="appbody">
             <script type="module" src="./main.js"></script>
         </div>
     </body>

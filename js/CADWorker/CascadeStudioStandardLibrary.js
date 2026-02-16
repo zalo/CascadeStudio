@@ -935,6 +935,634 @@ function Dropdown(name = "Dropdown", defaultValue = "", options = {}, realTime =
   return self.GUIState[name];
 }
 
+// --- Internal Topology Helpers (used by selectors, not exported to user API) ---
+
+function _edgeMidpoint(edge) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let midParam = (curve.FirstParameter() + curve.LastParameter()) / 2;
+  let pnt = new self.oc.gp_Pnt_1();
+  curve.D0(midParam, pnt);
+  return [pnt.X(), pnt.Y(), pnt.Z()];
+}
+
+function _edgeLength(edge) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.LinearProperties_1(edge, props, false, false);
+  return props.Mass();
+}
+
+function _edgeCurveType(edge) {
+  // Sample 3 points along the edge to determine curve type geometrically
+  // (GetType() is unavailable — GeomAbs_CurveType enum is unbound)
+  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let u0 = curve.FirstParameter(), u1 = curve.LastParameter();
+  let p0 = new self.oc.gp_Pnt_1(), p1 = new self.oc.gp_Pnt_1(), p2 = new self.oc.gp_Pnt_1();
+  curve.D0(u0, p0); curve.D0((u0 + u1) / 2, p1); curve.D0(u1, p2);
+  let a = [p0.X(), p0.Y(), p0.Z()];
+  let b = [p1.X(), p1.Y(), p1.Z()];
+  let c = [p2.X(), p2.Y(), p2.Z()];
+
+  // Check collinearity: if cross product of (b-a) and (c-a) is ~zero → Line
+  let ab = [b[0]-a[0], b[1]-a[1], b[2]-a[2]];
+  let ac = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
+  let cross = [
+    ab[1]*ac[2] - ab[2]*ac[1],
+    ab[2]*ac[0] - ab[0]*ac[2],
+    ab[0]*ac[1] - ab[1]*ac[0]
+  ];
+  let crossMag = Math.sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
+  let abMag = Math.sqrt(ab[0]*ab[0] + ab[1]*ab[1] + ab[2]*ab[2]);
+  if (abMag < 1e-10 || crossMag / abMag < 1e-6) { return "Line"; }
+
+  // Check if it's a circle: sample more points and check equal distance from center
+  let nSamples = 8;
+  let pts = [];
+  for (let i = 0; i <= nSamples; i++) {
+    let u = u0 + (u1 - u0) * i / nSamples;
+    let p = new self.oc.gp_Pnt_1();
+    curve.D0(u, p);
+    pts.push([p.X(), p.Y(), p.Z()]);
+  }
+  // Approximate center as average of all points
+  let cx = 0, cy = 0, cz = 0;
+  for (let p of pts) { cx += p[0]; cy += p[1]; cz += p[2]; }
+  cx /= pts.length; cy /= pts.length; cz /= pts.length;
+  // Check if all distances from center are approximately equal
+  let dists = pts.map(p => Math.sqrt((p[0]-cx)**2 + (p[1]-cy)**2 + (p[2]-cz)**2));
+  let avgDist = dists.reduce((s,d) => s+d, 0) / dists.length;
+  let maxDeviation = Math.max(...dists.map(d => Math.abs(d - avgDist)));
+  if (avgDist > 1e-10 && maxDeviation / avgDist < 0.01) { return "Circle"; }
+
+  return "Other";
+}
+
+function _edgeDirection(edge) {
+  // Compute direction from start and end points (no GetType() needed)
+  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let u0 = curve.FirstParameter(), u1 = curve.LastParameter();
+  let p0 = new self.oc.gp_Pnt_1(), p1 = new self.oc.gp_Pnt_1(), p2 = new self.oc.gp_Pnt_1();
+  curve.D0(u0, p0); curve.D0((u0 + u1) / 2, p1); curve.D0(u1, p2);
+
+  // Check if the edge is a line (collinear points)
+  let a = [p0.X(), p0.Y(), p0.Z()];
+  let b = [p1.X(), p1.Y(), p1.Z()];
+  let c = [p2.X(), p2.Y(), p2.Z()];
+  let ab = [b[0]-a[0], b[1]-a[1], b[2]-a[2]];
+  let ac = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
+  let cross = [
+    ab[1]*ac[2] - ab[2]*ac[1],
+    ab[2]*ac[0] - ab[0]*ac[2],
+    ab[0]*ac[1] - ab[1]*ac[0]
+  ];
+  let crossMag = Math.sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
+  let abMag = Math.sqrt(ab[0]*ab[0] + ab[1]*ab[1] + ab[2]*ab[2]);
+  if (abMag < 1e-10) { return null; }
+  if (crossMag / abMag > 1e-6) { return null; } // Not a line
+
+  return _normalize(ac);
+}
+
+function _faceCentroid(face) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.SurfaceProperties_1(face, props, false, false);
+  let c = props.CentreOfMass();
+  return [c.X(), c.Y(), c.Z()];
+}
+
+function _faceArea(face) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.SurfaceProperties_1(face, props, false, false);
+  return props.Mass();
+}
+
+function _faceNormal(face) {
+  // Compute face normal from edge geometry (BRepAdaptor_Surface not available)
+  // Sample 3 non-collinear points from the face's edges to determine normal
+  try {
+    let points = [];
+    let explorer = new self.oc.TopExp_Explorer_2(
+      face, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    while (explorer.More() && points.length < 10) {
+      let edge = self.oc.TopoDS.Edge_1(explorer.Current());
+      let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+      let u0 = curve.FirstParameter(), u1 = curve.LastParameter();
+      for (let t of [0, 0.5, 1]) {
+        let p = new self.oc.gp_Pnt_1();
+        curve.D0(u0 + (u1 - u0) * t, p);
+        points.push([p.X(), p.Y(), p.Z()]);
+      }
+      explorer.Next();
+    }
+    // Find 3 non-collinear points
+    if (points.length < 3) { return [0, 0, 1]; }
+    let a = points[0];
+    for (let i = 1; i < points.length; i++) {
+      let ab = [points[i][0]-a[0], points[i][1]-a[1], points[i][2]-a[2]];
+      let abLen = _vecLength(ab);
+      if (abLen < 1e-10) continue;
+      for (let j = i + 1; j < points.length; j++) {
+        let ac = [points[j][0]-a[0], points[j][1]-a[1], points[j][2]-a[2]];
+        let cross = [
+          ab[1]*ac[2] - ab[2]*ac[1],
+          ab[2]*ac[0] - ab[0]*ac[2],
+          ab[0]*ac[1] - ab[1]*ac[0]
+        ];
+        let crossMag = _vecLength(cross);
+        if (crossMag > 1e-8) {
+          return _normalize(cross);
+        }
+      }
+    }
+    return [0, 0, 1]; // Fallback (degenerate face)
+  } catch (e) {
+    return [0, 0, 1]; // Fallback
+  }
+}
+
+function _isFacePlanar(face) {
+  // Check if all sampled points on the face lie on a plane
+  try {
+    let points = [];
+    let explorer = new self.oc.TopExp_Explorer_2(
+      face, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+    while (explorer.More()) {
+      let edge = self.oc.TopoDS.Edge_1(explorer.Current());
+      let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+      let u0 = curve.FirstParameter(), u1 = curve.LastParameter();
+      for (let t = 0; t <= 1; t += 0.25) {
+        let p = new self.oc.gp_Pnt_1();
+        curve.D0(u0 + (u1 - u0) * t, p);
+        points.push([p.X(), p.Y(), p.Z()]);
+      }
+      explorer.Next();
+    }
+    if (points.length < 3) { return true; }
+    // Get the normal from first 3 non-collinear points
+    let normal = _faceNormal(face);
+    if (_vecLength(normal) < 1e-10) { return true; }
+    // Check all points lie on the plane defined by points[0] and normal
+    let d = _dot(points[0], normal);
+    for (let p of points) {
+      if (Math.abs(_dot(p, normal) - d) > 1e-4) { return false; }
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function _dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function _vecLength(v) {
+  return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+function _normalize(v) {
+  let len = _vecLength(v);
+  if (len < 1e-10) { return [0, 0, 0]; }
+  return [v[0] / len, v[1] / len, v[2] / len];
+}
+
+// --- Selector Classes ---
+
+class EdgeSelector {
+  constructor(shape) {
+    this._entries = [];
+    ForEachEdge(shape, (index, edge) => {
+      this._entries.push({ index, edge });
+    });
+  }
+
+  // --- Filtering ---
+
+  ofType(type) {
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => _edgeCurveType(e.edge) === type);
+    return sel;
+  }
+
+  parallel(axis, tolerance) {
+    if (!tolerance) { tolerance = 1e-4; }
+    let normAxis = _normalize(axis);
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => {
+      let dir = _edgeDirection(e.edge);
+      if (!dir) { return false; }
+      let normDir = _normalize(dir);
+      let dotVal = Math.abs(_dot(normDir, normAxis));
+      return Math.abs(dotVal - 1.0) < tolerance;
+    });
+    return sel;
+  }
+
+  perpendicular(axis, tolerance) {
+    if (!tolerance) { tolerance = 1e-4; }
+    let normAxis = _normalize(axis);
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => {
+      let dir = _edgeDirection(e.edge);
+      if (!dir) { return false; }
+      let normDir = _normalize(dir);
+      let dotVal = Math.abs(_dot(normDir, normAxis));
+      return dotVal < tolerance;
+    });
+    return sel;
+  }
+
+  atAngle(axis, degrees, tolerance) {
+    if (!tolerance) { tolerance = 1.0; }
+    let normAxis = _normalize(axis);
+    let targetRad = degrees * Math.PI / 180;
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => {
+      let dir = _edgeDirection(e.edge);
+      if (!dir) { return false; }
+      let normDir = _normalize(dir);
+      let dotVal = Math.abs(_dot(normDir, normAxis));
+      let angle = Math.acos(Math.min(1, dotVal)) * 180 / Math.PI;
+      return Math.abs(angle - degrees) < tolerance;
+    });
+    return sel;
+  }
+
+  // --- Sorting & Positional ---
+
+  sortBy(axis) {
+    let normAxis = _normalize(axis);
+    let sel = this._clone();
+    sel._entries.sort((a, b) => {
+      let ma = _edgeMidpoint(a.edge);
+      let mb = _edgeMidpoint(b.edge);
+      return _dot(ma, normAxis) - _dot(mb, normAxis);
+    });
+    return sel;
+  }
+
+  groupBy(axis, tolerance) {
+    if (!tolerance) { tolerance = 1e-3; }
+    let normAxis = _normalize(axis);
+    let groups = [];
+    let sorted = this.sortBy(axis)._entries;
+    for (let i = 0; i < sorted.length; i++) {
+      let pos = _dot(_edgeMidpoint(sorted[i].edge), normAxis);
+      if (groups.length === 0 || Math.abs(pos - groups[groups.length - 1].pos) > tolerance) {
+        groups.push({ pos, entries: [sorted[i]] });
+      } else {
+        groups[groups.length - 1].entries.push(sorted[i]);
+      }
+    }
+    return groups;
+  }
+
+  max(axis) {
+    let groups = this.groupBy(axis);
+    if (groups.length === 0) { return this._empty(); }
+    let sel = this._clone();
+    sel._entries = groups[groups.length - 1].entries;
+    return sel;
+  }
+
+  min(axis) {
+    let groups = this.groupBy(axis);
+    if (groups.length === 0) { return this._empty(); }
+    let sel = this._clone();
+    sel._entries = groups[0].entries;
+    return sel;
+  }
+
+  // --- Property Filtering ---
+
+  longerThan(length) {
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => _edgeLength(e.edge) > length);
+    return sel;
+  }
+
+  shorterThan(length) {
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => _edgeLength(e.edge) < length);
+    return sel;
+  }
+
+  withinBox(min, max) {
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => {
+      let mid = _edgeMidpoint(e.edge);
+      return mid[0] >= min[0] && mid[0] <= max[0] &&
+             mid[1] >= min[1] && mid[1] <= max[1] &&
+             mid[2] >= min[2] && mid[2] <= max[2];
+    });
+    return sel;
+  }
+
+  // --- Terminal Methods ---
+
+  indices() {
+    return this._entries.map(e => e.index);
+  }
+
+  edges() {
+    return this._entries.map(e => e.edge);
+  }
+
+  count() {
+    return this._entries.length;
+  }
+
+  first(n) {
+    if (!n) { n = 1; }
+    let sel = this._clone();
+    sel._entries = sel._entries.slice(0, n);
+    return sel;
+  }
+
+  last(n) {
+    if (!n) { n = 1; }
+    let sel = this._clone();
+    sel._entries = sel._entries.slice(-n);
+    return sel;
+  }
+
+  at(index) {
+    if (index >= 0 && index < this._entries.length) {
+      return this._entries[index].index;
+    }
+    return -1;
+  }
+
+  // --- Internal ---
+
+  _clone() {
+    let sel = new EdgeSelector.__empty();
+    sel._entries = this._entries.slice();
+    return sel;
+  }
+
+  _empty() {
+    let sel = new EdgeSelector.__empty();
+    sel._entries = [];
+    return sel;
+  }
+}
+// Private constructor bypass to avoid re-traversing shape
+EdgeSelector.__empty = function() { this._entries = []; };
+EdgeSelector.__empty.prototype = EdgeSelector.prototype;
+
+
+class FaceSelector {
+  constructor(shape) {
+    this._entries = [];
+    ForEachFace(shape, (index, face) => {
+      this._entries.push({ index, face });
+    });
+  }
+
+  // --- Filtering ---
+
+  ofType(type) {
+    // BRepAdaptor_Surface not available in bindings — use geometry heuristics
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => {
+      let normal = _faceNormal(e.face);
+      if (type === "Plane") {
+        // A planar face has consistent normals at all edge points
+        return _isFacePlanar(e.face);
+      }
+      // Other types not reliably detectable without BRepAdaptor_Surface
+      return false;
+    });
+    return sel;
+  }
+
+  parallel(axis, tolerance) {
+    if (!tolerance) { tolerance = 1e-4; }
+    let normAxis = _normalize(axis);
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => {
+      let normal = _faceNormal(e.face);
+      let dotVal = Math.abs(_dot(normal, normAxis));
+      return Math.abs(dotVal - 1.0) < tolerance;
+    });
+    return sel;
+  }
+
+  perpendicular(axis, tolerance) {
+    if (!tolerance) { tolerance = 1e-4; }
+    let normAxis = _normalize(axis);
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => {
+      let normal = _faceNormal(e.face);
+      let dotVal = Math.abs(_dot(normal, normAxis));
+      return dotVal < tolerance;
+    });
+    return sel;
+  }
+
+  // --- Sorting & Positional ---
+
+  sortBy(axis) {
+    let normAxis = _normalize(axis);
+    let sel = this._clone();
+    sel._entries.sort((a, b) => {
+      let ca = _faceCentroid(a.face);
+      let cb = _faceCentroid(b.face);
+      return _dot(ca, normAxis) - _dot(cb, normAxis);
+    });
+    return sel;
+  }
+
+  max(axis) {
+    let groups = this._groupBy(axis);
+    if (groups.length === 0) { return this._empty(); }
+    let sel = this._clone();
+    sel._entries = groups[groups.length - 1].entries;
+    return sel;
+  }
+
+  min(axis) {
+    let groups = this._groupBy(axis);
+    if (groups.length === 0) { return this._empty(); }
+    let sel = this._clone();
+    sel._entries = groups[0].entries;
+    return sel;
+  }
+
+  // --- Property Filtering ---
+
+  largerThan(area) {
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => _faceArea(e.face) > area);
+    return sel;
+  }
+
+  smallerThan(area) {
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => _faceArea(e.face) < area);
+    return sel;
+  }
+
+  // --- Terminal Methods ---
+
+  indices() {
+    return this._entries.map(e => e.index);
+  }
+
+  faces() {
+    return this._entries.map(e => e.face);
+  }
+
+  count() {
+    return this._entries.length;
+  }
+
+  // --- Internal ---
+
+  _groupBy(axis, tolerance) {
+    if (!tolerance) { tolerance = 1e-3; }
+    let normAxis = _normalize(axis);
+    let groups = [];
+    let sorted = this.sortBy(axis)._entries;
+    for (let i = 0; i < sorted.length; i++) {
+      let pos = _dot(_faceCentroid(sorted[i].face), normAxis);
+      if (groups.length === 0 || Math.abs(pos - groups[groups.length - 1].pos) > tolerance) {
+        groups.push({ pos, entries: [sorted[i]] });
+      } else {
+        groups[groups.length - 1].entries.push(sorted[i]);
+      }
+    }
+    return groups;
+  }
+
+  _clone() {
+    let sel = new FaceSelector.__empty();
+    sel._entries = this._entries.slice();
+    return sel;
+  }
+
+  _empty() {
+    let sel = new FaceSelector.__empty();
+    sel._entries = [];
+    return sel;
+  }
+}
+FaceSelector.__empty = function() { this._entries = []; };
+FaceSelector.__empty.prototype = FaceSelector.prototype;
+
+
+// --- Selector Entry Points ---
+
+function Edges(shape) {
+  return new EdgeSelector(shape);
+}
+
+function Faces(shape) {
+  return new FaceSelector(shape);
+}
+
+// --- Measurement Functions ---
+
+function Volume(shape) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.VolumeProperties_1(shape, props, false, false, false);
+  return props.Mass();
+}
+
+function SurfaceArea(shape) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.SurfaceProperties_1(shape, props, false, false);
+  return props.Mass();
+}
+
+function CenterOfMass(shape) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.VolumeProperties_1(shape, props, false, false, false);
+  let c = props.CentreOfMass();
+  return [c.X(), c.Y(), c.Z()];
+}
+
+function EdgeLength(shape) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.LinearProperties_1(shape, props, false, false);
+  return props.Mass();
+}
+
+// --- Additional Primitives ---
+
+function Wedge(dx, dy, dz, ltx) {
+  let curWedge = self.CacheOp(arguments, "Wedge", () => {
+    return new self.oc.BRepPrimAPI_MakeWedge_1(dx, dy, dz, ltx).Shape();
+  });
+  self.sceneShapes.push(curWedge);
+  return curWedge;
+}
+
+// --- Section (Cross-Section) ---
+
+function Section(shape, planeOrigin, planeNormal) {
+  if (!planeNormal) { planeNormal = [0, 0, 1]; }
+  if (!planeOrigin) { planeOrigin = [0, 0, 0]; }
+  let curSection = self.CacheOp(arguments, "Section", () => {
+    // Create a very thin slab at the cutting plane and intersect with shape.
+    // (gp_Pln and BRepAlgoAPI_Section are not available in the bindings.)
+    let n = _normalize(planeNormal);
+    let thickness = 1e-3;
+    // Create a large box centered at origin
+    let slab = new self.oc.BRepPrimAPI_MakeBox_4(
+      new self.oc.gp_Pnt_3(-1e4, -1e4, -thickness / 2),
+      new self.oc.gp_Pnt_3( 1e4,  1e4,  thickness / 2)
+    ).Shape();
+    // Rotate slab to align Z-axis with planeNormal
+    if (Math.abs(n[2] - 1.0) > 1e-8) {
+      // Need to rotate: find rotation axis (cross product of Z and normal)
+      let zAxis = [0, 0, 1];
+      let rotAxis = [
+        zAxis[1]*n[2] - zAxis[2]*n[1],
+        zAxis[2]*n[0] - zAxis[0]*n[2],
+        zAxis[0]*n[1] - zAxis[1]*n[0]
+      ];
+      let rotAxisLen = _vecLength(rotAxis);
+      if (rotAxisLen > 1e-10) {
+        let angle = Math.acos(Math.max(-1, Math.min(1, _dot(zAxis, n))));
+        rotAxis = _normalize(rotAxis);
+        let ax1 = new self.oc.gp_Ax1_2(
+          new self.oc.gp_Pnt_3(0, 0, 0),
+          new self.oc.gp_Dir_4(rotAxis[0], rotAxis[1], rotAxis[2])
+        );
+        let trsf = new self.oc.gp_Trsf_1();
+        trsf.SetRotation_1(ax1, angle);
+        let brep = new self.oc.BRepBuilderAPI_Transform_2(slab, trsf, true);
+        slab = brep.Shape();
+      } else if (n[2] < 0) {
+        // Normal is [0,0,-1], rotate 180 degrees around X
+        let ax1 = new self.oc.gp_Ax1_2(
+          new self.oc.gp_Pnt_3(0, 0, 0),
+          new self.oc.gp_Dir_4(1, 0, 0)
+        );
+        let trsf = new self.oc.gp_Trsf_1();
+        trsf.SetRotation_1(ax1, Math.PI);
+        let brep = new self.oc.BRepBuilderAPI_Transform_2(slab, trsf, true);
+        slab = brep.Shape();
+      }
+    }
+    // Translate slab to planeOrigin
+    if (planeOrigin[0] !== 0 || planeOrigin[1] !== 0 || planeOrigin[2] !== 0) {
+      let trsf = new self.oc.gp_Trsf_1();
+      trsf.SetTranslation_1(new self.oc.gp_Vec_4(planeOrigin[0], planeOrigin[1], planeOrigin[2]));
+      let brep = new self.oc.BRepBuilderAPI_Transform_2(slab, trsf, true);
+      slab = brep.Shape();
+    }
+    // Intersect
+    let common = new self.oc.BRepAlgoAPI_Common_3(shape, slab, new self.oc.Message_ProgressRange_1());
+    return common.Shape();
+  });
+  self.sceneShapes.push(curSection);
+  return curSection;
+}
+
 // --- Library Class (organizes initialization and self-registration) ---
 
 /** Wraps initialization of all CAD standard library functions.
@@ -987,6 +1615,22 @@ class CascadeStudioStandardLibrary {
     self.Checkbox = Checkbox;
     self.TextInput = TextInput;
     self.Dropdown = Dropdown;
+
+    // Selectors
+    self.Edges = Edges;
+    self.Faces = Faces;
+    self.EdgeSelector = EdgeSelector;
+    self.FaceSelector = FaceSelector;
+
+    // Measurement
+    self.Volume = Volume;
+    self.SurfaceArea = SurfaceArea;
+    self.CenterOfMass = CenterOfMass;
+    self.EdgeLength = EdgeLength;
+
+    // Additional primitives & operations
+    self.Wedge = Wedge;
+    self.Section = Section;
   }
 }
 

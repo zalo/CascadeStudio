@@ -71,3 +71,21 @@ for(let y = -80; y < 80; y += 40){
         shapeInd++;
     }
 }
+
+// --- Selector API Examples ---
+
+// Selector-based filleting (replaces hardcoded indices)
+let selectorBox = Box(40, 40, 20);
+FilletEdges(selectorBox, 3, Edges(selectorBox).max([0,0,1]).indices());
+Translate([120, -80, 0], selectorBox);
+
+// Measurement functions
+let measureBox = Box(10, 10, 10);
+console.log("Volume:", Volume(measureBox));
+console.log("Surface Area:", SurfaceArea(measureBox));
+console.log("Center of Mass:", CenterOfMass(measureBox));
+console.log("Edge Length:", EdgeLength(measureBox));
+Translate([120, -40, 0], measureBox);
+
+// Wedge primitive
+Translate([120, 0, 0], Wedge(30, 20, 30, 10));

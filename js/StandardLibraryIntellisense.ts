@@ -231,6 +231,124 @@ function FilletEdges(shape: oc.TopoDS_Shape, radius: number, edgeList: number[],
  * @example```ChamferEdges(shape, 1, [0,1,2,7]);``` */
 function ChamferEdges(shape: oc.TopoDS_Shape, distance: number, edgeList: number[], keepOriginal?:boolean): oc.TopoDS_Shape;
 
+// --- Selector API ---
+
+/** Selector for filtering and querying edges of a shape by geometric properties.
+ * Use `Edges(shape)` to create an EdgeSelector, then chain filtering methods,
+ * and call `.indices()` to get edge indices for FilletEdges/ChamferEdges.
+ * @example```FilletEdges(box, 3, Edges(box).max([0,0,1]).indices());``` */
+class EdgeSelector {
+    /** Filter to edges of a specific curve type: "Line", "Circle", "Ellipse", "BSpline", "Bezier" */
+    ofType(type: string): EdgeSelector;
+    /** Filter to edges whose direction is parallel to the given axis vector */
+    parallel(axis: number[], tolerance?: number): EdgeSelector;
+    /** Filter to edges whose direction is perpendicular to the given axis vector */
+    perpendicular(axis: number[], tolerance?: number): EdgeSelector;
+    /** Filter to edges at a specific angle (in degrees) to the given axis */
+    atAngle(axis: number[], degrees: number, tolerance?: number): EdgeSelector;
+
+    /** Sort edges by their midpoint projection onto the given axis */
+    sortBy(axis: number[]): EdgeSelector;
+    /** Group edges by position along axis, returns groups array */
+    groupBy(axis: number[], tolerance?: number): { pos: number, entries: any[] }[];
+    /** Select edges in the highest group along axis (like build123d >>) */
+    max(axis: number[]): EdgeSelector;
+    /** Select edges in the lowest group along axis (like build123d <<) */
+    min(axis: number[]): EdgeSelector;
+
+    /** Filter to edges longer than the specified length */
+    longerThan(length: number): EdgeSelector;
+    /** Filter to edges shorter than the specified length */
+    shorterThan(length: number): EdgeSelector;
+    /** Filter to edges whose midpoint lies within the bounding box */
+    withinBox(min: number[], max: number[]): EdgeSelector;
+
+    /** Return the edge indices as a number array for FilletEdges/ChamferEdges */
+    indices(): number[];
+    /** Return the raw TopoDS_Edge objects */
+    edges(): oc.TopoDS_Edge[];
+    /** Return the number of matched edges */
+    count(): number;
+    /** Select the first n edges */
+    first(n?: number): EdgeSelector;
+    /** Select the last n edges */
+    last(n?: number): EdgeSelector;
+    /** Return the index of the edge at position i in the filtered set */
+    at(index: number): number;
+}
+
+/** Selector for filtering and querying faces of a shape by geometric properties.
+ * Use `Faces(shape)` to create a FaceSelector, then chain filtering methods.
+ * @example```let topFace = Faces(box).max([0,0,1]).faces()[0];``` */
+class FaceSelector {
+    /** Filter to faces of a specific surface type: "Plane", "Cylinder", "Cone", "Sphere", "Torus", "BSpline" */
+    ofType(type: string): FaceSelector;
+    /** Filter to faces whose normal is parallel to the given axis */
+    parallel(axis: number[], tolerance?: number): FaceSelector;
+    /** Filter to faces whose normal is perpendicular to the given axis */
+    perpendicular(axis: number[], tolerance?: number): FaceSelector;
+
+    /** Sort faces by centroid projection onto the given axis */
+    sortBy(axis: number[]): FaceSelector;
+    /** Select face(s) with the highest centroid along axis */
+    max(axis: number[]): FaceSelector;
+    /** Select face(s) with the lowest centroid along axis */
+    min(axis: number[]): FaceSelector;
+
+    /** Filter to faces with area larger than specified */
+    largerThan(area: number): FaceSelector;
+    /** Filter to faces with area smaller than specified */
+    smallerThan(area: number): FaceSelector;
+
+    /** Return the face indices as a number array */
+    indices(): number[];
+    /** Return the raw TopoDS_Face objects */
+    faces(): oc.TopoDS_Face[];
+    /** Return the number of matched faces */
+    count(): number;
+}
+
+/** Create an EdgeSelector for the given shape. Chain filtering methods, then call .indices() for FilletEdges/ChamferEdges.
+ * @example```FilletEdges(box, 3, Edges(box).max([0,0,1]).indices());```
+ * @example```Edges(box).ofType("Circle").indices()```
+ * @example```Edges(box).parallel([0,0,1]).indices()``` */
+function Edges(shape: oc.TopoDS_Shape): EdgeSelector;
+
+/** Create a FaceSelector for the given shape. Chain filtering methods to select faces by property.
+ * @example```let topFace = Faces(box).max([0,0,1]).faces()[0];```
+ * @example```Faces(box).ofType("Plane").indices()``` */
+function Faces(shape: oc.TopoDS_Shape): FaceSelector;
+
+// --- Measurement Functions ---
+
+/** Returns the volume of a solid shape.
+ * @example```console.log("Volume:", Volume(Box(10, 10, 10)));  // 1000``` */
+function Volume(shape: oc.TopoDS_Shape): number;
+
+/** Returns the total surface area of a shape.
+ * @example```console.log("Area:", SurfaceArea(Box(10, 10, 10)));  // 600``` */
+function SurfaceArea(shape: oc.TopoDS_Shape): number;
+
+/** Returns the center of mass of a shape as [x, y, z].
+ * @example```let com = CenterOfMass(Box(10, 10, 10));``` */
+function CenterOfMass(shape: oc.TopoDS_Shape): number[];
+
+/** Returns the total edge length of a shape.
+ * @example```console.log("Edge length:", EdgeLength(Box(10, 10, 10)));``` */
+function EdgeLength(shape: oc.TopoDS_Shape): number;
+
+// --- Additional Primitives ---
+
+/** Creates a wedge (tapered box) with base dimensions dx, dy, dz and top length ltx.
+ * Useful for ramps, prisms, etc.
+ * @example```let wedge = Wedge(30, 20, 30, 10);``` */
+function Wedge(dx: number, dy: number, dz: number, ltx: number): oc.TopoDS_Shape;
+
+/** Creates a cross-section of a shape at the given plane.
+ * Returns the intersection wire/edges.
+ * @example```let crossSection = Section(Box(20,20,20), [0,0,10], [0,0,1]);``` */
+function Section(shape: oc.TopoDS_Shape, planeOrigin?: number[], planeNormal?: number[]): oc.TopoDS_Shape;
+
 /** Download this file URL through the browser.  Use this to export information from the CAD engine.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
  * @example```SaveFile("myInfo.txt", URL.createObjectURL( new Blob(["Hello, Harddrive!"], { type: 'text/plain' }) ));``` */

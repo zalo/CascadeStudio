@@ -13,68 +13,74 @@ class EditorManager {
     this._openscadProviders = [];
   }
 
-  /** Register the dockable Monaco Code Editor component with Golden Layout. */
+  /** Initialize the editor panel inside a DockviewContainer. */
+  initPanel(container, state) {
+    if (this.editor) {
+      monaco.editor.getModels().forEach(model => model.dispose());
+      this.editor = null;
+    }
+
+    // Set the Monaco Language Options
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      allowNonTsExtensions: true,
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    });
+    monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
+
+    // Import Typescript Intellisense Definitions
+    const isBuilt = typeof ESBUILD !== 'undefined';
+    let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
+    const ocDtsPath = isBuilt ? 'typedefs/cascadestudio.d.ts' : prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts';
+    const threeDtsPath = isBuilt ? 'typedefs/three.d.ts' : prefix + 'node_modules/@types/three/index.d.ts';
+    const libDtsPath = isBuilt ? 'typedefs/StandardLibraryIntellisense.ts' : prefix + 'js/StandardLibraryIntellisense.ts';
+    Promise.all([
+      fetch(ocDtsPath).then(r => r.text()),
+      fetch(threeDtsPath).then(r => r.text()),
+      fetch(libDtsPath).then(r => r.text()),
+    ]).then(([ocDts, threeDts, libDts]) => {
+      this._extraLibs = [
+        { content: ocDts, filePath: 'file://' + ocDtsPath },
+        { content: threeDts, filePath: 'file://' + threeDtsPath },
+        { content: libDts, filePath: 'file://' + libDtsPath },
+      ];
+      monaco.editor.createModel("", "typescript");
+      monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
+    }).catch(error => console.log("Error loading type definitions: " + error.message));
+
+    // Check for code serialization as an array
+    this._codeContainer = container;
+    if (EditorManager._isArrayLike(state.code)) {
+      let codeString = "";
+      for (let i = 0; i < state.code.length; i++) {
+        codeString += state.code[i] + "\n";
+      }
+      codeString = codeString.slice(0, -1);
+      state.code = codeString;
+      container.setState({ code: codeString });
+    }
+
+    // Initialize the Monaco Code Editor
+    this.editor = monaco.editor.create(container.element, {
+      value: state.code,
+      language: "typescript",
+      theme: "vs-dark",
+      automaticLayout: true,
+      minimap: { enabled: false }
+    });
+    window.monacoEditor = this.editor;
+
+    // Collapse all top-level functions in the Editor
+    this._collapseTopLevelFunctions(state.code);
+
+    // Set up keyboard shortcuts
+    this._setupKeyboardShortcuts(container);
+  }
+
+  /** Legacy: Register the dockable Monaco Code Editor component with Golden Layout.
+   *  Now delegates to initPanel. */
   registerComponent(layout) {
     layout.registerComponent('codeEditor', (container, state) => {
-      if (this.editor) {
-        monaco.editor.getModels().forEach(model => model.dispose());
-        this.editor = null;
-      }
-
-      // Set the Monaco Language Options
-      monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-        allowNonTsExtensions: true,
-        moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      });
-      monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
-
-      // Import Typescript Intellisense Definitions
-      const isBuilt = typeof ESBUILD !== 'undefined';
-      let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
-      const ocDtsPath = isBuilt ? 'typedefs/cascadestudio.d.ts' : prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts';
-      const threeDtsPath = isBuilt ? 'typedefs/three.d.ts' : prefix + 'node_modules/@types/three/index.d.ts';
-      const libDtsPath = isBuilt ? 'typedefs/StandardLibraryIntellisense.ts' : prefix + 'js/StandardLibraryIntellisense.ts';
-      Promise.all([
-        fetch(ocDtsPath).then(r => r.text()),
-        fetch(threeDtsPath).then(r => r.text()),
-        fetch(libDtsPath).then(r => r.text()),
-      ]).then(([ocDts, threeDts, libDts]) => {
-        this._extraLibs = [
-          { content: ocDts, filePath: 'file://' + ocDtsPath },
-          { content: threeDts, filePath: 'file://' + threeDtsPath },
-          { content: libDts, filePath: 'file://' + libDtsPath },
-        ];
-        monaco.editor.createModel("", "typescript");
-        monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
-      }).catch(error => console.log("Error loading type definitions: " + error.message));
-
-      // Check for code serialization as an array
-      this._codeContainer = container;
-      if (EditorManager._isArrayLike(state.code)) {
-        let codeString = "";
-        for (let i = 0; i < state.code.length; i++) {
-          codeString += state.code[i] + "\n";
-        }
-        codeString = codeString.slice(0, -1);
-        state.code = codeString;
-        container.setState({ code: codeString });
-      }
-
-      // Initialize the Monaco Code Editor
-      this.editor = monaco.editor.create(container.element, {
-        value: state.code,
-        language: "typescript",
-        theme: "vs-dark",
-        automaticLayout: true,
-        minimap: { enabled: false }
-      });
-      window.monacoEditor = this.editor;
-
-      // Collapse all top-level functions in the Editor
-      this._collapseTopLevelFunctions(state.code);
-
-      // Set up keyboard shortcuts
-      this._setupKeyboardShortcuts(container);
+      this.initPanel(container, state);
     });
   }
 
@@ -177,7 +183,7 @@ class EditorManager {
     }
   }
 
-  /** Get the golden layout container for the code editor. */
+  /** Get the container for the code editor. */
   get container() {
     return this._codeContainer;
   }

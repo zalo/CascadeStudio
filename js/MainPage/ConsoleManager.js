@@ -14,62 +14,68 @@ class ConsoleManager {
     this._initialized = false;
   }
 
-  /** Register the dockable Console component with Golden Layout. */
+  /** Initialize the console panel inside a DockviewContainer. */
+  initPanel(container) {
+    this._consoleGolden = container;
+    this._consoleContainer = document.createElement("div");
+    container.element.appendChild(this._consoleContainer);
+    container.element.style.overflow  = 'auto';
+    container.element.style.boxShadow = "inset 0px 0px 3px rgba(0,0,0,0.75)";
+
+    if (!this._initialized) {
+      this._initialized = true;
+      this._setupConsoleOverrides();
+
+      this._app.messageBus.on("log", (payload) => { console.log(payload); });
+      this._app.messageBus.on("error", (payload) => {
+        window.workerWorking = false;
+        console.error(payload);
+      });
+
+      window.onerror = (err, url, line, colno, errorObj) => {
+        let errorText = JSON.stringify(err, ConsoleManager._circularReplacer());
+        if (errorText.startsWith('"')) { errorText = errorText.slice(1, -1); }
+
+        this.errors.push("Line " + line + ": " + errorText);
+
+        let newline = document.createElement("div");
+        newline.style.color = "red";
+        newline.style.fontFamily = "monospace";
+        newline.style.fontSize = "1.2em";
+        newline.innerHTML = "Line " + line + ": " + errorText;
+        this._consoleContainer.appendChild(newline);
+        this._consoleContainer.parentElement.scrollTop = this._consoleContainer.parentElement.scrollHeight;
+
+        if (!errorObj || !(errorObj.stack.includes("wasm-function"))) {
+          const editor = this._app.editor.editor;
+          if (editor) {
+            monaco.editor.setModelMarkers(editor.getModel(), 'test', [{
+              startLineNumber: line,
+              startColumn: colno,
+              endLineNumber: line,
+              endColumn: 1000,
+              message: JSON.stringify(err, ConsoleManager._circularReplacer()),
+              severity: monaco.MarkerSeverity.Error
+            }]);
+          }
+        }
+      };
+
+      this._app.messageBus.on("Progress", (payload) => {
+        this._consoleContainer.parentElement.lastElementChild.lastElementChild.innerText =
+          "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType) ? " (" + payload.opType + ")" : "");
+      });
+
+      console.log("Welcome to Cascade Studio!");
+      console.log("Loading CAD Kernel...");
+    }
+  }
+
+  /** Legacy: Register the dockable Console component with Golden Layout.
+   *  Now delegates to initPanel. */
   registerComponent(layout) {
     layout.registerComponent('console', (container) => {
-      this._consoleGolden = container;
-      this._consoleContainer = document.createElement("div");
-      container.element.appendChild(this._consoleContainer);
-      container.element.style.overflow  = 'auto';
-      container.element.style.boxShadow = "inset 0px 0px 3px rgba(0,0,0,0.75)";
-
-      if (!this._initialized) {
-        this._initialized = true;
-        this._setupConsoleOverrides();
-
-        this._app.messageBus.on("log", (payload) => { console.log(payload); });
-        this._app.messageBus.on("error", (payload) => {
-          window.workerWorking = false;
-          console.error(payload);
-        });
-
-        window.onerror = (err, url, line, colno, errorObj) => {
-          let errorText = JSON.stringify(err, ConsoleManager._circularReplacer());
-          if (errorText.startsWith('"')) { errorText = errorText.slice(1, -1); }
-
-          this.errors.push("Line " + line + ": " + errorText);
-
-          let newline = document.createElement("div");
-          newline.style.color = "red";
-          newline.style.fontFamily = "monospace";
-          newline.style.fontSize = "1.2em";
-          newline.innerHTML = "Line " + line + ": " + errorText;
-          this._consoleContainer.appendChild(newline);
-          this._consoleContainer.parentElement.scrollTop = this._consoleContainer.parentElement.scrollHeight;
-
-          if (!errorObj || !(errorObj.stack.includes("wasm-function"))) {
-            const editor = this._app.editor.editor;
-            if (editor) {
-              monaco.editor.setModelMarkers(editor.getModel(), 'test', [{
-                startLineNumber: line,
-                startColumn: colno,
-                endLineNumber: line,
-                endColumn: 1000,
-                message: JSON.stringify(err, ConsoleManager._circularReplacer()),
-                severity: monaco.MarkerSeverity.Error
-              }]);
-            }
-          }
-        };
-
-        this._app.messageBus.on("Progress", (payload) => {
-          this._consoleContainer.parentElement.lastElementChild.lastElementChild.innerText =
-            "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType) ? " (" + payload.opType + ")" : "");
-        });
-
-        console.log("Welcome to Cascade Studio!");
-        console.log("Loading CAD Kernel...");
-      }
+      this.initPanel(container);
     });
   }
 
@@ -88,7 +94,7 @@ class ConsoleManager {
     }
   }
 
-  /** Get the golden layout container (for state persistence of imported files). */
+  /** Get the container (for state persistence of imported files). */
   get goldenContainer() { return this._consoleGolden; }
 
   /** Override console.log to capture output and display in the panel. */

@@ -1,65 +1,262 @@
-/* Add a black background color to the top navigation */
-.topnav {
-  background-color: #111;
+/* Cascade Studio — Modern Dark Theme */
+
+:root {
+  /* Base palette */
+  --cs-bg-primary: #1a1a2e;
+  --cs-bg-secondary: #16213e;
+  --cs-bg-surface: #1e2a45;
+  --cs-bg-elevated: #253352;
+
+  /* Text */
+  --cs-text-primary: #e0e0e0;
+  --cs-text-secondary: #a0a8b8;
+  --cs-text-muted: #6b7280;
+
+  /* Accent */
+  --cs-accent: #4fc3f7;
+  --cs-accent-hover: #81d4fa;
+  --cs-accent-dim: #2196f3;
+
+  /* Borders & separators */
+  --cs-border: #2a3a5c;
+  --cs-border-active: #4fc3f7;
+
+  /* Scrollbar */
+  --cs-scrollbar-track: var(--cs-bg-secondary);
+  --cs-scrollbar-thumb: #4a5568;
+
+  /* Radius */
+  --cs-radius: 4px;
+
+  /* Transition */
+  --cs-transition: 150ms ease;
+
+  /* Fonts */
+  --cs-font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --cs-font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+/* Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--cs-bg-primary);
+  color: var(--cs-text-primary);
+  font-family: var(--cs-font-ui);
   overflow: hidden;
 }
 
-/* Style the links inside the navigation bar */
-.topnav a, .topnav label {
-  float: left;
-  color: #f2f2f2;
-  text-align: center;
-  padding: 4px 16px;
-  text-decoration: none;
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--cs-scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--cs-scrollbar-thumb);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5a6878;
+}
+
+/* ============================================================
+   Top Navigation Bar
+   ============================================================ */
+
+.topnav {
+  background: var(--cs-bg-secondary);
+  border-bottom: 1px solid var(--cs-border);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  height: 36px;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+
+.topnav-brand {
+  color: var(--cs-accent) !important;
+  font-weight: 600;
   font-size: 14px;
-  font-family: Consolas;
+  padding: 0 12px;
+  text-decoration: none;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
 }
 
-/* Change the color of links on hover */
+.topnav-brand:hover {
+  color: var(--cs-accent-hover) !important;
+  background: transparent !important;
+}
+
+.topnav-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.topnav a, .topnav label {
+  color: var(--cs-text-secondary);
+  text-decoration: none;
+  font-size: 12px;
+  font-family: var(--cs-font-ui);
+  padding: 6px 10px;
+  border-radius: var(--cs-radius);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--cs-transition), background var(--cs-transition);
+}
+
 .topnav a:hover, .topnav label:hover {
-  background-color: #aaa;
-  color: black;
+  background: var(--cs-bg-elevated);
+  color: var(--cs-text-primary);
 }
 
-/* Add a color to the active/current link */
-.topnav a.active, label.active {
-  background-color: #4CAF50;
-  color: white;
+.topnav a:active, .topnav label:active {
+  background: var(--cs-accent-dim);
+  color: #fff;
 }
+
+.topnav-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--cs-border);
+  margin: 0 4px;
+}
+
+.topnav-select {
+  background: var(--cs-bg-surface);
+  color: var(--cs-text-secondary);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--cs-font-ui);
+  margin-left: 8px;
+  cursor: pointer;
+  transition: border-color var(--cs-transition);
+}
+
+.topnav-select:hover {
+  border-color: var(--cs-accent);
+}
+
+.topnav-select:focus {
+  outline: none;
+  border-color: var(--cs-accent);
+  box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.15);
+}
+
+.topnav-import {
+  cursor: pointer;
+}
+
+/* ============================================================
+   App Body (Dockview container)
+   ============================================================ */
+
+#appbody {
+  width: 100%;
+  overflow: hidden;
+  background: var(--cs-bg-primary);
+}
+
+/* ============================================================
+   Dockview Theme Overrides
+   ============================================================ */
+
+.dockview-theme-dark {
+  --dv-background-color: var(--cs-bg-primary);
+  --dv-paneview-header-border-color: var(--cs-border);
+  --dv-tabs-and-actions-container-background-color: var(--cs-bg-secondary);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--cs-bg-surface);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--cs-bg-secondary);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--cs-bg-surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--cs-bg-secondary);
+  --dv-tab-divider-color: var(--cs-border);
+  --dv-activegroup-visiblepanel-tab-color: var(--cs-text-primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--cs-text-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--cs-text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--cs-text-muted);
+  --dv-separator-border: var(--cs-border);
+  --dv-group-view-background-color: var(--cs-bg-primary);
+}
+
+/* ============================================================
+   Centered overlay
+   ============================================================ */
+
 .centered {
-  position: fixed; top: 10%; left: 25%; z-index: 1000;
-  width: 50%; height: 80%;
-  background: rgb(19, 19, 19); color: white;
+  position: fixed;
+  top: 10%;
+  left: 25%;
+  z-index: 1000;
+  width: 50%;
+  height: 80%;
+  background: var(--cs-bg-primary);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border);
+  border-radius: 8px;
   overflow: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-/* TweakPane theme */
+/* ============================================================
+   TweakPane (GUI Panel) Theme
+   ============================================================ */
+
 :root {
-  --tp-font-family: Arial, sans-serif;
-  --tp-base-background-color: #2e2e2e;
-  --tp-button-background-color: hsl(0, 0%, 25%);
-  --tp-button-background-color-active: hsl(0, 0%, 40%);
-  --tp-button-background-color-focus: hsl(0, 0%, 35%);
-  --tp-button-background-color-hover: hsl(0, 0%, 30%);
-  --tp-button-foreground-color: #eeeeee;
-  --tp-label-foreground-color: #aeb5b8;
+  --tp-font-family: var(--cs-font-ui);
+  --tp-base-background-color: var(--cs-bg-surface);
+  --tp-button-background-color: var(--cs-bg-elevated);
+  --tp-button-background-color-active: var(--cs-accent-dim);
+  --tp-button-background-color-focus: var(--cs-bg-elevated);
+  --tp-button-background-color-hover: #2c4060;
+  --tp-button-foreground-color: var(--cs-text-primary);
+  --tp-label-foreground-color: var(--cs-text-secondary);
 }
+
 .gui-panel {
   position: absolute;
   right: 0;
   max-height: 100%;
   overflow-y: auto;
+  z-index: 10;
 }
+
 .gui-panel::-webkit-scrollbar {
-  width: 10px;
-  background: var(--tp-base-background-color);
+  width: 8px;
+  background: var(--cs-bg-surface);
 }
+
 .gui-panel::-webkit-scrollbar-thumb {
-  background: #777;
+  background: var(--cs-scrollbar-thumb);
+  border-radius: 4px;
 }
+
 .tp-rotv {
   text-shadow: 1px 1px #000;
+  border-radius: var(--cs-radius);
 }
+
 .tp-rotv button {
   text-shadow: inherit;
+}
+
+/* ============================================================
+   Console Panel Styling
+   ============================================================ */
+
+/* Enhance console output readability */
+#appbody .dv-content-container div[style*="monospace"] {
+  padding: 2px 8px;
+  font-family: var(--cs-font-mono);
 }
