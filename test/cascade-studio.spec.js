@@ -306,6 +306,10 @@ test.describe('Console', () => {
       console.log("a", "b", 42);
       Box(10, 10, 10);
     `);
+    await page.waitForFunction(() => {
+      const logs = window.CascadeAPI.getConsoleLog();
+      return logs.some(l => l.includes('test message'));
+    }, { timeout: 10000 });
     const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
     expect(logs.some(l => l.includes('test message'))).toBe(true);
     expect(logs.some(l => l.includes('a') && l.includes('b') && l.includes('42'))).toBe(true);
@@ -350,6 +354,12 @@ test.describe('Selector API', () => {
     `);
     const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
     expect(errors).toEqual([]);
+
+    // Wait for all expected log tags to arrive (worker messages may lag slightly)
+    await page.waitForFunction(() => {
+      const logs = window.CascadeAPI.getConsoleLog();
+      return ['EDGE_COUNT:', 'TOP_FACES:'].every(tag => logs.some(l => l.includes(tag)));
+    }, { timeout: 10000 });
     const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
 
     const edgeCount = parseInt(extractLog(logs, 'EDGE_COUNT'));
@@ -386,6 +396,12 @@ test.describe('Measurement Functions', () => {
     `);
     const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
     expect(errors).toEqual([]);
+
+    // Wait for all expected log tags to arrive (worker messages may lag slightly)
+    await page.waitForFunction(() => {
+      const logs = window.CascadeAPI.getConsoleLog();
+      return ['VOL:', 'AREA:', 'COM:'].every(tag => logs.some(l => l.includes(tag)));
+    }, { timeout: 10000 });
     const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
 
     expect(parseFloat(extractLog(logs, 'VOL'))).toBeCloseTo(1000, 0);
