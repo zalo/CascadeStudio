@@ -20,7 +20,7 @@ import { CascadeStudioUtils } from './CascadeStudioStandardUtils.js';
 function Box(x, y, z, centered) {
   if (!centered) { centered = false;}
   let curBox = self.CacheOp(arguments, "Box", () => {
-    let box = new self.oc.BRepPrimAPI_MakeBox(x, y, z).Shape();
+    let box = new self.oc.BRepPrimAPI_MakeBox_2(x, y, z).Shape();
     if (centered) {
       return Translate([-x / 2, -y / 2, -z / 2], box);
     } else {
@@ -33,8 +33,8 @@ function Box(x, y, z, centered) {
 
 function Sphere(radius) {
   let curSphere = self.CacheOp(arguments, "Sphere", () => {
-    let spherePlane = new self.oc.gp_Ax2(new self.oc.gp_Pnt(0, 0, 0), self.oc.gp.prototype.DZ());
-    return new self.oc.BRepPrimAPI_MakeSphere(spherePlane, radius).Shape();
+    let spherePlane = new self.oc.gp_Ax2_3(new self.oc.gp_Pnt_3(0, 0, 0), self.oc.gp.DZ());
+    return new self.oc.BRepPrimAPI_MakeSphere_9(spherePlane, radius).Shape();
   });
   self.sceneShapes.push(curSphere);
   return curSphere;
@@ -42,8 +42,8 @@ function Sphere(radius) {
 
 function Cylinder(radius, height, centered) {
   let curCylinder = self.CacheOp(arguments, "Cylinder", () => {
-    let cylinderPlane = new self.oc.gp_Ax2(new self.oc.gp_Pnt(0, 0, centered ? -height / 2 : 0), new self.oc.gp_Dir(0, 0, 1));
-    return new self.oc.BRepPrimAPI_MakeCylinder(cylinderPlane, radius, height).Shape();
+    let cylinderPlane = new self.oc.gp_Ax2_3(new self.oc.gp_Pnt_3(0, 0, centered ? -height / 2 : 0), new self.oc.gp_Dir_4(0, 0, 1));
+    return new self.oc.BRepPrimAPI_MakeCylinder_3(cylinderPlane, radius, height).Shape();
   });
   self.sceneShapes.push(curCylinder);
   return curCylinder;
@@ -51,7 +51,7 @@ function Cylinder(radius, height, centered) {
 
 function Cone(radius1, radius2, height) {
   let curCone = self.CacheOp(arguments, "Cone", () => {
-    return new self.oc.BRepPrimAPI_MakeCone(radius1, radius2, height).Shape();
+    return new self.oc.BRepPrimAPI_MakeCone_1(radius1, radius2, height).Shape();
   });
   self.sceneShapes.push(curCone);
   return curCone;
@@ -64,23 +64,23 @@ function Polygon(points, wire) {
       gpPoints.push(self.convertToPnt(points[ind]));
     }
 
-    let polygonWire = new self.oc.BRepBuilderAPI_MakeWire();
+    let polygonWire = new self.oc.BRepBuilderAPI_MakeWire_1();
     for (let ind = 0; ind < points.length - 1; ind++) {
-      let seg = new self.oc.GC_MakeSegment(gpPoints[ind], gpPoints[ind + 1]).Value();
-      let edge = new self.oc.BRepBuilderAPI_MakeEdge(seg).Edge();
-      let innerWire = new self.oc.BRepBuilderAPI_MakeWire(edge).Wire();
-      polygonWire.Add(innerWire);
+      let seg = new self.oc.GC_MakeSegment_1(gpPoints[ind], gpPoints[ind + 1]).Value();
+      let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(seg.get())).Edge();
+      let innerWire = new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
+      polygonWire.Add_2(innerWire);
     }
-    let seg2 = new self.oc.GC_MakeSegment(gpPoints[points.length - 1], gpPoints[0]).Value();
-    let edge2 = new self.oc.BRepBuilderAPI_MakeEdge(seg2).Edge();
-    let innerWire2 = new self.oc.BRepBuilderAPI_MakeWire(edge2).Wire();
-    polygonWire.Add(innerWire2);
+    let seg2 = new self.oc.GC_MakeSegment_1(gpPoints[points.length - 1], gpPoints[0]).Value();
+    let edge2 = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(seg2.get())).Edge();
+    let innerWire2 = new self.oc.BRepBuilderAPI_MakeWire_2(edge2).Wire();
+    polygonWire.Add_2(innerWire2);
     let finalWire = polygonWire.Wire();
 
     if (wire) {
       return finalWire;
     } else {
-      return new self.oc.BRepBuilderAPI_MakeFace(finalWire).Face();
+      return new self.oc.BRepBuilderAPI_MakeFace_15(finalWire, false).Face();
     }
   });
   self.sceneShapes.push(curPolygon);
@@ -89,12 +89,12 @@ function Polygon(points, wire) {
 
 function Circle(radius, wire) {
   let curCircle = self.CacheOp(arguments, "Circle", () => {
-    let circle = new self.oc.GC_MakeCircle(new self.oc.gp_Ax2(new self.oc.gp_Pnt(0, 0, 0),
-      new self.oc.gp_Dir(0, 0, 1)), radius).Value();
-    let edge = new self.oc.BRepBuilderAPI_MakeEdge(circle).Edge();
-    let circleWire = new self.oc.BRepBuilderAPI_MakeWire(edge).Wire();
+    let circle = new self.oc.GC_MakeCircle_2(new self.oc.gp_Ax2_3(new self.oc.gp_Pnt_3(0, 0, 0),
+      new self.oc.gp_Dir_4(0, 0, 1)), radius).Value();
+    let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(circle.get())).Edge();
+    let circleWire = new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
     if (wire) { return circleWire; }
-    return new self.oc.BRepBuilderAPI_MakeFace(circleWire).Face();
+    return new self.oc.BRepBuilderAPI_MakeFace_15(circleWire, false).Face();
   });
   self.sceneShapes.push(curCircle);
   return curCircle;
@@ -102,15 +102,15 @@ function Circle(radius, wire) {
 
 function BSpline(inPoints, closed) {
   let curSpline = self.CacheOp(arguments, "BSpline", () => {
-    let ptList = new self.oc.TColgp_Array1OfPnt(1, inPoints.length + (closed ? 1 : 0));
+    let ptList = new self.oc.TColgp_Array1OfPnt_2(1, inPoints.length + (closed ? 1 : 0));
     for (let pIndex = 1; pIndex <= inPoints.length; pIndex++) {
       ptList.SetValue(pIndex, self.convertToPnt(inPoints[pIndex - 1]));
     }
     if (closed) { ptList.SetValue(inPoints.length + 1, ptList.Value(1)); }
 
-    let geomCurveHandle = new self.oc.GeomAPI_PointsToBSpline(ptList).Curve();
-    let edge = new self.oc.BRepBuilderAPI_MakeEdge(geomCurveHandle).Edge();
-    return     new self.oc.BRepBuilderAPI_MakeWire(edge).Wire();
+    let geomCurveHandle = new self.oc.GeomAPI_PointsToBSpline_2(ptList, 3, 8, self.oc.GeomAbs_Shape.GeomAbs_C2, 1.0e-3).Curve();
+    let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(geomCurveHandle.get())).Edge();
+    return     new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
   });
   self.sceneShapes.push(curSpline);
   return curSpline;
@@ -128,55 +128,55 @@ function Text3D(text, size, height, fontName) {
     let commands = self.loadedFonts[fontName].getPath(text, 0, 0, size).commands;
     for (let idx = 0; idx < commands.length; idx++) {
       if (commands[idx].type === "M") {
-        var firstPoint = new self.oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
+        var firstPoint = new self.oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
         var lastPoint = firstPoint;
-        var currentWire = new self.oc.BRepBuilderAPI_MakeWire();
+        var currentWire = new self.oc.BRepBuilderAPI_MakeWire_1();
       } else if (commands[idx].type === "Z") {
         try {
           let faceBuilder = null;
           if (textFaces.length > 0) {
-            faceBuilder = new self.oc.BRepBuilderAPI_MakeFace(
+            faceBuilder = new self.oc.BRepBuilderAPI_MakeFace_22(
               textFaces[textFaces.length - 1], currentWire.Wire());
           } else {
-            faceBuilder = new self.oc.BRepBuilderAPI_MakeFace(currentWire.Wire());
+            faceBuilder = new self.oc.BRepBuilderAPI_MakeFace_15(currentWire.Wire(), false);
           }
           textFaces.push(faceBuilder.Face());
         } catch (e) {
           console.error("ERROR: OCC encountered malformed characters when constructing faces from this font (likely self-intersections)!  Try using a more robust font like 'Roboto'.");
         }
       } else if (commands[idx].type === "L") {
-        let nextPoint = new self.oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
+        let nextPoint = new self.oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
         if (lastPoint.X() === nextPoint.X() && lastPoint.Y() === nextPoint.Y()) { continue; }
-        let lineSegment = new self.oc.GC_MakeSegment(lastPoint, nextPoint).Value();
-        let lineEdge = new self.oc.BRepBuilderAPI_MakeEdge(lineSegment).Edge();
-        currentWire.Add(new self.oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
+        let lineSegment = new self.oc.GC_MakeSegment_1(lastPoint, nextPoint).Value();
+        let lineEdge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(lineSegment.get())).Edge();
+        currentWire.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
         lastPoint = nextPoint;
       } else if (commands[idx].type === "Q") {
-        let controlPoint = new self.oc.gp_Pnt(commands[idx].x1, commands[idx].y1, 0);
-        let nextPoint = new self.oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
+        let controlPoint = new self.oc.gp_Pnt_3(commands[idx].x1, commands[idx].y1, 0);
+        let nextPoint = new self.oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
 
-        let ptList = new self.oc.TColgp_Array1OfPnt(1, 3);
+        let ptList = new self.oc.TColgp_Array1OfPnt_2(1, 3);
         ptList.SetValue(1, lastPoint);
         ptList.SetValue(2, controlPoint);
         ptList.SetValue(3, nextPoint);
-        let quadraticCurve = new self.oc.Geom_BezierCurve(ptList);
-        let lineEdge = new self.oc.BRepBuilderAPI_MakeEdge(new self.oc.Handle_Geom_BezierCurve(quadraticCurve)).Edge();
-        currentWire.Add(new self.oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
+        let quadraticCurve = new self.oc.Geom_BezierCurve_1(ptList);
+        let lineEdge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(quadraticCurve)).Edge();
+        currentWire.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
 
         lastPoint = nextPoint;
       } else if (commands[idx].type === "C") {
-        let controlPoint1 = new self.oc.gp_Pnt(commands[idx].x1, commands[idx].y1, 0);
-        let controlPoint2 = new self.oc.gp_Pnt(commands[idx].x2, commands[idx].y2, 0);
-        let nextPoint = new self.oc.gp_Pnt(commands[idx].x, commands[idx].y, 0);
+        let controlPoint1 = new self.oc.gp_Pnt_3(commands[idx].x1, commands[idx].y1, 0);
+        let controlPoint2 = new self.oc.gp_Pnt_3(commands[idx].x2, commands[idx].y2, 0);
+        let nextPoint = new self.oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
 
-        let ptList = new self.oc.TColgp_Array1OfPnt(1, 4);
+        let ptList = new self.oc.TColgp_Array1OfPnt_2(1, 4);
         ptList.SetValue(1, lastPoint);
         ptList.SetValue(2, controlPoint1);
         ptList.SetValue(3, controlPoint2);
         ptList.SetValue(4, nextPoint);
-        let cubicCurve = new self.oc.Geom_BezierCurve(ptList);
-        let lineEdge = new self.oc.BRepBuilderAPI_MakeEdge(new self.oc.Handle_Geom_BezierCurve(cubicCurve)).Edge();
-        currentWire.Add(new self.oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
+        let cubicCurve = new self.oc.Geom_BezierCurve_1(ptList);
+        let lineEdge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(cubicCurve)).Edge();
+        currentWire.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
 
         lastPoint = nextPoint;
       }
@@ -200,9 +200,9 @@ function Text3D(text, size, height, fontName) {
 
 function ForEachSolid(shape, callback) {
   let solid_index = 0;
-  let anExplorer = new self.oc.TopExp_Explorer(shape, self.oc.TopAbs_SOLID);
-  for (anExplorer.Init(shape, self.oc.TopAbs_SOLID); anExplorer.More(); anExplorer.Next()) {
-    callback(solid_index++, self.oc.TopoDS.prototype.Solid(anExplorer.Current()));
+  let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SOLID, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SOLID, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(solid_index++, self.oc.TopoDS.Solid_1(anExplorer.Current()));
   }
 }
 function GetNumSolidsInCompound(shape) {
@@ -218,7 +218,7 @@ function GetSolidFromCompound(shape, index, keepOriginal) {
   let sol = self.CacheOp(arguments, "GetSolidFromCompound", () => {
     let innerSolid = {}; let solidsFound = 0;
     ForEachSolid(shape, (i, s) => {
-      if (i === index) { innerSolid = new self.oc.TopoDS_Solid(s); } solidsFound++;
+      if (i === index) { innerSolid = s; } solidsFound++;
     });
     if (solidsFound === 0) { console.error("NO SOLIDS FOUND IN SHAPE!"); innerSolid = shape; }
     innerSolid.hash = shape.hash + 1;
@@ -233,25 +233,25 @@ function GetSolidFromCompound(shape, index, keepOriginal) {
 
 function ForEachShell(shape, callback) {
   let shell_index = 0;
-  let anExplorer = new self.oc.TopExp_Explorer(shape, self.oc.TopAbs_SHELL);
-  for (anExplorer.Init(shape, self.oc.TopAbs_SHELL); anExplorer.More(); anExplorer.Next()) {
-    callback(shell_index++, self.oc.TopoDS.prototype.Shell(anExplorer.Current()));
+  let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SHELL, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SHELL, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(shell_index++, self.oc.TopoDS.Shell_1(anExplorer.Current()));
   }
 }
 
 function ForEachFace(shape, callback) {
   let face_index = 0;
-  let anExplorer = new self.oc.TopExp_Explorer(shape, self.oc.TopAbs_FACE);
-  for (anExplorer.Init(shape, self.oc.TopAbs_FACE); anExplorer.More(); anExplorer.Next()) {
-    callback(face_index++, self.oc.TopoDS.prototype.Face(anExplorer.Current()));
+  let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_FACE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_FACE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(face_index++, self.oc.TopoDS.Face_1(anExplorer.Current()));
   }
 }
 
 function ForEachWire(shape, callback) {
   let wire_index = 0;
-  let anExplorer = new self.oc.TopExp_Explorer(shape, self.oc.TopAbs_WIRE);
-  for (anExplorer.Init(shape, self.oc.TopAbs_WIRE); anExplorer.More(); anExplorer.Next()) {
-    callback(wire_index++, self.oc.TopoDS.prototype.Wire(anExplorer.Current()));
+  let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_WIRE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_WIRE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(wire_index++, self.oc.TopoDS.Wire_1(anExplorer.Current()));
   }
 }
 function GetWire(shape, index, keepOriginal) {
@@ -261,7 +261,7 @@ function GetWire(shape, index, keepOriginal) {
   let wire = self.CacheOp(arguments, "GetWire", () => {
     let innerWire = {}; let wiresFound = 0;
     ForEachWire(shape, (i, s) => {
-      if (i === index) { innerWire = new self.oc.TopoDS_Wire(s); } wiresFound++;
+      if (i === index) { innerWire = s; } wiresFound++;
     });
     if (wiresFound === 0) { console.error("NO WIRES FOUND IN SHAPE!"); innerWire = shape; }
     innerWire.hash = shape.hash + 1;
@@ -277,9 +277,9 @@ function GetWire(shape, index, keepOriginal) {
 function ForEachEdge(shape, callback) {
   let edgeHashes = {};
   let edgeIndex = 0;
-  let anExplorer = new self.oc.TopExp_Explorer(shape, self.oc.TopAbs_EDGE);
-  for (anExplorer.Init(shape, self.oc.TopAbs_EDGE); anExplorer.More(); anExplorer.Next()) {
-    let edge = self.oc.TopoDS.prototype.Edge(anExplorer.Current());
+  let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    let edge = self.oc.TopoDS.Edge_1(anExplorer.Current());
     let edgeHash = edge.HashCode(100000000);
     if(!edgeHashes.hasOwnProperty(edgeHash)){
       edgeHashes[edgeHash] = edgeIndex;
@@ -290,9 +290,9 @@ function ForEachEdge(shape, callback) {
 }
 
 function ForEachVertex(shape, callback) {
-  let anExplorer = new self.oc.TopExp_Explorer(shape, self.oc.TopAbs_VERTEX);
-  for (anExplorer.Init(shape, self.oc.TopAbs_VERTEX); anExplorer.More(); anExplorer.Next()) {
-    callback(self.oc.TopoDS.prototype.Vertex(anExplorer.Current()));
+  let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_VERTEX, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_VERTEX, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+    callback(self.oc.TopoDS.Vertex_1(anExplorer.Current()));
   }
 }
 
@@ -300,16 +300,17 @@ function ForEachVertex(shape, callback) {
 
 function FilletEdges(shape, radius, edgeList, keepOriginal) {
   let curFillet = self.CacheOp(arguments, "FilletEdges", () => {
-    let mkFillet = new self.oc.BRepFilletAPI_MakeFillet(shape);
+    let mkFillet = new self.oc.BRepFilletAPI_MakeFillet(shape, self.oc.ChFi3d_FilletShape.ChFi3d_Rational);
     let foundEdges = 0;
     ForEachEdge(shape, (index, edge) => {
-      if (edgeList.includes(index)) { mkFillet.Add(radius, edge); foundEdges++; }
+      if (edgeList.includes(index)) { mkFillet.Add_2(radius, edge); foundEdges++; }
     });
     if (foundEdges == 0) {
       console.error("Fillet Edges Not Found!  Make sure you are looking at the object _before_ the Fillet is applied!");
-      return new self.oc.TopoDS_Solid(shape);
+      return shape;
     }
-    return new self.oc.TopoDS_Solid(mkFillet.Shape());
+    mkFillet.Build(new self.oc.Message_ProgressRange_1());
+    return mkFillet.Shape();
   });
   self.sceneShapes.push(curFillet);
   if (!keepOriginal) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
@@ -321,13 +322,14 @@ function ChamferEdges(shape, distance, edgeList, keepOriginal) {
     let mkChamfer = new self.oc.BRepFilletAPI_MakeChamfer(shape);
     let foundEdges = 0;
     ForEachEdge(shape, (index, edge) => {
-      if (edgeList.includes(index)) { mkChamfer.Add(distance, edge); foundEdges++; }
+      if (edgeList.includes(index)) { mkChamfer.Add_2(distance, edge); foundEdges++; }
     });
     if (foundEdges == 0) {
       console.error("Chamfer Edges Not Found!  Make sure you are looking at the object _before_ the Chamfer is applied!");
-      return new self.oc.TopoDS_Solid(shape);
+      return shape;
     }
-    return new self.oc.TopoDS_Solid(mkChamfer.Shape());
+    mkChamfer.Build(new self.oc.Message_ProgressRange_1());
+    return mkChamfer.Shape();
   });
   self.sceneShapes.push(curChamfer);
   if (!keepOriginal) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
@@ -351,15 +353,15 @@ function Transform(translation, rotation, scale, shapes) {
 
 function Translate(offset, shapes, keepOriginal) {
   let translated = self.CacheOp(arguments, "Translate", () => {
-    let transformation = new self.oc.gp_Trsf();
-    transformation.SetTranslation(new self.oc.gp_Vec(offset[0], offset[1], offset[2]));
-    let translation = new self.oc.TopLoc_Location(transformation);
+    let transformation = new self.oc.gp_Trsf_1();
+    transformation.SetTranslation_1(new self.oc.gp_Vec_4(offset[0], offset[1], offset[2]));
+    let translation = new self.oc.TopLoc_Location_2(transformation);
     if (!self.isArrayLike(shapes)) {
-      return new self.oc.TopoDS_Shape(shapes.Moved(translation));
+      return shapes.Moved(translation, false);
     } else if (shapes.length >= 1) {
       let newTrans = [];
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-        newTrans.push(new self.oc.TopoDS_Shape(shapes[shapeIndex].Moved(translation)));
+        newTrans.push(shapes[shapeIndex].Moved(translation, false));
       }
       return newTrans;
     }
@@ -374,20 +376,20 @@ function Translate(offset, shapes, keepOriginal) {
 function Rotate(axis, degrees, shapes, keepOriginal) {
   let rotated = null;
   if (degrees === 0) {
-    rotated = new self.oc.TopoDS_Shape(shapes);
+    rotated = shapes;
   } else {
     rotated = self.CacheOp(arguments, "Rotate", () => {
       let newRot;
-      let transformation = new self.oc.gp_Trsf();
-      transformation.SetRotation(
-        new self.oc.gp_Ax1(new self.oc.gp_Pnt(0, 0, 0), new self.oc.gp_Dir(
-          new self.oc.gp_Vec(axis[0], axis[1], axis[2]))), degrees * 0.0174533);
-      let rotation = new self.oc.TopLoc_Location(transformation);
+      let transformation = new self.oc.gp_Trsf_1();
+      transformation.SetRotation_1(
+        new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0), new self.oc.gp_Dir_2(
+          new self.oc.gp_Vec_4(axis[0], axis[1], axis[2]))), degrees * 0.0174533);
+      let rotation = new self.oc.TopLoc_Location_2(transformation);
       if (!self.isArrayLike(shapes)) {
-        newRot = new self.oc.TopoDS_Shape(shapes.Moved(rotation));
+        newRot = shapes.Moved(rotation, false);
       } else if (shapes.length >= 1) {
         for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-          shapes[shapeIndex].Move(rotation);
+          shapes[shapeIndex].Move(rotation, false);
         }
       }
       return newRot;
@@ -401,17 +403,17 @@ function Rotate(axis, degrees, shapes, keepOriginal) {
 function Mirror(vector, shapes, keepOriginal) {
   if (!vector) { vector = [1, 0, 0]; }
   const mirrored = self.CacheOp(arguments, "Mirror", () => {
-    const mirrorTransform   = new self.oc.gp_Trsf();
-    const mirrorPlaneOrigin = new self.oc.gp_Pnt(0, 0, 0);
-    const mirrorPlaneNormal = new self.oc.gp_Dir(vector[0], vector[1], vector[2]);
-    mirrorTransform.SetMirror(new self.oc.gp_Ax2(mirrorPlaneOrigin, mirrorPlaneNormal));
+    const mirrorTransform   = new self.oc.gp_Trsf_1();
+    const mirrorPlaneOrigin = new self.oc.gp_Pnt_3(0, 0, 0);
+    const mirrorPlaneNormal = new self.oc.gp_Dir_4(vector[0], vector[1], vector[2]);
+    mirrorTransform.SetMirror_3(new self.oc.gp_Ax2_3(mirrorPlaneOrigin, mirrorPlaneNormal));
 
     if (!self.isArrayLike(shapes)) {
-      return new self.oc.BRepBuilderAPI_Transform(shapes, mirrorTransform).Shape();
+      return new self.oc.BRepBuilderAPI_Transform_2(shapes, mirrorTransform, false).Shape();
     } else if (shapes.length >= 1) {
       let newMirroring = [];
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-        newMirroring.push(new self.oc.BRepBuilderAPI_Transform(shapes, mirrorTransform).Shape());
+        newMirroring.push(new self.oc.BRepBuilderAPI_Transform_2(shapes, mirrorTransform, false).Shape());
       }
       return newMirroring;
     }
@@ -424,15 +426,15 @@ function Mirror(vector, shapes, keepOriginal) {
 
 function Scale(scale, shapes, keepOriginal) {
   let scaled = self.CacheOp(arguments, "Scale", () => {
-    let transformation = new self.oc.gp_Trsf();
+    let transformation = new self.oc.gp_Trsf_1();
     transformation.SetScaleFactor(scale);
-    let scaling = new self.oc.TopLoc_Location(transformation);
+    let scaling = new self.oc.TopLoc_Location_2(transformation);
     if (!self.isArrayLike(shapes)) {
-      return new self.oc.TopoDS_Shape(shapes.Moved(scaling));
+      return shapes.Moved(scaling, false);
     } else if (shapes.length >= 1) {
       let newScale = [];
       for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-        newScale.push(new self.oc.TopoDS_Shape(shapes[shapeIndex].Moved(scaling)));
+        newScale.push(shapes[shapeIndex].Moved(scaling, false));
       }
       return newScale;
     }
@@ -449,20 +451,18 @@ function Scale(scale, shapes, keepOriginal) {
 function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
   let curUnion = self.CacheOp(arguments, "Union", () => {
-    let combined = new self.oc.TopoDS_Shape(objectsToJoin[0]);
+    let combined = objectsToJoin[0];
     if (objectsToJoin.length > 1) {
       for (let i = 0; i < objectsToJoin.length; i++) {
         if (i > 0) {
-          let combinedFuse = new self.oc.BRepAlgoAPI_Fuse(combined, objectsToJoin[i]);
-          combinedFuse.SetFuzzyValue(fuzzValue);
-          combinedFuse.Build();
+          let combinedFuse = new self.oc.BRepAlgoAPI_Fuse_3(combined, objectsToJoin[i], new self.oc.Message_ProgressRange_1());
           combined = combinedFuse.Shape();
         }
       }
     }
 
     if (!keepEdges) {
-      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain(combined); fusor.Build();
+      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
       combined = fusor.Shape();
     }
 
@@ -481,19 +481,17 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
   let curDifference = self.CacheOp(arguments, "Difference", () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
 
-    let difference = new self.oc.TopoDS_Shape(mainBody);
+    let difference = mainBody;
     if (objectsToSubtract.length >= 1) {
       for (let i = 0; i < objectsToSubtract.length; i++) {
         if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
-        let differenceCut = new self.oc.BRepAlgoAPI_Cut(difference, objectsToSubtract[i]);
-        differenceCut.SetFuzzyValue(fuzzValue);
-        differenceCut.Build();
+        let differenceCut = new self.oc.BRepAlgoAPI_Cut_3(difference, objectsToSubtract[i], new self.oc.Message_ProgressRange_1());
         difference = differenceCut.Shape();
       }
     }
 
     if (!keepEdges) {
-      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain(difference); fusor.Build();
+      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(difference, true, true, false); fusor.Build();
       difference = fusor.Shape();
     }
 
@@ -524,20 +522,18 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
 function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 0.1; }
   let curIntersection = self.CacheOp(arguments, "Intersection", () => {
-    let intersected = new self.oc.TopoDS_Shape(objectsToIntersect[0]);
+    let intersected = objectsToIntersect[0];
     if (objectsToIntersect.length > 1) {
       for (let i = 0; i < objectsToIntersect.length; i++) {
         if (i > 0) {
-          let intersectedCommon = new self.oc.BRepAlgoAPI_Common(intersected, objectsToIntersect[i]);
-          intersectedCommon.SetFuzzyValue(fuzzValue);
-          intersectedCommon.Build();
+          let intersectedCommon = new self.oc.BRepAlgoAPI_Common_3(intersected, objectsToIntersect[i], new self.oc.Message_ProgressRange_1());
           intersected = intersectedCommon.Shape();
         }
       }
     }
 
     if (!keepEdges) {
-      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain(intersected); fusor.Build();
+      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(intersected, true, true, false); fusor.Build();
       intersected = fusor.Shape();
     }
 
@@ -555,8 +551,8 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
 
 function Extrude(face, direction, keepFace) {
   let curExtrusion = self.CacheOp(arguments, "Extrude", () => {
-    return new self.oc.BRepPrimAPI_MakePrism(face,
-      new self.oc.gp_Vec(direction[0], direction[1], direction[2])).Shape();
+    return new self.oc.BRepPrimAPI_MakePrism_1(face,
+      new self.oc.gp_Vec_4(direction[0], direction[1], direction[2]), false, true).Shape();
   });
 
   if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
@@ -566,7 +562,7 @@ function Extrude(face, direction, keepFace) {
 
 function RemoveInternalEdges(shape, keepShape) {
   let cleanShape = self.CacheOp(arguments, "RemoveInternalEdges", () => {
-    let fusor = new self.oc.ShapeUpgrade_UnifySameDomain(shape);
+    let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(shape, true, true, false);
     fusor.Build();
     return fusor.Shape();
   });
@@ -583,19 +579,19 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
   let curOffset = self.CacheOp(arguments, "Offset", () => {
     let offset = null;
     if (shape.ShapeType() === 5) {
-      offset = new self.oc.BRepOffsetAPI_MakeOffset();
+      offset = new self.oc.BRepOffsetAPI_MakeOffset_1();
       offset.AddWire(shape);
       offset.Perform(offsetDistance);
     } else {
       offset = new self.oc.BRepOffsetAPI_MakeOffsetShape();
-      offset.PerformByJoin(shape, offsetDistance, tolerance);
+      offset.PerformByJoin(shape, offsetDistance, tolerance, self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false, self.oc.GeomAbs_JoinType.GeomAbs_Arc, false, new self.oc.Message_ProgressRange_1());
     }
-    let offsetShape = new self.oc.TopoDS_Shape(offset.Shape());
+    let offsetShape = offset.Shape();
 
     if (offsetShape.ShapeType() == 3) {
-      let solidOffset = new self.oc.BRepBuilderAPI_MakeSolid();
-      solidOffset.Add(offsetShape);
-      offsetShape = new self.oc.TopoDS_Solid(solidOffset.Solid());
+      let solidOffset = new self.oc.BRepBuilderAPI_MakeSolid_1();
+      solidOffset.Add(self.oc.TopoDS.Shell_1(offsetShape));
+      offsetShape = solidOffset.Solid();
     }
 
     return offsetShape;
@@ -611,14 +607,14 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
   if (!direction) { direction = [0, 0, 1]; }
   let curRevolution = self.CacheOp(arguments, "Revolve", () => {
     if (degrees >= 360.0) {
-      return new self.oc.BRepPrimAPI_MakeRevol(shape,
-        new self.oc.gp_Ax1(new self.oc.gp_Pnt(0, 0, 0),
-          new self.oc.gp_Dir(direction[0], direction[1], direction[2])),
+      return new self.oc.BRepPrimAPI_MakeRevol_2(shape,
+        new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0),
+          new self.oc.gp_Dir_4(direction[0], direction[1], direction[2])),
         copy).Shape();
     } else {
-      return new self.oc.BRepPrimAPI_MakeRevol(shape,
-        new self.oc.gp_Ax1(new self.oc.gp_Pnt(0, 0, 0),
-          new self.oc.gp_Dir(direction[0], direction[1], direction[2])),
+      return new self.oc.BRepPrimAPI_MakeRevol_1(shape,
+        new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0),
+          new self.oc.gp_Dir_4(direction[0], direction[1], direction[2])),
         degrees * 0.0174533, copy).Shape();
     }
   });
@@ -653,12 +649,12 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     self.sceneShapes = self.Remove(self.sceneShapes, aspineWire);
 
     let pipe = new self.oc.BRepOffsetAPI_MakePipeShell(spineWire);
-    pipe.SetMode(aspineWire, true);
-    pipe.Add(wire);
-    pipe.Add(upperPolygon);
-    pipe.Build();
+    pipe.SetMode_5(aspineWire, true, self.oc.BRepFill_TypeOfContact.BRepFill_NoContact);
+    pipe.Add_1(wire, false, false);
+    pipe.Add_1(upperPolygon, false, false);
+    pipe.Build(new self.oc.Message_ProgressRange_1());
     pipe.MakeSolid();
-    return new self.oc.TopoDS_Shape(pipe.Shape());
+    return pipe.Shape();
   });
   if (!keepWire) { self.sceneShapes = self.Remove(self.sceneShapes, wire); }
   self.sceneShapes.push(curExtrusion);
@@ -667,10 +663,10 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
 
 function Loft(wires, keepWires) {
   let curLoft = self.CacheOp(arguments, "Loft", () => {
-    let pipe = new self.oc.BRepOffsetAPI_ThruSections(true);
+    let pipe = new self.oc.BRepOffsetAPI_ThruSections(true, false, 1.0e-6);
     wires.forEach((wire) => { pipe.AddWire(wire); });
-    pipe.Build();
-    return new self.oc.TopoDS_Shape(pipe.Shape());
+    pipe.Build(new self.oc.Message_ProgressRange_1());
+    return pipe.Shape();
   });
 
   wires.forEach((wire) => {
@@ -682,9 +678,9 @@ function Loft(wires, keepWires) {
 
 function Pipe(shape, wirePath, keepInputs) {
   let curPipe = self.CacheOp(arguments, "Pipe", () => {
-    let pipe = new self.oc.BRepOffsetAPI_MakePipe(wirePath, shape);
-    pipe.Build();
-    return new self.oc.TopoDS_Shape(pipe.Shape());
+    let pipe = new self.oc.BRepOffsetAPI_MakePipe_1(wirePath, shape);
+    pipe.Build(new self.oc.Message_ProgressRange_1());
+    return pipe.Shape();
   });
 
   if (!keepInputs) {
@@ -701,16 +697,16 @@ function Sketch(startingPoint) {
   this.currentIndex = 0;
   this.faces        = [];
   this.wires        = [];
-  this.firstPoint   = new self.oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
+  this.firstPoint   = new self.oc.gp_Pnt_3(startingPoint[0], startingPoint[1], 0);
   this.lastPoint    = this.firstPoint;
-  this.wireBuilder  = new self.oc.BRepBuilderAPI_MakeWire();
+  this.wireBuilder  = new self.oc.BRepBuilderAPI_MakeWire_1();
   this.fillets      = [];
   this.argsString   = self.ComputeHash(arguments, true);
 
   this.Start = function (startingPoint) {
-    this.firstPoint  = new self.oc.gp_Pnt(startingPoint[0], startingPoint[1], 0);
+    this.firstPoint  = new self.oc.gp_Pnt_3(startingPoint[0], startingPoint[1], 0);
     this.lastPoint   = this.firstPoint;
-    this.wireBuilder = new self.oc.BRepBuilderAPI_MakeWire();
+    this.wireBuilder = new self.oc.BRepBuilderAPI_MakeWire_1();
     this.argsString += self.ComputeHash(arguments, true);
     return this;
   }
@@ -731,12 +727,12 @@ function Sketch(startingPoint) {
 
     let faceBuilder = null;
     if (this.faces.length > 0) {
-      faceBuilder = new self.oc.BRepBuilderAPI_MakeFace(this.wires[0]);
+      faceBuilder = new self.oc.BRepBuilderAPI_MakeFace_15(this.wires[0], false);
       for (let w = 1; w < this.wires.length; w++){
         faceBuilder.Add(this.wires[w]);
       }
     } else {
-      faceBuilder = new self.oc.BRepBuilderAPI_MakeFace(wire);
+      faceBuilder = new self.oc.BRepBuilderAPI_MakeFace_15(wire, false);
     }
 
     let face = faceBuilder.Face();
@@ -769,9 +765,9 @@ function Sketch(startingPoint) {
       let successes = 0; let swapFillets = [];
       for (let f = 0; f < this.fillets.length; f++) { this.fillets[f].disabled = false; }
 
-      let makeFillet = new self.oc.BRepFilletAPI_MakeFillet2d(this.faces[this.faces.length - 1]);
+      let makeFillet = new self.oc.BRepFilletAPI_MakeFillet2d_2(this.faces[this.faces.length - 1]);
       ForEachVertex(this.faces[this.faces.length - 1], (vertex) => {
-        let pnt = self.oc.BRep_Tool.prototype.Pnt(vertex);
+        let pnt = self.oc.BRep_Tool.Pnt(vertex);
         for (let f = 0; f < this.fillets.length; f++) {
           if (!this.fillets[f].disabled &&
               pnt.X() === this.fillets[f].x &&
@@ -790,7 +786,7 @@ function Sketch(startingPoint) {
 
   this.AddWire = function (wire) {
     this.argsString += self.ComputeHash(arguments, true);
-    this.wireBuilder.Add(wire);
+    this.wireBuilder.Add_2(wire);
     if (endPoint) { this.lastPoint = endPoint; }
     return this;
   }
@@ -805,11 +801,11 @@ function Sketch(startingPoint) {
     } else {
       if (this.lastPoint.X() === nextPoint[0] &&
           this.lastPoint.Y() === nextPoint[1]) { return this; }
-      endPoint = new self.oc.gp_Pnt(nextPoint[0], nextPoint[1], 0);
+      endPoint = new self.oc.gp_Pnt_3(nextPoint[0], nextPoint[1], 0);
     }
-    let lineSegment    = new self.oc.GC_MakeSegment(this.lastPoint, endPoint).Value();
-    let lineEdge       = new self.oc.BRepBuilderAPI_MakeEdge(lineSegment    ).Edge ();
-    this.wireBuilder.Add(new self.oc.BRepBuilderAPI_MakeWire(lineEdge       ).Wire ());
+    let lineSegment    = new self.oc.GC_MakeSegment_1(this.lastPoint, endPoint).Value();
+    let lineEdge       = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(lineSegment.get())).Edge();
+    this.wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(lineEdge       ).Wire ());
     this.lastPoint     = endPoint;
     this.currentIndex++;
     return this;
@@ -817,11 +813,11 @@ function Sketch(startingPoint) {
 
   this.ArcTo = function (pointOnArc, arcEnd) {
     this.argsString += self.ComputeHash(arguments, true);
-    let onArc          = new self.oc.gp_Pnt(pointOnArc[0], pointOnArc[1], 0);
-    let nextPoint      = new self.oc.gp_Pnt(    arcEnd[0],     arcEnd[1], 0);
-    let arcCurve       = new self.oc.GC_MakeArcOfCircle(this.lastPoint, onArc, nextPoint).Value();
-    let arcEdge        = new self.oc.BRepBuilderAPI_MakeEdge(arcCurve    ).Edge() ;
-    this.wireBuilder.Add(new self.oc.BRepBuilderAPI_MakeWire(arcEdge).Wire());
+    let onArc          = new self.oc.gp_Pnt_3(pointOnArc[0], pointOnArc[1], 0);
+    let nextPoint      = new self.oc.gp_Pnt_3(    arcEnd[0],     arcEnd[1], 0);
+    let arcCurve       = new self.oc.GC_MakeArcOfCircle_4(this.lastPoint, onArc, nextPoint).Value();
+    let arcEdge        = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(arcCurve.get())).Edge();
+    this.wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(arcEdge).Wire());
     this.lastPoint     = nextPoint;
     this.currentIndex++;
     return this;
@@ -829,33 +825,32 @@ function Sketch(startingPoint) {
 
   this.BezierTo = function (bezierControlPoints) {
     this.argsString += self.ComputeHash(arguments, true);
-    let ptList = new self.oc.TColgp_Array1OfPnt(1, bezierControlPoints.length+1);
+    let ptList = new self.oc.TColgp_Array1OfPnt_2(1, bezierControlPoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
       let ctrlPoint = self.convertToPnt(bezierControlPoints[bInd]);
       ptList.SetValue(bInd + 2, ctrlPoint);
       this.lastPoint = ctrlPoint;
     }
-    let cubicCurve     = new self.oc.Geom_BezierCurve(ptList);
-    let handle         = new self.oc.Handle_Geom_BezierCurve(cubicCurve);
-    let lineEdge       = new self.oc.BRepBuilderAPI_MakeEdge(handle    ).Edge() ;
-    this.wireBuilder.Add(new self.oc.BRepBuilderAPI_MakeWire(lineEdge  ).Wire());
+    let cubicCurve     = new self.oc.Geom_BezierCurve_1(ptList);
+    let lineEdge       = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(cubicCurve)).Edge();
+    this.wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(lineEdge  ).Wire());
     this.currentIndex++;
     return this;
   }
 
   this.BSplineTo = function (bsplinePoints) {
     this.argsString += self.ComputeHash(arguments, true);
-    let ptList = new self.oc.TColgp_Array1OfPnt(1, bsplinePoints.length+1);
+    let ptList = new self.oc.TColgp_Array1OfPnt_2(1, bsplinePoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bsplinePoints.length; bInd++){
       let ctrlPoint = self.convertToPnt(bsplinePoints[bInd]);
       ptList.SetValue(bInd + 2, ctrlPoint);
       this.lastPoint = ctrlPoint;
     }
-    let handle         = new self.oc.GeomAPI_PointsToBSpline(ptList  ).Curve();
-    let lineEdge       = new self.oc.BRepBuilderAPI_MakeEdge(handle  ).Edge() ;
-    this.wireBuilder.Add(new self.oc.BRepBuilderAPI_MakeWire(lineEdge).Wire());
+    let bsplineHandle  = new self.oc.GeomAPI_PointsToBSpline_2(ptList, 3, 8, self.oc.GeomAbs_Shape.GeomAbs_C2, 1.0e-3).Curve();
+    let lineEdge       = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(bsplineHandle.get())).Edge();
+    this.wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(lineEdge).Wire());
     this.currentIndex++;
     return this;
   }
@@ -868,22 +863,22 @@ function Sketch(startingPoint) {
 
   this.Circle = function (center, radius, reversed) {
     this.argsString += self.ComputeHash(arguments, true);
-    let circle = new self.oc.GC_MakeCircle(new self.oc.gp_Ax2(self.convertToPnt(center),
-    new self.oc.gp_Dir(0, 0, 1)), radius).Value();
-    let edge = new self.oc.BRepBuilderAPI_MakeEdge(circle).Edge();
-    let wire = new self.oc.BRepBuilderAPI_MakeWire(edge).Wire();
+    let circle = new self.oc.GC_MakeCircle_2(new self.oc.gp_Ax2_3(self.convertToPnt(center),
+    new self.oc.gp_Dir_4(0, 0, 1)), radius).Value();
+    let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(circle.get())).Edge();
+    let wire = new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
     if (reversed) { wire = wire.Reversed(); }
     wire.hash = self.stringToHash(this.argsString);
     this.wires.push(wire);
 
     let faceBuilder = null;
     if (this.faces.length > 0) {
-      faceBuilder = new self.oc.BRepBuilderAPI_MakeFace(this.wires[0]);
+      faceBuilder = new self.oc.BRepBuilderAPI_MakeFace_15(this.wires[0], false);
       for (let w = 1; w < this.wires.length; w++){
         faceBuilder.Add(this.wires[w]);
       }
     } else {
-      faceBuilder = new self.oc.BRepBuilderAPI_MakeFace(wire);
+      faceBuilder = new self.oc.BRepBuilderAPI_MakeFace_15(wire, false);
     }
     let face = faceBuilder.Face();
     face.hash = self.stringToHash(this.argsString);

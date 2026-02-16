@@ -62,11 +62,11 @@ class CascadeStudioWorker {
 
   /** Asynchronously load all dependencies and initialize OpenCascade WASM. */
   async init() {
-    let opencascade, opentype, potpack;
+    let initOpenCascade, opentype, potpack;
 
     try {
-      const ocMod = await import('../../node_modules/opencascade.js/dist/opencascade.wasm.module.js');
-      opencascade = ocMod.default;
+      const ocMod = await import('../../node_modules/opencascade.js/dist/cascadestudio.js');
+      initOpenCascade = ocMod.default;
     } catch(e) {
       postMessage({ type: "log", payload: "ERROR loading opencascade: " + e.message });
       throw e;
@@ -98,26 +98,15 @@ class CascadeStudioWorker {
     // Preload fonts available via Text3D
     this._loadFonts(opentype);
 
-    // Load the full OpenCascade WebAssembly Module
-    // NOTE: Emscripten's Module object has a .then() method that returns itself,
-    // creating an infinite thenable resolution loop with `await`. We use a proper
-    // Promise with onRuntimeInitialized instead.
+    // Load the OpenCascade WebAssembly Module (v2 Embind)
     try {
-      const openCascade = await new Promise((resolve) => {
-        new opencascade({
-          locateFile(path) {
-            if (path.endsWith('.wasm')) {
-              return "../../node_modules/opencascade.js/dist/opencascade.wasm.wasm";
-            }
-            return path;
-          },
-          onRuntimeInitialized() {
-            // Delete the Emscripten thenable to prevent infinite resolution
-            // loop when this Module object is passed to Promise.resolve()
-            delete this.then;
-            resolve(this);
+      const openCascade = await new initOpenCascade({
+        locateFile(path) {
+          if (path.endsWith('.wasm')) {
+            return '../../node_modules/opencascade.js/dist/cascadestudio.wasm';
           }
-        });
+          return path;
+        }
       });
 
       // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
@@ -184,6 +173,7 @@ class CascadeStudioWorker {
     // Initialize currentShape as an empty Compound Solid
     self.currentShape = new oc.TopoDS_Compound();
     let sceneBuilder = new oc.BRep_Builder();
+    // Note: BRep_Builder and TopoDS_Compound have no overloaded constructors in v2
     sceneBuilder.MakeCompound(self.currentShape);
     let fullShapeEdgeHashes = {}; let fullShapeFaceHashes = {};
     postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Combining Shapes" } });

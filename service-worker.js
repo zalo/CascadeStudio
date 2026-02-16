@@ -41,12 +41,11 @@ var offlineFundamentals = [
   // Other ESM dependencies
   "node_modules/tweakpane/dist/tweakpane.js",
   "node_modules/opentype.js/dist/opentype.module.js",
-  "node_modules/opencascade.js/dist/opencascade.wasm.module.js",
-  "node_modules/opencascade.js/dist/opencascade.wasm.js",
-  "node_modules/opencascade.js/dist/opencascade.wasm.wasm",
+  "node_modules/opencascade.js/dist/cascadestudio.js",
+  "node_modules/opencascade.js/dist/cascadestudio.wasm",
 
   // Type definitions for Monaco intellisense
-  "node_modules/opencascade.js/dist/opencascade.d.ts",
+  "node_modules/opencascade.js/dist/cascadestudio.d.ts",
   "node_modules/@types/three/index.d.ts",
 
   // Monaco Editor (AMD loader)

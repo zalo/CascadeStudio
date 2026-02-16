@@ -48,7 +48,7 @@ class CascadeStudioUtils {
 
     let check = this.CheckCache(curHash);
     if (check && self.GUIState["Cache?"]) {
-      toReturn = new self.oc.TopoDS_Shape(check);
+      toReturn = check;
       toReturn.hash = check.hash;
     } else {
       toReturn = cacheMiss();
@@ -65,9 +65,8 @@ class CascadeStudioUtils {
 
   /** Adds this `shape` to the cache, indexable by `hash`. */
   AddToCache(hash, shape) {
-    let cacheShape = new self.oc.TopoDS_Shape(shape);
-    cacheShape.hash = hash;
-    this.argCache[hash] = cacheShape;
+    shape.hash = hash;
+    this.argCache[hash] = shape;
     return hash;
   }
 
@@ -162,7 +161,7 @@ class CascadeStudioUtils {
   static convertToPnt(pnt) {
     let point = pnt;
     if (point.length) {
-      point = new self.oc.gp_Pnt(point[0], point[1], (point[2]) ? point[2] : 0);
+      point = new self.oc.gp_Pnt_3(point[0], point[1], (point[2]) ? point[2] : 0);
     }
     return point;
   }

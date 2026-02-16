@@ -237,12 +237,12 @@ class CascadeStudioApp {
       let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
       let extraLibs = [];
       Promise.all([
-        fetch(prefix + "node_modules/opencascade.js/dist/opencascade.d.ts").then(r => r.text()),
+        fetch(prefix + "node_modules/opencascade.js/dist/cascadestudio.d.ts").then(r => r.text()),
         fetch(prefix + "node_modules/@types/three/index.d.ts").then(r => r.text()),
         fetch(prefix + "js/StandardLibraryIntellisense.ts").then(r => r.text()),
       ]).then(([ocDts, threeDts, libDts]) => {
         extraLibs = [
-          { content: ocDts, filePath: 'file://' + prefix + 'node_modules/opencascade.js/dist/opencascade.d.ts' },
+          { content: ocDts, filePath: 'file://' + prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts' },
           { content: threeDts, filePath: 'file://' + prefix + 'node_modules/@types/three/index.d.ts' },
           { content: libDts, filePath: 'file://' + prefix + 'js/StandardLibraryIntellisense.d.ts' },
         ];

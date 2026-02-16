@@ -69,18 +69,18 @@ class CascadeStudioFileIO {
 
     var reader = null; let tempFilename = fileName.toLowerCase();
     if (tempFilename.endsWith(".step") || tempFilename.endsWith(".stp")) {
-      reader = new oc.STEPControl_Reader();
+      reader = new oc.STEPControl_Reader_1();
     } else if (tempFilename.endsWith(".iges") || tempFilename.endsWith(".igs")) {
-      reader = new oc.IGESControl_Reader();
+      reader = new oc.IGESControl_Reader_1();
     } else { console.error("opencascade.js can't parse this extension! (yet)"); }
 
     let readResult = reader.ReadFile(fileName);
-    if (readResult === 1) {
+    if (readResult === oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
       console.log(fileName + " loaded successfully!     Converting to OCC now...");
-      reader.TransferRoots();
+      reader.TransferRoots(new oc.Message_ProgressRange_1());
       let stepShape = reader.OneShape();
 
-      self.externalShapes[fileName] = new oc.TopoDS_Shape(stepShape);
+      self.externalShapes[fileName] = stepShape;
       self.externalShapes[fileName].hash = self.stringToHash(fileName);
       console.log("Shape Import complete! Use sceneShapes.push(externalShapes['" + fileName + "']); to add it to the scene!");
 
@@ -104,10 +104,10 @@ class CascadeStudioFileIO {
     if (reader.Read(readShape, fileName)) {
       console.log(fileName + " loaded successfully!     Converting to OCC now...");
 
-      let solidSTL = new oc.BRepBuilderAPI_MakeSolid();
-      solidSTL.Add(new oc.TopoDS_Shape(readShape));
+      let solidSTL = new oc.BRepBuilderAPI_MakeSolid_1();
+      solidSTL.Add(oc.TopoDS.Shell_1(readShape));
 
-      self.externalShapes[fileName] = new oc.TopoDS_Shape(solidSTL.Solid());
+      self.externalShapes[fileName] = solidSTL.Solid();
       self.externalShapes[fileName].hash = self.stringToHash(fileName);
       console.log("Shape Import complete! Use sceneShapes.push(externalShapes['" + fileName + "']); to see it!");
 
@@ -123,11 +123,11 @@ class CascadeStudioFileIO {
   /** Returns `currentShape` `.STEP` file content. */
   saveShapeSTEP(filename = "CascadeStudioPart.step") {
     let oc = self.oc;
-    let writer = new oc.STEPControl_Writer();
-    let transferResult = writer.Transfer(self.currentShape, 0);
-    if (transferResult === 1) {
+    let writer = new oc.STEPControl_Writer_1();
+    let transferResult = writer.Transfer(self.currentShape, oc.STEPControl_StepModelType.STEPControl_AsIs, true, new oc.Message_ProgressRange_1());
+    if (transferResult === oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
       let writeResult = writer.Write(filename);
-      if (writeResult === 1) {
+      if (writeResult === oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
         let stepFileText = oc.FS.readFile("/" + filename, { encoding: "utf8" });
         oc.FS.unlink("/" + filename);
         return stepFileText;

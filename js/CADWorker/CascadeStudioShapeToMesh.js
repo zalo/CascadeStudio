@@ -10,7 +10,7 @@ class CascadeStudioMesher {
   }
 
   static lengthOfCurve(geomAdaptor, UMin, UMax, segments = 5) {
-    let point1 = new Vector3(), point2 = new Vector3(), arcLength = 0, gpPnt = new self.oc.gp_Pnt();
+    let point1 = new Vector3(), point2 = new Vector3(), arcLength = 0, gpPnt = new self.oc.gp_Pnt_1();
     for (let s = UMin; s <= UMax; s += (UMax - UMin) / segments) {
       geomAdaptor.D0(s, gpPnt);
       point1.set(gpPnt.X(), gpPnt.Y(), gpPnt.Z());
@@ -27,9 +27,11 @@ class CascadeStudioMesher {
   /** Iterate over all the faces in this shape, calling `callback` on each one. */
   static forEachFace(shape, callback) {
     let face_index = 0;
-    let anExplorer = new self.oc.TopExp_Explorer(shape, self.oc.TopAbs_FACE);
-    for (anExplorer.Init(shape, self.oc.TopAbs_FACE); anExplorer.More(); anExplorer.Next()) {
-      callback(face_index++, self.oc.TopoDS.prototype.Face(anExplorer.Current()));
+    let anExplorer = new self.oc.TopExp_Explorer_2(shape,
+      self.oc.TopAbs_ShapeEnum.TopAbs_FACE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_FACE,
+      self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+      callback(face_index++, self.oc.TopoDS.Face_1(anExplorer.Current()));
     }
   }
 
@@ -37,9 +39,11 @@ class CascadeStudioMesher {
   static forEachEdge(shape, callback) {
     let edgeHashes = {};
     let edgeIndex = 0;
-    let anExplorer = new self.oc.TopExp_Explorer(shape, self.oc.TopAbs_EDGE);
-    for (anExplorer.Init(shape, self.oc.TopAbs_EDGE); anExplorer.More(); anExplorer.Next()) {
-      let edge = self.oc.TopoDS.prototype.Edge(anExplorer.Current());
+    let anExplorer = new self.oc.TopExp_Explorer_2(shape,
+      self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+      self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
+      let edge = self.oc.TopoDS.Edge_1(anExplorer.Current());
       let edgeHash = edge.HashCode(100000000);
       if (!edgeHashes.hasOwnProperty(edgeHash)) {
         edgeHashes[edgeHash] = edgeIndex;
@@ -53,10 +57,9 @@ class CascadeStudioMesher {
     let facelist = [], edgeList = [];
     try {
       let oc = self.oc;
-      shape = new oc.TopoDS_Shape(shape);
 
       // Set up the Incremental Mesh builder, with a precision
-      new oc.BRepMesh_IncrementalMesh(shape, maxDeviation, false, maxDeviation * 5);
+      new oc.BRepMesh_IncrementalMesh_2(shape, maxDeviation, false, maxDeviation * 5, false);
 
       // Construct the edge hashes to assign proper indices to the edges
       let fullShapeEdgeHashes2 = {};
@@ -64,8 +67,8 @@ class CascadeStudioMesher {
       // Iterate through the faces and triangulate each one
       let triangulations = []; let uv_boxes = []; let curFace = 0;
       CascadeStudioMesher.forEachFace(shape, (faceIndex, myFace) => {
-        let aLocation = new oc.TopLoc_Location();
-        let myT = oc.BRep_Tool.prototype.Triangulation(myFace, aLocation);
+        let aLocation = new oc.TopLoc_Location_1();
+        let myT = oc.BRep_Tool.Triangulation(myFace, aLocation, 0 /* Poly_MeshPurpose_NONE */);
         if (myT.IsNull()) { console.error("Encountered Null Face!"); self.argCache = {}; return; }
 
         let this_face = {
@@ -77,27 +80,27 @@ class CascadeStudioMesher {
           face_index: fullShapeFaceHashes[myFace.HashCode(100000000)]
         };
 
-        let pc = new oc.Poly_Connect(myT);
-        let Nodes = myT.get().Nodes();
+        let pc = new oc.Poly_Connect_2(myT);
+        let nbNodes = myT.get().NbNodes();
 
         // Write vertex buffer
-        this_face.vertex_coord = new Array(Nodes.Length() * 3);
-        for (let i = 0; i < Nodes.Length(); i++) {
-          let p = Nodes.Value(i + 1).Transformed(aLocation.Transformation());
-          this_face.vertex_coord[(i * 3) + 0] = p.X();
-          this_face.vertex_coord[(i * 3) + 1] = p.Y();
-          this_face.vertex_coord[(i * 3) + 2] = p.Z();
+        this_face.vertex_coord = new Array(nbNodes * 3);
+        for (let i = 1; i <= nbNodes; i++) {
+          let p = myT.get().Node(i).Transformed(aLocation.Transformation());
+          this_face.vertex_coord[((i - 1) * 3) + 0] = p.X();
+          this_face.vertex_coord[((i - 1) * 3) + 1] = p.Y();
+          this_face.vertex_coord[((i - 1) * 3) + 2] = p.Z();
         }
 
         // Write UV buffer
-        let orient = myFace.Orientation();
+        let orient = myFace.Orientation_1();
         if (myT.get().HasUVNodes()) {
           let UMin = 0, UMax = 0, VMin = 0, VMax = 0;
 
-          let UVNodes = myT.get().UVNodes(), UVNodesLength = UVNodes.Length();
+          let UVNodesLength = nbNodes;
           this_face.uv_coord = new Array(UVNodesLength * 2);
           for (let i = 0; i < UVNodesLength; i++) {
-            let p = UVNodes.Value(i + 1);
+            let p = myT.get().UVNode(i + 1);
             let x = p.X(), y = p.Y();
             this_face.uv_coord[(i * 2) + 0] = x;
             this_face.uv_coord[(i * 2) + 1] = y;
@@ -108,11 +111,11 @@ class CascadeStudioMesher {
           }
 
           // Compute the Arclengths of the Isoparametric Curves of the face
-          let surface = oc.BRep_Tool.prototype.Surface(myFace).get();
+          let surface = oc.BRep_Tool.Surface_2(myFace).get();
           let UIso_Handle = surface.UIso(UMin + ((UMax - UMin) * 0.5));
           let VIso_Handle = surface.VIso(VMin + ((VMax - VMin) * 0.5));
-          let UAdaptor = new oc.GeomAdaptor_Curve(VIso_Handle);
-          let VAdaptor = new oc.GeomAdaptor_Curve(UIso_Handle);
+          let UAdaptor = new oc.GeomAdaptor_Curve_2(VIso_Handle);
+          let VAdaptor = new oc.GeomAdaptor_Curve_2(UIso_Handle);
           uv_boxes.push({
             w: CascadeStudioMesher.lengthOfCurve(UAdaptor, UMin, UMax),
             h: CascadeStudioMesher.lengthOfCurve(VAdaptor, VMin, VMax),
@@ -126,7 +129,7 @@ class CascadeStudioMesher {
 
             x = ((x - UMin) / (UMax - UMin));
             y = ((y - VMin) / (VMax - VMin));
-            if (orient !== oc.TopAbs_FORWARD) { x = 1.0 - x; }
+            if (orient !== oc.TopAbs_Orientation.TopAbs_FORWARD) { x = 1.0 - x; }
 
             this_face.uv_coord[(i * 2) + 0] = x;
             this_face.uv_coord[(i * 2) + 1] = y;
@@ -134,11 +137,10 @@ class CascadeStudioMesher {
         }
 
         // Write normal buffer
-        let myNormal = new oc.TColgp_Array1OfDir(Nodes.Lower(), Nodes.Upper());
-        let SST = new oc.StdPrs_ToolTriangulatedShape();
-        SST.Normal(myFace, pc, myNormal);
-        this_face.normal_coord = new Array(myNormal.Length() * 3);
-        for (let i = 0; i < myNormal.Length(); i++) {
+        let myNormal = new oc.TColgp_Array1OfDir_2(1, nbNodes);
+        oc.StdPrs_ToolTriangulatedShape.Normal(myFace, pc, myNormal);
+        this_face.normal_coord = new Array(nbNodes * 3);
+        for (let i = 0; i < nbNodes; i++) {
           let d = myNormal.Value(i + 1).Transformed(aLocation.Transformation());
           this_face.normal_coord[(i * 3) + 0] = d.X();
           this_face.normal_coord[(i * 3) + 1] = d.Y();
@@ -146,15 +148,15 @@ class CascadeStudioMesher {
         }
 
         // Write triangle buffer
-        let triangles = myT.get().Triangles();
-        this_face.tri_indexes = new Array(triangles.Length() * 3);
+        let nbTriangles = myT.get().NbTriangles();
+        this_face.tri_indexes = new Array(nbTriangles * 3);
         let validFaceTriCount = 0;
-        for (let nt = 1; nt <= myT.get().NbTriangles(); nt++) {
-          let t = triangles.Value(nt);
+        for (let nt = 1; nt <= nbTriangles; nt++) {
+          let t = myT.get().Triangle(nt);
           let n1 = t.Value(1);
           let n2 = t.Value(2);
           let n3 = t.Value(3);
-          if (orient !== oc.TopAbs_FORWARD) {
+          if (orient !== oc.TopAbs_Orientation.TopAbs_FORWARD) {
             let tmp = n1;
             n1 = n2;
             n2 = tmp;
@@ -176,15 +178,32 @@ class CascadeStudioMesher {
               edge_index: -1
             };
 
-            let myP = oc.BRep_Tool.prototype.PolygonOnTriangulation(myEdge, myT, aLocation);
-            let edgeNodes = myP.get().Nodes();
+            try {
+              let myP = oc.BRep_Tool.PolygonOnTriangulation_1(myEdge, myT, aLocation);
+              if (!myP.IsNull()) {
+                let edgeNodes = myP.get().Nodes();
 
-            this_edge.vertex_coord = new Array(edgeNodes.Length() * 3);
-            for (let j = 0; j < edgeNodes.Length(); j++) {
-              let vertexIndex = edgeNodes.Value(j + 1);
-              this_edge.vertex_coord[(j * 3) + 0] = this_face.vertex_coord[((vertexIndex - 1) * 3) + 0];
-              this_edge.vertex_coord[(j * 3) + 1] = this_face.vertex_coord[((vertexIndex - 1) * 3) + 1];
-              this_edge.vertex_coord[(j * 3) + 2] = this_face.vertex_coord[((vertexIndex - 1) * 3) + 2];
+                this_edge.vertex_coord = new Array(edgeNodes.Length() * 3);
+                for (let j = 0; j < edgeNodes.Length(); j++) {
+                  let vertexIndex = edgeNodes.Value(j + 1);
+                  this_edge.vertex_coord[(j * 3) + 0] = this_face.vertex_coord[((vertexIndex - 1) * 3) + 0];
+                  this_edge.vertex_coord[(j * 3) + 1] = this_face.vertex_coord[((vertexIndex - 1) * 3) + 1];
+                  this_edge.vertex_coord[(j * 3) + 2] = this_face.vertex_coord[((vertexIndex - 1) * 3) + 2];
+                }
+              } else {
+                throw new Error("Null polygon on triangulation");
+              }
+            } catch (e) {
+              // Fallback: discretize edge directly using BRepAdaptor_Curve
+              let adaptorCurve = new oc.BRepAdaptor_Curve_2(myEdge);
+              let tangDef = new oc.GCPnts_TangentialDeflection_2(adaptorCurve, maxDeviation, 0.1, 2, 1.0e-9, 1.0e-7);
+              this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
+              for (let j = 0; j < tangDef.NbPoints(); j++) {
+                let vertex = tangDef.Value(j + 1).Transformed(aLocation.Transformation());
+                this_edge.vertex_coord[(j * 3) + 0] = vertex.X();
+                this_edge.vertex_coord[(j * 3) + 1] = vertex.Y();
+                this_edge.vertex_coord[(j * 3) + 2] = vertex.Z();
+              }
             }
 
             this_edge.edge_index = fullShapeEdgeHashes[edgeHash];
@@ -227,9 +246,9 @@ class CascadeStudioMesher {
             edge_index: -1
           };
 
-          let aLocation = new oc.TopLoc_Location();
-          let adaptorCurve = new oc.BRepAdaptor_Curve(myEdge);
-          let tangDef = new oc.GCPnts_TangentialDeflection(adaptorCurve, maxDeviation, 0.1);
+          let aLocation = new oc.TopLoc_Location_1();
+          let adaptorCurve = new oc.BRepAdaptor_Curve_2(myEdge);
+          let tangDef = new oc.GCPnts_TangentialDeflection_2(adaptorCurve, maxDeviation, 0.1, 2, 1.0e-9, 1.0e-7);
 
           this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
           for (let j = 0; j < tangDef.NbPoints(); j++) {
