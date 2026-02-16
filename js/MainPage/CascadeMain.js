@@ -127,8 +127,13 @@ class CascadeStudioApp {
       try {
         let parsed = JSON.parse(projectContent);
         if (parsed._cascadeState) {
+          // New Dockview project format
           codeStr = parsed._cascadeState.code || codeStr;
           this.gui.state = parsed._cascadeState.guiState || {};
+        } else if (parsed.content || parsed.root) {
+          // Legacy GoldenLayout project format — extract code from componentState
+          let code = this._extractLegacyCode(parsed);
+          if (code) { codeStr = code; }
         }
       } catch (e) {
         console.error("Failed to parse project:", e);
@@ -324,6 +329,25 @@ class CascadeStudioApp {
   clearExternalFiles() {
     this.messageBus.send("clearExternalFiles");
     this.console.goldenContainer.setState({});
+  }
+
+  /** Extract code from a legacy GoldenLayout project file. */
+  _extractLegacyCode(parsed) {
+    // Recursively search for componentState.code in GoldenLayout config
+    function findCode(obj) {
+      if (!obj || typeof obj !== 'object') return null;
+      if (obj.componentState && obj.componentState.code) return obj.componentState.code;
+      for (let key of ['content', 'root', 'children']) {
+        if (Array.isArray(obj[key])) {
+          for (let child of obj[key]) {
+            let result = findCode(child);
+            if (result) return result;
+          }
+        }
+      }
+      return null;
+    }
+    return findCode(parsed);
   }
 
   // --- Static utility methods ---

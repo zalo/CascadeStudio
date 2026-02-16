@@ -238,7 +238,7 @@ function ChamferEdges(shape: oc.TopoDS_Shape, distance: number, edgeList: number
  * and call `.indices()` to get edge indices for FilletEdges/ChamferEdges.
  * @example```FilletEdges(box, 3, Edges(box).max([0,0,1]).indices());``` */
 class EdgeSelector {
-    /** Filter to edges of a specific curve type: "Line", "Circle", "Ellipse", "BSpline", "Bezier" */
+    /** Filter to edges of a specific curve type: "Line", "Circle", "Ellipse", "Hyperbola", "Parabola", "BezierCurve", "BSplineCurve" */
     ofType(type: string): EdgeSelector;
     /** Filter to edges whose direction is parallel to the given axis vector */
     parallel(axis: number[], tolerance?: number): EdgeSelector;
@@ -281,7 +281,7 @@ class EdgeSelector {
  * Use `Faces(shape)` to create a FaceSelector, then chain filtering methods.
  * @example```let topFace = Faces(box).max([0,0,1]).faces()[0];``` */
 class FaceSelector {
-    /** Filter to faces of a specific surface type: "Plane", "Cylinder", "Cone", "Sphere", "Torus", "BSpline" */
+    /** Filter to faces of a specific surface type: "Plane", "Cylinder", "Cone", "Sphere", "Torus", "BSplineSurface", "BezierSurface" */
     ofType(type: string): FaceSelector;
     /** Filter to faces whose normal is parallel to the given axis */
     parallel(axis: number[], tolerance?: number): FaceSelector;

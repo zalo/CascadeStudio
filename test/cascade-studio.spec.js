@@ -134,7 +134,7 @@ test.describe('Primitives', () => {
     }
   });
 
-  test.skip('Circle renders without errors (requires GC_MakeCircle binding)', async ({ page }) => {
+  test('Circle renders without errors', async ({ page }) => {
     await gotoAndReady(page);
     await evaluateNoErrors(page, 'Circle(30);');
   });
@@ -223,15 +223,12 @@ test.describe('Operations', () => {
       Loft([w1, w2]);
     `);
 
-    // Pipe (allow GeomAbs_C2 binding gap)
-    await evaluateCode(page, `
+    // Pipe
+    await evaluateNoErrors(page, `
       let profile = new Sketch([-5,-5]).LineTo([5,-5]).LineTo([5,5]).LineTo([-5,5]).End(true).Face();
       let spine = BSpline([[0,0,0],[0,0,30],[30,0,60]], false);
       Pipe(profile, spine);
     `);
-    const pipeErrors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    const unexpectedPipeErrors = pipeErrors.filter(e => !e.includes('GeomAbs_C2'));
-    expect(unexpectedPipeErrors).toEqual([]);
 
     // FilletEdges, ChamferEdges, Offset
     await evaluateNoErrors(page, 'FilletEdges(Cylinder(10, 20), 3, [0, 2]);');
@@ -327,10 +324,7 @@ test.describe('Everything Example', () => {
     await page.waitForFunction(() => !window.CascadeAPI.isWorking(), { timeout: 60000 });
     await evaluateCode(page, EVERYTHING_EXAMPLE, 120000);
     const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    const unexpectedErrors = errors.filter(e =>
-      !e.includes('GeomAbs_C2') && !e.includes('GC_MakeCircle')
-    );
-    expect(unexpectedErrors).toEqual([]);
+    expect(errors).toEqual([]);
   });
 });
 
@@ -376,6 +370,30 @@ test.describe('Selector API', () => {
       let box = Box(50, 50, 30);
       FilletEdges(box, 3, Edges(box).max([0,0,1]).indices());
     `);
+  });
+
+  test('face type selectors detect Plane and Cylinder', async ({ page }) => {
+    await gotoAndReady(page);
+
+    await evaluateCode(page, `
+      let box = Box(10, 10, 10);
+      console.log("BOX_PLANES:" + Faces(box).ofType("Plane").count());
+      let cyl = Cylinder(10, 20);
+      console.log("CYL_CYLINDERS:" + Faces(cyl).ofType("Cylinder").count());
+      console.log("CYL_PLANES:" + Faces(cyl).ofType("Plane").count());
+    `);
+    const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
+    expect(errors).toEqual([]);
+
+    await page.waitForFunction(() => {
+      const logs = window.CascadeAPI.getConsoleLog();
+      return ['BOX_PLANES:', 'CYL_CYLINDERS:', 'CYL_PLANES:'].every(tag => logs.some(l => l.includes(tag)));
+    }, { timeout: 10000 });
+    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
+
+    expect(parseInt(extractLog(logs, 'BOX_PLANES'))).toBe(6);
+    expect(parseInt(extractLog(logs, 'CYL_CYLINDERS'))).toBe(1);
+    expect(parseInt(extractLog(logs, 'CYL_PLANES'))).toBe(2);
   });
 });
 
