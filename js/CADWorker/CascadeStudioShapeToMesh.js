@@ -195,11 +195,13 @@ class CascadeStudioMesher {
               }
             } catch (e) {
               // Fallback: discretize edge directly using BRepAdaptor_Curve
+              // BRepAdaptor_Curve already applies the edge's location transform,
+              // so the returned points are in world coordinates — no additional transform needed
               let adaptorCurve = new oc.BRepAdaptor_Curve_2(myEdge);
               let tangDef = new oc.GCPnts_TangentialDeflection_2(adaptorCurve, maxDeviation, 0.1, 2, 1.0e-9, 1.0e-7);
               this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
               for (let j = 0; j < tangDef.NbPoints(); j++) {
-                let vertex = tangDef.Value(j + 1).Transformed(aLocation.Transformation());
+                let vertex = tangDef.Value(j + 1);
                 this_edge.vertex_coord[(j * 3) + 0] = vertex.X();
                 this_edge.vertex_coord[(j * 3) + 1] = vertex.Y();
                 this_edge.vertex_coord[(j * 3) + 2] = vertex.Z();
@@ -246,13 +248,14 @@ class CascadeStudioMesher {
             edge_index: -1
           };
 
-          let aLocation = new oc.TopLoc_Location_1();
+          // BRepAdaptor_Curve already applies the edge's location transform,
+          // so the returned points are in world coordinates — no additional transform needed
           let adaptorCurve = new oc.BRepAdaptor_Curve_2(myEdge);
           let tangDef = new oc.GCPnts_TangentialDeflection_2(adaptorCurve, maxDeviation, 0.1, 2, 1.0e-9, 1.0e-7);
 
           this_edge.vertex_coord = new Array(tangDef.NbPoints() * 3);
           for (let j = 0; j < tangDef.NbPoints(); j++) {
-            let vertex = tangDef.Value(j + 1).Transformed(aLocation.Transformation());
+            let vertex = tangDef.Value(j + 1);
             this_edge.vertex_coord[(j * 3) + 0] = vertex.X();
             this_edge.vertex_coord[(j * 3) + 1] = vertex.Y();
             this_edge.vertex_coord[(j * 3) + 2] = vertex.Z();
