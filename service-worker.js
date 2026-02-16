@@ -12,52 +12,31 @@ var offlineFundamentals = [
   "manifest.webmanifest",
   "icon/android-chrome-192x192.png",
   /*
-  // ESM Application files
-  "js/MainPage/main.js",
-  "js/MainPage/CascadeMain.js",
-  "js/MainPage/CascadeView.js",
-  "js/MainPage/CascadeViewHandles.js",
-  "js/CADWorker/CascadeStudioMainWorker.js",
-  "js/CADWorker/CascadeStudioStandardLibrary.js",
-  "js/CADWorker/CascadeStudioStandardUtils.js",
-  "js/CADWorker/CascadeStudioShapeToMesh.js",
-  "js/CADWorker/CascadeStudioFileUtils.js",
-  "js/StandardLibraryIntellisense.ts",
+  // Build-mode paths (served from build/ directory):
+  "main.js",
+  "CascadeStudioMainWorker.js",
+  "cascadestudio.wasm",
 
   // Golden Layout v2
   "lib/golden-layout/golden-layout.js",
   "lib/golden-layout/goldenlayout-base.css",
   "lib/golden-layout/goldenlayout-dark-theme.css",
 
-  // Three.js ESM
-  "node_modules/three/build/three.module.js",
-  "node_modules/three/examples/jsm/controls/OrbitControls.js",
-  "node_modules/three/examples/jsm/controls/TransformControls.js",
-  "node_modules/three/examples/jsm/exporters/STLExporter.js",
-  "node_modules/three/examples/jsm/exporters/OBJExporter.js",
-  "node_modules/three/examples/jsm/libs/fflate.module.js",
-  "node_modules/three/examples/jsm/libs/potpack.module.js",
-
-  // Other ESM dependencies
-  "node_modules/tweakpane/dist/tweakpane.js",
-  "node_modules/opentype.js/dist/opentype.module.js",
-  "node_modules/opencascade.js/dist/cascadestudio.js",
-  "node_modules/opencascade.js/dist/cascadestudio.wasm",
-
   // Type definitions for Monaco intellisense
-  "node_modules/opencascade.js/dist/cascadestudio.d.ts",
-  "node_modules/@types/three/index.d.ts",
+  "typedefs/cascadestudio.d.ts",
+  "typedefs/three.d.ts",
+  "typedefs/StandardLibraryIntellisense.ts",
 
   // Monaco Editor (AMD loader)
-  "node_modules/monaco-editor/min/vs/editor/editor.main.css",
-  "node_modules/monaco-editor/min/vs/loader.js",
-  "node_modules/monaco-editor/min/vs/editor/editor.main.nls.js",
-  "node_modules/monaco-editor/min/vs/editor/editor.main.js",
-  "node_modules/monaco-editor/min/vs/basic-languages/javascript/javascript.js",
-  "node_modules/monaco-editor/min/vs/basic-languages/typescript/typescript.js",
-  "node_modules/monaco-editor/min/vs/language/typescript/tsMode.js",
-  "node_modules/monaco-editor/min/vs/language/typescript/tsWorker.js",
-  "node_modules/monaco-editor/min/vs/base/worker/workerMain.js",
+  "monaco-editor/min/vs/editor/editor.main.css",
+  "monaco-editor/min/vs/loader.js",
+  "monaco-editor/min/vs/editor/editor.main.nls.js",
+  "monaco-editor/min/vs/editor/editor.main.js",
+  "monaco-editor/min/vs/basic-languages/javascript/javascript.js",
+  "monaco-editor/min/vs/basic-languages/typescript/typescript.js",
+  "monaco-editor/min/vs/language/typescript/tsMode.js",
+  "monaco-editor/min/vs/language/typescript/tsWorker.js",
+  "monaco-editor/min/vs/base/worker/workerMain.js",
 
   // Assets
   "css/main.css",

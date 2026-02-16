@@ -25,6 +25,6 @@
 	},
 	"scripts": {
 		"postinstall": "node scripts/postinstall.js",
-		"build": "esbuild ./js/MainPage/main.js ./js/CADWorker/CascadeStudioMainWorker.js --bundle --minify --sourcemap --format=esm --target=es2020 --outdir=./build --external:fs --external:path --loader:.wasm=file --define:ESBUILD=true"
+		"build": "node scripts/build.js"
 	}
 }

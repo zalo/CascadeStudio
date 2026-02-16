@@ -6,7 +6,8 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-# webpack bundle output file
+# Build output
+build/
 dist/*
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
@@ -41,76 +42,8 @@ bower_components
 build/Release
 
 # Dependency directories
-node_modules/**/*
+node_modules/
 CascadeStudio/
-
-# Three.js Build
-!node_modules/three/
-!node_modules/three/*/
-!node_modules/three/build/*
-# Three.js Controls
-!node_modules/three/examples/*/
-!node_modules/three/examples/js/
-!node_modules/three/examples/js/*/
-!node_modules/three/examples/js/controls/
-!node_modules/three/examples/js/controls/*
-!node_modules/three/examples/js/exporters/
-!node_modules/three/examples/js/exporters/*
-
-# Golden-Layout Scripts
-!node_modules/golden-layout/
-!node_modules/golden-layout/*/
-!node_modules/golden-layout/index.d.ts
-!node_modules/golden-layout/dist/
-!node_modules/golden-layout/dist/*
-# Golden-Layout Scripts
-!node_modules/golden-layout/src/
-!node_modules/golden-layout/src/*/
-!node_modules/golden-layout/src/css/
-!node_modules/golden-layout/src/css/*
-
-# Monaco Editor Scripts
-!node_modules/monaco-editor
-!node_modules/monaco-editor/*
-!node_modules/monaco-editor/min/
-!node_modules/monaco-editor/min/**
-!node_modules/monaco-editor/min-maps/
-!node_modules/monaco-editor/min-maps/**
-
-# JQuery Scripts
-!node_modules/jquery/
-!node_modules/jquery/*/
-!node_modules/jquery/dist/
-!node_modules/jquery/dist/*
-
-# Raw Inflate and Deflate
-!node_modules/rawflate/
-!node_modules/rawflate/*
-
-# OpenType.js Scripts
-!node_modules/opentype.js/
-!node_modules/opentype.js/*/
-!node_modules/opentype.js/dist/
-!node_modules/opentype.js/dist/*
-
-# Tweakpane Bin
-!node_modules/tweakpane/
-!node_modules/tweakpane/*/
-!node_modules/tweakpane/dist/
-!node_modules/tweakpane/dist/*
-!node_modules/tweakpane/dist/types/**/*
-
-# opencascade.js Bin
-!node_modules/opencascade.js/
-!node_modules/opencascade.js/*/
-!node_modules/opencascade.js/dist/
-!node_modules/opencascade.js/dist/*
-node_modules/opencascade.js/dist/opencascade.js
-# Add the above line for now, can take it out if necessary
-
-# potpack
-!node_modules/potpack/
-!node_modules/potpack/index.js
 
 jspm_packages/
 

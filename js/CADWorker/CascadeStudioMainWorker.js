@@ -103,7 +103,8 @@ class CascadeStudioWorker {
       const openCascade = await new initOpenCascade({
         locateFile(path) {
           if (path.endsWith('.wasm')) {
-            return '../../node_modules/opencascade.js/dist/cascadestudio.wasm';
+            // In build mode, WASM is copied to the build output directory
+            return typeof ESBUILD !== 'undefined' ? './cascadestudio.wasm' : '../../node_modules/opencascade.js/dist/cascadestudio.wasm';
           }
           return path;
         }

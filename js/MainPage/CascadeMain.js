@@ -37,7 +37,9 @@ class CascadeStudioApp {
   /** Start the application: create the worker, wire up messages, and initialize. */
   start() {
     // Create the CAD Worker with module type
-    this.cascadeStudioWorker = new Worker('./js/CADWorker/CascadeStudioMainWorker.js', { type: 'module' });
+    // In build mode (ESBUILD defined), the worker is co-located with main.js
+    const workerPath = typeof ESBUILD !== 'undefined' ? './CascadeStudioMainWorker.js' : './js/CADWorker/CascadeStudioMainWorker.js';
+    this.cascadeStudioWorker = new Worker(workerPath, { type: 'module' });
     this.cascadeStudioWorker.onerror = (e) => {
       console.error("CAD Worker error:", e.message, e.filename, e.lineno);
     };
@@ -234,17 +236,22 @@ class CascadeStudioApp {
       monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
 
       // Import Typescript Intellisense Definitions
+      // In build mode, type defs are copied to typedefs/ by the build script
+      const isBuilt = typeof ESBUILD !== 'undefined';
       let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
+      const ocDtsPath = isBuilt ? 'typedefs/cascadestudio.d.ts' : prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts';
+      const threeDtsPath = isBuilt ? 'typedefs/three.d.ts' : prefix + 'node_modules/@types/three/index.d.ts';
+      const libDtsPath = isBuilt ? 'typedefs/StandardLibraryIntellisense.ts' : prefix + 'js/StandardLibraryIntellisense.ts';
       let extraLibs = [];
       Promise.all([
-        fetch(prefix + "node_modules/opencascade.js/dist/cascadestudio.d.ts").then(r => r.text()),
-        fetch(prefix + "node_modules/@types/three/index.d.ts").then(r => r.text()),
-        fetch(prefix + "js/StandardLibraryIntellisense.ts").then(r => r.text()),
+        fetch(ocDtsPath).then(r => r.text()),
+        fetch(threeDtsPath).then(r => r.text()),
+        fetch(libDtsPath).then(r => r.text()),
       ]).then(([ocDts, threeDts, libDts]) => {
         extraLibs = [
-          { content: ocDts, filePath: 'file://' + prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts' },
-          { content: threeDts, filePath: 'file://' + prefix + 'node_modules/@types/three/index.d.ts' },
-          { content: libDts, filePath: 'file://' + prefix + 'js/StandardLibraryIntellisense.d.ts' },
+          { content: ocDts, filePath: 'file://' + ocDtsPath },
+          { content: threeDts, filePath: 'file://' + threeDtsPath },
+          { content: libDts, filePath: 'file://' + libDtsPath },
         ];
         monaco.editor.createModel("", "typescript");
         monaco.languages.typescript.typescriptDefaults.setExtraLibs(extraLibs);
