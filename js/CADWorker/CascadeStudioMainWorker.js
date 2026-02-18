@@ -101,7 +101,7 @@ class CascadeStudioWorker {
 
     // Load the OpenCascade WebAssembly Module (v2 Embind)
     try {
-      const openCascade = await new initOpenCascade({
+      const openCascade = await initOpenCascade({
         locateFile(path) {
           if (path.endsWith('.wasm')) {
             // In build mode, WASM is copied to the build output directory
@@ -201,7 +201,7 @@ class CascadeStudioWorker {
         // Scan the edges and faces and add to the edge list
         Object.assign(fullShapeEdgeHashes, self.ForEachEdge(self.sceneShapes[shapeInd], (index, edge) => { }));
         self.ForEachFace(self.sceneShapes[shapeInd], (index, face) => {
-          fullShapeFaceHashes[face.HashCode(100000000)] = index;
+          fullShapeFaceHashes[self.oc.OCJS.HashCode(face, 100000000)] = index;
         });
 
         sceneBuilder.Add(self.currentShape, self.sceneShapes[shapeInd]);

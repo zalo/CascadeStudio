@@ -134,7 +134,7 @@ test.describe('Primitives', () => {
     }
   });
 
-  // Requires GC_MakeCircle binding fix (pending opencascade.js rebuild)
+  // Needs Handle_Geom_Circle binding in opencascade.js
   test.skip('Circle renders without errors', async ({ page }) => {
     await gotoAndReady(page);
     await evaluateNoErrors(page, 'Circle(30);');
@@ -378,7 +378,7 @@ test.describe('Selector API', () => {
     `);
   });
 
-  // Requires BRepAdaptor_Surface + GeomAbs_SurfaceType bindings (pending opencascade.js rebuild)
+  // Needs GeomAdaptor_TransformedSurface binding in opencascade.js (base of BRepAdaptor_Surface)
   test.skip('face type selectors detect Plane and Cylinder', async ({ page }) => {
     await gotoAndReady(page);
 

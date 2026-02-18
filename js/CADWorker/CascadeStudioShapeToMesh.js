@@ -31,7 +31,7 @@ class CascadeStudioMesher {
       self.oc.TopAbs_ShapeEnum.TopAbs_FACE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
     for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_FACE,
       self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-      callback(face_index++, self.oc.TopoDS.Face_1(anExplorer.Current()));
+      callback(face_index++, self.oc.TopoDS_Cast.Face_1(anExplorer.Current()));
     }
   }
 
@@ -43,8 +43,8 @@ class CascadeStudioMesher {
       self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
     for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE,
       self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-      let edge = self.oc.TopoDS.Edge_1(anExplorer.Current());
-      let edgeHash = edge.HashCode(100000000);
+      let edge = self.oc.TopoDS_Cast.Edge_1(anExplorer.Current());
+      let edgeHash = self.oc.OCJS.HashCode(edge, 100000000);
       if (!edgeHashes.hasOwnProperty(edgeHash)) {
         edgeHashes[edgeHash] = edgeIndex;
         callback(edgeIndex++, edge);
@@ -77,10 +77,9 @@ class CascadeStudioMesher {
           normal_coord: [],
           tri_indexes: [],
           number_of_triangles: 0,
-          face_index: fullShapeFaceHashes[myFace.HashCode(100000000)]
+          face_index: fullShapeFaceHashes[self.oc.OCJS.HashCode(myFace, 100000000)]
         };
 
-        let pc = new oc.Poly_Connect_2(myT);
         let nbNodes = myT.get().NbNodes();
 
         // Write vertex buffer
@@ -136,12 +135,11 @@ class CascadeStudioMesher {
           }
         }
 
-        // Write normal buffer
-        let myNormal = new oc.TColgp_Array1OfDir_2(1, nbNodes);
-        oc.StdPrs_ToolTriangulatedShape.Normal(myFace, pc, myNormal);
+        // Write normal buffer (OCCT 8.0: compute normals on the triangulation, then read per-node)
+        if (!myT.get().HasNormals()) { myT.get().ComputeNormals(); }
         this_face.normal_coord = new Array(nbNodes * 3);
         for (let i = 0; i < nbNodes; i++) {
-          let d = myNormal.Value(i + 1).Transformed(aLocation.Transformation());
+          let d = myT.get().Normal_1(i + 1).Transformed(aLocation.Transformation());
           this_face.normal_coord[(i * 3) + 0] = d.X();
           this_face.normal_coord[(i * 3) + 1] = d.Y();
           this_face.normal_coord[(i * 3) + 2] = d.Z();
@@ -171,7 +169,7 @@ class CascadeStudioMesher {
         curFace += 1;
 
         CascadeStudioMesher.forEachEdge(myFace, (index, myEdge) => {
-          let edgeHash = myEdge.HashCode(100000000);
+          let edgeHash = self.oc.OCJS.HashCode(myEdge, 100000000);
           if (fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
             let this_edge = {
               vertex_coord: [],
@@ -241,7 +239,7 @@ class CascadeStudioMesher {
 
       // Get the free edges that aren't on any triangulated face/surface
       CascadeStudioMesher.forEachEdge(shape, (index, myEdge) => {
-        let edgeHash = myEdge.HashCode(100000000);
+        let edgeHash = self.oc.OCJS.HashCode(myEdge, 100000000);
         if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
           let this_edge = {
             vertex_coord: [],

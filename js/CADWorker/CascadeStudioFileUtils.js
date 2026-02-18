@@ -105,7 +105,7 @@ class CascadeStudioFileIO {
       console.log(fileName + " loaded successfully!     Converting to OCC now...");
 
       let solidSTL = new oc.BRepBuilderAPI_MakeSolid_1();
-      solidSTL.Add(oc.TopoDS.Shell_1(readShape));
+      solidSTL.Add(oc.TopoDS_Cast.Shell_1(readShape));
 
       self.externalShapes[fileName] = solidSTL.Solid();
       self.externalShapes[fileName].hash = self.stringToHash(fileName);
@@ -124,7 +124,7 @@ class CascadeStudioFileIO {
   saveShapeSTEP(filename = "CascadeStudioPart.step") {
     let oc = self.oc;
     let writer = new oc.STEPControl_Writer_1();
-    let transferResult = writer.Transfer(self.currentShape, oc.STEPControl_StepModelType.STEPControl_AsIs, true, new oc.Message_ProgressRange_1());
+    let transferResult = writer.Transfer_1(self.currentShape, oc.STEPControl_StepModelType.STEPControl_AsIs, true, new oc.Message_ProgressRange_1());
     if (transferResult === oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
       let writeResult = writer.Write(filename);
       if (writeResult === oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
