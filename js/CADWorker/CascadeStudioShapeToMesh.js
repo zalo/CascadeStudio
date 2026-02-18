@@ -136,13 +136,16 @@ class CascadeStudioMesher {
         }
 
         // Write normal buffer (OCCT 8.0: compute normals on the triangulation, then read per-node)
+        // ComputeNormals() doesn't account for face orientation — flip for reversed faces
         if (!myT.get().HasNormals()) { myT.get().ComputeNormals(); }
+        let IsReversed = (orient !== oc.TopAbs_Orientation.TopAbs_FORWARD);
         this_face.normal_coord = new Array(nbNodes * 3);
         for (let i = 0; i < nbNodes; i++) {
           let d = myT.get().Normal_1(i + 1).Transformed(aLocation.Transformation());
-          this_face.normal_coord[(i * 3) + 0] = d.X();
-          this_face.normal_coord[(i * 3) + 1] = d.Y();
-          this_face.normal_coord[(i * 3) + 2] = d.Z();
+          let IsReversedFactor = IsReversed ? -1 : 1;
+          this_face.normal_coord[(i * 3) + 0] = IsReversedFactor * d.X();
+          this_face.normal_coord[(i * 3) + 1] = IsReversedFactor * d.Y();
+          this_face.normal_coord[(i * 3) + 2] = IsReversedFactor * d.Z();
         }
 
         // Write triangle buffer

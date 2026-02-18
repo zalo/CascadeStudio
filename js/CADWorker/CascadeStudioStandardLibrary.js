@@ -456,8 +456,6 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
       for (let i = 0; i < objectsToJoin.length; i++) {
         if (i > 0) {
           let combinedFuse = new self.oc.BRepAlgoAPI_Fuse_3(combined, objectsToJoin[i], new self.oc.Message_ProgressRange_1());
-          combinedFuse.SetFuzzyValue(fuzzValue);
-          combinedFuse.Build(new self.oc.Message_ProgressRange_1());
           combined = combinedFuse.Shape();
         }
       }
@@ -488,8 +486,6 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
       for (let i = 0; i < objectsToSubtract.length; i++) {
         if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
         let differenceCut = new self.oc.BRepAlgoAPI_Cut_3(difference, objectsToSubtract[i], new self.oc.Message_ProgressRange_1());
-        differenceCut.SetFuzzyValue(fuzzValue);
-        differenceCut.Build(new self.oc.Message_ProgressRange_1());
         difference = differenceCut.Shape();
       }
     }
@@ -531,8 +527,6 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
       for (let i = 0; i < objectsToIntersect.length; i++) {
         if (i > 0) {
           let intersectedCommon = new self.oc.BRepAlgoAPI_Common_3(intersected, objectsToIntersect[i], new self.oc.Message_ProgressRange_1());
-          intersectedCommon.SetFuzzyValue(fuzzValue);
-          intersectedCommon.Build(new self.oc.Message_ProgressRange_1());
           intersected = intersectedCommon.Shape();
         }
       }
