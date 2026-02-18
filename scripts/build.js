@@ -23,9 +23,10 @@ execFileSync(npx, [
   './js/MainPage/main.js',
   './js/CADWorker/CascadeStudioMainWorker.js',
   '--bundle', '--minify', '--sourcemap',
-  '--format=esm', '--target=es2020',
+  '--format=esm', '--target=es2022',
   '--outdir=./build', '--entry-names=[name]',
   '--external:fs', '--external:path', '--external:os',
+  '--external:module', '--external:worker_threads',
   '--loader:.wasm=file',
   '--define:ESBUILD=true',
 ], { cwd: root, stdio: 'inherit' });
