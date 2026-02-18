@@ -449,7 +449,7 @@ function Scale(scale, shapes, keepOriginal) {
 // --- Boolean Operations ---
 
 function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
-  if (!fuzzValue) { fuzzValue = 0.1; }
+  if (!fuzzValue) { fuzzValue = 1e-7; }
   let curUnion = self.CacheOp(arguments, "Union", () => {
     let combined = objectsToJoin[0];
     if (objectsToJoin.length > 1) {
@@ -476,7 +476,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
 }
 
 function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdges) {
-  if (!fuzzValue) { fuzzValue = 0.1; }
+  if (!fuzzValue) { fuzzValue = 1e-7; }
   let curDifference = self.CacheOp(arguments, "Difference", () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
 
@@ -518,7 +518,7 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
 }
 
 function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
-  if (!fuzzValue) { fuzzValue = 0.1; }
+  if (!fuzzValue) { fuzzValue = 1e-7; }
   let curIntersection = self.CacheOp(arguments, "Intersection", () => {
     let intersected = objectsToIntersect[0];
     if (objectsToIntersect.length > 1) {
