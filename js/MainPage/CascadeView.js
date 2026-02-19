@@ -19,7 +19,7 @@ class Environment {
     // Create the Canvas and WebGL Renderer
     this.curCanvas = document.createElement('canvas');
     this.goldenContainer.element.appendChild(this.curCanvas);
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.curCanvas, antialias: true, webgl2: false });
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.curCanvas, antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(this.parentWidth, this.parentHeight);
     this.goldenContainer.on('resize', this.onWindowResize.bind(this));

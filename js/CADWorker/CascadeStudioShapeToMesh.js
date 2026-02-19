@@ -136,16 +136,18 @@ class CascadeStudioMesher {
         }
 
         // Write normal buffer (OCCT 8.0: compute normals on the triangulation, then read per-node)
-        // ComputeNormals() produces normals based on triangle winding, which already
-        // follows the parametric surface orientation — no need to flip for REVERSED faces.
+        // ComputeNormals() derives normals from stored triangle winding, which follows the
+        // parametric surface orientation. For REVERSED faces, we flip both normals AND winding
+        // so they remain consistent with each other while pointing geometrically outward.
         if (!myT.get().HasNormals()) { myT.get().ComputeNormals(); }
         let IsReversed = (orient !== oc.TopAbs_Orientation.TopAbs_FORWARD);
+        let IsReversedFactor = IsReversed ? -1 : 1;
         this_face.normal_coord = new Array(nbNodes * 3);
         for (let i = 0; i < nbNodes; i++) {
           let d = myT.get().Normal_1(i + 1).Transformed(aLocation.Transformation());
-          this_face.normal_coord[(i * 3) + 0] = d.X();
-          this_face.normal_coord[(i * 3) + 1] = d.Y();
-          this_face.normal_coord[(i * 3) + 2] = d.Z();
+          this_face.normal_coord[(i * 3) + 0] = IsReversedFactor * d.X();
+          this_face.normal_coord[(i * 3) + 1] = IsReversedFactor * d.Y();
+          this_face.normal_coord[(i * 3) + 2] = IsReversedFactor * d.Z();
         }
 
         // Write triangle buffer — flip winding for REVERSED faces
