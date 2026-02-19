@@ -14,7 +14,15 @@ module.exports = defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } },
+    {
+      name: 'chromium',
+      use: {
+        browserName: 'chromium',
+        launchOptions: {
+          args: ['--use-gl=angle', '--use-angle=swiftshader'],
+        },
+      },
+    },
   ],
   webServer: {
     command: 'npx http-server ./build -p 8080 -c-1 --silent',
