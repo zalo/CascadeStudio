@@ -1,29 +1,29 @@
 /* Cascade Studio — Modern Dark Theme */
 
 :root {
-  /* Base palette */
-  --cs-bg-primary: #1a1a2e;
-  --cs-bg-secondary: #16213e;
-  --cs-bg-surface: #1e2a45;
-  --cs-bg-elevated: #253352;
+  /* Base palette — matches master's neutral dark theme */
+  --cs-bg-primary: #222;
+  --cs-bg-secondary: #111;
+  --cs-bg-surface: #2e2e2e;
+  --cs-bg-elevated: #404040;
 
   /* Text */
-  --cs-text-primary: #e0e0e0;
-  --cs-text-secondary: #a0a8b8;
-  --cs-text-muted: #6b7280;
+  --cs-text-primary: #f2f2f2;
+  --cs-text-secondary: #aeb5b8;
+  --cs-text-muted: #777;
 
   /* Accent */
-  --cs-accent: #4fc3f7;
-  --cs-accent-hover: #81d4fa;
-  --cs-accent-dim: #2196f3;
+  --cs-accent: #4CAF50;
+  --cs-accent-hover: #66BB6A;
+  --cs-accent-dim: #388E3C;
 
   /* Borders & separators */
-  --cs-border: #2a3a5c;
-  --cs-border-active: #4fc3f7;
+  --cs-border: #333;
+  --cs-border-active: #4CAF50;
 
   /* Scrollbar */
   --cs-scrollbar-track: var(--cs-bg-secondary);
-  --cs-scrollbar-thumb: #4a5568;
+  --cs-scrollbar-thumb: #777;
 
   /* Radius */
   --cs-radius: 4px;
@@ -63,7 +63,7 @@ body {
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #5a6878;
+  background: #999;
 }
 
 /* ============================================================
@@ -72,29 +72,26 @@ body {
 
 .topnav {
   background: var(--cs-bg-secondary);
-  border-bottom: 1px solid var(--cs-border);
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0;
   height: 36px;
   overflow-x: auto;
   overflow-y: hidden;
-  backdrop-filter: blur(8px);
 }
 
 .topnav-brand {
-  color: var(--cs-accent) !important;
-  font-weight: 600;
+  color: var(--cs-text-primary) !important;
   font-size: 14px;
-  padding: 0 12px;
+  font-family: Consolas, monospace;
+  padding: 4px 16px;
   text-decoration: none;
   white-space: nowrap;
-  letter-spacing: 0.02em;
 }
 
 .topnav-brand:hover {
-  color: var(--cs-accent-hover) !important;
-  background: transparent !important;
+  background: #aaa !important;
+  color: black !important;
 }
 
 .topnav-actions {
@@ -105,25 +102,23 @@ body {
 }
 
 .topnav a, .topnav label {
-  color: var(--cs-text-secondary);
+  color: var(--cs-text-primary);
   text-decoration: none;
-  font-size: 12px;
-  font-family: var(--cs-font-ui);
-  padding: 6px 10px;
-  border-radius: var(--cs-radius);
+  font-size: 14px;
+  font-family: Consolas, monospace;
+  padding: 4px 16px;
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--cs-transition), background var(--cs-transition);
 }
 
 .topnav a:hover, .topnav label:hover {
-  background: var(--cs-bg-elevated);
-  color: var(--cs-text-primary);
+  background: #aaa;
+  color: black;
 }
 
 .topnav a:active, .topnav label:active {
-  background: var(--cs-accent-dim);
-  color: #fff;
+  background: var(--cs-accent);
+  color: white;
 }
 
 .topnav-separator {
@@ -153,7 +148,7 @@ body {
 .topnav-select:focus {
   outline: none;
   border-color: var(--cs-accent);
-  box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.15);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
 }
 
 .topnav-import {
@@ -177,15 +172,17 @@ body {
 .dockview-theme-dark {
   --dv-background-color: var(--cs-bg-primary);
   --dv-paneview-header-border-color: var(--cs-border);
-  --dv-tabs-and-actions-container-background-color: var(--cs-bg-secondary);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--cs-bg-surface);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--cs-bg-secondary);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--cs-bg-surface);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--cs-bg-secondary);
+  --dv-tabs-and-actions-container-background-color: transparent;
+  --dv-tabs-and-actions-container-height: 20px;
+  --dv-tabs-and-actions-container-font-size: 11px;
+  --dv-activegroup-visiblepanel-tab-background-color: #222;
+  --dv-activegroup-hiddenpanel-tab-background-color: #1a1a1a;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #222;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #1a1a1a;
   --dv-tab-divider-color: var(--cs-border);
-  --dv-activegroup-visiblepanel-tab-color: var(--cs-text-primary);
+  --dv-activegroup-visiblepanel-tab-color: #ddd;
   --dv-activegroup-hiddenpanel-tab-color: var(--cs-text-muted);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--cs-text-secondary);
+  --dv-inactivegroup-visiblepanel-tab-color: #ddd;
   --dv-inactivegroup-hiddenpanel-tab-color: var(--cs-text-muted);
   --dv-separator-border: var(--cs-border);
   --dv-group-view-background-color: var(--cs-bg-primary);
@@ -215,14 +212,14 @@ body {
    ============================================================ */
 
 :root {
-  --tp-font-family: var(--cs-font-ui);
+  --tp-font-family: Arial, sans-serif;
   --tp-base-background-color: var(--cs-bg-surface);
-  --tp-button-background-color: var(--cs-bg-elevated);
-  --tp-button-background-color-active: var(--cs-accent-dim);
-  --tp-button-background-color-focus: var(--cs-bg-elevated);
-  --tp-button-background-color-hover: #2c4060;
-  --tp-button-foreground-color: var(--cs-text-primary);
-  --tp-label-foreground-color: var(--cs-text-secondary);
+  --tp-button-background-color: hsl(0, 0%, 25%);
+  --tp-button-background-color-active: hsl(0, 0%, 40%);
+  --tp-button-background-color-focus: hsl(0, 0%, 35%);
+  --tp-button-background-color-hover: hsl(0, 0%, 30%);
+  --tp-button-foreground-color: #eee;
+  --tp-label-foreground-color: #aeb5b8;
 }
 
 .gui-panel {
@@ -280,7 +277,7 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  background: rgba(22, 33, 62, 0.85);
+  background: rgba(34, 34, 34, 0.85);
   backdrop-filter: blur(8px);
   border: 1px solid var(--cs-border);
   border-radius: 16px;
@@ -319,7 +316,7 @@ body {
 .cs-timeline-step.cs-timeline-active {
   color: var(--cs-accent);
   background: var(--cs-bg-elevated);
-  box-shadow: 0 0 6px rgba(79, 195, 247, 0.3);
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.3);
 }
 
 .cs-timeline-step.cs-timeline-final {
@@ -328,7 +325,7 @@ body {
 
 /* Editor line highlight when scrubbing timeline */
 .cs-history-line-highlight {
-  background: rgba(79, 195, 247, 0.12);
+  background: rgba(76, 175, 80, 0.12);
   border-left: 2px solid var(--cs-accent);
 }
 
@@ -344,6 +341,9 @@ body {
    ============================================================ */
 
 @media (orientation: portrait) {
+  .dv-tabs-and-actions-container {
+    display: none !important;
+  }
   .gui-panel {
     max-width: 70%;
     font-size: 11px;
