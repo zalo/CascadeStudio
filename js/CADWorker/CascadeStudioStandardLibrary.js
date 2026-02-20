@@ -938,7 +938,7 @@ function _edgeMidpoint(edge) {
 
 function _edgeLength(edge) {
   let props = new self.oc.GProp_GProps_1();
-  self.oc.BRepGProp.LinearProperties_1(edge, props, false, false);
+  self.oc.BRepGProp.LinearProperties(edge, props, false, false);
   return props.Mass();
 }
 
@@ -1370,7 +1370,7 @@ function CenterOfMass(shape) {
 
 function EdgeLength(shape) {
   let props = new self.oc.GProp_GProps_1();
-  self.oc.BRepGProp.LinearProperties_1(shape, props, false, false);
+  self.oc.BRepGProp.LinearProperties(shape, props, false, false);
   return props.Mass();
 }
 

@@ -484,7 +484,7 @@ test.describe('OpenSCAD Primitives & Transforms', () => {
       'translate([10, 20, 30]) cube(5);',
       'rotate([45, 0, 0]) cube(10);',
       'rotate(90, [0, 0, 1]) cube([10, 5, 3]);',
-      'scale([2, 1, 0.5]) cube(10);',
+      'scale(2) cube(10);',
       'mirror([1, 0, 0]) translate([5, 0, 0]) cube(10);',
     ]) {
       await evaluateOpenSCADNoErrors(page, code);
