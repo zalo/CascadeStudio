@@ -71,7 +71,8 @@ class GUIManager {
     if (this._gui) { this._gui.dispose(); }
     this._gui = new Pane({
       title: 'Cascade Control Panel',
-      container: document.getElementById('guiPanel')
+      container: document.getElementById('guiPanel'),
+      expanded: !navigator.webdriver,
     });
     this._guiSeparatorAdded = false;
     this._userGui = false;

@@ -943,7 +943,6 @@ function _edgeLength(edge) {
 }
 
 function _edgeCurveType(edge) {
-  if (!self.oc.GeomAbs_CurveType) return "Other";
   let curve = new self.oc.BRepAdaptor_Curve_2(edge);
   let type = curve.GetType();
   let CT = self.oc.GeomAbs_CurveType;
@@ -958,7 +957,6 @@ function _edgeCurveType(edge) {
 }
 
 function _edgeDirection(edge) {
-  if (!self.oc.GeomAbs_CurveType) return null;
   let curve = new self.oc.BRepAdaptor_Curve_2(edge);
   if (curve.GetType() !== self.oc.GeomAbs_CurveType.GeomAbs_Line) return null;
   let dir = curve.Line().Direction();
@@ -979,20 +977,6 @@ function _faceArea(face) {
 }
 
 function _faceNormal(face) {
-  if (!self.oc.BRepAdaptor_Surface_2) {
-    // Fallback: use edge cross-product heuristic
-    let edges = [];
-    ForEachEdge(face, (i, edge) => { edges.push(edge); });
-    if (edges.length < 2) return [0, 0, 1];
-    let mid0 = _edgeMidpoint(edges[0]), mid1 = _edgeMidpoint(edges[1]);
-    let c = _faceCentroid(face);
-    let v0 = [mid0[0] - c[0], mid0[1] - c[1], mid0[2] - c[2]];
-    let v1 = [mid1[0] - c[0], mid1[1] - c[1], mid1[2] - c[2]];
-    let cross = [v0[1]*v1[2] - v0[2]*v1[1], v0[2]*v1[0] - v0[0]*v1[2], v0[0]*v1[1] - v0[1]*v1[0]];
-    let mag = Math.sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
-    if (mag < 1e-10) return [0, 0, 1];
-    return [cross[0] / mag, cross[1] / mag, cross[2] / mag];
-  }
   let surf = new self.oc.BRepAdaptor_Surface_2(face, true);
   let uMid = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
   let vMid = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
@@ -1217,10 +1201,6 @@ class FaceSelector {
   // --- Filtering ---
 
   ofType(type) {
-    if (!self.oc.GeomAbs_SurfaceType || !self.oc.BRepAdaptor_Surface_2) {
-      console.warn("FaceSelector.ofType requires GeomAbs_SurfaceType and BRepAdaptor_Surface bindings");
-      return this._empty();
-    }
     let ST = self.oc.GeomAbs_SurfaceType;
     let typeMap = {
       "Plane": ST.GeomAbs_Plane,
@@ -1409,33 +1389,12 @@ function Section(shape, planeOrigin, planeNormal) {
   if (!planeOrigin) { planeOrigin = [0, 0, 0]; }
   if (_vecLength(planeNormal) < 1e-10) { throw new Error("Section: planeNormal must be a non-zero vector"); }
   let curSection = self.CacheOp(arguments, "Section", () => {
-    if (self.oc.gp_Pln_3 && self.oc.BRepAlgoAPI_Section_5) {
-      // Proper planar section using gp_Pln
-      let origin = new self.oc.gp_Pnt_3(planeOrigin[0], planeOrigin[1], planeOrigin[2]);
-      let normal = new self.oc.gp_Dir_5(planeNormal[0], planeNormal[1], planeNormal[2]);
-      let plane = new self.oc.gp_Pln_3(origin, normal);
-      let section = new self.oc.BRepAlgoAPI_Section_5(shape, plane, false);
-      section.Build(new self.oc.Message_ProgressRange_1());
-      return section.Shape();
-    }
-    // Fallback: thin-slab boolean intersection
-    let norm = _normalize(planeNormal);
-    let size = 1000, thickness = 0.001;
-    let slab = Box(size, size, thickness, true);
-    // Rotate slab to align with planeNormal
-    let defaultNorm = [0, 0, 1];
-    let dot = _dot(defaultNorm, norm);
-    if (Math.abs(dot + 1) < 1e-6) {
-      slab = Rotate([1, 0, 0], 180, slab, false);
-    } else if (Math.abs(dot - 1) > 1e-6) {
-      let cross = [defaultNorm[1]*norm[2] - defaultNorm[2]*norm[1],
-                    defaultNorm[2]*norm[0] - defaultNorm[0]*norm[2],
-                    defaultNorm[0]*norm[1] - defaultNorm[1]*norm[0]];
-      let angle = Math.acos(Math.min(1, Math.max(-1, dot))) * 180 / Math.PI;
-      slab = Rotate(cross, angle, slab, false);
-    }
-    slab = Translate(planeOrigin, slab, false);
-    return Intersection([shape, slab], false);
+    let origin = new self.oc.gp_Pnt_3(planeOrigin[0], planeOrigin[1], planeOrigin[2]);
+    let normal = new self.oc.gp_Dir_5(planeNormal[0], planeNormal[1], planeNormal[2]);
+    let plane = new self.oc.gp_Pln_3(origin, normal);
+    let section = new self.oc.BRepAlgoAPI_Section_5(shape, plane, false);
+    section.Build(new self.oc.Message_ProgressRange_1());
+    return section.Shape();
   });
   self.sceneShapes.push(curSection);
   return curSection;
