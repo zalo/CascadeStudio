@@ -108,3 +108,7 @@ typings/
 
 # TernJS port file
 .tern-port
+
+# Playwright
+playwright-report/
+test-results/
