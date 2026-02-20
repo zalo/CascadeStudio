@@ -58,7 +58,6 @@ class CascadeStudioMesher {
     let facelist = [], edgeList = [];
     try {
       let oc = self.oc;
-
       // Set up the Incremental Mesh builder, with a precision
       let mesher = new oc.BRepMesh_IncrementalMesh_2(shape, maxDeviation, false, maxDeviation * 5, false);
 
@@ -218,7 +217,6 @@ class CascadeStudioMesher {
 
               // Run constrained Delaunay triangulation
               cdtTriangles = cdt2d(uvPoints, constraintEdges, { exterior: false });
-              // CDT re-triangulation succeeded (fallback for faces with bad OCCT mesh)
             } catch(e) {
               console.warn(`[MESH CDT] Face ${faceIndex}: cdt2d failed, using OCCT mesh: ${e.message}`);
               cdtTriangles = null;
