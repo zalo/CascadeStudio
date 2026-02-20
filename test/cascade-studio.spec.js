@@ -52,34 +52,46 @@ function extractLog(logs, tag) {
   return line.split(tag + ':')[1];
 }
 
+/**
+ * Wait for all expected log tags, then return logs.
+ */
+async function waitForLogs(page, tags, timeout = 10000) {
+  await page.waitForFunction((t) => {
+    const logs = window.CascadeAPI.getConsoleLog();
+    return t.every(tag => logs.some(l => l.includes(tag + ':')));
+  }, tags, { timeout });
+  return await page.evaluate(() => window.CascadeAPI.getConsoleLog());
+}
+
+/**
+ * Switch to OpenSCAD mode and evaluate code, asserting zero errors.
+ */
+async function evaluateOpenSCADNoErrors(page, code, timeout = 60000) {
+  await page.evaluate(() => window.CascadeAPI.setMode('openscad'));
+  await evaluateNoErrors(page, code, timeout);
+}
+
 // ============================================================================
-// Application Startup
+// Application Startup + CascadeAPI
 // ============================================================================
 
-test.describe('Application Startup', () => {
-  test('page loads with correct title and meta', async ({ page }) => {
+test.describe('Application Startup & CascadeAPI', () => {
+  test('page loads, CascadeAPI works, capabilities and examples are correct', async ({ page }) => {
+    // Page title and meta
     await page.goto('/');
     await expect(page).toHaveTitle(/Cascade Studio/);
     const meta = await page.locator('meta[name="cascade-api"]').getAttribute('content');
     expect(meta).toBe('window.CascadeAPI');
-  });
 
-  test('CascadeAPI is available and starter code evaluates without errors', async ({ page }) => {
-    await gotoAndReady(page);
+    // Wait for WASM init
+    await waitForReady(page);
+    await page.waitForFunction(() => !window.CascadeAPI.isWorking(), { timeout: 60000 });
+
+    // CascadeAPI is available and starter code ran without errors
     const hasAPI = await page.evaluate(() => typeof window.CascadeAPI === 'object');
     expect(hasAPI).toBe(true);
     const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
     expect(errors).toEqual([]);
-  });
-});
-
-// ============================================================================
-// CascadeAPI Methods
-// ============================================================================
-
-test.describe('CascadeAPI', () => {
-  test('getCapabilities, getExamples, setCode/getCode, getMode, screenshot', async ({ page }) => {
-    await gotoAndReady(page);
 
     // getCapabilities
     const caps = await page.evaluate(() => window.CascadeAPI.getCapabilities());
@@ -115,13 +127,14 @@ test.describe('CascadeAPI', () => {
 });
 
 // ============================================================================
-// Primitives
+// Primitives, Transforms, Measurement, Additional Primitives
 // ============================================================================
 
-test.describe('Primitives', () => {
-  test('Box, Sphere, Cylinder, Cone, Text3D, Polygon all render without errors', async ({ page }) => {
+test.describe('Primitives & Transforms', () => {
+  test('all primitives, transforms, measurement functions, and additional primitives work', async ({ page }) => {
     await gotoAndReady(page);
 
+    // --- Primitives ---
     for (const code of [
       'Box(10, 20, 30);',
       'Sphere(50);',
@@ -129,24 +142,12 @@ test.describe('Primitives', () => {
       'Cone(20, 5, 30);',
       'Text3D("Hi", 36, 0.15, "Roboto");',
       'Polygon([[0,0],[100,0],[100,50],[50,100],[0,100]]);',
+      'Circle(30);',
     ]) {
       await evaluateNoErrors(page, code);
     }
-  });
 
-  test('Circle renders without errors', async ({ page }) => {
-    await gotoAndReady(page);
-    await evaluateNoErrors(page, 'Circle(30);');
-  });
-});
-
-// ============================================================================
-// Transforms
-// ============================================================================
-
-test.describe('Transforms', () => {
-  test('Translate, Rotate, Scale, Mirror all render without errors', async ({ page }) => {
-    await gotoAndReady(page);
+    // --- Transforms ---
     for (const code of [
       'Translate([10, 20, 30], Box(10, 10, 10));',
       'Rotate([0, 0, 1], 45, Box(10, 10, 10));',
@@ -155,17 +156,42 @@ test.describe('Transforms', () => {
     ]) {
       await evaluateNoErrors(page, code);
     }
+
+    // --- Measurement Functions ---
+    await evaluateCode(page, `
+      let box = Box(10, 10, 10);
+      console.log("VOL:" + Volume(box));
+      console.log("AREA:" + SurfaceArea(box));
+      let com = CenterOfMass(box);
+      console.log("COM:" + com.join(","));
+    `);
+    const mErrors = await page.evaluate(() => window.CascadeAPI.getErrors());
+    expect(mErrors).toEqual([]);
+
+    const mLogs = await waitForLogs(page, ['VOL', 'AREA', 'COM']);
+    expect(parseFloat(extractLog(mLogs, 'VOL'))).toBeCloseTo(1000, 0);
+    expect(parseFloat(extractLog(mLogs, 'AREA'))).toBeCloseTo(600, 0);
+    const comParts = extractLog(mLogs, 'COM').split(',').map(Number);
+    expect(comParts.length).toBe(3);
+    expect(comParts[0]).toBeCloseTo(5, 0);
+    expect(comParts[1]).toBeCloseTo(5, 0);
+    expect(comParts[2]).toBeCloseTo(5, 0);
+
+    // --- Additional Primitives ---
+    await evaluateNoErrors(page, 'Wedge(30, 20, 30, 10);');
+    await evaluateNoErrors(page, 'Section(Box(20, 20, 20), [0, 0, 10], [0, 0, 1]);');
   });
 });
 
 // ============================================================================
-// Booleans
+// Booleans & Operations
 // ============================================================================
 
-test.describe('Booleans', () => {
-  test('Union, Difference, Intersection, three-hole sphere all render without errors', async ({ page }) => {
+test.describe('Booleans & Operations', () => {
+  test('booleans, extrude, revolve, loft, pipe, fillet, chamfer, offset, sketch all work', async ({ page }) => {
     await gotoAndReady(page);
 
+    // --- Booleans ---
     await evaluateNoErrors(page, `
       let a = Box(20, 20, 20);
       let b = Translate([10, 10, 10], Box(20, 20, 20));
@@ -191,16 +217,8 @@ test.describe('Booleans', () => {
       let cylinderX = Rotate([1,0,0], 90, Cylinder(30, 200, true));
       Difference(sphere, [cylinderX, cylinderY, cylinderZ]);
     `);
-  });
-});
 
-// ============================================================================
-// Operations (Extrude, Revolve, Loft, Pipe, Fillet, Chamfer, Offset, Sketch)
-// ============================================================================
-
-test.describe('Operations', () => {
-  test('Extrude, Revolve, Loft, Pipe, FilletEdges, ChamferEdges, Offset, Sketch all render', async ({ page }) => {
-    await gotoAndReady(page);
+    // --- Operations ---
 
     // Extrude
     await evaluateNoErrors(page, `
@@ -249,12 +267,14 @@ test.describe('Operations', () => {
 });
 
 // ============================================================================
-// Export Formats
+// Export, GUI Controls, Console
 // ============================================================================
 
-test.describe('Export', () => {
-  test('getSTL, getOBJ, getSTEP all return non-empty data', async ({ page }) => {
+test.describe('Export, GUI & Console', () => {
+  test('export formats, GUI controls, and console capture all work', async ({ page }) => {
     await gotoAndReady(page);
+
+    // --- Export ---
     await evaluateCode(page, 'Box(10, 20, 30);');
 
     const stl = await page.evaluate(() => window.CascadeAPI.getSTL());
@@ -267,17 +287,8 @@ test.describe('Export', () => {
 
     const step = await page.evaluate(() => window.CascadeAPI.getSTEP());
     expect(step.length).toBeGreaterThan(0);
-  });
-});
 
-// ============================================================================
-// GUI Controls
-// ============================================================================
-
-test.describe('GUI Controls', () => {
-  test('Slider and Checkbox create GUI controls and render', async ({ page }) => {
-    await gotoAndReady(page);
-
+    // --- GUI Controls ---
     await evaluateNoErrors(page, `
       let r = Slider("Radius", 20, 5, 50);
       Sphere(r);
@@ -287,17 +298,8 @@ test.describe('GUI Controls', () => {
       let centered = Checkbox("Centered", true);
       Box(20, 20, 20, centered);
     `);
-  });
-});
 
-// ============================================================================
-// Console Capture
-// ============================================================================
-
-test.describe('Console', () => {
-  test('console.log messages and multiple arguments are captured', async ({ page }) => {
-    await gotoAndReady(page);
-
+    // --- Console Capture ---
     await evaluateCode(page, `
       console.log("test message");
       console.log("a", "b", 42);
@@ -318,7 +320,7 @@ test.describe('Console', () => {
 // ============================================================================
 
 test.describe('Everything Example', () => {
-  test('full gallery renders (some features may require additional bindings)', async ({ page }) => {
+  test('full gallery renders without errors', async ({ page }) => {
     await page.goto('/');
     await waitForReady(page);
     await page.waitForFunction(() => !window.CascadeAPI.isWorking(), { timeout: 60000 });
@@ -329,14 +331,14 @@ test.describe('Everything Example', () => {
 });
 
 // ============================================================================
-// Selector API
+// Selector API — basic selectors + face type detection
 // ============================================================================
 
 test.describe('Selector API', () => {
-  test('edge and face selectors with filtering, sorting, and FilletEdges integration', async ({ page }) => {
+  test('edge/face selectors with filtering, sorting, face type detection, and FilletEdges', async ({ page }) => {
     await gotoAndReady(page);
 
-    // Run all selector checks in one evaluation
+    // Edge and face selectors on a box
     await evaluateCode(page, `
       let box = Box(10, 10, 10);
       console.log("EDGE_COUNT:" + Edges(box).indices().length);
@@ -344,33 +346,22 @@ test.describe('Selector API', () => {
       console.log("BOTTOM_EDGES:" + Edges(box).min([0,0,1]).count());
       console.log("TOP_FACES:" + Faces(box).max([0,0,1]).count());
     `);
-    const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    expect(errors).toEqual([]);
+    const errors1 = await page.evaluate(() => window.CascadeAPI.getErrors());
+    expect(errors1).toEqual([]);
 
-    // Wait for all expected log tags to arrive (worker messages may lag slightly)
-    await page.waitForFunction(() => {
-      const logs = window.CascadeAPI.getConsoleLog();
-      return ['EDGE_COUNT:', 'TOP_FACES:'].every(tag => logs.some(l => l.includes(tag)));
-    }, { timeout: 10000 });
-    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-
-    const edgeCount = parseInt(extractLog(logs, 'EDGE_COUNT'));
-    expect(edgeCount).toBeGreaterThan(0);
-
-    expect(parseInt(extractLog(logs, 'TOP_EDGES'))).toBe(4);
-    expect(parseInt(extractLog(logs, 'BOTTOM_EDGES'))).toBe(4);
-    expect(parseInt(extractLog(logs, 'TOP_FACES'))).toBe(1);
+    const logs1 = await waitForLogs(page, ['EDGE_COUNT', 'TOP_FACES']);
+    expect(parseInt(extractLog(logs1, 'EDGE_COUNT'))).toBeGreaterThan(0);
+    expect(parseInt(extractLog(logs1, 'TOP_EDGES'))).toBe(4);
+    expect(parseInt(extractLog(logs1, 'BOTTOM_EDGES'))).toBe(4);
+    expect(parseInt(extractLog(logs1, 'TOP_FACES'))).toBe(1);
 
     // FilletEdges with selector indices
     await evaluateNoErrors(page, `
       let box = Box(50, 50, 30);
       FilletEdges(box, 3, Edges(box).max([0,0,1]).indices());
     `);
-  });
 
-  test('face type selectors detect Plane and Cylinder', async ({ page }) => {
-    await gotoAndReady(page);
-
+    // Face type selectors
     await evaluateCode(page, `
       let box = Box(10, 10, 10);
       console.log("BOX_PLANES:" + Faces(box).ofType("Plane").count());
@@ -378,94 +369,160 @@ test.describe('Selector API', () => {
       console.log("CYL_CYLINDERS:" + Faces(cyl).ofType("Cylinder").count());
       console.log("CYL_PLANES:" + Faces(cyl).ofType("Plane").count());
     `);
-    const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    expect(errors).toEqual([]);
+    const errors2 = await page.evaluate(() => window.CascadeAPI.getErrors());
+    expect(errors2).toEqual([]);
 
-    await page.waitForFunction(() => {
-      const logs = window.CascadeAPI.getConsoleLog();
-      return ['BOX_PLANES:', 'CYL_CYLINDERS:', 'CYL_PLANES:'].every(tag => logs.some(l => l.includes(tag)));
-    }, { timeout: 10000 });
-    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-
-    expect(parseInt(extractLog(logs, 'BOX_PLANES'))).toBe(6);
-    expect(parseInt(extractLog(logs, 'CYL_CYLINDERS'))).toBe(1);
-    expect(parseInt(extractLog(logs, 'CYL_PLANES'))).toBe(2);
+    const logs2 = await waitForLogs(page, ['BOX_PLANES', 'CYL_CYLINDERS', 'CYL_PLANES']);
+    expect(parseInt(extractLog(logs2, 'BOX_PLANES'))).toBe(6);
+    expect(parseInt(extractLog(logs2, 'CYL_CYLINDERS'))).toBe(1);
+    expect(parseInt(extractLog(logs2, 'CYL_PLANES'))).toBe(2);
   });
 });
 
 // ============================================================================
-// Measurement Functions
+// Selector Chaining & Filtering — edge/face filtering + type detection
 // ============================================================================
 
-test.describe('Measurement Functions', () => {
-  test('Volume, SurfaceArea, CenterOfMass return correct values for a 10x10x10 box', async ({ page }) => {
+test.describe('Selector Chaining & Filtering', () => {
+  test('edge and face filtering: parallel, perpendicular, ofType, length, area, type detection', async ({ page }) => {
     await gotoAndReady(page);
 
+    // --- Edge selectors on a 30x20x10 box ---
+    await evaluateCode(page, `
+      let box = Box(30, 20, 10);
+      console.log("Z_PARALLEL:" + Edges(box).parallel([0,0,1]).count());
+      console.log("Z_PERP:" + Edges(box).perpendicular([0,0,1]).count());
+      console.log("LINE_EDGES:" + Edges(box).ofType("Line").count());
+      console.log("CIRCLE_EDGES:" + Edges(box).ofType("Circle").count());
+      console.log("TOTAL_EDGES:" + Edges(box).count());
+      console.log("LONG_EDGES:" + Edges(box).longerThan(25).count());
+      console.log("SHORT_EDGES:" + Edges(box).shorterThan(15).count());
+    `);
+    const errors1 = await page.evaluate(() => window.CascadeAPI.getErrors());
+    expect(errors1).toEqual([]);
+
+    const logs1 = await waitForLogs(page, ['Z_PARALLEL', 'Z_PERP', 'LINE_EDGES', 'TOTAL_EDGES']);
+    expect(parseInt(extractLog(logs1, 'Z_PARALLEL'))).toBe(4);
+    expect(parseInt(extractLog(logs1, 'Z_PERP'))).toBe(8);
+    expect(parseInt(extractLog(logs1, 'LINE_EDGES'))).toBe(12);
+    expect(parseInt(extractLog(logs1, 'CIRCLE_EDGES'))).toBe(0);
+    expect(parseInt(extractLog(logs1, 'TOTAL_EDGES'))).toBe(12);
+    expect(parseInt(extractLog(logs1, 'LONG_EDGES'))).toBe(4);
+    expect(parseInt(extractLog(logs1, 'SHORT_EDGES'))).toBe(4);
+
+    // --- Face selectors on a 30x20x10 box ---
+    await evaluateCode(page, `
+      let box = Box(30, 20, 10);
+      console.log("Z_PAR_FACES:" + Faces(box).parallel([0,0,1]).count());
+      console.log("Z_PERP_FACES:" + Faces(box).perpendicular([0,0,1]).count());
+      console.log("TOTAL_FACES:" + Faces(box).count());
+      console.log("LARGE_FACES:" + Faces(box).largerThan(500).count());
+      console.log("SMALL_FACES:" + Faces(box).smallerThan(250).count());
+    `);
+    const errors2 = await page.evaluate(() => window.CascadeAPI.getErrors());
+    expect(errors2).toEqual([]);
+
+    const logs2 = await waitForLogs(page, ['Z_PAR_FACES', 'Z_PERP_FACES', 'TOTAL_FACES', 'LARGE_FACES']);
+    expect(parseInt(extractLog(logs2, 'Z_PAR_FACES'))).toBe(2);
+    expect(parseInt(extractLog(logs2, 'Z_PERP_FACES'))).toBe(4);
+    expect(parseInt(extractLog(logs2, 'TOTAL_FACES'))).toBe(6);
+    expect(parseInt(extractLog(logs2, 'LARGE_FACES'))).toBe(2);
+    expect(parseInt(extractLog(logs2, 'SMALL_FACES'))).toBe(2);
+
+    // --- Cylinder type detection + chained selectors ---
+    await evaluateCode(page, `
+      let cyl = Cylinder(10, 30);
+      console.log("CYL_CIRCLES:" + Edges(cyl).ofType("Circle").count());
+      console.log("CYL_TOTAL:" + Edges(cyl).count());
+      console.log("CYL_CYL_FACES:" + Faces(cyl).ofType("Cylinder").count());
+      console.log("CYL_PLANE_FACES:" + Faces(cyl).ofType("Plane").count());
+      console.log("TOP_CIRCLE:" + Edges(cyl).ofType("Circle").max([0,0,1]).count());
+      console.log("BOT_CIRCLE:" + Edges(cyl).ofType("Circle").min([0,0,1]).count());
+    `);
+    const errors3 = await page.evaluate(() => window.CascadeAPI.getErrors());
+    expect(errors3).toEqual([]);
+
+    const logs3 = await waitForLogs(page, ['CYL_CIRCLES', 'CYL_TOTAL', 'CYL_CYL_FACES', 'TOP_CIRCLE']);
+    expect(parseInt(extractLog(logs3, 'CYL_CIRCLES'))).toBe(2);
+    expect(parseInt(extractLog(logs3, 'CYL_TOTAL'))).toBeGreaterThanOrEqual(2);
+    expect(parseInt(extractLog(logs3, 'CYL_CYL_FACES'))).toBe(1);
+    expect(parseInt(extractLog(logs3, 'CYL_PLANE_FACES'))).toBe(2);
+    expect(parseInt(extractLog(logs3, 'TOP_CIRCLE'))).toBe(1);
+    expect(parseInt(extractLog(logs3, 'BOT_CIRCLE'))).toBe(1);
+
+    // --- Sphere + cone type detection ---
+    await evaluateCode(page, `
+      let sph = Sphere(15);
+      console.log("SPH_SPHERE_FACES:" + Faces(sph).ofType("Sphere").count());
+      console.log("SPH_TOTAL_FACES:" + Faces(sph).count());
+      let cone = Cone(15, 5, 20);
+      console.log("CONE_CONE_FACES:" + Faces(cone).ofType("Cone").count());
+      console.log("CONE_PLANE_FACES:" + Faces(cone).ofType("Plane").count());
+    `);
+    const errors4 = await page.evaluate(() => window.CascadeAPI.getErrors());
+    expect(errors4).toEqual([]);
+
+    const logs4 = await waitForLogs(page, ['SPH_SPHERE_FACES', 'CONE_CONE_FACES']);
+    expect(parseInt(extractLog(logs4, 'SPH_SPHERE_FACES'))).toBeGreaterThanOrEqual(1);
+    expect(parseInt(extractLog(logs4, 'SPH_TOTAL_FACES'))).toBeGreaterThanOrEqual(1);
+    expect(parseInt(extractLog(logs4, 'CONE_CONE_FACES'))).toBe(1);
+    expect(parseInt(extractLog(logs4, 'CONE_PLANE_FACES'))).toBe(2);
+  });
+
+  test('selector-driven operations and terminal selectors', async ({ page }) => {
+    await gotoAndReady(page);
+
+    // --- Fillet/chamfer with selectors ---
+    await evaluateNoErrors(page, `
+      let box = Box(40, 30, 20);
+      FilletEdges(box, 3, Edges(box).max([0,0,1]).indices());
+    `);
+
+    await evaluateNoErrors(page, `
+      let box = Box(40, 30, 20);
+      ChamferEdges(box, 2, Edges(box).min([0,0,1]).indices());
+    `);
+
+    await evaluateNoErrors(page, `
+      let box = Box(40, 30, 20);
+      FilletEdges(box, 2, Edges(box).parallel([1,0,0]).indices());
+    `);
+
+    await evaluateNoErrors(page, `
+      let cyl = Cylinder(15, 25);
+      FilletEdges(cyl, 3, Edges(cyl).ofType("Circle").indices());
+    `);
+
+    // --- first, last, at terminal selectors ---
     await evaluateCode(page, `
       let box = Box(10, 10, 10);
-      console.log("VOL:" + Volume(box));
-      console.log("AREA:" + SurfaceArea(box));
-      let com = CenterOfMass(box);
-      console.log("COM:" + com.join(","));
+      let sorted = Edges(box).sortBy([0,0,1]);
+      console.log("SORTED_COUNT:" + sorted.count());
+      console.log("FIRST4:" + sorted.first(4).count());
+      console.log("LAST4:" + sorted.last(4).count());
+      let idx = sorted.at(0);
+      console.log("AT0_TYPE:" + (typeof idx));
     `);
     const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
     expect(errors).toEqual([]);
 
-    // Wait for all expected log tags to arrive (worker messages may lag slightly)
-    await page.waitForFunction(() => {
-      const logs = window.CascadeAPI.getConsoleLog();
-      return ['VOL:', 'AREA:', 'COM:'].every(tag => logs.some(l => l.includes(tag)));
-    }, { timeout: 10000 });
-    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-
-    expect(parseFloat(extractLog(logs, 'VOL'))).toBeCloseTo(1000, 0);
-    expect(parseFloat(extractLog(logs, 'AREA'))).toBeCloseTo(600, 0);
-
-    const comParts = extractLog(logs, 'COM').split(',').map(Number);
-    expect(comParts.length).toBe(3);
-    expect(comParts[0]).toBeCloseTo(5, 0);
-    expect(comParts[1]).toBeCloseTo(5, 0);
-    expect(comParts[2]).toBeCloseTo(5, 0);
+    const logs = await waitForLogs(page, ['SORTED_COUNT', 'FIRST4', 'LAST4', 'AT0_TYPE']);
+    expect(parseInt(extractLog(logs, 'SORTED_COUNT'))).toBe(12);
+    expect(parseInt(extractLog(logs, 'FIRST4'))).toBe(4);
+    expect(parseInt(extractLog(logs, 'LAST4'))).toBe(4);
+    expect(extractLog(logs, 'AT0_TYPE')).toBe('number');
   });
 });
 
 // ============================================================================
-// Additional Primitives (Wedge, Section)
+// OpenSCAD — basics (primitives, transforms, booleans, extrusions, modules)
 // ============================================================================
 
-test.describe('Additional Primitives', () => {
-  test('Wedge and Section render without errors', async ({ page }) => {
-    await gotoAndReady(page);
-    await evaluateNoErrors(page, 'Wedge(30, 20, 30, 10);');
-    await evaluateNoErrors(page, 'Section(Box(20, 20, 20), [0, 0, 10], [0, 0, 1]);');
-  });
-});
-
-// ============================================================================
-// OpenSCAD Mode
-// ============================================================================
-
-/**
- * Switch to OpenSCAD mode and evaluate code.
- */
-async function evaluateOpenSCAD(page, code, timeout = 60000) {
-  await page.evaluate(() => window.CascadeAPI.setMode('openscad'));
-  await evaluateCode(page, code, timeout);
-}
-
-/**
- * Switch to OpenSCAD mode and evaluate code, asserting zero errors.
- */
-async function evaluateOpenSCADNoErrors(page, code, timeout = 60000) {
-  await page.evaluate(() => window.CascadeAPI.setMode('openscad'));
-  await evaluateNoErrors(page, code, timeout);
-}
-
-test.describe('OpenSCAD Primitives & Transforms', () => {
-  test('cube, sphere, cylinder, circle, square, and transforms all render', async ({ page }) => {
+test.describe('OpenSCAD Basics', () => {
+  test('primitives, transforms, booleans, extrusions, modules, loops, and variables', async ({ page }) => {
     await gotoAndReady(page);
 
-    // Primitives
+    // --- Primitives ---
     for (const code of [
       'cube(10);',
       'cube([20, 10, 5]);',
@@ -479,7 +536,7 @@ test.describe('OpenSCAD Primitives & Transforms', () => {
       await evaluateOpenSCADNoErrors(page, code);
     }
 
-    // Transforms
+    // --- Transforms ---
     for (const code of [
       'translate([10, 20, 30]) cube(5);',
       'rotate([45, 0, 0]) cube(10);',
@@ -489,14 +546,8 @@ test.describe('OpenSCAD Primitives & Transforms', () => {
     ]) {
       await evaluateOpenSCADNoErrors(page, code);
     }
-  });
-});
 
-test.describe('OpenSCAD Booleans & Extrusions', () => {
-  test('union, difference, intersection, linear_extrude, rotate_extrude all render', async ({ page }) => {
-    await gotoAndReady(page);
-
-    // Union
+    // --- Booleans ---
     await evaluateOpenSCADNoErrors(page, `
       union() {
         cube(10);
@@ -504,7 +555,6 @@ test.describe('OpenSCAD Booleans & Extrusions', () => {
       }
     `);
 
-    // Difference — classic drilled cube
     await evaluateOpenSCADNoErrors(page, `
       difference() {
         cube(20, center = true);
@@ -512,7 +562,6 @@ test.describe('OpenSCAD Booleans & Extrusions', () => {
       }
     `);
 
-    // Intersection
     await evaluateOpenSCADNoErrors(page, `
       intersection() {
         cube(20, center = true);
@@ -520,26 +569,19 @@ test.describe('OpenSCAD Booleans & Extrusions', () => {
       }
     `);
 
-    // Linear extrude
+    // --- Extrusions ---
     await evaluateOpenSCADNoErrors(page, `
       linear_extrude(height = 10)
         polygon(points = [[0,0],[20,0],[10,15]]);
     `);
 
-    // Rotate extrude — donut/torus
     await evaluateOpenSCADNoErrors(page, `
       rotate_extrude()
         translate([15, 0, 0])
           circle(r = 5);
     `);
-  });
-});
 
-test.describe('OpenSCAD Modules, Loops & Variables', () => {
-  test('modules, for loops, variables, and echo work correctly', async ({ page }) => {
-    await gotoAndReady(page);
-
-    // Module definition + call
+    // --- Modules ---
     await evaluateOpenSCADNoErrors(page, `
       module rounded_cube(size, r) {
         translate([r, r, 0])
@@ -548,21 +590,20 @@ test.describe('OpenSCAD Modules, Loops & Variables', () => {
       rounded_cube(20, 3);
     `);
 
-    // For loop with range
+    // --- For loops ---
     await evaluateOpenSCADNoErrors(page, `
       for (i = [0:3]) {
         translate([i * 15, 0, 0]) cube(10);
       }
     `);
 
-    // For loop with list
     await evaluateOpenSCADNoErrors(page, `
       for (pos = [[0,0,0], [20,0,0], [0,20,0]]) {
         translate(pos) sphere(r = 5);
       }
     `);
 
-    // Variables + math
+    // --- Variables + math ---
     await evaluateOpenSCADNoErrors(page, `
       base_r = 20;
       top_r = base_r / 3;
@@ -570,7 +611,7 @@ test.describe('OpenSCAD Modules, Loops & Variables', () => {
       cylinder(h = h, r1 = base_r, r2 = top_r);
     `);
 
-    // Echo → console.log (verify no errors, don't check output since mode is openscad)
+    // --- Echo ---
     await evaluateOpenSCADNoErrors(page, `
       x = 42;
       echo("value:", x);
@@ -579,11 +620,15 @@ test.describe('OpenSCAD Modules, Loops & Variables', () => {
   });
 });
 
+// ============================================================================
+// OpenSCAD — complex models
+// ============================================================================
+
 test.describe('OpenSCAD Complex Models', () => {
-  test('multi-boolean drilled sphere renders', async ({ page }) => {
+  test('drilled sphere, nested booleans, parametric pattern, dodecahedron, star, rocket', async ({ page }) => {
     await gotoAndReady(page);
 
-    // Three-axis drilled sphere (same concept as CascadeStudio boolean test)
+    // Three-axis drilled sphere
     await evaluateOpenSCADNoErrors(page, `
       difference() {
         sphere(r = 25);
@@ -592,12 +637,8 @@ test.describe('OpenSCAD Complex Models', () => {
         rotate([0, 90, 0]) cylinder(h = 100, r = 15, center = true);
       }
     `);
-  });
 
-  test('nested transforms and booleans render', async ({ page }) => {
-    await gotoAndReady(page);
-
-    // Bracket-like shape with nested operations
+    // Nested transforms and booleans (bracket)
     await evaluateOpenSCADNoErrors(page, `
       difference() {
         union() {
@@ -608,10 +649,6 @@ test.describe('OpenSCAD Complex Models', () => {
         translate([2.5, 10, 15]) rotate([0, 90, 0]) cylinder(h = 10, r = 3);
       }
     `);
-  });
-
-  test('parametric pattern with module and for loop renders', async ({ page }) => {
-    await gotoAndReady(page);
 
     // Parametric array of pillars
     await evaluateOpenSCADNoErrors(page, `
@@ -624,13 +661,8 @@ test.describe('OpenSCAD Complex Models', () => {
         }
       }
     `);
-  });
-
-  test('dodecahedron-like intersection renders', async ({ page }) => {
-    await gotoAndReady(page);
 
     // Dodecahedron via intersecting rotated cubes
-    // (intersection_for is not supported, so we manually intersect)
     await evaluateOpenSCADNoErrors(page, `
       intersection() {
         cube([2, 2, 1], center = true);
@@ -641,12 +673,8 @@ test.describe('OpenSCAD Complex Models', () => {
         rotate([0, 0, 288]) rotate([116.565, 0, 0]) cube([2, 2, 1], center = true);
       }
     `, 120000);
-  });
 
-  test('extruded star polygon renders', async ({ page }) => {
-    await gotoAndReady(page);
-
-    // 5-pointed star via linear_extrude of polygon
+    // Extruded star polygon
     await evaluateOpenSCADNoErrors(page, `
       linear_extrude(height = 5)
         polygon(points = [
@@ -656,11 +684,8 @@ test.describe('OpenSCAD Complex Models', () => {
           [-8, -3], [-19, 6], [-5, 7]
         ]);
     `);
-  });
 
-  test('rocket with body, nose cone, and swept wings renders', async ({ page }) => {
-    await gotoAndReady(page);
-
+    // Rocket with body, nose cone, and swept wings
     await evaluateOpenSCADNoErrors(page, `
       rocket_d = 30;
       rocket_r = rocket_d / 2;
@@ -690,226 +715,6 @@ test.describe('OpenSCAD Complex Models', () => {
         rotate([0, 0, 120 * i])
           wing();
     `, 120000);
-  });
-});
-
-// ============================================================================
-// Extended Selector API
-// ============================================================================
-
-test.describe('Selector Chaining & Filtering', () => {
-  test('edge selectors: parallel, perpendicular, ofType, longerThan, shorterThan', async ({ page }) => {
-    await gotoAndReady(page);
-
-    await evaluateCode(page, `
-      let box = Box(30, 20, 10);
-
-      // Edges parallel to Z axis (vertical edges of a box = 4)
-      console.log("Z_PARALLEL:" + Edges(box).parallel([0,0,1]).count());
-
-      // Edges perpendicular to Z axis (horizontal edges = 8)
-      console.log("Z_PERP:" + Edges(box).perpendicular([0,0,1]).count());
-
-      // All edges of a box are lines
-      console.log("LINE_EDGES:" + Edges(box).ofType("Line").count());
-      console.log("CIRCLE_EDGES:" + Edges(box).ofType("Circle").count());
-
-      // Total edges of a box = 12
-      console.log("TOTAL_EDGES:" + Edges(box).count());
-
-      // Filter by length: box is 30x20x10
-      // 4 edges of length 30, 4 of length 20, 4 of length 10
-      console.log("LONG_EDGES:" + Edges(box).longerThan(25).count());
-      console.log("SHORT_EDGES:" + Edges(box).shorterThan(15).count());
-    `);
-    const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    expect(errors).toEqual([]);
-
-    await page.waitForFunction(() => {
-      const logs = window.CascadeAPI.getConsoleLog();
-      return ['Z_PARALLEL:', 'Z_PERP:', 'LINE_EDGES:', 'TOTAL_EDGES:'].every(
-        tag => logs.some(l => l.includes(tag))
-      );
-    }, { timeout: 10000 });
-    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-
-    expect(parseInt(extractLog(logs, 'Z_PARALLEL'))).toBe(4);
-    expect(parseInt(extractLog(logs, 'Z_PERP'))).toBe(8);
-    expect(parseInt(extractLog(logs, 'LINE_EDGES'))).toBe(12);
-    expect(parseInt(extractLog(logs, 'CIRCLE_EDGES'))).toBe(0);
-    expect(parseInt(extractLog(logs, 'TOTAL_EDGES'))).toBe(12);
-    expect(parseInt(extractLog(logs, 'LONG_EDGES'))).toBe(4);
-    expect(parseInt(extractLog(logs, 'SHORT_EDGES'))).toBe(4);
-  });
-
-  test('face selectors: parallel, perpendicular, sortBy, largerThan, smallerThan', async ({ page }) => {
-    await gotoAndReady(page);
-
-    await evaluateCode(page, `
-      let box = Box(30, 20, 10);
-
-      // Faces parallel to Z (top + bottom = 2)
-      console.log("Z_PAR_FACES:" + Faces(box).parallel([0,0,1]).count());
-
-      // Faces perpendicular to Z (4 side faces)
-      console.log("Z_PERP_FACES:" + Faces(box).perpendicular([0,0,1]).count());
-
-      // Total faces = 6
-      console.log("TOTAL_FACES:" + Faces(box).count());
-
-      // Face areas: top/bottom = 30*20 = 600, front/back = 30*10 = 300, left/right = 20*10 = 200
-      // largerThan(500) = top + bottom = 2
-      console.log("LARGE_FACES:" + Faces(box).largerThan(500).count());
-      // smallerThan(250) = left + right = 2
-      console.log("SMALL_FACES:" + Faces(box).smallerThan(250).count());
-    `);
-    const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    expect(errors).toEqual([]);
-
-    await page.waitForFunction(() => {
-      const logs = window.CascadeAPI.getConsoleLog();
-      return ['Z_PAR_FACES:', 'Z_PERP_FACES:', 'TOTAL_FACES:', 'LARGE_FACES:'].every(
-        tag => logs.some(l => l.includes(tag))
-      );
-    }, { timeout: 10000 });
-    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-
-    expect(parseInt(extractLog(logs, 'Z_PAR_FACES'))).toBe(2);
-    expect(parseInt(extractLog(logs, 'Z_PERP_FACES'))).toBe(4);
-    expect(parseInt(extractLog(logs, 'TOTAL_FACES'))).toBe(6);
-    expect(parseInt(extractLog(logs, 'LARGE_FACES'))).toBe(2);
-    expect(parseInt(extractLog(logs, 'SMALL_FACES'))).toBe(2);
-  });
-
-  test('cylinder edge/face type detection and chained selectors', async ({ page }) => {
-    await gotoAndReady(page);
-
-    await evaluateCode(page, `
-      let cyl = Cylinder(10, 30);
-
-      // Cylinder has 2 circular edges (top + bottom); may have a seam edge
-      console.log("CYL_CIRCLES:" + Edges(cyl).ofType("Circle").count());
-      console.log("CYL_TOTAL:" + Edges(cyl).count());
-
-      // Cylinder faces: 1 cylindrical + 2 planar (top/bottom)
-      console.log("CYL_CYL_FACES:" + Faces(cyl).ofType("Cylinder").count());
-      console.log("CYL_PLANE_FACES:" + Faces(cyl).ofType("Plane").count());
-
-      // Top circle edge (max Z)
-      console.log("TOP_CIRCLE:" + Edges(cyl).ofType("Circle").max([0,0,1]).count());
-
-      // Chained: circular edges at bottom
-      console.log("BOT_CIRCLE:" + Edges(cyl).ofType("Circle").min([0,0,1]).count());
-    `);
-    const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    expect(errors).toEqual([]);
-
-    await page.waitForFunction(() => {
-      const logs = window.CascadeAPI.getConsoleLog();
-      return ['CYL_CIRCLES:', 'CYL_TOTAL:', 'CYL_CYL_FACES:', 'TOP_CIRCLE:'].every(
-        tag => logs.some(l => l.includes(tag))
-      );
-    }, { timeout: 10000 });
-    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-
-    expect(parseInt(extractLog(logs, 'CYL_CIRCLES'))).toBe(2);
-    expect(parseInt(extractLog(logs, 'CYL_TOTAL'))).toBeGreaterThanOrEqual(2);
-    expect(parseInt(extractLog(logs, 'CYL_CYL_FACES'))).toBe(1);
-    expect(parseInt(extractLog(logs, 'CYL_PLANE_FACES'))).toBe(2);
-    expect(parseInt(extractLog(logs, 'TOP_CIRCLE'))).toBe(1);
-    expect(parseInt(extractLog(logs, 'BOT_CIRCLE'))).toBe(1);
-  });
-
-  test('sphere and cone face type detection', async ({ page }) => {
-    await gotoAndReady(page);
-
-    await evaluateCode(page, `
-      let sph = Sphere(15);
-      console.log("SPH_SPHERE_FACES:" + Faces(sph).ofType("Sphere").count());
-      console.log("SPH_TOTAL_FACES:" + Faces(sph).count());
-
-      let cone = Cone(15, 5, 20);
-      console.log("CONE_CONE_FACES:" + Faces(cone).ofType("Cone").count());
-      console.log("CONE_PLANE_FACES:" + Faces(cone).ofType("Plane").count());
-    `);
-    const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    expect(errors).toEqual([]);
-
-    await page.waitForFunction(() => {
-      const logs = window.CascadeAPI.getConsoleLog();
-      return ['SPH_SPHERE_FACES:', 'CONE_CONE_FACES:'].every(
-        tag => logs.some(l => l.includes(tag))
-      );
-    }, { timeout: 10000 });
-    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-
-    expect(parseInt(extractLog(logs, 'SPH_SPHERE_FACES'))).toBeGreaterThanOrEqual(1);
-    expect(parseInt(extractLog(logs, 'SPH_TOTAL_FACES'))).toBeGreaterThanOrEqual(1);
-    expect(parseInt(extractLog(logs, 'CONE_CONE_FACES'))).toBe(1);
-    expect(parseInt(extractLog(logs, 'CONE_PLANE_FACES'))).toBe(2);
-  });
-
-  test('selector-driven fillet and chamfer operations', async ({ page }) => {
-    await gotoAndReady(page);
-
-    // Fillet top edges of a box using selectors
-    await evaluateNoErrors(page, `
-      let box = Box(40, 30, 20);
-      FilletEdges(box, 3, Edges(box).max([0,0,1]).indices());
-    `);
-
-    // Chamfer bottom edges
-    await evaluateNoErrors(page, `
-      let box = Box(40, 30, 20);
-      ChamferEdges(box, 2, Edges(box).min([0,0,1]).indices());
-    `);
-
-    // Fillet only edges parallel to X axis
-    await evaluateNoErrors(page, `
-      let box = Box(40, 30, 20);
-      FilletEdges(box, 2, Edges(box).parallel([1,0,0]).indices());
-    `);
-
-    // Fillet circular edges of a cylinder
-    await evaluateNoErrors(page, `
-      let cyl = Cylinder(15, 25);
-      FilletEdges(cyl, 3, Edges(cyl).ofType("Circle").indices());
-    `);
-  });
-
-  test('first, last, at terminal selectors work correctly', async ({ page }) => {
-    await gotoAndReady(page);
-
-    await evaluateCode(page, `
-      let box = Box(10, 10, 10);
-
-      // sortBy Z then first/last
-      let sorted = Edges(box).sortBy([0,0,1]);
-      console.log("SORTED_COUNT:" + sorted.count());
-
-      // first(4) = bottom 4 edges, last(4) = top 4 edges
-      console.log("FIRST4:" + sorted.first(4).count());
-      console.log("LAST4:" + sorted.last(4).count());
-
-      // at(0) returns an index (number)
-      let idx = sorted.at(0);
-      console.log("AT0_TYPE:" + (typeof idx));
-    `);
-    const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-    expect(errors).toEqual([]);
-
-    await page.waitForFunction(() => {
-      const logs = window.CascadeAPI.getConsoleLog();
-      return ['SORTED_COUNT:', 'FIRST4:', 'LAST4:', 'AT0_TYPE:'].every(
-        tag => logs.some(l => l.includes(tag))
-      );
-    }, { timeout: 10000 });
-    const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-
-    expect(parseInt(extractLog(logs, 'SORTED_COUNT'))).toBe(12);
-    expect(parseInt(extractLog(logs, 'FIRST4'))).toBe(4);
-    expect(parseInt(extractLog(logs, 'LAST4'))).toBe(4);
-    expect(extractLog(logs, 'AT0_TYPE')).toBe('number');
   });
 });
 
