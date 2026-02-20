@@ -80,11 +80,6 @@ body {
   overflow-x: auto;
   overflow-y: hidden;
   backdrop-filter: blur(8px);
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.topnav::-webkit-scrollbar {
-  display: none;
 }
 
 .topnav-brand {
@@ -106,7 +101,7 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .topnav a, .topnav label {

@@ -193,9 +193,7 @@ class CascadeStudioApp {
 
     if (isMobile) {
       // Mobile: cascadeView on top, editor below, console at bottom
-      const h = appBody.offsetHeight;
-
-      this._dockviewApi.addPanel({
+      const viewPanel = this._dockviewApi.addPanel({
         id: 'cascadeView',
         component: 'cascadeView',
         title: 'CAD View',
@@ -207,17 +205,24 @@ class CascadeStudioApp {
         component: 'codeEditor',
         title: '* Untitled',
         params: { code: codeStr },
-        position: { referencePanel: 'cascadeView', direction: 'below' },
-        initialHeight: Math.floor(h * 0.6)
+        position: { referencePanel: 'cascadeView', direction: 'below' }
       });
 
-      this._dockviewApi.addPanel({
+      const consolePanel = this._dockviewApi.addPanel({
         id: 'console',
         component: 'console',
         title: 'Console',
-        position: { referencePanel: 'codeEditor', direction: 'below' },
-        initialHeight: Math.floor(h * 0.1)
+        position: { referencePanel: 'codeEditor', direction: 'below' }
       });
+
+      // Set proportions after dockview grid initializes
+      setTimeout(() => {
+        try {
+          const h = appBody.offsetHeight;
+          viewPanel.group.api.setSize({ height: Math.floor(h * 0.25) });
+          consolePanel.group.api.setSize({ height: Math.floor(h * 0.05) });
+        } catch (e) { /* ignore */ }
+      }, 50);
     } else {
       // Desktop: editor left, cascadeView right, console below view
       const editorPanel = this._dockviewApi.addPanel({
