@@ -286,6 +286,12 @@ body {
   padding: 4px 8px;
   cursor: pointer;
   user-select: none;
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.cs-timeline-track::-webkit-scrollbar {
+  display: none;
 }
 
 .cs-timeline-step {
@@ -330,4 +336,28 @@ body {
   width: 4px !important;
   margin-left: 3px;
   border-radius: 2px;
+}
+
+/* ============================================================
+   Mobile Responsive Overrides
+   ============================================================ */
+
+@media (orientation: portrait) {
+  .topnav {
+    height: auto;
+    min-height: 36px;
+    flex-wrap: wrap;
+  }
+  .topnav-actions {
+    flex-wrap: wrap;
+  }
+  .gui-panel {
+    max-width: 70%;
+    font-size: 11px;
+  }
+  .cs-timeline-step {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
 }

@@ -65,7 +65,8 @@ class EditorManager {
       language: "typescript",
       theme: "vs-dark",
       automaticLayout: true,
-      minimap: { enabled: false }
+      minimap: { enabled: false },
+      wordWrap: window.innerHeight > window.innerWidth ? 'on' : 'off'
     });
     window.monacoEditor = this.editor;
 

@@ -188,37 +188,77 @@ class CascadeStudioApp {
       }
     });
 
-    // Add panels
-    const editorPanel = this._dockviewApi.addPanel({
-      id: 'codeEditor',
-      component: 'codeEditor',
-      title: '* Untitled',
-      params: { code: codeStr }
-    });
+    // Add panels — use vertical stack on mobile, side-by-side on desktop
+    const isMobile = window.innerHeight > window.innerWidth;
 
-    const viewPanel = this._dockviewApi.addPanel({
-      id: 'cascadeView',
-      component: 'cascadeView',
-      title: 'CAD View',
-      params: { guiState: this.gui.state },
-      position: { referencePanel: 'codeEditor', direction: 'right' }
-    });
+    if (isMobile) {
+      // Mobile: cascadeView on top, editor below, console at bottom
+      const viewPanel = this._dockviewApi.addPanel({
+        id: 'cascadeView',
+        component: 'cascadeView',
+        title: 'CAD View',
+        params: { guiState: this.gui.state }
+      });
 
-    this._dockviewApi.addPanel({
-      id: 'console',
-      component: 'console',
-      title: 'Console',
-      position: { referencePanel: 'cascadeView', direction: 'below' }
-    });
+      const editorPanel = this._dockviewApi.addPanel({
+        id: 'codeEditor',
+        component: 'codeEditor',
+        title: '* Untitled',
+        params: { code: codeStr },
+        position: { referencePanel: 'cascadeView', direction: 'below' }
+      });
 
-    // Set initial proportions (editor ~50%, view+console ~50%)
-    try {
-      const editorGroup = editorPanel.group;
-      const viewGroup = viewPanel.group;
-      if (editorGroup && viewGroup) {
-        editorGroup.api.setSize({ width: Math.floor(appBody.offsetWidth * 0.5) });
-      }
-    } catch (e) { /* setSize may not be available on initial render */ }
+      this._dockviewApi.addPanel({
+        id: 'console',
+        component: 'console',
+        title: 'Console',
+        position: { referencePanel: 'codeEditor', direction: 'below' }
+      });
+
+      // Set mobile proportions: 30% view, 60% editor, 10% console
+      try {
+        const viewGroup = viewPanel.group;
+        if (viewGroup) {
+          viewGroup.api.setSize({ height: Math.floor(appBody.offsetHeight * 0.3) });
+        }
+        const editorGroup = editorPanel.group;
+        if (editorGroup) {
+          editorGroup.api.setSize({ height: Math.floor(appBody.offsetHeight * 0.6) });
+        }
+      } catch (e) { /* setSize may not be available on initial render */ }
+    } else {
+      // Desktop: editor left, cascadeView right, console below view
+      const editorPanel = this._dockviewApi.addPanel({
+        id: 'codeEditor',
+        component: 'codeEditor',
+        title: '* Untitled',
+        params: { code: codeStr }
+      });
+
+      const viewPanel = this._dockviewApi.addPanel({
+        id: 'cascadeView',
+        component: 'cascadeView',
+        title: 'CAD View',
+        params: { guiState: this.gui.state },
+        position: { referencePanel: 'codeEditor', direction: 'right' }
+      });
+
+      this._dockviewApi.addPanel({
+        id: 'console',
+        component: 'console',
+        title: 'Console',
+        position: { referencePanel: 'cascadeView', direction: 'below' }
+      });
+
+      // Set initial proportions (editor ~50%, view+console ~50%)
+      try {
+        const editorGroup = editorPanel.group;
+        const viewGroup = viewPanel.group;
+        if (editorGroup && viewGroup) {
+          editorGroup.api.setSize({ width: Math.floor(appBody.offsetWidth * 0.5) });
+        }
+      } catch (e) { /* setSize may not be available on initial render */ }
+    }
 
     // Resize the layout when the browser resizes
     if (this._updateLayoutSize) {
