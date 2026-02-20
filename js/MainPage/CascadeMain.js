@@ -193,39 +193,31 @@ class CascadeStudioApp {
 
     if (isMobile) {
       // Mobile: cascadeView on top, editor below, console at bottom
-      const viewPanel = this._dockviewApi.addPanel({
+      const h = appBody.offsetHeight;
+
+      this._dockviewApi.addPanel({
         id: 'cascadeView',
         component: 'cascadeView',
         title: 'CAD View',
         params: { guiState: this.gui.state }
       });
 
-      const editorPanel = this._dockviewApi.addPanel({
+      this._dockviewApi.addPanel({
         id: 'codeEditor',
         component: 'codeEditor',
         title: '* Untitled',
         params: { code: codeStr },
-        position: { referencePanel: 'cascadeView', direction: 'below' }
+        position: { referencePanel: 'cascadeView', direction: 'below' },
+        initialHeight: Math.floor(h * 0.6)
       });
 
       this._dockviewApi.addPanel({
         id: 'console',
         component: 'console',
         title: 'Console',
-        position: { referencePanel: 'codeEditor', direction: 'below' }
+        position: { referencePanel: 'codeEditor', direction: 'below' },
+        initialHeight: Math.floor(h * 0.1)
       });
-
-      // Set mobile proportions: 30% view, 60% editor, 10% console
-      try {
-        const viewGroup = viewPanel.group;
-        if (viewGroup) {
-          viewGroup.api.setSize({ height: Math.floor(appBody.offsetHeight * 0.3) });
-        }
-        const editorGroup = editorPanel.group;
-        if (editorGroup) {
-          editorGroup.api.setSize({ height: Math.floor(appBody.offsetHeight * 0.6) });
-        }
-      } catch (e) { /* setSize may not be available on initial render */ }
     } else {
       // Desktop: editor left, cascadeView right, console below view
       const editorPanel = this._dockviewApi.addPanel({

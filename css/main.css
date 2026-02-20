@@ -77,8 +77,14 @@ body {
   align-items: center;
   padding: 0 8px;
   height: 36px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   backdrop-filter: blur(8px);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.topnav::-webkit-scrollbar {
+  display: none;
 }
 
 .topnav-brand {
@@ -343,14 +349,6 @@ body {
    ============================================================ */
 
 @media (orientation: portrait) {
-  .topnav {
-    height: auto;
-    min-height: 36px;
-    flex-wrap: wrap;
-  }
-  .topnav-actions {
-    flex-wrap: wrap;
-  }
   .gui-panel {
     max-width: 70%;
     font-size: 11px;
