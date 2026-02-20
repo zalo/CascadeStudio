@@ -33,7 +33,7 @@ class OpenSCADTranspiler {
     }
 
     const lines = [];
-    for (const stmt of ast.children) {
+    for (const stmt of (ast.statements || ast.children || [])) {
       const code = this._transpileStatement(stmt);
       if (code) lines.push(code);
     }
@@ -589,11 +589,15 @@ class OpenSCADTranspiler {
       case 'MemberLookupExpr':
         return `${this._transpileExpr(expr.expr)}.${expr.member}`;
 
-      case 'BinaryOpExpr':
-        return `(${this._transpileExpr(expr.left)} ${expr.operation} ${this._transpileExpr(expr.right)})`;
+      case 'BinaryOpExpr': {
+        let op = typeof expr.operation === 'number' ? (expr.tokens?.operator?.lexeme || expr.operation) : expr.operation;
+        return `(${this._transpileExpr(expr.left)} ${op} ${this._transpileExpr(expr.right)})`;
+      }
 
-      case 'UnaryOpExpr':
-        return `(${expr.operation}${this._transpileExpr(expr.right)})`;
+      case 'UnaryOpExpr': {
+        let op = typeof expr.operation === 'number' ? (expr.tokens?.operator?.lexeme || expr.operation) : expr.operation;
+        return `(${op}${this._transpileExpr(expr.right)})`;
+      }
 
       case 'TernaryExpr':
         return `(${this._transpileExpr(expr.cond)} ? ${this._transpileExpr(expr.ifExpr)} : ${this._transpileExpr(expr.elseExpr)})`;

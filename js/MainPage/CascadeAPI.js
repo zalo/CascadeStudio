@@ -54,6 +54,17 @@ class CascadeAPI {
         resolve();
       });
       this._app.editor.evaluateCode(false);
+      // If evaluateCode returned without sending to worker (e.g. transpile error),
+      // workerWorking will be false — resolve immediately to avoid hanging
+      if (!window.workerWorking) {
+        if (originalHandler) {
+          this._app.messageBus.on("combineAndRenderShapes", originalHandler);
+        } else {
+          this._app.messageBus.off("combineAndRenderShapes");
+        }
+        this._evaluatePromise = null;
+        resolve();
+      }
     });
     return this._evaluatePromise;
   }

@@ -959,8 +959,10 @@ function _edgeCurveType(edge) {
 function _edgeDirection(edge) {
   let curve = new self.oc.BRepAdaptor_Curve_2(edge);
   if (curve.GetType() !== self.oc.GeomAbs_CurveType.GeomAbs_Line) return null;
-  let dir = curve.Line().Direction();
-  return [dir.X(), dir.Y(), dir.Z()];
+  let p1 = new self.oc.gp_Pnt_1(), p2 = new self.oc.gp_Pnt_1();
+  curve.D0(curve.FirstParameter(), p1);
+  curve.D0(curve.LastParameter(), p2);
+  return [p2.X() - p1.X(), p2.Y() - p1.Y(), p2.Z() - p1.Z()];
 }
 
 function _faceCentroid(face) {

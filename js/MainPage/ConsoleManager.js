@@ -62,8 +62,10 @@ class ConsoleManager {
       };
 
       this._app.messageBus.on("Progress", (payload) => {
-        this._consoleContainer.parentElement.lastElementChild.lastElementChild.innerText =
-          "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType) ? " (" + payload.opType + ")" : "");
+        let el = this._consoleContainer.parentElement?.lastElementChild?.lastElementChild;
+        if (el) {
+          el.innerText = "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType) ? " (" + payload.opType + ")" : "");
+        }
       });
 
       console.log("Welcome to Cascade Studio!");
