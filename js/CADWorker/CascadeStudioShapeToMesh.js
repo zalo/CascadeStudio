@@ -1,5 +1,4 @@
 import { Vector3 } from '../../node_modules/three/build/three.module.js';
-import cdt2d from 'cdt2d';
 
 /** Handles triangulation and meshing of OpenCascade shapes for 3D rendering. */
 class CascadeStudioMesher {
@@ -135,10 +134,7 @@ class CascadeStudioMesher {
           }
         }
 
-        // Write normal buffer (OCCT 8.0: compute normals on the triangulation, then read per-node)
-        // ComputeNormals() derives normals from stored triangle winding, which follows the
-        // parametric surface orientation. For REVERSED faces, we flip both normals AND winding
-        // so they remain consistent with each other while pointing geometrically outward.
+        // Write normal buffer (OCCT 8.0: StdPrs_ToolTriangulatedShape.Normal was removed)
         if (!myT.get().HasNormals()) { myT.get().ComputeNormals(); }
         let IsReversed = (orient !== oc.TopAbs_Orientation.TopAbs_FORWARD);
         let IsReversedFactor = IsReversed ? -1 : 1;
@@ -150,104 +146,24 @@ class CascadeStudioMesher {
           this_face.normal_coord[(i * 3) + 2] = IsReversedFactor * d.Z();
         }
 
-        // Write triangle buffer — flip winding for REVERSED faces
-        // Detect bad triangulations and re-triangulate with JS-side CDT
+        // Write triangle buffer
         let nbTriangles = myT.get().NbTriangles();
-        let v = this_face.vertex_coord;
-
-        // Compute max triangle edge length to detect bad meshes
-        let maxTriEdge = 0;
+        this_face.tri_indexes = new Array(nbTriangles * 3);
         for (let nt = 1; nt <= nbTriangles; nt++) {
           let t = myT.get().Triangle(nt);
-          let i1 = t.Value(1) - 1, i2 = t.Value(2) - 1, i3 = t.Value(3) - 1;
-          let dx12 = v[i2*3]-v[i1*3], dy12 = v[i2*3+1]-v[i1*3+1], dz12 = v[i2*3+2]-v[i1*3+2];
-          let dx23 = v[i3*3]-v[i2*3], dy23 = v[i3*3+1]-v[i2*3+1], dz23 = v[i3*3+2]-v[i2*3+2];
-          let dx31 = v[i1*3]-v[i3*3], dy31 = v[i1*3+1]-v[i3*3+1], dz31 = v[i1*3+2]-v[i3*3+2];
-          maxTriEdge = Math.max(maxTriEdge,
-            Math.sqrt(dx12*dx12 + dy12*dy12 + dz12*dz12),
-            Math.sqrt(dx23*dx23 + dy23*dy23 + dz23*dz23),
-            Math.sqrt(dx31*dx31 + dy31*dy31 + dz31*dz31));
-        }
-
-        // CDT FIX: Re-triangulate faces with bad meshes using cdt2d.
-        // OCCT's BRepMesh can produce "bridging" triangles on faces with
-        // internal holes (e.g. sphere with cylindrical cuts) when compiled
-        // with newer emsdk versions. Detected by abnormally low tri/node ratio.
-        let cdtTriangles = null;
-        if (nbTriangles < nbNodes * 0.8 && myT.get().HasUVNodes()) {
-          // Count wires — only re-triangulate faces with holes (>1 wire)
-          let wireCount = 0;
-          let we = new oc.TopExp_Explorer_2(myFace, oc.TopAbs_ShapeEnum.TopAbs_WIRE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
-          for (we.Init(myFace, oc.TopAbs_ShapeEnum.TopAbs_WIRE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); we.More(); we.Next()) wireCount++;
-
-          if (wireCount > 1) {
-            try {
-              // Collect UV points (0-based)
-              let uvPoints = new Array(nbNodes);
-              for (let i = 0; i < nbNodes; i++) {
-                let uv = myT.get().UVNode(i + 1);
-                uvPoints[i] = [uv.X(), uv.Y()];
-              }
-
-              // Collect constraint edges from boundary wires
-              let constraintEdges = [];
-              let we2 = new oc.TopExp_Explorer_2(myFace, oc.TopAbs_ShapeEnum.TopAbs_WIRE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
-              for (we2.Init(myFace, oc.TopAbs_ShapeEnum.TopAbs_WIRE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); we2.More(); we2.Next()) {
-                let wire = oc.TopoDS_Cast.Wire_1(we2.Current());
-                let ee = new oc.TopExp_Explorer_2(wire, oc.TopAbs_ShapeEnum.TopAbs_EDGE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
-                for (ee.Init(wire, oc.TopAbs_ShapeEnum.TopAbs_EDGE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ee.More(); ee.Next()) {
-                  let edge = oc.TopoDS_Cast.Edge_1(ee.Current());
-                  try {
-                    let poly = oc.BRep_Tool.PolygonOnTriangulation_1(edge, myT, aLocation);
-                    if (!poly.IsNull()) {
-                      let nodes = poly.get().Nodes();
-                      let len = nodes.Length();
-                      if (len >= 2) {
-                        let isRev = (edge.Orientation_1() === oc.TopAbs_Orientation.TopAbs_REVERSED);
-                        for (let j = 0; j < len - 1; j++) {
-                          let j1 = isRev ? len - j : j + 1;
-                          let j2 = isRev ? len - j - 1 : j + 2;
-                          constraintEdges.push([nodes.Value(j1) - 1, nodes.Value(j2) - 1]);
-                        }
-                      }
-                    }
-                  } catch(e) { /* edge may not have polygon on this triangulation */ }
-                }
-              }
-
-              // Run constrained Delaunay triangulation
-              cdtTriangles = cdt2d(uvPoints, constraintEdges, { exterior: false });
-            } catch(e) {
-              console.warn(`[MESH CDT] Face ${faceIndex}: cdt2d failed, using OCCT mesh: ${e.message}`);
-              cdtTriangles = null;
-            }
+          let n1 = t.Value(1);
+          let n2 = t.Value(2);
+          let n3 = t.Value(3);
+          if (orient !== oc.TopAbs_Orientation.TopAbs_FORWARD) {
+            let tmp = n1;
+            n1 = n2;
+            n2 = tmp;
           }
+          this_face.tri_indexes[((nt - 1) * 3) + 0] = n1 - 1;
+          this_face.tri_indexes[((nt - 1) * 3) + 1] = n2 - 1;
+          this_face.tri_indexes[((nt - 1) * 3) + 2] = n3 - 1;
         }
-
-        if (cdtTriangles) {
-          // Use CDT triangles
-          this_face.tri_indexes = new Array(cdtTriangles.length * 3);
-          for (let i = 0; i < cdtTriangles.length; i++) {
-            let a = cdtTriangles[i][0], b = cdtTriangles[i][1], c = cdtTriangles[i][2];
-            if (IsReversed) { let tmp = a; a = b; b = tmp; }
-            this_face.tri_indexes[i * 3 + 0] = a;
-            this_face.tri_indexes[i * 3 + 1] = b;
-            this_face.tri_indexes[i * 3 + 2] = c;
-          }
-          this_face.number_of_triangles = cdtTriangles.length;
-        } else {
-          // Use OCCT triangles directly
-          this_face.tri_indexes = new Array(nbTriangles * 3);
-          for (let nt = 0; nt < nbTriangles; nt++) {
-            let t = myT.get().Triangle(nt + 1);
-            let n1 = t.Value(1) - 1, n2 = t.Value(2) - 1, n3 = t.Value(3) - 1;
-            if (IsReversed) { let tmp = n1; n1 = n2; n2 = tmp; }
-            this_face.tri_indexes[nt * 3 + 0] = n1;
-            this_face.tri_indexes[nt * 3 + 1] = n2;
-            this_face.tri_indexes[nt * 3 + 2] = n3;
-          }
-          this_face.number_of_triangles = nbTriangles;
-        }
+        this_face.number_of_triangles = nbTriangles;
         facelist.push(this_face);
         curFace += 1;
 
