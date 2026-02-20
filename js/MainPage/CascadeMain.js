@@ -269,6 +269,26 @@ class CascadeStudioApp {
       CascadeStudioApp.getNewFileHandle, CascadeStudioApp.writeFile, CascadeStudioApp.downloadFile
     );
     window.threejsViewport = this.viewport;
+
+    // Wire timeline step changes to editor line highlighting
+    this._historyDecorations = [];
+    this.viewport._onHistoryStepChange = (lineNumber) => {
+      let editor = window.monacoEditor;
+      if (!editor) return;
+      if (lineNumber && lineNumber > 0) {
+        this._historyDecorations = editor.deltaDecorations(this._historyDecorations, [{
+          range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+          options: {
+            isWholeLine: true,
+            className: 'cs-history-line-highlight',
+            glyphMarginClassName: 'cs-history-glyph'
+          }
+        }]);
+        editor.revealLineInCenter(lineNumber);
+      } else {
+        this._historyDecorations = editor.deltaDecorations(this._historyDecorations, []);
+      }
+    };
   }
 
   /** Serialize the project's current state into a .json file and save it. */

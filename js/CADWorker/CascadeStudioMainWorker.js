@@ -34,6 +34,7 @@ class CascadeStudioWorker {
     // Register message handlers
     self.messageHandlers["Evaluate"] = this.evaluate.bind(this);
     self.messageHandlers["combineAndRenderShapes"] = this.combineAndRenderShapes.bind(this);
+    self.messageHandlers["meshHistoryStep"] = this.meshHistoryStep.bind(this);
   }
 
   /** Override console.log/error to forward messages to the main thread. */
@@ -155,6 +156,12 @@ class CascadeStudioWorker {
   evaluate(payload) {
     self.opNumber = 0;
     self.GUIState = payload.GUIState;
+
+    // Reset modeling history for this evaluation
+    self.modelHistory = [];
+    this.standardLibrary.utils.modelHistory = self.modelHistory;
+    this.standardLibrary.utils._pendingHistoryOp = null;
+
     try {
       eval(payload.code);
     } catch (e) {
@@ -163,6 +170,20 @@ class CascadeStudioWorker {
         throw e;
       }, 0);
     } finally {
+      // Flush the final operation's history step
+      self.flushHistoryStep();
+
+      // Send lightweight history metadata to main thread (no shape data)
+      postMessage({
+        type: "modelHistory",
+        payload: self.modelHistory.map((step, i) => ({
+          index: i,
+          fnName: step.fnName,
+          lineNumber: step.lineNumber,
+          shapeCount: step.shapes.length
+        }))
+      });
+
       postMessage({ type: "resetWorking" });
       // Clean cache; remove unused objects
       for (let hash in self.argCache) {
@@ -218,6 +239,33 @@ class CascadeStudioWorker {
       console.error("There were no scene shapes returned!");
     }
     postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
+  }
+
+  /** Triangulate and return the shapes from a specific modeling history step.
+   *  Called on-demand when the user scrubs the timeline. */
+  meshHistoryStep(payload) {
+    let step = self.modelHistory[payload.stepIndex];
+    if (!step || step.shapes.length === 0) return null;
+
+    let oc = self.oc;
+    let compound = new oc.TopoDS_Compound();
+    let builder = new oc.BRep_Builder();
+    builder.MakeCompound(compound);
+
+    let edgeHashes = {};
+    let faceHashes = {};
+
+    for (let shape of step.shapes) {
+      if (!shape || shape.IsNull()) continue;
+      Object.assign(edgeHashes, self.ForEachEdge(shape, () => {}));
+      self.ForEachFace(shape, (index, face) => {
+        faceHashes[oc.OCJS.HashCode(face, 100000000)] = index;
+      });
+      builder.Add(compound, shape);
+    }
+
+    let facesAndEdges = self.ShapeToMesh(compound, payload.maxDeviation || 0.1, edgeHashes, faceHashes);
+    return facesAndEdges;
   }
 }
 

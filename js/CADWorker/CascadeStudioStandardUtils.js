@@ -9,14 +9,23 @@ class CascadeStudioUtils {
     this.currentOp = '';
     this.currentLineNumber = 0;
 
+    // Modeling history timeline: records sceneShapes state after each operation.
+    // Uses a "capture-on-next-call" pattern: when CacheOp fires for op N,
+    // it snapshots sceneShapes (which reflects the state after op N-1 completed).
+    // The final state is captured after eval() completes.
+    this.modelHistory = [];
+    this._pendingHistoryOp = null; // {fnName, lineNumber} of the op that just ran
+
     // Expose instance and methods on self for eval() access
     self.argCache = this.argCache;
     self.usedHashes = this.usedHashes;
     self.opNumber = this.opNumber;
+    self.modelHistory = this.modelHistory;
     self.CacheOp = this.CacheOp.bind(this);
     self.CheckCache = this.CheckCache.bind(this);
     self.AddToCache = this.AddToCache.bind(this);
     self.ComputeHash = this.ComputeHash.bind(this);
+    self.flushHistoryStep = this.flushHistoryStep.bind(this);
     self.recursiveTraverse = CascadeStudioUtils.recursiveTraverse;
     self.Remove = CascadeStudioUtils.Remove;
     self.isArrayLike = CascadeStudioUtils.isArrayLike;
@@ -35,6 +44,11 @@ class CascadeStudioUtils {
    *   arguments.callee is not available in strict mode / ES modules)
    * @param {Function} cacheMiss - Callback if cache miss */
   CacheOp(args, fnName, cacheMiss) {
+    // Capture the sceneShapes state left by the PREVIOUS operation.
+    // At this point, the previous op has finished mutating sceneShapes,
+    // so [...self.sceneShapes] is the correct post-op snapshot.
+    this.flushHistoryStep();
+
     this.currentOp = fnName;
     self.currentOp = this.currentOp;
     this.currentLineNumber = CascadeStudioUtils.getCallingLocation()[0];
@@ -56,8 +70,26 @@ class CascadeStudioUtils {
       if (self.GUIState["Cache?"]) { this.AddToCache(curHash, toReturn); }
     }
 
+    // Record this op so the NEXT CacheOp call (or flushHistoryStep) can snapshot its result
+    this._pendingHistoryOp = { fnName, lineNumber: this.currentLineNumber };
+
     postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber, "opType": null } });
     return toReturn;
+  }
+
+  /** Flush the pending history step by snapshotting the current sceneShapes.
+   *  Called at the start of each CacheOp (to capture the previous op's result)
+   *  and after eval() completes (to capture the final op's result). */
+  flushHistoryStep() {
+    if (this._pendingHistoryOp) {
+      this.modelHistory.push({
+        fnName: this._pendingHistoryOp.fnName,
+        lineNumber: this._pendingHistoryOp.lineNumber,
+        shapes: [...self.sceneShapes]
+      });
+      self.modelHistory = this.modelHistory;
+      this._pendingHistoryOp = null;
+    }
   }
 
   /** Returns the cached object if it exists, or null otherwise. */
