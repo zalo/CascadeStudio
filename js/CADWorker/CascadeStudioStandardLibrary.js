@@ -448,8 +448,18 @@ function Scale(scale, shapes, keepOriginal) {
 
 // --- Boolean Operations ---
 
+function _quickVolume(shape) {
+  try {
+    let props = new self.oc.GProp_GProps_1();
+    self.oc.BRepGProp.VolumeProperties_1(shape, props, false, false, false);
+    return Math.abs(props.Mass());
+  } catch (e) { return 0; }
+}
+
 function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 1e-7; }
+  let inputVolumes = objectsToJoin.map(o => _quickVolume(o));
+  let totalInput = inputVolumes.reduce((a, b) => a + b, 0);
   let curUnion = self.CacheOp(arguments, "Union", () => {
     let combined = objectsToJoin[0];
     if (objectsToJoin.length > 1) {
@@ -467,6 +477,10 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
 
     return combined;
   });
+  let resultVol = _quickVolume(curUnion);
+  if (totalInput > 1 && resultVol < totalInput * 0.01) {
+    console.error("Union produced near-zero volume (" + resultVol.toFixed(1) + " from " + totalInput.toFixed(1) + "). Do the shapes overlap? Non-touching shapes cannot be Unioned — keep them as separate scene objects instead.");
+  }
 
   for (let i = 0; i < objectsToJoin.length; i++) {
     if (!keepObjects) { self.sceneShapes = self.Remove(self.sceneShapes, objectsToJoin[i]); }
@@ -477,6 +491,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
 
 function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 1e-7; }
+  let mainVol = _quickVolume(mainBody);
   let curDifference = self.CacheOp(arguments, "Difference", () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
 
@@ -500,6 +515,10 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
 
     return difference;
   });
+  let resultVol = _quickVolume(curDifference);
+  if (mainVol > 1 && resultVol < mainVol * 0.01) {
+    console.error("Difference destroyed the main body (volume " + mainVol.toFixed(1) + " → " + resultVol.toFixed(1) + "). Check that the tool shapes intersect the body and are not consuming it entirely.");
+  }
 
   if (Array.isArray(keepObjects)) {
     if (!keepObjects[0]) { self.sceneShapes = self.Remove(self.sceneShapes, mainBody); }
@@ -519,6 +538,8 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
 
 function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
   if (!fuzzValue) { fuzzValue = 1e-7; }
+  let inputVolumes = objectsToIntersect.map(o => _quickVolume(o));
+  let minInput = Math.min(...inputVolumes);
   let curIntersection = self.CacheOp(arguments, "Intersection", () => {
     let intersected = objectsToIntersect[0];
     if (objectsToIntersect.length > 1) {
@@ -536,6 +557,10 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
 
     return intersected;
   });
+  let resultVol = _quickVolume(curIntersection);
+  if (minInput > 1 && resultVol < minInput * 0.01) {
+    console.error("Intersection produced near-zero volume (" + resultVol.toFixed(1) + "). Do the shapes actually overlap?");
+  }
 
   for (let i = 0; i < objectsToIntersect.length; i++) {
     if (!keepObjects) { self.sceneShapes = self.Remove(self.sceneShapes, objectsToIntersect[i]); }
