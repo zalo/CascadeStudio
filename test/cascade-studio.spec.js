@@ -99,6 +99,7 @@ test.describe('Application Startup & CascadeAPI', () => {
     expect(qs.functions).toBeDefined();
     expect(qs.pitfalls).toBeDefined();
     expect(qs.tips).toBeDefined();
+    expect(qs.strategy).toBeDefined();
     expect(qs.examples.box).toContain('Sketch');
     expect(qs.examples.organic).toContain('Loft');
     expect(qs.examples.revolved).toContain('Revolve');
@@ -255,6 +256,16 @@ test.describe('Booleans & Operations', () => {
         .End(true)
         .Face();
       Extrude(sketch, [0, 0, 20]);
+    `);
+
+    // Sketch XZ plane (for revolve profiles)
+    await evaluateNoErrors(page, `
+      let profile = new Sketch([0, 0], "XZ")
+        .LineTo([15, 0]).LineTo([15, 2])
+        .LineTo([12, 3]).LineTo([10, 8])
+        .LineTo([11, 10]).LineTo([8, 12])
+        .LineTo([0, 12]).End(true).Face();
+      Revolve(profile, 360);
     `);
   });
 });

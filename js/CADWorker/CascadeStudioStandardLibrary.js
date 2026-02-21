@@ -777,18 +777,37 @@ function Pipe(shape, wirePath, keepInputs) {
 
 // --- Sketch Class (drawing utility) ---
 
-function Sketch(startingPoint) {
+function Sketch(startingPoint, plane) {
   this.currentIndex = 0;
   this.faces        = [];
   this.wires        = [];
-  this.firstPoint   = new self.oc.gp_Pnt_3(startingPoint[0], startingPoint[1], 0);
-  this.lastPoint    = this.firstPoint;
-  this.wireBuilder  = new self.oc.BRepBuilderAPI_MakeWire_1();
   this.fillets      = [];
   this.argsString   = self.ComputeHash(arguments, true);
 
+  // Plane support: 'XY' (default), 'XZ', 'YZ'
+  this._plane = (typeof plane === 'string') ? plane.toUpperCase() : 'XY';
+  this._toPnt = function (a, b) {
+    if (this._plane === 'XZ') return new self.oc.gp_Pnt_3(a, 0, b);
+    if (this._plane === 'YZ') return new self.oc.gp_Pnt_3(0, a, b);
+    return new self.oc.gp_Pnt_3(a, b, 0);
+  };
+  this._getAB = function (pnt) {
+    if (this._plane === 'XZ') return [pnt.X(), pnt.Z()];
+    if (this._plane === 'YZ') return [pnt.Y(), pnt.Z()];
+    return [pnt.X(), pnt.Y()];
+  };
+  this._normal = function () {
+    if (this._plane === 'XZ') return new self.oc.gp_Dir_5(0, 1, 0);
+    if (this._plane === 'YZ') return new self.oc.gp_Dir_5(1, 0, 0);
+    return new self.oc.gp_Dir_5(0, 0, 1);
+  };
+
+  this.firstPoint   = this._toPnt(startingPoint[0], startingPoint[1]);
+  this.lastPoint    = this.firstPoint;
+  this.wireBuilder  = new self.oc.BRepBuilderAPI_MakeWire_1();
+
   this.Start = function (startingPoint) {
-    this.firstPoint  = new self.oc.gp_Pnt_3(startingPoint[0], startingPoint[1], 0);
+    this.firstPoint  = this._toPnt(startingPoint[0], startingPoint[1]);
     this.lastPoint   = this.firstPoint;
     this.wireBuilder = new self.oc.BRepBuilderAPI_MakeWire_1();
     this.argsString += self.ComputeHash(arguments, true);
@@ -798,10 +817,10 @@ function Sketch(startingPoint) {
   this.End = function (closed, reversed) {
     this.argsString += self.ComputeHash(arguments, true);
 
-    if (closed &&
-       (this.firstPoint.X() !== this.lastPoint.X() ||
-        this.firstPoint.Y() !== this.lastPoint.Y())) {
-      this.LineTo(this.firstPoint);
+    if (closed) {
+      let [fa, fb] = this._getAB(this.firstPoint);
+      let [la, lb] = this._getAB(this.lastPoint);
+      if (fa !== la || fb !== lb) { this.LineTo(this.firstPoint); }
     }
 
     let wire = this.wireBuilder.Wire();
@@ -852,10 +871,11 @@ function Sketch(startingPoint) {
       let makeFillet = new self.oc.BRepFilletAPI_MakeFillet2d_2(this.faces[this.faces.length - 1]);
       ForEachVertex(this.faces[this.faces.length - 1], (vertex) => {
         let pnt = self.oc.BRep_Tool.Pnt(vertex);
+        let [pa, pb] = this._getAB(pnt);
         for (let f = 0; f < this.fillets.length; f++) {
           if (!this.fillets[f].disabled &&
-              pnt.X() === this.fillets[f].x &&
-              pnt.Y() === this.fillets[f].y ) {
+              pa === this.fillets[f].a &&
+              pb === this.fillets[f].b ) {
             makeFillet.AddFillet(vertex, this.fillets[f].radius);
             this.fillets[f].disabled = true; successes++;
             break;
@@ -879,13 +899,14 @@ function Sketch(startingPoint) {
     this.argsString += self.ComputeHash(arguments, true);
     let endPoint = null;
     if (nextPoint.X) {
-      if (this.lastPoint.X() === nextPoint.X() &&
-          this.lastPoint.Y() === nextPoint.Y()) { return this; }
+      let [la, lb] = this._getAB(this.lastPoint);
+      let [na, nb] = this._getAB(nextPoint);
+      if (la === na && lb === nb) { return this; }
       endPoint = nextPoint;
     } else {
-      if (this.lastPoint.X() === nextPoint[0] &&
-          this.lastPoint.Y() === nextPoint[1]) { return this; }
-      endPoint = new self.oc.gp_Pnt_3(nextPoint[0], nextPoint[1], 0);
+      let [la, lb] = this._getAB(this.lastPoint);
+      if (la === nextPoint[0] && lb === nextPoint[1]) { return this; }
+      endPoint = this._toPnt(nextPoint[0], nextPoint[1]);
     }
     let lineSegment    = new self.oc.GC_MakeSegment_1(this.lastPoint, endPoint).Value();
     let lineEdge       = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(lineSegment.get())).Edge();
@@ -897,8 +918,8 @@ function Sketch(startingPoint) {
 
   this.ArcTo = function (pointOnArc, arcEnd) {
     this.argsString += self.ComputeHash(arguments, true);
-    let onArc          = new self.oc.gp_Pnt_3(pointOnArc[0], pointOnArc[1], 0);
-    let nextPoint      = new self.oc.gp_Pnt_3(    arcEnd[0],     arcEnd[1], 0);
+    let onArc          = this._toPnt(pointOnArc[0], pointOnArc[1]);
+    let nextPoint      = this._toPnt(    arcEnd[0],     arcEnd[1]);
     let arcCurve       = new self.oc.GC_MakeArcOfCircle_4(this.lastPoint, onArc, nextPoint).Value();
     let arcEdge        = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(arcCurve.get())).Edge();
     this.wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(arcEdge).Wire());
@@ -912,7 +933,8 @@ function Sketch(startingPoint) {
     let ptList = new self.oc.TColgp_Array1OfPnt_2(1, bezierControlPoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bezierControlPoints.length; bInd++){
-      let ctrlPoint = self.convertToPnt(bezierControlPoints[bInd]);
+      let cp = bezierControlPoints[bInd];
+      let ctrlPoint = (cp.X) ? cp : this._toPnt(cp[0], cp[1]);
       ptList.SetValue(bInd + 2, ctrlPoint);
       this.lastPoint = ctrlPoint;
     }
@@ -928,7 +950,8 @@ function Sketch(startingPoint) {
     let ptList = new self.oc.TColgp_Array1OfPnt_2(1, bsplinePoints.length+1);
     ptList.SetValue(1, this.lastPoint);
     for (let bInd = 0; bInd < bsplinePoints.length; bInd++){
-      let ctrlPoint = self.convertToPnt(bsplinePoints[bInd]);
+      let cp = bsplinePoints[bInd];
+      let ctrlPoint = (cp.X) ? cp : this._toPnt(cp[0], cp[1]);
       ptList.SetValue(bInd + 2, ctrlPoint);
       this.lastPoint = ctrlPoint;
     }
@@ -945,14 +968,16 @@ function Sketch(startingPoint) {
       console.error("Sketch.Fillet() must be called after .LineTo() — it fillets the corner at the most recent vertex.");
       return this;
     }
-    this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
+    let [fa, fb] = this._getAB(this.lastPoint);
+    this.fillets.push({ a: fa, b: fb, radius: radius });
     return this;
   }
 
   this.Circle = function (center, radius, reversed) {
     this.argsString += self.ComputeHash(arguments, true);
-    let circle = new self.oc.GC_MakeCircle_2(new self.oc.gp_Ax2_4(self.convertToPnt(center),
-    new self.oc.gp_Dir_5(0, 0, 1)), radius).Value();
+    let centerPnt = (center.X) ? center : this._toPnt(center[0], center[1]);
+    let circle = new self.oc.GC_MakeCircle_2(new self.oc.gp_Ax2_4(centerPnt,
+    this._normal()), radius).Value();
     let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(circle.get())).Edge();
     let wire = new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire();
     if (reversed) { wire = wire.Reversed(); }

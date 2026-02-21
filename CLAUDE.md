@@ -176,7 +176,29 @@ let tray = Extrude(outerFace, [0, 0, 30]);
 let innerFace = new Sketch(/* smaller dimensions */).End(true).Face();
 ```
 
-### 12. Null Shape Cascading Errors
+### 12. Sketch Plane Parameter for Revolve Profiles
+
+`new Sketch([x,y], 'XZ')` draws in the XZ plane — `[x,y]` maps to `[X, 0, Z]` in 3D.
+This is the correct way to create revolve profiles (lathe-turned parts):
+
+```javascript
+// GOOD: Sketch in XZ plane, then Revolve around Z axis
+let profile = new Sketch([0, 0], "XZ")
+  .LineTo([15, 0]).LineTo([15, 2])
+  .LineTo([10, 8]).LineTo([0, 8])
+  .End(true).Face();
+Revolve(profile, 360);
+
+// BAD: Default Sketch (XY plane) + Revolve around Z = flat concentric circles
+let profile = new Sketch([0, 0])
+  .LineTo([15, 0]).LineTo([15, 8]).LineTo([0, 8])
+  .End(true).Face();
+Revolve(profile, 360);  // Produces a flat disk!
+```
+
+Supported planes: `'XY'` (default), `'XZ'`, `'YZ'`.
+
+### 13. Null Shape Cascading Errors
 
 If any operation produces a null shape (e.g., from bad Scale, failed Fillet, etc.),
 subsequent operations that consume it will fail. Most functions (Extrude, FilletEdges,

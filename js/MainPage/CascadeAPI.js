@@ -82,27 +82,34 @@ class CascadeAPI {
       ],
       functions: {
         primitives: 'Box(x,y,z,centered?), Sphere(r), Cylinder(r,h,centered?), Cone(r1,r2,h), Circle(r,wire?), Polygon(points,wire?), BSpline(points,closed?), Text3D(text,size,height,font?)',
-        sketch: 'new Sketch([x,y]).LineTo([x,y]).Fillet(r).ArcTo([mid],[end]).BSplineTo(pts).End(closed?).Face() or .Wire()',
+        sketch: 'new Sketch([x,y], plane?).LineTo([x,y]).Fillet(r).ArcTo([mid],[end]).BSplineTo(pts).End(closed?).Face() or .Wire() — plane: "XY"(default),"XZ","YZ"',
         transforms: 'Translate([x,y,z], shape), Rotate([ax,ay,az], degrees, shape), Scale(factor, shape), Mirror([vx,vy,vz], shape) — ALL return NEW shape!',
         booleans: 'Union(shapes), Difference(mainBody, [tools]), Intersection(shapes)',
         operations: 'Extrude(face, [dx,dy,dz], keepFace?), Revolve(shape, degrees, [ax,ay,az]?), Loft([wires]), Pipe(shape, wirePath), Offset(shape, distance), FilletEdges(shape, radius, edgeIndices), ChamferEdges(shape, distance, edgeIndices)',
         selectors: 'Edges(shape).ofType("Line"|"Circle").parallel([axis]).max([axis]).min([axis]).indices()',
         measurement: 'Volume(shape), SurfaceArea(shape), CenterOfMass(shape)',
       },
-      coordinates: 'X=right, Y=depth, Z=up. Polygon takes 2D [x,y] points in XY plane. Extrude [0,0,z] for vertical.',
+      coordinates: 'X=right, Y=depth, Z=up. Extrude [0,0,z] goes vertical. Revolve defaults to spinning around Z axis.',
+      strategy: [
+        'Decompose models into parts: identify which technique fits each part, build them separately, then combine with Union/Translate.',
+        'Cylindrical/round parts (handles, shafts, vases, bases): use Sketch in "XZ" plane + Revolve(face, 360). The profile is a 2D cross-section — X is radius from center, Y is height.',
+        'Organic/tapered shapes: Loft between Sketch cross-sections with .Fillet() for smooth corners. Place cross-sections at different Z heights with Translate.',
+        'Prismatic parts (boxes, channels, slots): Sketch in default "XY" plane + Extrude vertically.',
+        'Subtractive details (slots, holes, grooves): build the cutter shape, then Difference(mainBody, [cutters]).',
+        'Build incrementally — run code after each major part to check errors before adding complexity.',
+      ],
       tips: [
-        'For organic/curved shapes: Loft rounded Sketch cross-sections. Do NOT extrude a flat profile and try to round it after — FilletEdges and Offset both fail on complex solids.',
-        'For lathe-turned parts (bases, vases, bottles): use Polygon with 3D [x,0,z] points to define a half-profile in the XZ plane, then Revolve(face, 360). Do NOT use Sketch for revolve profiles — Sketch creates in XY and revolving around Z produces flat concentric circles.',
-        'Sketch().Fillet(r) rounds corners inline — use this to make smooth cross-sections BEFORE lofting.',
-        'Offset() on concave solids often self-intersects → zero volume. Only use on simple convex shapes or 2D faces.',
-        'FilletEdges works reliably on simple solids (boxes, cylinders). On complex boolean results it usually fails — build the roundness into the geometry instead.',
-        'Polygon accepts 2D [x,y] (XY plane) or 3D [x,y,z] points. For revolve profiles use 3D [x,0,z] points to place the profile in the XZ plane.',
+        'Sketch plane parameter: new Sketch([x,y], "XZ") maps [x,y] to [X,0,Z] in 3D — perfect for Revolve profiles. Default "XY" maps to [X,Y,0].',
+        'Sketch().Fillet(r) rounds corners inline — use BEFORE lofting for smooth cross-sections.',
+        'FilletEdges works on simple solids (boxes, cylinders). On complex booleans it usually fails — build roundness into the geometry instead.',
+        'Offset() on concave solids often self-intersects. Only use on simple convex shapes or 2D faces.',
+        'BSpline(points, closed?) creates smooth curves through points — use for organic paths.',
       ],
       pitfalls: [
         'Translate/Rotate/Scale return NEW shapes — always capture: shape = Translate([x,y,z], shape)',
         'Circle(r, true) → wire (for Loft/Pipe), Circle(r) → face (for Extrude)',
         'Extrude consumes the face — pass keepFace=true if you need it again',
-        'Loft works best with wires — use GetWire() after transforms',
+        'Loft needs wires — use GetWire() after transforms',
         'Scale takes a single number, NOT a vector',
       ],
       examples: {
@@ -129,12 +136,12 @@ let s2 = Translate([3,0,15], new Sketch([-7,-5]).LineTo([7,-5]).Fillet(3)
 let s3 = Translate([0,0,30], Circle(4, true));
 Loft([GetWire(s1), GetWire(s2), GetWire(s3)]);`,
         revolved: `// Lathe-turned base via Revolve
-// Use Polygon with 3D [x,0,z] points for the XZ half-profile
-let profile = Polygon([
-  [0,0,0], [15,0,0], [15,0,2],
-  [12,0,3], [10,0,8], [11,0,10],
-  [8,0,12], [0,0,12]
-]);
+// Sketch in XZ plane: [x,y] coords map to [X,0,Z] in 3D
+let profile = new Sketch([0, 0], "XZ")
+  .LineTo([15, 0]).LineTo([15, 2])
+  .LineTo([12, 3]).LineTo([10, 8])
+  .LineTo([11, 10]).LineTo([8, 12])
+  .LineTo([0, 12]).End(true).Face();
 Revolve(profile, 360);`,
       },
       fullDocs: 'await CascadeAPI.getStandardLibrary() → TypeScript definitions with JSDoc',

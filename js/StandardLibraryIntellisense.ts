@@ -15,10 +15,13 @@ type integer = number;
 // ============================================================
 
 /** Starts sketching a 2D shape which can contain lines, arcs, bezier splines, and fillets.
+ * @param startingPoint - Starting point as [x, y] in the chosen plane
+ * @param plane - Drawing plane: 'XY' (default), 'XZ', or 'YZ'. For revolve profiles use 'XZ'.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
- * @example```let sketch = new Sketch([0,0]).LineTo([100,0]).Fillet(20).LineTo([100,100]).End(true).Face();```*/
+ * @example```let sketch = new Sketch([0,0]).LineTo([100,0]).Fillet(20).LineTo([100,100]).End(true).Face();```
+ * @example```let profile = new Sketch([0,0], "XZ").LineTo([15,0]).LineTo([15,10]).LineTo([0,10]).End(true).Face(); Revolve(profile, 360);```*/
 class Sketch {
-    constructor(startingPoint: number[]);
+    constructor(startingPoint: number[], plane?: 'XY' | 'XZ' | 'YZ');
 
     faces       : oc.TopoDS_Face[];
     wires       : oc.TopoDS_Wire[];
