@@ -510,8 +510,8 @@ let cavity = Translate([0, 0, wall], Extrude(innerFace, [0, 0, height]));
 tray = Difference(tray, [cavity]);
 
 // --- Divider (Box + Union) ---
-let divider = Box(wall, depth - wall*2, height - wall*2);
-Translate([-wall/2, -(depth - wall*2)/2, wall], divider);
+let divider = Translate([-wall/2, -(depth - wall*2)/2, wall],
+  Box(wall, depth - wall*2, height - wall*2));
 tray = Union([tray, divider]);
 
 // --- Pen Holder (Revolve + ChamferEdges) ---
