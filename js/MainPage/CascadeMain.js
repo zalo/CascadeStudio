@@ -511,7 +511,7 @@ tray = Difference(tray, [cavity]);
 
 // --- Divider (Box + Union) ---
 let divider = Box(wall, depth - wall*2, height - wall*2);
-Translate([width*0.15 - wall/2, -(depth - wall*2)/2, wall], divider);
+Translate([-wall/2, -(depth - wall*2)/2, wall], divider);
 tray = Union([tray, divider]);
 
 // --- Pen Holder (Revolve + ChamferEdges) ---
@@ -543,7 +543,7 @@ Translate([-width/2 - 6, -depth/4, 0], spiral);
 // --- 3D Text Label ---
 if (showLabel) {
   let label = Text3D("CS", 10, wall * 0.2, "Consolas");
-  Translate([width/4, -depth/2 + 0.1, height * 0.3], label);
+  Translate([width/4, -depth/2 - wall * 0.2, height * 0.3], label);
 }
 
 // --- Measurements ---
