@@ -92,11 +92,11 @@ class CascadeAPI {
       coordinates: 'X=right, Y=depth, Z=up. Polygon takes 2D [x,y] points in XY plane. Extrude [0,0,z] for vertical.',
       tips: [
         'For organic/curved shapes: Loft rounded Sketch cross-sections. Do NOT extrude a flat profile and try to round it after — FilletEdges and Offset both fail on complex solids.',
-        'For lathe-turned parts (bases, vases, bottles): define a half-profile with Polygon or Sketch, then Revolve(face, 360).',
+        'For lathe-turned parts (bases, vases, bottles): use Polygon with 3D [x,0,z] points to define a half-profile in the XZ plane, then Revolve(face, 360). Do NOT use Sketch for revolve profiles — Sketch creates in XY and revolving around Z produces flat concentric circles.',
         'Sketch().Fillet(r) rounds corners inline — use this to make smooth cross-sections BEFORE lofting.',
         'Offset() on concave solids often self-intersects → zero volume. Only use on simple convex shapes or 2D faces.',
         'FilletEdges works reliably on simple solids (boxes, cylinders). On complex boolean results it usually fails — build the roundness into the geometry instead.',
-        'Polygon takes 2D [x,y] in the XY plane only. To use a profile in another plane, create it in XY then Rotate([1,0,0], 90, shape) to reorient.',
+        'Polygon accepts 2D [x,y] (XY plane) or 3D [x,y,z] points. For revolve profiles use 3D [x,0,z] points to place the profile in the XZ plane.',
       ],
       pitfalls: [
         'Translate/Rotate/Scale return NEW shapes — always capture: shape = Translate([x,y,z], shape)',
@@ -129,10 +129,12 @@ let s2 = Translate([3,0,15], new Sketch([-7,-5]).LineTo([7,-5]).Fillet(3)
 let s3 = Translate([0,0,30], Circle(4, true));
 Loft([GetWire(s1), GetWire(s2), GetWire(s3)]);`,
         revolved: `// Lathe-turned base via Revolve
-let profile = new Sketch([0,0]).LineTo([15,0]).LineTo([15,2])
-  .LineTo([12,3]).Fillet(1).LineTo([10,8]).Fillet(1)
-  .LineTo([11,10]).LineTo([8,12]).LineTo([0,12])
-  .End(true).Face();
+// Use Polygon with 3D [x,0,z] points for the XZ half-profile
+let profile = Polygon([
+  [0,0,0], [15,0,0], [15,0,2],
+  [12,0,3], [10,0,8], [11,0,10],
+  [8,0,12], [0,0,12]
+]);
 Revolve(profile, 360);`,
       },
       fullDocs: 'await CascadeAPI.getStandardLibrary() → TypeScript definitions with JSDoc',
