@@ -206,13 +206,13 @@ function ForEachSolid(shape, callback) {
   }
 }
 function GetNumSolidsInCompound(shape) {
-  if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
+  if (!shape || shape.ShapeType().value > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
   let solidsFound = 0;
   ForEachSolid(shape, (i, s) => { solidsFound++; });
   return solidsFound;
 }
 function GetSolidFromCompound(shape, index, keepOriginal) {
-  if (!shape || shape.ShapeType() > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
+  if (!shape || shape.ShapeType().value > 1 || shape.IsNull()) { console.error("Not a compound shape!"); return shape; }
   if (!index) { index = 0;}
 
   let sol = self.CacheOp(arguments, "GetSolidFromCompound", () => {
@@ -255,7 +255,7 @@ function ForEachWire(shape, callback) {
   }
 }
 function GetWire(shape, index, keepOriginal) {
-  if (!shape || shape.ShapeType() > 4 || shape.IsNull()) { console.error("Not a wire shape!"); return shape; }
+  if (!shape || shape.ShapeType().value > 4 || shape.IsNull()) { console.error("Not a wire shape!"); return shape; }
   if (!index) { index = 0;}
 
   let wire = self.CacheOp(arguments, "GetWire", () => {
@@ -575,17 +575,36 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
   if (offsetDistance === 0.0) { return shape; }
   let curOffset = self.CacheOp(arguments, "Offset", () => {
     let offset = null;
-    if (shape.ShapeType() === 5) {
+    let shapeType = shape.ShapeType().value;
+    if (shapeType === 5) {
+      // Wire: 2D planar wire offset
       offset = new self.oc.BRepOffsetAPI_MakeOffset_1();
       offset.AddWire(shape);
       offset.Perform(offsetDistance);
+    } else if (shapeType === 4) {
+      // Face: 2D boundary offset using the face's own surface as reference plane
+      let face = self.oc.TopoDS_Cast.Face_1(shape);
+      offset = new self.oc.BRepOffsetAPI_MakeOffset_2(face,
+        self.oc.GeomAbs_JoinType.GeomAbs_Arc, false);
+      offset.Perform(offsetDistance);
+      // Result is a wire — extract and rebuild as a face
+      let resultShape = offset.Shape();
+      let wExp = new self.oc.TopExp_Explorer_2(resultShape,
+        self.oc.TopAbs_ShapeEnum.TopAbs_WIRE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+      if (wExp.More()) {
+        let offsetWire = self.oc.TopoDS_Cast.Wire_1(wExp.Current());
+        let faceMaker = new self.oc.BRepBuilderAPI_MakeFace_15(offsetWire, true);
+        return faceMaker.Face();
+      }
+      return resultShape;
     } else {
+      // Solid/Shell: 3D shell offset
       offset = new self.oc.BRepOffsetAPI_MakeOffsetShape();
       offset.PerformByJoin(shape, offsetDistance, tolerance, self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false, self.oc.GeomAbs_JoinType.GeomAbs_Arc, false, new self.oc.Message_ProgressRange_1());
     }
     let offsetShape = offset.Shape();
 
-    if (offsetShape.ShapeType() == 3) {
+    if (offsetShape.ShapeType().value === 3) {
       let solidOffset = new self.oc.BRepBuilderAPI_MakeSolid_1();
       solidOffset.Add(self.oc.TopoDS_Cast.Shell_1(offsetShape));
       offsetShape = solidOffset.Solid();

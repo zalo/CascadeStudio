@@ -496,20 +496,16 @@ let outerFace = new Sketch([-width/2, -depth/2])
   .LineTo([-width/2,  depth/2]).Fillet(filletR)
   .LineTo([-width/2, -depth/2]).Fillet(filletR)
   .End(true).Face();
-let tray = Extrude(outerFace, [0, 0, height]);
+let tray = Extrude(outerFace, [0, 0, height], true);  // keepFace: reuse for Offset below
+
+// Offset: Create inner profile while outerFace is still intact
+let innerFace = Offset(outerFace, -wall);
 
 // FilletEdges + Selector: Round the top rim edges
 let topEdges = Edges(tray).max([0,0,1]).indices();
 tray = FilletEdges(tray, wall * 0.4, topEdges);
 
 // Difference: Hollow out to create a tray
-// (Rebuild inner profile — the outerFace was consumed by Extrude above)
-let innerFace = new Sketch([-(width/2 - wall), -(depth/2 - wall)])
-  .LineTo([ (width/2 - wall), -(depth/2 - wall)]).Fillet(Math.max(filletR - wall, 1))
-  .LineTo([ (width/2 - wall),  (depth/2 - wall)]).Fillet(Math.max(filletR - wall, 1))
-  .LineTo([-(width/2 - wall),  (depth/2 - wall)]).Fillet(Math.max(filletR - wall, 1))
-  .LineTo([-(width/2 - wall), -(depth/2 - wall)]).Fillet(Math.max(filletR - wall, 1))
-  .End(true).Face();
 let cavity = Translate([0, 0, wall], Extrude(innerFace, [0, 0, height]));
 tray = Difference(tray, [cavity]);
 
@@ -518,16 +514,19 @@ let divider = Box(wall, depth - wall*2, height - wall*2);
 Translate([width*0.15 - wall/2, -(depth - wall*2)/2, wall], divider);
 tray = Union([tray, divider]);
 
-// --- Pen Holder (Cylinder + Difference + ChamferEdges) ---
+// --- Pen Holder (Revolve + ChamferEdges) ---
+// Revolve an L-shaped profile around Z to create a hollow cup in one step
 let penR = depth / 4;
 let penH = height * 1.6;
 let penX = width/2 + penR + 3;
-let holder = Translate([penX, 0, 0], Cylinder(penR, penH));
-let holderHole = Translate([penX, 0, wall],
-  Cylinder(penR - wall, penH + 1));
-holder = Difference(holder, [holderHole]);
+let cupProfile = Polygon([
+  [0, 0, 0], [penR, 0, 0], [penR, 0, penH],
+  [penR - wall, 0, penH], [penR - wall, 0, wall], [0, 0, wall]
+]);
+let holder = Revolve(cupProfile, 360, [0, 0, 1]);
 let chamferEdges = Edges(holder).max([0,0,1]).ofType("Circle").indices();
 holder = ChamferEdges(holder, wall * 0.6, chamferEdges);
+Translate([penX, 0, 0], holder);
 
 // --- Decorative Cutout (Sphere + Boolean + Mirror) ---
 let cutR = Math.min(8, height * 0.25);
