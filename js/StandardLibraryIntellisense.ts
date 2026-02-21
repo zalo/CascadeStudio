@@ -122,9 +122,14 @@ function Revolve(shape: oc.TopoDS_Shape, degrees?: number, axis?: number[], keep
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js) 
  * @example```let pipe = Pipe(Circle(20), BSpline([[0,0,0],[0,0,50],[20,0,100]], false, true));```*/
 function Pipe(shape: oc.TopoDS_Shape, wirePath: oc.TopoDS_Shape, keepInputs?: boolean): oc.TopoDS_Shape;
-/** Offsets the faces of a shape by offsetDistance
+/** Offsets a shape by offsetDistance. Behavior depends on the input shape type:
+ * - **Face**: 2D boundary offset — shrinks (negative) or grows (positive) the face outline, returns a new face. Useful with `Extrude(..., true)` + `Offset()` to create inner cavities.
+ * - **Solid/Shell**: 3D shell offset — offsets all faces of the solid outward/inward.
+ * - **Wire**: 2D planar wire offset.
+ *
  * The original shape is removed unless `keepShape` is true.
  * [Source](https://github.com/zalo/CascadeStudio/blob/master/js/CADWorker/CascadeStudioStandardLibrary.js)
+ * @example```let innerFace = Offset(outerFace, -wallThickness);```
  * @example```let roundedCube = Offset(Box(10,10,10), 10);```*/
 function Offset(shape: oc.TopoDS_Shape, offsetDistance: number, tolerance?: number, keepShape?: boolean) : oc.TopoDS_Shape;
 
