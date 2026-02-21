@@ -36,6 +36,18 @@
   --cs-font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
 }
 
+/* Visually hidden but accessible — stays in Playwright's accessibility snapshot.
+   Uses offscreen positioning instead of clip (clip: rect(0,0,0,0) causes
+   Playwright to strip the text from the accessibility tree entirely). */
+.sr-only {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
 /* Reset */
 *, *::before, *::after {
   box-sizing: border-box;

@@ -13,7 +13,6 @@ class CascadeAPI {
   /** Install the API on window and update discovery meta tag. */
   install() {
     window.CascadeAPI = this;
-    // Update existing meta tag or create one for agent discovery
     let meta = document.querySelector('meta[name="cascade-api"]');
     if (!meta) {
       meta = document.createElement('meta');
@@ -21,41 +20,131 @@ class CascadeAPI {
       document.head.appendChild(meta);
     }
     meta.content = 'window.CascadeAPI';
+
+    // Console messages for agent discovery — separate calls so each appears
+    // as its own [LOG] line in Playwright's Events section (multi-line strings
+    // get truncated to a single line and the agent misses the key info).
+    console.log('[CascadeAPI] Ready. Run: CascadeAPI.getQuickStart() for docs');
+    console.log('[CascadeAPI] Key methods: runCode(code), saveScreenshot(file), setCameraAngle(az,el)');
+    console.log('[CascadeAPI] NEVER use browser_take_screenshot or browser_run_code');
   }
 
-  // --- Code Management ---
+  // ===== Golden Path (use these) =====
 
-  /** Set the editor code. */
-  setCode(code) {
-    this._app.editor.setCode(code);
+  /** Run code end-to-end: set code, evaluate, wait, and return results.
+   *  Returns: { success, errors, logs, historySteps } */
+  async runCode(code) {
+    await new Promise(r => setTimeout(r, 50));
+    this.setCode(code);
+    await this.evaluate();
+    return {
+      success: this.getErrors().length === 0,
+      errors: this.getErrors(),
+      logs: this.getConsoleLog(),
+      historySteps: this.getHistorySteps(),
+    };
   }
 
-  /** Get the current editor code. */
-  getCode() {
-    return this._app.editor.getCode();
+  /** Save a screenshot of the 3D model to a file (triggers browser download).
+   *  Auto-fits camera and collapses GUI panel first.
+   *  View the result with Read tool at .playwright-mcp/filename */
+  saveScreenshot(filename) {
+    const gui = this._app.gui;
+    if (gui && gui._gui) gui._gui.expanded = false;
+    const dataURL = this.screenshot();
+    const byteString = atob(dataURL.split(',')[1]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+    const blob = new Blob([ab], { type: 'image/png' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || 'screenshot.png';
+    a.click();
+    return filename || 'screenshot.png';
   }
 
-  /** Evaluate the current code and return a Promise that resolves when generation is complete. */
+  /** Set camera angle. azimuth: 0=front, 90=right, 180=back. elevation: 0=level, 90=top. */
+  setCameraAngle(azimuthDeg, elevationDeg) {
+    const viewport = this._app.viewport;
+    if (viewport) viewport.setCameraAngle(azimuthDeg, elevationDeg);
+  }
+
+  /** Compact quick-start guide. Call this FIRST to learn the API. */
+  getQuickStart() {
+    return {
+      workflow: [
+        'result = await CascadeAPI.runCode(code) → {success, errors, logs, historySteps}',
+        'CascadeAPI.setCameraAngle(azimuth, elevation) → 0=front, 90=right; 0=level, 90=top',
+        'CascadeAPI.saveScreenshot("model.png") → then Read .playwright-mcp/model.png to view',
+        'NEVER use browser_take_screenshot (captures full page UI) or browser_run_code (use setCameraAngle instead)',
+      ],
+      functions: {
+        primitives: 'Box(x,y,z,centered?), Sphere(r), Cylinder(r,h,centered?), Cone(r1,r2,h), Circle(r,wire?), Polygon(points,wire?), BSpline(points,closed?), Text3D(text,size,height,font?)',
+        sketch: 'new Sketch([x,y]).LineTo([x,y]).Fillet(r).ArcTo([mid],[end]).BSplineTo(pts).End(closed?).Face() or .Wire()',
+        transforms: 'Translate([x,y,z], shape), Rotate([ax,ay,az], degrees, shape), Scale(factor, shape), Mirror([vx,vy,vz], shape) — ALL return NEW shape!',
+        booleans: 'Union(shapes), Difference(mainBody, [tools]), Intersection(shapes)',
+        operations: 'Extrude(face, [dx,dy,dz], keepFace?), Revolve(shape, degrees, [ax,ay,az]?), Loft([wires]), Pipe(shape, wirePath), Offset(shape, distance), FilletEdges(shape, radius, edgeIndices), ChamferEdges(shape, distance, edgeIndices)',
+        selectors: 'Edges(shape).ofType("Line"|"Circle").parallel([axis]).max([axis]).min([axis]).indices()',
+        measurement: 'Volume(shape), SurfaceArea(shape), CenterOfMass(shape)',
+      },
+      coordinates: 'X=right, Y=depth, Z=up. Polygon takes 2D [x,y] points in XY plane. Extrude [0,0,z] for vertical.',
+      pitfalls: [
+        'Translate/Rotate/Scale return NEW shapes — always capture: shape = Translate([x,y,z], shape)',
+        'Circle(r, true) → wire (for Loft/Pipe), Circle(r) → face (for Extrude)',
+        'Extrude consumes the face — pass keepFace=true if you need it again',
+        'FilletEdges must be applied BEFORE boolean Difference',
+        'Loft works best with wires — use GetWire() after transforms',
+        'Scale takes a single number, NOT a vector',
+        'Polygon takes 2D [x,y] — NOT 3D. Use Rotate to reorient.',
+      ],
+      example: `// Rounded box with cavity
+let face = new Sketch([-20, -15])
+  .LineTo([20, -15]).Fillet(5)
+  .LineTo([20, 15]).Fillet(5)
+  .LineTo([-20, 15]).Fillet(5)
+  .LineTo([-20, -15]).Fillet(5)
+  .End(true).Face();
+let box = Extrude(face, [0, 0, 20], true);
+box = FilletEdges(box, 2, Edges(box).max([0,0,1]).indices());
+let inner = Offset(face, -3);
+let cavity = Translate([0, 0, 3], Extrude(inner, [0, 0, 20]));
+Difference(box, [cavity]);`,
+      fullDocs: 'await CascadeAPI.getStandardLibrary() → TypeScript definitions with JSDoc',
+    };
+  }
+
+  /** Fetch full standard library TypeScript definitions with JSDoc and examples. */
+  async getStandardLibrary() {
+    try {
+      const resp = await fetch('./typedefs/StandardLibraryIntellisense.ts');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return await resp.text();
+    } catch (e) {
+      return `Error fetching standard library: ${e.message}`;
+    }
+  }
+
+  // ===== Internal (used by runCode/saveScreenshot/tests) =====
+
+  setCode(code) { this._app.editor.setCode(code); }
+  getCode() { return this._app.editor.getCode(); }
+
   evaluate() {
     if (this._evaluatePromise) { return this._evaluatePromise; }
     this._evaluatePromise = new Promise((resolve) => {
-      // Wrap the existing handler to detect completion
       const originalHandler = this._app.messageBus.handlers["combineAndRenderShapes"];
       this._app.messageBus.on("combineAndRenderShapes", (payload) => {
-        // Restore original handler first
         if (originalHandler) {
           this._app.messageBus.on("combineAndRenderShapes", originalHandler);
         } else {
           this._app.messageBus.off("combineAndRenderShapes");
         }
-        // Call original handler
         if (originalHandler) originalHandler(payload);
         this._evaluatePromise = null;
         resolve();
       });
       this._app.editor.evaluateCode(false);
-      // If evaluateCode returned without sending to worker (e.g. transpile error),
-      // workerWorking will be false — resolve immediately to avoid hanging
       if (!window.workerWorking) {
         if (originalHandler) {
           this._app.messageBus.on("combineAndRenderShapes", originalHandler);
@@ -69,313 +158,66 @@ class CascadeAPI {
     return this._evaluatePromise;
   }
 
-  // --- Results ---
-
-  /** Get console logs since last evaluation. */
-  getConsoleLog() {
-    return this._app.console.getLogs();
-  }
-
-  /** Get errors since last evaluation. */
-  getErrors() {
-    return this._app.console.getErrors();
-  }
-
-  /** Get the current model as STEP format string. Returns a Promise. */
-  getSTEP() {
-    return this._app.messageBus.request("saveShapeSTEP");
-  }
-
-  /** Get the current model as STL format string. Synchronous. */
-  getSTL() {
+  getConsoleLog() { return this._app.console.getLogs(); }
+  getErrors() { return this._app.console.getErrors(); }
+  getHistorySteps() {
     const viewport = this._app.viewport;
-    if (!viewport || !viewport.mainObject) return '';
-    const exporter = new STLExporter();
-    return exporter.parse(viewport.mainObject);
+    return viewport ? viewport._historySteps.slice() : [];
   }
 
-  /** Get the current model as OBJ format string. Synchronous. */
-  getOBJ() {
-    const viewport = this._app.viewport;
-    if (!viewport || !viewport.mainObject) return '';
-    const exporter = new OBJExporter();
-    return exporter.parse(viewport.mainObject);
-  }
-
-  /** Take a screenshot of the viewport as a base64 PNG data URL. */
   screenshot() {
     const viewport = this._app.viewport;
     if (!viewport) return '';
-    // Force render
+    viewport.fitCamera();
     viewport.environment.renderer.render(viewport.environment.scene, viewport.environment.camera);
     return viewport.environment.curCanvas.toDataURL('image/png');
   }
 
-  // --- Model History ---
-
-  /** Get the modeling history steps from the last evaluation.
-   *  Returns an array of {fnName, lineNumber, shapeCount} objects. */
-  getHistorySteps() {
+  fitCamera() {
     const viewport = this._app.viewport;
-    if (!viewport) return [];
-    return viewport._historySteps.slice();
+    if (viewport) viewport.fitCamera();
   }
 
-  /** Show an intermediate history step in the viewport.
-   *  stepIndex: 0-based index into getHistorySteps(), or -1 for final result.
-   *  Returns a Promise that resolves when the step mesh is displayed. */
-  async showHistoryStep(stepIndex) {
-    const viewport = this._app.viewport;
-    if (!viewport) return;
-    if (stepIndex === -1) {
-      viewport._showFinalResult();
-    } else {
-      await viewport._showHistoryStep(stepIndex);
-    }
-  }
+  isReady() { return this._app.startup !== null; }
+  isWorking() { return window.workerWorking; }
 
-  /** Take a screenshot of a specific history step. Navigates to the step,
-   *  renders, captures, then returns to the final result.
-   *  Returns a base64 PNG data URL. */
-  async screenshotHistoryStep(stepIndex) {
-    const viewport = this._app.viewport;
-    if (!viewport) return '';
-
-    // Navigate to the history step
-    if (stepIndex === -1) {
-      viewport._showFinalResult();
-    } else {
-      await viewport._showHistoryStep(stepIndex);
-    }
-
-    // Force render and capture
-    viewport.environment.renderer.render(viewport.environment.scene, viewport.environment.camera);
-    const dataURL = viewport.environment.curCanvas.toDataURL('image/png');
-
-    return dataURL;
-  }
-
-  /** Restore the viewport to show the final result (after history scrubbing). */
-  showFinalResult() {
-    const viewport = this._app.viewport;
-    if (!viewport) return;
-    viewport._showFinalResult();
-  }
-
-  // --- State ---
-
-  /** Returns true if the worker has finished initialization. */
-  isReady() {
-    return this._app.startup !== null;
-  }
-
-  /** Returns true if the worker is currently evaluating code. */
-  isWorking() {
-    return window.workerWorking;
-  }
-
-  /** Set the editor mode: 'cascadestudio' or 'openscad'. */
   setMode(mode) {
     this._app.editor.setMode(mode);
     const modeSelect = document.getElementById('editorMode');
     if (modeSelect) modeSelect.value = mode;
   }
+  getMode() { return this._app.editor.mode; }
 
-  /** Get the current editor mode. */
-  getMode() {
-    return this._app.editor.mode;
+  // Debug / history inspection
+  showHistoryStep(index) {
+    const viewport = this._app.viewport;
+    if (viewport) viewport._showHistoryStep(index);
+  }
+  screenshotHistoryStep(index) {
+    this.showHistoryStep(index);
+    return this.screenshot();
+  }
+  showFinalResult() {
+    const viewport = this._app.viewport;
+    if (viewport) viewport._showFinalResult();
+  }
+  debugHistory() {
+    return this.getHistorySteps().map((s, i) =>
+      `${i}: ${s.fnName} (line ${s.lineNumber}, ${s.shapeCount} shapes)`
+    ).join('\n');
   }
 
-  // --- Self-Documentation ---
-
-  /** Get structured capabilities description for agent consumption. */
-  getCapabilities() {
-    return {
-      version: '1.0',
-      modes: ['cascadestudio', 'openscad'],
-      currentMode: this.getMode(),
-      isReady: this.isReady(),
-      isWorking: this.isWorking(),
-      api: {
-        code: {
-          setCode: { params: ['code: string'], description: 'Set editor code' },
-          getCode: { params: [], returns: 'string', description: 'Get editor code' },
-          evaluate: { params: [], returns: 'Promise<void>', description: 'Evaluate code, resolves when rendering completes' },
-        },
-        results: {
-          getConsoleLog: { params: [], returns: 'string[]', description: 'Get console logs since last eval' },
-          getErrors: { params: [], returns: 'string[]', description: 'Get errors since last eval' },
-          getSTEP: { params: [], returns: 'Promise<string>', description: 'Export model as STEP' },
-          getSTL: { params: [], returns: 'string', description: 'Export model as STL' },
-          getOBJ: { params: [], returns: 'string', description: 'Export model as OBJ' },
-          screenshot: { params: [], returns: 'string', description: 'Viewport screenshot as base64 PNG data URL' },
-        },
-        state: {
-          isReady: { params: [], returns: 'boolean', description: 'Worker initialized' },
-          isWorking: { params: [], returns: 'boolean', description: 'Worker evaluating' },
-          setMode: { params: ['mode: string'], description: 'Set editor mode (cascadestudio/openscad)' },
-          getMode: { params: [], returns: 'string', description: 'Get current mode' },
-        },
-        history: {
-          getHistorySteps: { params: [], returns: '{fnName, lineNumber, shapeCount}[]', description: 'Get modeling history steps' },
-          showHistoryStep: { params: ['stepIndex: number'], returns: 'Promise<void>', description: 'Navigate to intermediate step (-1 for final)' },
-          screenshotHistoryStep: { params: ['stepIndex: number'], returns: 'Promise<string>', description: 'Screenshot a specific history step as base64 PNG' },
-          showFinalResult: { params: [], description: 'Restore viewport to final result after scrubbing' },
-        },
-      },
-      cadFunctions: {
-        primitives: {
-          'Box(x, y, z, centered?)': 'Create a box',
-          'Sphere(radius)': 'Create a sphere',
-          'Cylinder(radius, height, centered?)': 'Create a cylinder',
-          'Cone(r1, r2, height)': 'Create a cone',
-          'Polygon(points, wire?)': 'Create a polygon face or wire',
-          'Circle(radius, wire?)': 'Create a circle face or wire',
-          'BSpline(points, closed?)': 'Create a BSpline curve',
-          'Text3D(text, size, height, fontName?)': 'Create extruded 3D text',
-          'Wedge(dx, dy, dz, ltx)': 'Create a wedge (tapered box)',
-          'Sketch(startingPoint)': 'Start a 2D sketch chain (.LineTo().ArcTo().End().Face())',
-        },
-        transforms: {
-          'Translate(offset, shape, keepOriginal?)': 'Translate a shape',
-          'Rotate(axis, degrees, shape, keepOriginal?)': 'Rotate a shape around axis',
-          'Scale(factor, shape, keepOriginal?)': 'Scale a shape',
-          'Mirror(vector, shape, keepOriginal?)': 'Mirror a shape across plane',
-          'Transform(translation, rotation, scale, shape)': 'Full transform (used by gizmos)',
-        },
-        booleans: {
-          'Union(shapes, keepObjects?, fuzz?, keepEdges?)': 'Boolean union of shapes',
-          'Difference(mainBody, tools, keepObjects?, fuzz?, keepEdges?)': 'Boolean subtraction',
-          'Intersection(shapes, keepObjects?, fuzz?, keepEdges?)': 'Boolean intersection',
-        },
-        operations: {
-          'Extrude(face, direction, keepFace?)': 'Extrude a face along a direction vector',
-          'Revolve(shape, degrees, direction?, keepShape?)': 'Revolve a shape around an axis',
-          'RotatedExtrude(wire, height, rotation, keepWire?)': 'Helical extrusion',
-          'Loft(wires, keepWires?)': 'Loft through wire profiles',
-          'Pipe(shape, wirePath, keepInputs?)': 'Sweep a shape along a path',
-          'Offset(shape, distance, tolerance?, keepShape?)': 'Offset/shell a shape',
-          'FilletEdges(shape, radius, edgeList, keepOriginal?)': 'Fillet edges',
-          'ChamferEdges(shape, distance, edgeList, keepOriginal?)': 'Chamfer edges',
-          'Section(shape, planeOrigin?, planeNormal?)': 'Cross-section at plane',
-          'RemoveInternalEdges(shape, keepShape?)': 'Remove internal edges',
-        },
-        iteration: {
-          'ForEachSolid(shape, callback)': 'Iterate solids in compound',
-          'ForEachFace(shape, callback)': 'Iterate faces',
-          'ForEachEdge(shape, callback)': 'Iterate edges',
-          'ForEachWire(shape, callback)': 'Iterate wires',
-          'ForEachVertex(shape, callback)': 'Iterate vertices',
-        },
-        gui: {
-          'Slider(name, default, min, max, realTime?, step?, precision?)': 'Add a slider control',
-          'Checkbox(name, default?)': 'Add a checkbox control',
-          'TextInput(name, default?, realTime?)': 'Add a text input control',
-          'Dropdown(name, default?, options?, realTime?)': 'Add a dropdown control',
-          'Button(name)': 'Add a button',
-        },
-        selectors: {
-          'Edges(shape)': 'Create an EdgeSelector for chaining — .ofType(), .parallel(), .max(), .min(), .indices()',
-          'Faces(shape)': 'Create a FaceSelector for chaining — .ofType(), .parallel(), .max(), .min(), .indices()',
-          'EdgeSelector.ofType(type)': 'Filter edges by curve type: "Line", "Circle", "BSpline", etc.',
-          'EdgeSelector.parallel(axis)': 'Filter edges parallel to axis vector',
-          'EdgeSelector.perpendicular(axis)': 'Filter edges perpendicular to axis vector',
-          'EdgeSelector.max(axis)': 'Select edges at highest position along axis',
-          'EdgeSelector.min(axis)': 'Select edges at lowest position along axis',
-          'EdgeSelector.indices()': 'Return edge indices for FilletEdges/ChamferEdges',
-          'FaceSelector.ofType(type)': 'Filter faces by surface type: "Plane", "Cylinder", etc.',
-          'FaceSelector.max(axis)': 'Select face(s) at highest position along axis',
-          'FaceSelector.min(axis)': 'Select face(s) at lowest position along axis',
-        },
-        measurement: {
-          'Volume(shape)': 'Solid volume',
-          'SurfaceArea(shape)': 'Total surface area',
-          'CenterOfMass(shape)': 'Center of mass as [x,y,z]',
-          'EdgeLength(shape)': 'Total edge length',
-        },
-        utility: {
-          'Remove(array, item)': 'Remove item from sceneShapes array',
-          'GetWire(shape, index, keepOriginal?)': 'Get a wire by index from a shape',
-          'GetSolidFromCompound(shape, index, keepOriginal?)': 'Get solid by index',
-          'GetNumSolidsInCompound(shape)': 'Count solids in compound',
-          'SaveFile(filename, fileURL)': 'Trigger file download',
-        },
-      },
-    };
+  // Export formats
+  getSTEP() { return this._app.messageBus.request("saveShapeSTEP"); }
+  getSTL() {
+    const viewport = this._app.viewport;
+    if (!viewport || !viewport.mainObject) return '';
+    return new STLExporter().parse(viewport.mainObject);
   }
-
-  /** Get example code for both modes. */
-  getExamples() {
-    return {
-      cascadestudio: {
-        description: 'CascadeStudio JavaScript mode — call CAD functions directly',
-        basic: `// Primitives
-let box = Box(10, 20, 30);
-let sphere = Sphere(50);
-let cyl = Cylinder(10, 40, true);
-let cone = Cone(20, 5, 30);`,
-        transforms: `// Transforms
-let box = Box(10, 10, 10);
-Translate([20, 0, 0], box);
-Rotate([0, 0, 1], 45, Box(10, 10, 10));
-Mirror([1, 0, 0], Box(10, 10, 10));
-Scale(2, Sphere(10));`,
-        booleans: `// Booleans
-let sphere = Sphere(50);
-let cylX = Rotate([1, 0, 0], 90, Cylinder(30, 200, true));
-let cylY = Rotate([0, 1, 0], 90, Cylinder(30, 200, true));
-let cylZ = Cylinder(30, 200, true);
-Difference(sphere, [cylX, cylY, cylZ]);`,
-        extrusions: `// Extrusions
-let face = Polygon([[0,0],[100,0],[100,50],[50,100],[0,100]]);
-Extrude(face, [0, 0, 20]);
-
-let circle = Circle(30);
-Revolve(circle, 360, [0, 1, 0]);`,
-        sketch: `// Sketch API
-let sketch = new Sketch([0, 0])
-  .LineTo([100, 0])
-  .Fillet(20)
-  .LineTo([100, 100])
-  .End(true)
-  .Face();
-Extrude(sketch, [0, 0, 20]);`,
-        gui: `// GUI Controls
-let radius = Slider("Radius", 20, 5, 50);
-let height = Slider("Height", 40, 10, 100);
-let centered = Checkbox("Centered", true);
-Cylinder(radius, height, centered);`,
-      },
-      openscad: {
-        description: 'OpenSCAD mode — use standard OpenSCAD syntax',
-        basic: `// Primitives
-cube(10);
-sphere(r=20);
-cylinder(h=30, r=10);`,
-        transforms: `// Transforms
-translate([20, 0, 0]) cube(10);
-rotate([0, 0, 45]) cube(10);
-mirror([1, 0, 0]) sphere(15);`,
-        booleans: `// Booleans
-difference() {
-  cube(20, center=true);
-  sphere(13);
-}`,
-        modules: `// Custom modules
-module rounded_box(size, r) {
-  minkowski() {
-    cube(size - 2*r, center=true);
-    sphere(r);
-  }
-}
-rounded_box(30, 5);`,
-        loops: `// For loops
-for (i = [0:4]) {
-  translate([i * 15, 0, 0])
-    sphere(5);
-}`,
-      },
-    };
+  getOBJ() {
+    const viewport = this._app.viewport;
+    if (!viewport || !viewport.mainObject) return '';
+    return new OBJExporter().parse(viewport.mainObject);
   }
 }
 

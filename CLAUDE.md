@@ -37,99 +37,31 @@ js/StandardLibraryIntellisense.ts  ← TypeScript definitions for all CAD functi
 
 ## Agent API (window.CascadeAPI)
 
-The `CascadeAPI` class is installed on `window.CascadeAPI` at startup. It provides:
+Four methods — that's it:
 
-### Code Management
-- `setCode(code)` — Set editor code
-- `getCode()` → string — Get current code
-- `evaluate()` → Promise — Evaluate code, resolves when rendering is complete
+1. `getQuickStart()` → Learn the API (call this first)
+2. `runCode(code)` → Run CAD code, returns `{success, errors, logs, historySteps}`
+3. `saveScreenshot(filename)` → Download 3D model screenshot (view with Read at `.playwright-mcp/filename`)
+4. `setCameraAngle(azimuth, elevation)` → Rotate view (0=front, 90=right; 0=level, 90=top)
 
-### Results
-- `getConsoleLog()` → string[] — Console logs since last eval
-- `getErrors()` → string[] — Errors since last eval
-- `screenshot()` → string — Base64 PNG data URL of the 3D viewport
-- `getSTEP()` → Promise<string> — Export model as STEP
-- `getSTL()` → string — Export model as STL
-- `getOBJ()` → string — Export model as OBJ
+**NEVER** use `browser_take_screenshot` (captures full page UI, not the 3D model) or `browser_run_code` (use `setCameraAngle` instead).
 
-### Model History
-- `getHistorySteps()` → {fnName, lineNumber, shapeCount}[] — Intermediate build steps
-- `showHistoryStep(index)` → Promise — Navigate to a history step (-1 for final)
-- `screenshotHistoryStep(index)` → Promise<string> — Screenshot a specific step
-- `showFinalResult()` — Return to final result after scrubbing
+## Playwright Testing
 
-### State
-- `isReady()` → boolean — Worker has initialized
-- `isWorking()` → boolean — Worker is currently evaluating
-- `setMode(mode)` — Switch between 'cascadestudio' and 'openscad'
-- `getCapabilities()` → object — Full structured API documentation
-
-## Playwright Testing Patterns
-
-### Loading the App
+WebGL requires `--use-gl=angle --use-angle=swiftshader` in playwright.config.js launch args.
 
 ```javascript
 await page.goto('http://localhost:8080');
-// Wait for WASM to finish loading
-await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady());
-// Wait for initial code evaluation to complete
+await page.waitForFunction(() => window.CascadeAPI?.isReady());
 await page.waitForFunction(() => !window.CascadeAPI.isWorking(), { timeout: 60000 });
-```
 
-### Evaluating Code
+// Use runCode for tests (combines setCode + evaluate + getErrors):
+const result = await page.evaluate((code) => CascadeAPI.runCode(code), myCode);
+expect(result.errors).toEqual([]);
 
-```javascript
-await page.evaluate((code) => window.CascadeAPI.setCode(code), myCode);
-await page.evaluate(() => window.CascadeAPI.evaluate());
-await page.waitForFunction(() => !window.CascadeAPI.isWorking(), { timeout: 60000 });
-const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
-// errors should be [] for success
-```
-
-### Taking Screenshots
-
-The viewport uses WebGL which requires special browser flags for headless rendering:
-
-```javascript
-// playwright.config.js — REQUIRED for WebGL screenshots
-launchOptions: {
-  args: ['--use-gl=angle', '--use-angle=swiftshader'],
-}
-```
-
-To capture a screenshot of the 3D model:
-
-```javascript
-// Method 1: Use CascadeAPI (returns base64 PNG via Three.js renderer)
-const dataURL = await page.evaluate(() => window.CascadeAPI.screenshot());
-
-// Method 2: Trigger a download and read the file
-await page.evaluate(() => {
-  const dataURL = window.CascadeAPI.screenshot();
-  const byteString = atob(dataURL.split(',')[1]);
-  const ab = new ArrayBuffer(byteString.length);
-  const ia = new Uint8Array(ab);
-  for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-  const blob = new Blob([ab], { type: 'image/png' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'screenshot.png';
-  a.click();
-});
-// File saves to .playwright-mcp/ directory
-```
-
-### Console Log Capture with Tags
-
-Use tagged console.log for extracting specific values in tests:
-
-```javascript
-// In CAD code:
-console.log("VOLUME:" + Volume(shape));
-
-// In test:
-const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-const volume = parseFloat(logs.find(l => l.startsWith("VOLUME:")).split(":")[1]);
+// Screenshots:
+await page.evaluate(() => CascadeAPI.saveScreenshot('model.png'));
+// View with Read tool at .playwright-mcp/model.png
 ```
 
 ## CAD Modeling — Common Pitfalls
@@ -265,26 +197,27 @@ When building a model interactively via Playwright:
 6. **Evaluate**: `await page.evaluate(() => CascadeAPI.evaluate())`
 7. **Wait**: `await page.waitForFunction(() => !CascadeAPI.isWorking())`
 8. **Check errors**: `page.evaluate(() => CascadeAPI.getErrors())`
-9. **Screenshot**: Trigger download of `CascadeAPI.screenshot()` base64 PNG
-10. **Iterate**: Fix errors, re-inject, re-evaluate
+9. **Screenshot**: `CascadeAPI.saveScreenshot("model.png")` → view with Read at `.playwright-mcp/model.png`
+10. **Camera angle**: `CascadeAPI.setCameraAngle(azimuth, elevation)` to rotate (0=front, 90=right)
+11. **Iterate**: Fix errors, re-inject, re-evaluate
 
 ### Screenshot Download Pattern
 
 ```javascript
+// Simple: one-line screenshot (auto-fits camera, collapses GUI)
+await page.evaluate(() => CascadeAPI.saveScreenshot('model.png'));
+// View with Read tool at .playwright-mcp/model.png
+
+// With custom camera angle:
 await page.evaluate(() => {
-  const dataURL = window.CascadeAPI.screenshot();
-  const byteString = atob(dataURL.split(',')[1]);
-  const ab = new ArrayBuffer(byteString.length);
-  const ia = new Uint8Array(ab);
-  for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-  const blob = new Blob([ab], { type: 'image/png' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'my-screenshot.png';
-  a.click();
+  CascadeAPI.setCameraAngle(90, 30);  // right side, 30° elevation
+  CascadeAPI.saveScreenshot('model-side.png');
 });
-// Downloaded to .playwright-mcp/my-screenshot.png (relative to CWD)
+// View with Read tool at .playwright-mcp/model-side.png
 ```
+
+**NEVER** use Playwright `browser_take_screenshot` — it captures the full page UI.
+**NEVER** use `browser_run_code` for mouse dragging — use `setCameraAngle()` instead.
 
 ### History Step Screenshots
 
@@ -328,3 +261,34 @@ Decoding: `inflateSync(atob(decodeURIComponent(encoded)))` (compatible with mast
 - **Dockview**: Panel layout system (replaces Golden Layout)
 - **Tweakpane v4**: GUI controls (sliders, checkboxes)
 - **fflate**: DEFLATE compression for URL encoding
+
+## Blind Agent Tests
+
+Test that a fresh agent can discover and use the CascadeAPI without reading local files.
+Run in the background so you can continue working:
+
+```javascript
+// 1. Build and start server
+npm run build
+npx http-server ./build -p 8113 -c-1 --silent &
+
+// 2. Launch via Task tool
+Task({
+  subagent_type: "general-purpose",
+  model: "opus",
+  run_in_background: true,
+  description: "Blind agent test",
+  prompt: `You are testing a browser-based CAD application at http://localhost:8113
+Your task: Model a chess knight piece. Make it recognizable and detailed.
+Instructions:
+1. Navigate to the app
+2. Wait for it to load
+3. Discover the API by reading the page
+4. Build the knight iteratively — run code, check errors, take screenshots to verify
+5. Use multiple camera angles to verify from different sides
+6. Save a final screenshot when satisfied
+Important: Do NOT read any local project files. Discover everything through the browser.`
+})
+```
+
+**Success criteria**: 0 uses of `browser_take_screenshot` and `browser_run_code`, multiple uses of `saveScreenshot` and `setCameraAngle`.

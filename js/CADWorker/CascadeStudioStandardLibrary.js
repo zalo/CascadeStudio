@@ -712,15 +712,37 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
 }
 
 function Loft(wires, keepWires) {
-  // Auto-extract wires from non-wire shapes (e.g. after Translate/Rotate)
+  // Auto-extract wires from non-wire shapes (e.g. after Translate/Rotate).
+  // Embind requires the exact TopoDS_Wire type for AddWire(), so we rebuild
+  // wires through BRepBuilderAPI_MakeWire to ensure proper Embind typing.
   let resolvedWires = wires.map((w, i) => {
+    let wire = w;
     if (w.ShapeType().value !== 5) {
+      // Not a wire — extract the first wire sub-shape
       console.warn("Loft: profile " + i + " is not a wire (ShapeType " + w.ShapeType().value + "), extracting wire automatically. Use GetWire() to avoid this warning.");
       let exp = new self.oc.TopExp_Explorer_2(w, self.oc.TopAbs_ShapeEnum.TopAbs_WIRE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
-      if (exp.More()) { return self.oc.TopoDS_Cast.Wire_1(exp.Current()); }
-      console.error("Loft: could not extract a wire from profile " + i);
+      if (exp.More()) {
+        wire = self.oc.TopoDS_Cast.Wire_1(exp.Current());
+      } else {
+        console.error("Loft: could not extract a wire from profile " + i);
+        return w;
+      }
     }
-    return w;
+    // Rebuild the wire from its edges to get a properly Embind-typed TopoDS_Wire.
+    // TopoDS_Cast.Wire_1() and Translate() return references that Embind sees as
+    // TopoDS_Shape, which causes AddWire() to throw a BindingError.
+    try {
+      let mw = new self.oc.BRepBuilderAPI_MakeWire_1();
+      let edgeExp = new self.oc.TopExp_Explorer_2(wire, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+      while (edgeExp.More()) {
+        mw.Add_1(self.oc.TopoDS_Cast.Edge_1(edgeExp.Current()));
+        edgeExp.Next();
+      }
+      return mw.Wire();
+    } catch (e) {
+      // If re-wrapping fails, return the original and let AddWire handle it
+      return wire;
+    }
   });
   let curLoft = self.CacheOp(arguments, "Loft", () => {
     let pipe = new self.oc.BRepOffsetAPI_ThruSections(true, false, 1.0e-6);

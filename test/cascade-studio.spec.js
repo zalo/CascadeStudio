@@ -93,22 +93,12 @@ test.describe('Application Startup & CascadeAPI', () => {
     const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
     expect(errors).toEqual([]);
 
-    // getCapabilities
-    const caps = await page.evaluate(() => window.CascadeAPI.getCapabilities());
-    expect(caps.version).toBe('1.0');
-    expect(caps.modes).toContain('cascadestudio');
-    expect(caps.modes).toContain('openscad');
-    expect(caps.api).toBeDefined();
-    expect(caps.cadFunctions).toBeDefined();
-    expect(caps.cadFunctions.primitives).toBeDefined();
-    expect(caps.cadFunctions.booleans).toBeDefined();
-
-    // getExamples
-    const examples = await page.evaluate(() => window.CascadeAPI.getExamples());
-    expect(examples.cascadestudio).toBeDefined();
-    expect(examples.openscad).toBeDefined();
-    expect(examples.cascadestudio.basic).toContain('Box');
-    expect(examples.openscad.basic).toContain('cube');
+    // getQuickStart
+    const qs = await page.evaluate(() => window.CascadeAPI.getQuickStart());
+    expect(qs.workflow).toBeDefined();
+    expect(qs.functions).toBeDefined();
+    expect(qs.pitfalls).toBeDefined();
+    expect(qs.example).toContain('Sketch');
 
     // setCode/getCode round-trip
     const testCode = 'Box(10, 20, 30);';

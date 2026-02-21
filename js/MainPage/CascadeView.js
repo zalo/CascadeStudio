@@ -127,7 +127,7 @@ class CascadeEnvironment {
     this._downloadFile = downloadFile;
 
     // Modeling history timeline state
-    this._historySteps = [];       // Metadata from worker: [{fnName, lineNumber, shapeCount}, ...]
+    this._historySteps = [];       // Metadata from worker: [{fnName, lineNumber, shapeCount, volume, surfaceArea, solidCount}, ...]
     this._historyMeshCache = {};   // stepIndex → [facelist, edgelist]
     this._historyCurrentStep = -1; // -1 = showing final result (default)
     this._historyObject = null;    // THREE.Group for the history preview
@@ -156,6 +156,89 @@ class CascadeEnvironment {
     // Start the animation loop
     this._animate();
     this.environment.renderer.render(this.environment.scene, this.environment.camera);
+  }
+
+  /** Fit the camera to frame the current model with a 3/4 elevated view.
+   *  Auto-detects which axis is "up" based on bounding box proportions:
+   *  the tallest dimension is treated as vertical. */
+  fitCamera() {
+    if (!this.mainObject && !this._historyObject) return;
+    const target = this._historyObject || this.mainObject;
+    const box = new THREE.Box3().setFromObject(target);
+    if (box.isEmpty()) return;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    // Distance to fit the object in the camera frustum
+    const fov = this.environment.camera.fov * (Math.PI / 180);
+    const dist = (maxDim / (2 * Math.tan(fov / 2))) * 1.6;
+
+    // Auto-detect "up" axis: the tallest dimension is treated as vertical.
+    // This makes revolution solids (pawns, vases, etc.) render upright
+    // regardless of which axis they were revolved around.
+    let up, dir;
+    if (size.y >= size.x && size.y >= size.z) {
+      // Y is tallest — camera looks from XZ, Y is up
+      up = new THREE.Vector3(0, 1, 0);
+      dir = new THREE.Vector3(1, 0.5, 1).normalize();
+    } else if (size.z >= size.x && size.z >= size.y) {
+      // Z is tallest — camera looks from XY, Z is up
+      up = new THREE.Vector3(0, 0, 1);
+      dir = new THREE.Vector3(1, 1, 0.5).normalize();
+    } else {
+      // X is tallest — camera looks from YZ, X is up (unusual but handled)
+      up = new THREE.Vector3(1, 0, 0);
+      dir = new THREE.Vector3(0.5, 1, 1).normalize();
+    }
+
+    this.environment.camera.up.copy(up);
+    this.environment.camera.position.copy(center).addScaledVector(dir, dist);
+    this.environment.controls.target.copy(center);
+    this.environment.camera.lookAt(center);
+    this.environment.controls.update();
+    this.environment.viewDirty = true;
+  }
+
+  /** Set the camera angle using azimuth and elevation (in degrees).
+   *  azimuth: horizontal rotation around the model (0=front, 90=right, 180=back, 270=left)
+   *  elevation: angle above the horizontal plane (0=level, 90=top-down)
+   *  Respects the auto-detected "up" axis from fitCamera(). */
+  setCameraAngle(azimuthDeg, elevationDeg) {
+    // First fit to establish correct distance, up axis, and center
+    this.fitCamera();
+
+    const camera = this.environment.camera;
+    const controls = this.environment.controls;
+    const target = controls.target.clone();
+    const dist = camera.position.distanceTo(target);
+    const up = camera.up.clone().normalize();
+
+    const az = ((azimuthDeg != null) ? azimuthDeg : 45) * Math.PI / 180;
+    const el = ((elevationDeg != null) ? elevationDeg : 30) * Math.PI / 180;
+
+    // Build orthonormal basis from up vector
+    let temp = Math.abs(up.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+    let right = new THREE.Vector3().crossVectors(temp, up).normalize();
+    let forward = new THREE.Vector3().crossVectors(up, right).normalize();
+
+    // Spherical coords: azimuth around up axis, elevation above horizontal
+    const cosEl = Math.cos(el);
+    const sinEl = Math.sin(el);
+    const dir = new THREE.Vector3()
+      .addScaledVector(forward, cosEl * Math.cos(az))
+      .addScaledVector(right, cosEl * Math.sin(az))
+      .addScaledVector(up, sinEl)
+      .normalize();
+
+    camera.position.copy(target).addScaledVector(dir, dist);
+    camera.lookAt(target);
+    controls.update();
+    this.environment.viewDirty = true;
+
+    // Force render so the frame is ready for screenshot
+    this.environment.renderer.render(this.environment.scene, camera);
   }
 
   /** Build a THREE.Group from facelist/edgelist mesh data. */

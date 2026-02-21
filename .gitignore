@@ -112,3 +112,8 @@ typings/
 # Playwright
 playwright-report/
 test-results/
+.playwright-mcp/
+
+# Agent test screenshots
+agent-test-*.png
+chess-pawn*.png

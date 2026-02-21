@@ -82,10 +82,35 @@ class CascadeStudioUtils {
    *  and after eval() completes (to capture the final op's result). */
   flushHistoryStep() {
     if (this._pendingHistoryOp) {
+      let shapes = [...self.sceneShapes];
+
+      // Compute per-step metadata (volume, surfaceArea, solidCount)
+      let volume = 0, surfaceArea = 0, solidCount = 0;
+      try {
+        let oc = self.oc;
+        for (let shape of shapes) {
+          if (!shape || shape.IsNull()) continue;
+          let vProps = new oc.GProp_GProps_1();
+          oc.BRepGProp.VolumeProperties_1(shape, vProps, false, false, false);
+          volume += Math.abs(vProps.Mass());
+          let sProps = new oc.GProp_GProps_1();
+          oc.BRepGProp.SurfaceProperties_1(shape, sProps, false, false);
+          surfaceArea += sProps.Mass();
+          // Count solids
+          let explorer = new oc.TopExp_Explorer_2(shape, oc.TopAbs_ShapeEnum.TopAbs_SOLID, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+          for (explorer.Init(shape, oc.TopAbs_ShapeEnum.TopAbs_SOLID, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); explorer.More(); explorer.Next()) {
+            solidCount++;
+          }
+        }
+      } catch (e) { /* Metadata is best-effort */ }
+
       this.modelHistory.push({
         fnName: this._pendingHistoryOp.fnName,
         lineNumber: this._pendingHistoryOp.lineNumber,
-        shapes: [...self.sceneShapes]
+        shapes,
+        volume: Math.round(volume * 100) / 100,
+        surfaceArea: Math.round(surfaceArea * 100) / 100,
+        solidCount,
       });
       self.modelHistory = this.modelHistory;
       this._pendingHistoryOp = null;

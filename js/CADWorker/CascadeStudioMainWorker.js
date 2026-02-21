@@ -180,7 +180,10 @@ class CascadeStudioWorker {
           index: i,
           fnName: step.fnName,
           lineNumber: step.lineNumber,
-          shapeCount: step.shapes.length
+          shapeCount: step.shapes.length,
+          volume: step.volume,
+          surfaceArea: step.surfaceArea,
+          solidCount: step.solidCount,
         }))
       });
 
