@@ -1,7 +1,7 @@
-/* Cascade Studio — Industrial Dark Theme */
+/* Cascade Studio — Modern Dark Theme */
 
 :root {
-  /* Base palette — neutral dark */
+  /* Base palette — matches master's neutral dark theme */
   --cs-bg-primary: #222;
   --cs-bg-secondary: #111;
   --cs-bg-surface: #2e2e2e;
@@ -23,7 +23,7 @@
 
   /* Scrollbar */
   --cs-scrollbar-track: var(--cs-bg-secondary);
-  --cs-scrollbar-thumb: #555;
+  --cs-scrollbar-thumb: #777;
 
   /* Radius */
   --cs-radius: 4px;
@@ -52,18 +52,18 @@ body {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--cs-scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--cs-scrollbar-thumb);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #888;
+  background: #999;
 }
 
 /* ============================================================
@@ -78,7 +78,6 @@ body {
   height: 36px;
   overflow-x: auto;
   overflow-y: hidden;
-  border-bottom: 1px solid #1a1a1a;
 }
 
 .topnav-brand {
@@ -88,36 +87,33 @@ body {
   padding: 4px 16px;
   text-decoration: none;
   white-space: nowrap;
-  letter-spacing: 0.5px;
-  transition: background var(--cs-transition), color var(--cs-transition);
 }
 
 .topnav-brand:hover {
-  background: var(--cs-accent) !important;
-  color: white !important;
+  background: #aaa !important;
+  color: black !important;
 }
 
 .topnav-actions {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 2px;
   flex-shrink: 0;
 }
 
 .topnav a, .topnav label {
-  color: var(--cs-text-secondary);
+  color: var(--cs-text-primary);
   text-decoration: none;
-  font-size: 12px;
+  font-size: 14px;
   font-family: Consolas, monospace;
-  padding: 8px 12px;
+  padding: 4px 16px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--cs-transition), color var(--cs-transition);
 }
 
 .topnav a:hover, .topnav label:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--cs-text-primary);
+  background: #aaa;
+  color: black;
 }
 
 .topnav a:active, .topnav label:active {
@@ -127,10 +123,9 @@ body {
 
 .topnav-separator {
   width: 1px;
-  height: 14px;
-  background: #2a2a2a;
-  margin: 0 2px;
-  flex-shrink: 0;
+  height: 16px;
+  background: var(--cs-border);
+  margin: 0 4px;
 }
 
 .topnav-select {
@@ -143,7 +138,7 @@ body {
   font-family: var(--cs-font-ui);
   margin-left: 8px;
   cursor: pointer;
-  transition: border-color var(--cs-transition), box-shadow var(--cs-transition);
+  transition: border-color var(--cs-transition);
 }
 
 .topnav-select:hover {
@@ -177,35 +172,20 @@ body {
 .dockview-theme-dark {
   --dv-background-color: var(--cs-bg-primary);
   --dv-paneview-header-border-color: var(--cs-border);
-  --dv-tabs-and-actions-container-background-color: var(--cs-bg-secondary);
-  --dv-tabs-and-actions-container-height: 24px;
+  --dv-tabs-and-actions-container-background-color: transparent;
+  --dv-tabs-and-actions-container-height: 20px;
   --dv-tabs-and-actions-container-font-size: 11px;
-  --dv-activegroup-visiblepanel-tab-background-color: var(--cs-bg-primary);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--cs-bg-secondary);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--cs-bg-primary);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--cs-bg-secondary);
-  --dv-tab-divider-color: transparent;
-  --dv-activegroup-visiblepanel-tab-color: var(--cs-text-primary);
+  --dv-activegroup-visiblepanel-tab-background-color: #222;
+  --dv-activegroup-hiddenpanel-tab-background-color: #1a1a1a;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #222;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #1a1a1a;
+  --dv-tab-divider-color: var(--cs-border);
+  --dv-activegroup-visiblepanel-tab-color: #ddd;
   --dv-activegroup-hiddenpanel-tab-color: var(--cs-text-muted);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--cs-text-primary);
+  --dv-inactivegroup-visiblepanel-tab-color: #ddd;
   --dv-inactivegroup-hiddenpanel-tab-color: var(--cs-text-muted);
-  --dv-separator-border: #1a1a1a;
+  --dv-separator-border: var(--cs-border);
   --dv-group-view-background-color: var(--cs-bg-primary);
-}
-
-/* Active tab accent indicator */
-.dv-tab.dv-active-tab {
-  box-shadow: inset 0 2px 0 var(--cs-accent) !important;
-}
-
-/* Tab hover effect */
-.dv-tab:not(.dv-active-tab):hover {
-  background: rgba(255, 255, 255, 0.04) !important;
-}
-
-/* Tab container bottom border */
-.dv-tabs-and-actions-container {
-  border-bottom: 1px solid #1a1a1a;
 }
 
 /* ============================================================
@@ -224,7 +204,7 @@ body {
   border: 1px solid var(--cs-border);
   border-radius: 8px;
   overflow: auto;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 /* ============================================================
@@ -232,8 +212,8 @@ body {
    ============================================================ */
 
 :root {
-  --tp-font-family: var(--cs-font-ui);
-  --tp-base-background-color: hsla(0, 0%, 14%, 0.92);
+  --tp-font-family: Arial, sans-serif;
+  --tp-base-background-color: var(--cs-bg-surface);
   --tp-button-background-color: hsl(0, 0%, 25%);
   --tp-button-background-color-active: hsl(0, 0%, 40%);
   --tp-button-background-color-focus: hsl(0, 0%, 35%);
@@ -244,28 +224,25 @@ body {
 
 .gui-panel {
   position: absolute;
-  right: 8px;
-  top: 0;
+  right: 0;
   max-height: 100%;
   overflow-y: auto;
   z-index: 10;
 }
 
 .gui-panel::-webkit-scrollbar {
-  width: 4px;
-  background: transparent;
+  width: 8px;
+  background: var(--cs-bg-surface);
 }
 
 .gui-panel::-webkit-scrollbar-thumb {
   background: var(--cs-scrollbar-thumb);
-  border-radius: 2px;
+  border-radius: 4px;
 }
 
 .tp-rotv {
   text-shadow: 1px 1px #000;
-  border-radius: 6px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border-radius: var(--cs-radius);
 }
 
 .tp-rotv button {
@@ -299,26 +276,25 @@ body {
 .cs-timeline-track {
   display: flex;
   align-items: center;
-  gap: 1px;
-  background: rgba(17, 17, 17, 0.88);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  padding: 3px 6px;
+  gap: 2px;
+  background: rgba(34, 34, 34, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--cs-border);
+  border-radius: 16px;
+  padding: 4px 8px;
   cursor: pointer;
   user-select: none;
   overflow-x: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 .cs-timeline-track::-webkit-scrollbar {
   display: none;
 }
 
 .cs-timeline-step {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -327,22 +303,20 @@ body {
   color: var(--cs-text-muted);
   background: transparent;
   transition: color var(--cs-transition), background var(--cs-transition),
-              transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow var(--cs-transition);
+              transform var(--cs-transition);
   flex-shrink: 0;
 }
 
 .cs-timeline-step:hover {
   color: var(--cs-text-primary);
-  background: rgba(255, 255, 255, 0.08);
-  transform: scale(1.2);
+  background: var(--cs-bg-elevated);
+  transform: scale(1.15);
 }
 
 .cs-timeline-step.cs-timeline-active {
-  color: #fff;
-  background: var(--cs-accent);
-  box-shadow: 0 0 8px rgba(76, 175, 80, 0.4), 0 0 2px rgba(76, 175, 80, 0.6);
-  transform: scale(1.1);
+  color: var(--cs-accent);
+  background: var(--cs-bg-elevated);
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.3);
 }
 
 .cs-timeline-step.cs-timeline-final {
@@ -351,8 +325,8 @@ body {
 
 /* Editor line highlight when scrubbing timeline */
 .cs-history-line-highlight {
-  background: rgba(76, 175, 80, 0.1);
-  border-left: 3px solid var(--cs-accent);
+  background: rgba(76, 175, 80, 0.12);
+  border-left: 2px solid var(--cs-accent);
 }
 
 .cs-history-glyph {

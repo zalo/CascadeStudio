@@ -39,11 +39,9 @@ class ConsoleManager {
         this.errors.push("Line " + line + ": " + errorText);
 
         let newline = document.createElement("div");
-        newline.style.color = "#f44336";
-        newline.style.fontFamily = "'JetBrains Mono', 'Fira Code', Consolas, monospace";
-        newline.style.fontSize = "12px";
-        newline.style.padding = "1px 8px";
-        newline.style.lineHeight = "1.5";
+        newline.style.color = "red";
+        newline.style.fontFamily = "monospace";
+        newline.style.fontSize = "1.2em";
         newline.innerHTML = "Line " + line + ": " + errorText;
         this._consoleContainer.appendChild(newline);
         this._consoleContainer.parentElement.scrollTop = this._consoleContainer.parentElement.scrollHeight;
@@ -123,12 +121,10 @@ class ConsoleManager {
       self.logs.push(messageText);
 
       let newline = document.createElement("div");
-      newline.style.fontFamily = "'JetBrains Mono', 'Fira Code', Consolas, monospace";
-      newline.style.color = (alternatingColor = !alternatingColor) ? "#999" : "#ccc";
-      newline.style.fontSize = "12px";
-      newline.style.padding = "1px 8px";
-      newline.style.lineHeight = "1.5";
-      newline.innerHTML = "&gt; " + messageText;
+      newline.style.fontFamily = "monospace";
+      newline.style.color = (alternatingColor = !alternatingColor) ? "LightGray" : "white";
+      newline.style.fontSize = "1.2em";
+      newline.innerHTML = "&gt;  " + messageText;
       self._consoleContainer.appendChild(newline);
       self._consoleContainer.parentElement.scrollTop = self._consoleContainer.parentElement.scrollHeight;
       self._realConsoleLog.apply(console, args);
