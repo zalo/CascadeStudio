@@ -148,7 +148,7 @@ class EditorManager {
       console.log("Saved to URL!");
       window.history.replaceState({}, 'Cascade Studio',
         new URL(
-          location.pathname + "#code=" + AppClass.encode(newCode) +
+          location.pathname + "?code=" + AppClass.encode(newCode) +
           "&gui=" + AppClass.encode(JSON.stringify(this._app.gui.state)),
           location.href
         ).href

@@ -245,8 +245,8 @@ body {
 .gui-panel {
   position: absolute;
   right: 8px;
-  top: 32px;
-  max-height: calc(100% - 40px);
+  top: 0;
+  max-height: 100%;
   overflow-y: auto;
   z-index: 10;
 }
