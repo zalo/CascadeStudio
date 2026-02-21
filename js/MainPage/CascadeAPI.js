@@ -68,6 +68,7 @@ class CascadeAPI {
   setCameraAngle(azimuthDeg, elevationDeg) {
     const viewport = this._app.viewport;
     if (viewport) viewport.setCameraAngle(azimuthDeg, elevationDeg);
+    this._hasCustomAngle = true;
   }
 
   /** Compact quick-start guide. Call this FIRST to learn the API. */
@@ -192,7 +193,8 @@ Revolve(profile, 360);`,
   screenshot() {
     const viewport = this._app.viewport;
     if (!viewport) return '';
-    viewport.fitCamera();
+    if (!this._hasCustomAngle) viewport.fitCamera();
+    this._hasCustomAngle = false;
     viewport.environment.renderer.render(viewport.environment.scene, viewport.environment.camera);
     return viewport.environment.curCanvas.toDataURL('image/png');
   }
