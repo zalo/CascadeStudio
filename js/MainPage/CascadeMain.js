@@ -479,26 +479,71 @@ class CascadeStudioApp {
 
 /** Default starter code shown in the editor. */
 CascadeStudioApp.STARTER_CODE =
-`// Welcome to Cascade Studio!   Here are some useful functions:
-//  Translate(), Rotate(), Scale(), Mirror(), Union(), Difference(), Intersection()
-//  Box(), Sphere(), Cylinder(), Cone(), Text3D(), Polygon()
-//  Offset(), Extrude(), RotatedExtrude(), Revolve(), Pipe(), Loft(),
-//  FilletEdges(), ChamferEdges(),
-//  Edges(), Faces() — Select edges/faces by property for FilletEdges/ChamferEdges
-//  Volume(), SurfaceArea(), CenterOfMass() — Measurement functions
-//  Slider(), Checkbox(), TextInput(), Dropdown()
+`// Welcome to Cascade Studio!  A Browser-Based CAD Modeling Environment.
+// Adjust these sliders to modify the model in real time:
+let width     = Slider("Width",      80, 40, 120);
+let depth     = Slider("Depth",      60, 30, 100);
+let height    = Slider("Height",     30, 15, 50);
+let wall      = Slider("Wall",        3,  2,  8);
+let filletR   = Slider("Fillet",       6,  1, 15);
+let showLabel = Checkbox("Label",   true);
 
-let holeRadius = Slider("Radius", 30 , 20 , 40);
+// --- Base Tray (Sketch + Extrude) ---
+// Sketch: Draw a rounded-rectangle, then extrude it into a solid
+let outerFace = new Sketch([-width/2, -depth/2])
+  .LineTo([ width/2, -depth/2]).Fillet(filletR)
+  .LineTo([ width/2,  depth/2]).Fillet(filletR)
+  .LineTo([-width/2,  depth/2]).Fillet(filletR)
+  .LineTo([-width/2, -depth/2]).Fillet(filletR)
+  .End(true).Face();
+let tray = Extrude(outerFace, [0, 0, height]);
 
-let sphere     = Sphere(50);
-let cylinderZ  =                     Cylinder(holeRadius, 200, true);
-let cylinderY  = Rotate([0,1,0], 90, Cylinder(holeRadius, 200, true));
-let cylinderX  = Rotate([1,0,0], 90, Cylinder(holeRadius, 200, true));
+// FilletEdges + Selector: Round the top rim edges
+let topEdges = Edges(tray).max([0,0,1]).indices();
+tray = FilletEdges(tray, wall * 0.4, topEdges);
 
-Translate([0, 0, 50], Difference(sphere, [cylinderX, cylinderY, cylinderZ]));
+// Difference + Offset: Hollow out to create a tray
+let innerFace = Offset(outerFace, -wall);
+let cavity = Translate([0, 0, wall], Extrude(innerFace, [0, 0, height]));
+tray = Difference(tray, [cavity]);
 
-Translate([-25, 0, 40], Text3D("Hi!", 36, 0.15, 'Consolas'));
+// --- Divider (Box + Union) ---
+let divider = Box(wall, depth - wall*2, height - wall*2);
+Translate([width*0.15 - wall/2, -(depth - wall*2)/2, wall], divider);
+tray = Union([tray, divider]);
 
-// Don't forget to push imported or oc-defined shapes into sceneShapes to add them to the workspace!`;
+// --- Pen Holder (Cylinder + Difference + ChamferEdges) ---
+let penR = depth / 4;
+let penH = height * 1.6;
+let holder = Translate([width/2 + penR + 3, 0, 0], Cylinder(penR, penH));
+let holderHole = Translate([width/2 + penR + 3, 0, wall],
+  Cylinder(penR - wall, penH + 1));
+holder = Difference(holder, [holderHole]);
+let chamferEdges = Edges(holder).max([0,0,1]).ofType("Circle").indices();
+holder = ChamferEdges(holder, wall * 0.6, chamferEdges);
+tray = Union([tray, holder]);
+
+// --- Decorative Cutout (Sphere + Boolean + Mirror) ---
+let cutout = Translate([0, -depth/2, height * 0.5], Sphere(8));
+tray = Difference(tray, [cutout]);
+// Mirror: Matching cutout on the back wall
+tray = Difference(tray, [Mirror([0, 1, 0], cutout)]);
+
+// --- RotatedExtrude: Decorative twisted accent ---
+let spiralWire = Translate([3, 0, 0], Circle(1.5, true));
+let spiral = RotatedExtrude(spiralWire, 12, 180);
+Translate([-width/2 - 6, -depth/4, 0], spiral);
+
+// --- 3D Text Label ---
+if (showLabel) {
+  let label = Text3D("CS", 10, wall * 0.2, "Consolas");
+  Translate([width/4, -depth/2 + 0.1, height * 0.3], label);
+}
+
+// --- Measurements ---
+console.log("Volume:  " + Math.abs(Volume(tray)).toFixed(0) + " mm\\u00B3");
+console.log("Surface: " + SurfaceArea(tray).toFixed(0) + " mm\\u00B2");
+let com = CenterOfMass(tray);
+console.log("Center:  [" + com.map(v => v.toFixed(1)).join(", ") + "]");`;
 
 export { CascadeStudioApp };

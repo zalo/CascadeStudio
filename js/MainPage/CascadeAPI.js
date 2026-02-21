@@ -111,6 +111,57 @@ class CascadeAPI {
     return viewport.environment.curCanvas.toDataURL('image/png');
   }
 
+  // --- Model History ---
+
+  /** Get the modeling history steps from the last evaluation.
+   *  Returns an array of {fnName, lineNumber, shapeCount} objects. */
+  getHistorySteps() {
+    const viewport = this._app.viewport;
+    if (!viewport) return [];
+    return viewport._historySteps.slice();
+  }
+
+  /** Show an intermediate history step in the viewport.
+   *  stepIndex: 0-based index into getHistorySteps(), or -1 for final result.
+   *  Returns a Promise that resolves when the step mesh is displayed. */
+  async showHistoryStep(stepIndex) {
+    const viewport = this._app.viewport;
+    if (!viewport) return;
+    if (stepIndex === -1) {
+      viewport._showFinalResult();
+    } else {
+      await viewport._showHistoryStep(stepIndex);
+    }
+  }
+
+  /** Take a screenshot of a specific history step. Navigates to the step,
+   *  renders, captures, then returns to the final result.
+   *  Returns a base64 PNG data URL. */
+  async screenshotHistoryStep(stepIndex) {
+    const viewport = this._app.viewport;
+    if (!viewport) return '';
+
+    // Navigate to the history step
+    if (stepIndex === -1) {
+      viewport._showFinalResult();
+    } else {
+      await viewport._showHistoryStep(stepIndex);
+    }
+
+    // Force render and capture
+    viewport.environment.renderer.render(viewport.environment.scene, viewport.environment.camera);
+    const dataURL = viewport.environment.curCanvas.toDataURL('image/png');
+
+    return dataURL;
+  }
+
+  /** Restore the viewport to show the final result (after history scrubbing). */
+  showFinalResult() {
+    const viewport = this._app.viewport;
+    if (!viewport) return;
+    viewport._showFinalResult();
+  }
+
   // --- State ---
 
   /** Returns true if the worker has finished initialization. */
@@ -164,6 +215,12 @@ class CascadeAPI {
           isWorking: { params: [], returns: 'boolean', description: 'Worker evaluating' },
           setMode: { params: ['mode: string'], description: 'Set editor mode (cascadestudio/openscad)' },
           getMode: { params: [], returns: 'string', description: 'Get current mode' },
+        },
+        history: {
+          getHistorySteps: { params: [], returns: '{fnName, lineNumber, shapeCount}[]', description: 'Get modeling history steps' },
+          showHistoryStep: { params: ['stepIndex: number'], returns: 'Promise<void>', description: 'Navigate to intermediate step (-1 for final)' },
+          screenshotHistoryStep: { params: ['stepIndex: number'], returns: 'Promise<string>', description: 'Screenshot a specific history step as base64 PNG' },
+          showFinalResult: { params: [], description: 'Restore viewport to final result after scrubbing' },
         },
       },
       cadFunctions: {
