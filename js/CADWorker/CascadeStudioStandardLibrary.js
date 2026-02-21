@@ -299,6 +299,8 @@ function ForEachVertex(shape, callback) {
 // --- Edge/Face Operations ---
 
 function FilletEdges(shape, radius, edgeList, keepOriginal) {
+  if (!shape || shape.IsNull()) { console.error("FilletEdges: input shape is null!"); return shape; }
+  if (!edgeList || edgeList.length === 0) { console.error("FilletEdges: edgeList is empty — no edges to fillet."); return shape; }
   let curFillet = self.CacheOp(arguments, "FilletEdges", () => {
     let mkFillet = new self.oc.BRepFilletAPI_MakeFillet(shape, self.oc.ChFi3d_FilletShape.ChFi3d_Rational);
     let foundEdges = 0;
@@ -318,6 +320,8 @@ function FilletEdges(shape, radius, edgeList, keepOriginal) {
 }
 
 function ChamferEdges(shape, distance, edgeList, keepOriginal) {
+  if (!shape || shape.IsNull()) { console.error("ChamferEdges: input shape is null!"); return shape; }
+  if (!edgeList || edgeList.length === 0) { console.error("ChamferEdges: edgeList is empty — no edges to chamfer."); return shape; }
   let curChamfer = self.CacheOp(arguments, "ChamferEdges", () => {
     let mkChamfer = new self.oc.BRepFilletAPI_MakeChamfer(shape);
     let foundEdges = 0;
@@ -425,6 +429,10 @@ function Mirror(vector, shapes, keepOriginal) {
 }
 
 function Scale(scale, shapes, keepOriginal) {
+  if (Array.isArray(scale)) {
+    console.error("Scale() takes a single number, not an array. Non-uniform scaling [x,y,z] is not supported. Using scale[0]=" + scale[0] + " instead.");
+    scale = scale[0];
+  }
   let scaled = self.CacheOp(arguments, "Scale", () => {
     let transformation = new self.oc.gp_Trsf_1();
     transformation.SetScaleFactor(scale);
@@ -572,6 +580,7 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
 // --- Extrusion and Shape Generation ---
 
 function Extrude(face, direction, keepFace) {
+  if (!face || face.IsNull()) { console.error("Extrude: input shape is null! Was it consumed by a previous operation? Use keepFace/keepShape to preserve shapes for reuse."); return face; }
   let curExtrusion = self.CacheOp(arguments, "Extrude", () => {
     return new self.oc.BRepPrimAPI_MakePrism_1(face,
       new self.oc.gp_Vec_4(direction[0], direction[1], direction[2]), false, true).Shape();
@@ -595,7 +604,7 @@ function RemoveInternalEdges(shape, keepShape) {
 }
 
 function Offset(shape, offsetDistance, tolerance, keepShape) {
-  if (!shape || shape.IsNull()) { console.error("Offset received Null Shape!"); }
+  if (!shape || shape.IsNull()) { console.error("Offset: input shape is null!"); return shape; }
   if (!tolerance) { tolerance = 0.1; }
   if (offsetDistance === 0.0) { return shape; }
   let curOffset = self.CacheOp(arguments, "Offset", () => {
@@ -703,9 +712,19 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
 }
 
 function Loft(wires, keepWires) {
+  // Auto-extract wires from non-wire shapes (e.g. after Translate/Rotate)
+  let resolvedWires = wires.map((w, i) => {
+    if (w.ShapeType().value !== 5) {
+      console.warn("Loft: profile " + i + " is not a wire (ShapeType " + w.ShapeType().value + "), extracting wire automatically. Use GetWire() to avoid this warning.");
+      let exp = new self.oc.TopExp_Explorer_2(w, self.oc.TopAbs_ShapeEnum.TopAbs_WIRE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+      if (exp.More()) { return self.oc.TopoDS_Cast.Wire_1(exp.Current()); }
+      console.error("Loft: could not extract a wire from profile " + i);
+    }
+    return w;
+  });
   let curLoft = self.CacheOp(arguments, "Loft", () => {
     let pipe = new self.oc.BRepOffsetAPI_ThruSections(true, false, 1.0e-6);
-    wires.forEach((wire) => { pipe.AddWire(wire); });
+    resolvedWires.forEach((wire) => { pipe.AddWire(wire); });
     pipe.Build(new self.oc.Message_ProgressRange_1());
     return pipe.Shape();
   });
@@ -718,6 +737,8 @@ function Loft(wires, keepWires) {
 }
 
 function Pipe(shape, wirePath, keepInputs) {
+  if (!shape || shape.IsNull()) { console.error("Pipe: profile shape is null!"); return shape; }
+  if (!wirePath || wirePath.IsNull()) { console.error("Pipe: wire path is null!"); return wirePath; }
   let curPipe = self.CacheOp(arguments, "Pipe", () => {
     let pipe = new self.oc.BRepOffsetAPI_MakePipe_1(wirePath, shape);
     pipe.Build(new self.oc.Message_ProgressRange_1());
@@ -898,6 +919,10 @@ function Sketch(startingPoint) {
 
   this.Fillet = function (radius) {
     this.argsString += self.ComputeHash(arguments, true);
+    if (this.currentIndex === 0) {
+      console.error("Sketch.Fillet() must be called after .LineTo() — it fillets the corner at the most recent vertex.");
+      return this;
+    }
     this.fillets.push({ x: this.lastPoint.X(), y: this.lastPoint.Y(), radius: radius });
     return this;
   }

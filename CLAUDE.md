@@ -134,17 +134,13 @@ const volume = parseFloat(logs.find(l => l.startsWith("VOLUME:")).split(":")[1])
 
 ## CAD Modeling — Common Pitfalls
 
-### 1. Loft() Requires TopoDS_Wire, Not TopoDS_Shape
+### 1. Loft() Prefers TopoDS_Wire
 
-`Loft()` only accepts wires. After transforms (Translate, Rotate), shapes become
-generic `TopoDS_Shape` even if they started as wires. Use `GetWire()` to extract:
+`Loft()` works best with wires. After transforms (Translate, Rotate), shapes become
+generic `TopoDS_Shape` even if they started as wires. Loft now auto-extracts wires
+with a warning, but for clearest code use `GetWire()` explicitly:
 
 ```javascript
-// WRONG — Translate returns TopoDS_Shape, Loft fails
-let w1 = Translate([0,0,10], Circle(10, true));
-Loft([w1, Circle(5, true)]);  // BindingError!
-
-// RIGHT — Use GetWire or create wires at the right position via Sketch
 let w1 = Circle(10, true);
 let w2 = Translate([0,0,10], Circle(5, true));
 Loft([GetWire(w1), GetWire(w2)]);
@@ -210,31 +206,25 @@ new Sketch([-10, -10])
 ### 8. Scale() Takes a Scalar, Not a Vector
 
 `Scale(factor, shape)` only accepts a single number, not `[x, y, z]`.
-Non-uniform scaling is not supported. Using an array will produce a null shape
-that causes cascading errors ("Not a compound shape!", "Main Shape is null!").
+Non-uniform scaling is not supported. Passing an array now logs an error and
+falls back to `scale[0]` instead of producing a null shape.
 
 ### 9. BSpline for Pipe Paths
 
 `BSpline(points, closed)` creates a smooth curve through the given points.
 Use `closed: false` for open paths (Pipe rails) and `closed: true` for rings.
 
-### 10. Union() Requires Overlapping Shapes
+### 10. Union() Works Best with Overlapping Shapes
 
-`Union(shapes)` performs a boolean fusion. If the shapes don't share any volume
-(i.e., they're separate with a gap between them), Union may produce a null shape
-or destroy the larger operand silently (no error, but volume becomes 0). Only
-Union shapes that physically overlap or touch.
+`Union(shapes)` performs a boolean fusion. Non-overlapping shapes may produce
+unexpected results. All boolean operations (Union, Difference, Intersection)
+now include volume sanity checks that warn when the result is near-zero.
 
 ```javascript
-// BAD — separate shapes with a gap, Union destroys the tray
+// Keep non-touching shapes as separate scene objects
 let tray = Extrude(face, [0, 0, 30]);
-let holder = Translate([60, 0, 0], Cylinder(15, 50));  // 20mm gap
-tray = Union([tray, holder]);  // tray is now null!
-
-// GOOD — keep non-touching shapes as separate scene objects
-let tray = Extrude(face, [0, 0, 30]);
-let holder = Translate([60, 0, 0], Cylinder(15, 50));  // separate shape
-// Both will render in the scene without Union
+let holder = Translate([60, 0, 0], Cylinder(15, 50));
+// Both render in the scene without Union
 ```
 
 ### 11. Extrude() Consumes the Input Face
@@ -257,12 +247,9 @@ let innerFace = new Sketch(/* smaller dimensions */).End(true).Face();
 ### 12. Null Shape Cascading Errors
 
 If any operation produces a null shape (e.g., from bad Scale, failed Fillet, etc.),
-subsequent operations that consume it will fail with unhelpful messages:
-- "Not a compound shape!" — passing null to Union/Difference
-- "Main Shape in Difference is null!" — shape was consumed or nullified
-- "Null Shape detected in sceneShapes" — final rendering catches it
-
-Fix: identify which operation first failed (check console errors in order).
+subsequent operations that consume it will fail. Most functions (Extrude, FilletEdges,
+ChamferEdges, Offset, Pipe, Difference) now check for null inputs and log a
+descriptive error with early return instead of cascading cryptic failures.
 
 ## Iterative Model Development Workflow
 
