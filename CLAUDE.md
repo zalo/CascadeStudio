@@ -218,7 +218,43 @@ that causes cascading errors ("Not a compound shape!", "Main Shape is null!").
 `BSpline(points, closed)` creates a smooth curve through the given points.
 Use `closed: false` for open paths (Pipe rails) and `closed: true` for rings.
 
-### 10. Null Shape Cascading Errors
+### 10. Union() Requires Overlapping Shapes
+
+`Union(shapes)` performs a boolean fusion. If the shapes don't share any volume
+(i.e., they're separate with a gap between them), Union may produce a null shape
+or destroy the larger operand silently (no error, but volume becomes 0). Only
+Union shapes that physically overlap or touch.
+
+```javascript
+// BAD — separate shapes with a gap, Union destroys the tray
+let tray = Extrude(face, [0, 0, 30]);
+let holder = Translate([60, 0, 0], Cylinder(15, 50));  // 20mm gap
+tray = Union([tray, holder]);  // tray is now null!
+
+// GOOD — keep non-touching shapes as separate scene objects
+let tray = Extrude(face, [0, 0, 30]);
+let holder = Translate([60, 0, 0], Cylinder(15, 50));  // separate shape
+// Both will render in the scene without Union
+```
+
+### 11. Extrude() Consumes the Input Face
+
+`Extrude(face, direction)` consumes the face by default (`keepFace=false`).
+If you need to reuse the face later (e.g., for `Offset()`), either pass
+`keepFace: true` or recreate the profile from a new Sketch.
+
+```javascript
+// BAD — outerFace is consumed, Offset fails
+let outerFace = new Sketch(...).End(true).Face();
+let tray = Extrude(outerFace, [0, 0, 30]);
+let inner = Offset(outerFace, -3);  // outerFace is gone!
+
+// GOOD — recreate the inner profile independently
+let tray = Extrude(outerFace, [0, 0, 30]);
+let innerFace = new Sketch(/* smaller dimensions */).End(true).Face();
+```
+
+### 12. Null Shape Cascading Errors
 
 If any operation produces a null shape (e.g., from bad Scale, failed Fillet, etc.),
 subsequent operations that consume it will fail with unhelpful messages:

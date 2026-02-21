@@ -502,8 +502,14 @@ let tray = Extrude(outerFace, [0, 0, height]);
 let topEdges = Edges(tray).max([0,0,1]).indices();
 tray = FilletEdges(tray, wall * 0.4, topEdges);
 
-// Difference + Offset: Hollow out to create a tray
-let innerFace = Offset(outerFace, -wall);
+// Difference: Hollow out to create a tray
+// (Rebuild inner profile — the outerFace was consumed by Extrude above)
+let innerFace = new Sketch([-(width/2 - wall), -(depth/2 - wall)])
+  .LineTo([ (width/2 - wall), -(depth/2 - wall)]).Fillet(Math.max(filletR - wall, 1))
+  .LineTo([ (width/2 - wall),  (depth/2 - wall)]).Fillet(Math.max(filletR - wall, 1))
+  .LineTo([-(width/2 - wall),  (depth/2 - wall)]).Fillet(Math.max(filletR - wall, 1))
+  .LineTo([-(width/2 - wall), -(depth/2 - wall)]).Fillet(Math.max(filletR - wall, 1))
+  .End(true).Face();
 let cavity = Translate([0, 0, wall], Extrude(innerFace, [0, 0, height]));
 tray = Difference(tray, [cavity]);
 
@@ -515,16 +521,17 @@ tray = Union([tray, divider]);
 // --- Pen Holder (Cylinder + Difference + ChamferEdges) ---
 let penR = depth / 4;
 let penH = height * 1.6;
-let holder = Translate([width/2 + penR + 3, 0, 0], Cylinder(penR, penH));
-let holderHole = Translate([width/2 + penR + 3, 0, wall],
+let penX = width/2 + penR + 3;
+let holder = Translate([penX, 0, 0], Cylinder(penR, penH));
+let holderHole = Translate([penX, 0, wall],
   Cylinder(penR - wall, penH + 1));
 holder = Difference(holder, [holderHole]);
 let chamferEdges = Edges(holder).max([0,0,1]).ofType("Circle").indices();
 holder = ChamferEdges(holder, wall * 0.6, chamferEdges);
-tray = Union([tray, holder]);
 
 // --- Decorative Cutout (Sphere + Boolean + Mirror) ---
-let cutout = Translate([0, -depth/2, height * 0.5], Sphere(8));
+let cutR = Math.min(8, height * 0.25);
+let cutout = Translate([0, -depth/2, height * 0.5], Sphere(cutR));
 tray = Difference(tray, [cutout]);
 // Mirror: Matching cutout on the back wall
 tray = Difference(tray, [Mirror([0, 1, 0], cutout)]);
