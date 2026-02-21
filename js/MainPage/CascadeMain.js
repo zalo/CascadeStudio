@@ -525,7 +525,7 @@ let cupProfile = Polygon([
 ]);
 let holder = Revolve(cupProfile, 360, [0, 0, 1]);
 let chamferEdges = Edges(holder).max([0,0,1]).ofType("Circle").indices();
-holder = ChamferEdges(holder, wall * 0.6, chamferEdges);
+holder = ChamferEdges(holder, wall * 0.3, chamferEdges);
 Translate([penX, 0, 0], holder);
 
 // --- Decorative Cutout (Sphere + Boolean + Mirror) ---
