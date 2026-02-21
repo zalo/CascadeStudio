@@ -89,16 +89,23 @@ class CascadeAPI {
         measurement: 'Volume(shape), SurfaceArea(shape), CenterOfMass(shape)',
       },
       coordinates: 'X=right, Y=depth, Z=up. Polygon takes 2D [x,y] points in XY plane. Extrude [0,0,z] for vertical.',
+      tips: [
+        'For organic/curved shapes: Loft rounded Sketch cross-sections. Do NOT extrude a flat profile and try to round it after — FilletEdges and Offset both fail on complex solids.',
+        'For lathe-turned parts (bases, vases, bottles): define a half-profile with Polygon or Sketch, then Revolve(face, 360).',
+        'Sketch().Fillet(r) rounds corners inline — use this to make smooth cross-sections BEFORE lofting.',
+        'Offset() on concave solids often self-intersects → zero volume. Only use on simple convex shapes or 2D faces.',
+        'FilletEdges works reliably on simple solids (boxes, cylinders). On complex boolean results it usually fails — build the roundness into the geometry instead.',
+        'Polygon takes 2D [x,y] in the XY plane only. To use a profile in another plane, create it in XY then Rotate([1,0,0], 90, shape) to reorient.',
+      ],
       pitfalls: [
         'Translate/Rotate/Scale return NEW shapes — always capture: shape = Translate([x,y,z], shape)',
         'Circle(r, true) → wire (for Loft/Pipe), Circle(r) → face (for Extrude)',
         'Extrude consumes the face — pass keepFace=true if you need it again',
-        'FilletEdges must be applied BEFORE boolean Difference',
         'Loft works best with wires — use GetWire() after transforms',
         'Scale takes a single number, NOT a vector',
-        'Polygon takes 2D [x,y] — NOT 3D. Use Rotate to reorient.',
       ],
-      example: `// Rounded box with cavity
+      examples: {
+        box: `// Rounded box with cavity
 let face = new Sketch([-20, -15])
   .LineTo([20, -15]).Fillet(5)
   .LineTo([20, 15]).Fillet(5)
@@ -110,6 +117,23 @@ box = FilletEdges(box, 2, Edges(box).max([0,0,1]).indices());
 let inner = Offset(face, -3);
 let cavity = Translate([0, 0, 3], Extrude(inner, [0, 0, 20]));
 Difference(box, [cavity]);`,
+        organic: `// Organic shape via lofted rounded cross-sections
+// Each Sketch has .Fillet() for smooth corners — this is the key technique
+let s1 = new Sketch([-10,-8]).LineTo([10,-8]).Fillet(4)
+  .LineTo([10,8]).Fillet(4).LineTo([-10,8]).Fillet(4)
+  .LineTo([-10,-8]).Fillet(4).End(true).Wire();
+let s2 = Translate([3,0,15], new Sketch([-7,-5]).LineTo([7,-5]).Fillet(3)
+  .LineTo([7,5]).Fillet(3).LineTo([-7,5]).Fillet(3)
+  .LineTo([-7,-5]).Fillet(3).End(true).Wire());
+let s3 = Translate([0,0,30], Circle(4, true));
+Loft([GetWire(s1), GetWire(s2), GetWire(s3)]);`,
+        revolved: `// Lathe-turned base via Revolve
+let profile = new Sketch([0,0]).LineTo([15,0]).LineTo([15,2])
+  .LineTo([12,3]).Fillet(1).LineTo([10,8]).Fillet(1)
+  .LineTo([11,10]).LineTo([8,12]).LineTo([0,12])
+  .End(true).Face();
+Revolve(profile, 360);`,
+      },
       fullDocs: 'await CascadeAPI.getStandardLibrary() → TypeScript definitions with JSDoc',
     };
   }

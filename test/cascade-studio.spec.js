@@ -98,7 +98,10 @@ test.describe('Application Startup & CascadeAPI', () => {
     expect(qs.workflow).toBeDefined();
     expect(qs.functions).toBeDefined();
     expect(qs.pitfalls).toBeDefined();
-    expect(qs.example).toContain('Sketch');
+    expect(qs.tips).toBeDefined();
+    expect(qs.examples.box).toContain('Sketch');
+    expect(qs.examples.organic).toContain('Loft');
+    expect(qs.examples.revolved).toContain('Revolve');
 
     // setCode/getCode round-trip
     const testCode = 'Box(10, 20, 30);';
