@@ -1,7 +1,8 @@
 {
 	"name": "cascadestudio",
+	"version": "2.0.0",
 	"productName": "CascadeStudio",
-	"description": "BRep SCAD in your browser.",
+	"description": "A full live-scripted CAD kernel and IDE in the browser.",
 	"homepage": "https://zalo.github.io/CascadeStudio",
 	"repository": {
 		"type": "git",
