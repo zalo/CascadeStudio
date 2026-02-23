@@ -134,6 +134,9 @@ class CascadeEnvironment {
     this._historyPending = false;  // True while awaiting worker mesh response
     this._lastSceneOptions = {};
 
+    // Fit camera on first render so the orbit target centers on the model
+    this._isFirstRender = true;
+
     // Register the shape rendering callback
     this._registerRenderCallback(messageBus);
 
@@ -395,6 +398,10 @@ class CascadeEnvironment {
       }
 
       this.environment.scene.add(this.mainObject);
+      if (this._isFirstRender) {
+        this._isFirstRender = false;
+        this.fitCamera();
+      }
       this.environment.viewDirty = true;
       console.log("Generation Complete!");
     });
