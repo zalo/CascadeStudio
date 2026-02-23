@@ -318,6 +318,21 @@ class OpenSCADTranspiler {
     return `Text3D(${text}, ${size}, 0);`;
   }
 
+  /** Convert a text() call to an extruded Text3D matching OpenSCAD's linear_extrude orientation.
+   *  Text3D internally applies Rotate([1,0,0], -90) so we undo that to match
+   *  OpenSCAD's convention where linear_extrude pushes along +Z.
+   *  Text3D height is relative (multiplied by size), so we divide by size. */
+  _textToExtrudedText3D(textStmt, height) {
+    const args = this._parseNamedArgs(textStmt.args, ['text']);
+    const text = args.text ? this._transpileExpr(args.text) : '""';
+    const size = args.size ? this._transpileExpr(args.size) : '10';
+    const font = args.font ? this._transpileExpr(args.font) : null;
+    const text3dArgs = font
+      ? `${text}, ${size}, (${height}) / (${size}), ${font}`
+      : `${text}, ${size}, (${height}) / (${size})`;
+    return `Rotate([1,0,0], 90, Text3D(${text3dArgs}))`;
+  }
+
   // --- Transforms ---
 
   _transpileTransform(csFunc, stmt, children) {
@@ -461,6 +476,16 @@ class OpenSCADTranspiler {
     const shouldCenter = centerExpr && centerExpr !== 'false';
 
     if (children.length === 0) return '';
+
+    // Special case: linear_extrude of text() → Text3D with extrude height
+    if (children.length === 1 && children[0].name === 'text') {
+      let result = this._textToExtrudedText3D(children[0], h);
+      if (shouldCenter) {
+        result = `Translate([0, 0, -(${h})/2], ${result})`;
+      }
+      return result + ';';
+    }
+
     if (children.length === 1) {
       const childExpr = this._transpileChildAsExpr(children[0]);
       if (shouldCenter) {
@@ -816,6 +841,27 @@ class OpenSCADTranspiler {
           const v = args.v ? this._transpileExpr(args.v) : '[1, 0, 0]';
           if (grandChildren.length === 1) {
             return `Mirror(${v}, ${this._transpileChildAsExpr(grandChildren[0])})`;
+          }
+          break;
+        }
+        case 'linear_extrude': {
+          const leArgs = this._parseNamedArgs(child.args, ['height']);
+          const leH = leArgs.height ? this._transpileExpr(leArgs.height) : '1';
+          const leCenterExpr = leArgs.center ? this._transpileExpr(leArgs.center) : null;
+          const leShouldCenter = leCenterExpr && leCenterExpr !== 'false';
+          if (grandChildren.length === 1) {
+            if (grandChildren[0].name === 'text') {
+              let result = this._textToExtrudedText3D(grandChildren[0], leH);
+              if (leShouldCenter) {
+                result = `Translate([0, 0, -(${leH})/2], ${result})`;
+              }
+              return result;
+            }
+            const innerExpr = this._transpileChildAsExpr(grandChildren[0]);
+            if (leShouldCenter) {
+              return `Translate([0, 0, -(${leH})/2], Extrude(${innerExpr}, [0, 0, ${leH}]))`;
+            }
+            return `Extrude(${innerExpr}, [0, 0, ${leH}])`;
           }
           break;
         }

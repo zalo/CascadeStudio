@@ -102,11 +102,20 @@ class CascadeStudioApp {
     // Register OpenSCAD language with Monaco (for syntax highlighting)
     this._openscadMonaco.registerLanguage();
 
-    // Mode toggle handler
+    // Mode toggle handler — save/restore code per mode
+    this._savedCode = {};
     const modeSelect = document.getElementById('editorMode');
     if (modeSelect) {
       modeSelect.addEventListener('change', (e) => {
-        this.editor.setMode(e.target.value);
+        const newMode = e.target.value;
+        // Save current code for the current mode
+        this._savedCode[this.editor.mode] = this.editor.getCode();
+        this.editor.setMode(newMode);
+        // Load saved code or starter code for the new mode
+        const starter = newMode === 'openscad'
+          ? CascadeStudioApp.OPENSCAD_STARTER_CODE
+          : CascadeStudioApp.STARTER_CODE;
+        this.editor.setCode(this._savedCode[newMode] || starter);
       });
     }
 
@@ -554,37 +563,43 @@ console.log("Center:  [" + com.map(v => v.toFixed(1)).join(", ") + "]");`;
 
 /** Default OpenSCAD starter code shown when switching to OpenSCAD mode. */
 CascadeStudioApp.OPENSCAD_STARTER_CODE =
-`// GEB - Gödel, Escher, Bach
-// Three letters viewed from three orthogonal axes
-// Adapted from the OpenSCAD Advanced examples
+`// GEB — Gödel, Escher, Bach
+// Three letters visible from three orthogonal directions
+// Adapted from the OpenSCAD Advanced example by Marius Kintel
 
-module G() translate([-4, -5, 0]) text("G", size = 14, font = "Roboto");
-module E() translate([-4, -5, 0]) text("E", size = 14, font = "Roboto");
-module B() translate([-4, -5, 0]) text("B", size = 14, font = "Roboto");
+size = 14;
+depth = 24;
 
-module GEB() {
-  intersection() {
-    linear_extrude(height = 24, center = true)
-      B();
+// Approximate centering for the default (Roboto) font
+cx = -4;
+cy = -5;
 
-    rotate([90, 0, 0])
-      linear_extrude(height = 24, center = true)
-        E();
-
-    rotate([90, 0, 90])
-      linear_extrude(height = 24, center = true)
-        G();
-  }
+// A centered, extruded letter
+module letter(t) {
+  translate([cx, cy, 0])
+    linear_extrude(height = depth, center = true)
+      text(t, size = size);
 }
 
-GEB();
+// GEB sculpture: intersection from three orthogonal axes
+intersection() {
+  letter("B");              // viewed from the front
 
-// Pedestal
-translate([3, -3, -14])
+  rotate([90, 0, 0])
+    letter("E");            // viewed from the top
+
+  rotate([90, 0, 90])
+    letter("G");            // viewed from the right
+}
+
+// Base plate with decorative cutouts
+translate([0, 0, -(depth / 2) - 2])
   difference() {
-    cube([18, 18, 2]);
-    translate([2, 2, -1])
-      cube([14, 14, 4]);
+    cube([20, 20, 2], center = true);
+    for (i = [0:3])
+      rotate([0, 0, i * 90])
+        translate([6, 0, 0])
+          cylinder(h = 4, r = 2, center = true);
   }
 `;
 
