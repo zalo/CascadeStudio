@@ -31,7 +31,12 @@ class GUIManager {
 
     messageBus.on("addButton", (payload) => {
       this._addSeparator();
-      this._gui.addButton({ title: payload.name, label: payload.label }).on('click', payload.callback);
+      const button = this._gui.addButton({ title: payload.name, label: payload.label || payload.name });
+      if (typeof payload.callback === 'function') {
+        button.on('click', payload.callback);
+      } else {
+        button.on('click', () => { this._delayReload(); });
+      }
     });
 
     messageBus.on("addCheckbox", (payload) => {

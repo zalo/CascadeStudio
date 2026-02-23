@@ -23,8 +23,8 @@ class MessageBus {
       // Route to registered handler
       if (type in this._handlers) {
         let response = this._handlers[type](payload);
-        if (response !== undefined) {
-          this._worker.postMessage({ type, payload: response });
+        if (response !== undefined && requestId) {
+          this._worker.postMessage({ type, payload: response, requestId });
         }
       }
     };

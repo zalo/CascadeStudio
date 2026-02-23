@@ -60,13 +60,20 @@ class EditorManager {
     }
 
     // Initialize the Monaco Code Editor
+    const isMobile = window.innerHeight > window.innerWidth;
     this.editor = monaco.editor.create(container.element, {
       value: state.code,
       language: "typescript",
       theme: "vs-dark",
       automaticLayout: true,
       minimap: { enabled: false },
-      wordWrap: window.innerHeight > window.innerWidth ? 'on' : 'off'
+      wordWrap: isMobile ? 'on' : 'off',
+      ...(isMobile && {
+        glyphMargin: false,
+        folding: false,
+        lineDecorationsWidth: 0,
+        lineNumbersMinChars: 2
+      })
     });
     window.monacoEditor = this.editor;
 

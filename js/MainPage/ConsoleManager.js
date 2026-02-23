@@ -42,7 +42,7 @@ class ConsoleManager {
         newline.style.color = "red";
         newline.style.fontFamily = "monospace";
         newline.style.fontSize = "1.2em";
-        newline.innerHTML = "Line " + line + ": " + errorText;
+        newline.textContent = "Line " + line + ": " + errorText;
         this._consoleContainer.appendChild(newline);
         this._consoleContainer.parentElement.scrollTop = this._consoleContainer.parentElement.scrollHeight;
 
@@ -124,7 +124,7 @@ class ConsoleManager {
       newline.style.fontFamily = "monospace";
       newline.style.color = (alternatingColor = !alternatingColor) ? "LightGray" : "white";
       newline.style.fontSize = "1.2em";
-      newline.innerHTML = "&gt;  " + messageText;
+      newline.textContent = ">  " + messageText;
       self._consoleContainer.appendChild(newline);
       self._consoleContainer.parentElement.scrollTop = self._consoleContainer.parentElement.scrollHeight;
       self._realConsoleLog.apply(console, args);

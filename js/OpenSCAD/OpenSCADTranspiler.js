@@ -573,7 +573,7 @@ class OpenSCADTranspiler {
     switch (type) {
       case 'LiteralExpr':
         if (typeof expr.value === 'string') {
-          return `"${expr.value.replace(/"/g, '\\"')}"`;
+          return `"${expr.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
         }
         if (typeof expr.value === 'boolean') {
           return expr.value ? 'true' : 'false';
