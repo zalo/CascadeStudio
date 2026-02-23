@@ -566,38 +566,45 @@ console.log("Center:  [" + com.map(v => v.toFixed(1)).join(", ") + "]");`;
 
 /** Default OpenSCAD starter code shown when switching to OpenSCAD mode. */
 CascadeStudioApp.OPENSCAD_STARTER_CODE =
-`// GEB — Gödel, Escher, Bach
-// Three letters visible from three orthogonal directions
-// Adapted from the OpenSCAD Advanced example by Marius Kintel
+`// Parametric Bolt and Nut
+// Demonstrates modules, intersection, difference, and transforms
 
-size = 14;
-depth = 24;
+hex_r = 10;
+hex_h = 6;
+bore_r = 5;
+shaft_r = 4.8;
+shaft_h = 25;
 
-// A centered, extruded letter
-module letter(t) {
-  linear_extrude(height = depth, center = true)
-    text(t, size = size, halign = "center", valign = "center");
+// Hex prism: three intersecting boxes
+module hex(r, h) {
+  intersection() {
+    cube([r * 2, r * 1.73, h], center = true);
+    rotate([0, 0, 60])
+      cube([r * 2, r * 1.73, h], center = true);
+    rotate([0, 0, -60])
+      cube([r * 2, r * 1.73, h], center = true);
+  }
 }
 
-// GEB sculpture: intersection from three orthogonal axes
-intersection() {
-  letter("B");              // viewed from the front
+// Bolt head
+hex(hex_r, hex_h);
 
-  rotate([90, 0, 0])
-    letter("E");            // viewed from the top
+// Shaft
+translate([0, 0, hex_h / 2])
+  cylinder(h = shaft_h, r = shaft_r);
 
-  rotate([90, 0, 90])
-    letter("G");            // viewed from the right
-}
-
-// Base plate with decorative cutouts
-translate([0, 0, -(depth / 2) - 2])
+// Washer
+translate([0, 0, shaft_h])
   difference() {
-    cube([20, 20, 2], center = true);
-    for (i = [0:3])
-      rotate([0, 0, i * 90])
-        translate([6, 0, 0])
-          cylinder(h = 4, r = 2, center = true);
+    cylinder(h = 2, r = hex_r - 1);
+    cylinder(h = 3, r = bore_r);
+  }
+
+// Nut with bore hole
+translate([0, 0, shaft_h + 2])
+  difference() {
+    hex(hex_r, hex_h);
+    cylinder(h = hex_h + 1, r = bore_r, center = true);
   }
 `;
 
