@@ -72,7 +72,9 @@ class EditorManager {
         glyphMargin: false,
         folding: false,
         lineDecorationsWidth: 0,
-        lineNumbersMinChars: 2
+        lineNumbersMinChars: 0,
+        lineNumbers: 'off',
+        padding: { top: 0, bottom: 0 }
       })
     });
     window.monacoEditor = this.editor;

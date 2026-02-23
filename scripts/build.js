@@ -88,7 +88,7 @@ fs.writeFileSync(path.join(buildDir, 'index.html'), `<!DOCTYPE html>
         <meta name="description"        content="A Full Live-Scripted CAD Kernel in the Browser">
         <meta name="keywords"           content="SCAD, OpenSCAD, CAD, OpenCascade, Scripting">
         <meta name="author"             content="Johnathon Selstad">
-        <meta name="viewport"           content="width=device-width, initial-scale=1.0">
+        <meta name="viewport"           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <meta name="theme-color"        content="#1a1a2e">
         <meta name="cascade-api"        content="window.CascadeAPI">
 

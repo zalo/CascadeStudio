@@ -365,4 +365,10 @@ body {
     height: 20px;
     font-size: 10px;
   }
+  /* Remove outer padding around Monaco editor */
+  .monaco-editor,
+  .monaco-editor .overflow-guard,
+  .monaco-editor .margin {
+    padding: 0 !important;
+  }
 }
