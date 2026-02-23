@@ -321,15 +321,26 @@ class OpenSCADTranspiler {
   /** Convert a text() call to an extruded Text3D matching OpenSCAD's linear_extrude orientation.
    *  Text3D internally applies Rotate([1,0,0], -90) so we undo that to match
    *  OpenSCAD's convention where linear_extrude pushes along +Z.
-   *  Text3D height is relative (multiplied by size), so we divide by size. */
+   *  Text3D height is relative (multiplied by size), so we divide by size.
+   *  When halign/valign="center", auto-centers using CenterOfMass. */
   _textToExtrudedText3D(textStmt, height) {
     const args = this._parseNamedArgs(textStmt.args, ['text']);
     const text = args.text ? this._transpileExpr(args.text) : '""';
     const size = args.size ? this._transpileExpr(args.size) : '10';
     const font = args.font ? this._transpileExpr(args.font) : null;
+    const halign = args.halign ? this._transpileExpr(args.halign) : null;
+    const valign = args.valign ? this._transpileExpr(args.valign) : null;
     const text3dArgs = font
       ? `${text}, ${size}, (${height}) / (${size}), ${font}`
       : `${text}, ${size}, (${height}) / (${size})`;
+
+    const centerX = halign === '"center"';
+    const centerY = valign === '"center"';
+    if (centerX || centerY) {
+      const dx = centerX ? '-_c[0]' : '0';
+      const dy = centerY ? '-_c[1]' : '0';
+      return `(function() { let _s = Rotate([1,0,0], 90, Text3D(${text3dArgs})); sceneShapes = Remove(sceneShapes, _s); let _c = CenterOfMass(_s); return Translate([${dx}, ${dy}, 0], _s); })()`;
+    }
     return `Rotate([1,0,0], 90, Text3D(${text3dArgs}))`;
   }
 

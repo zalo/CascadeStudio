@@ -162,8 +162,7 @@ class CascadeEnvironment {
   }
 
   /** Fit the camera to frame the current model with a 3/4 elevated view.
-   *  Auto-detects which axis is "up" based on bounding box proportions:
-   *  the tallest dimension is treated as vertical. */
+   *  Always uses Y-up (the model group's -PI/2 X rotation maps OCC Z-up to Three.js Y-up). */
   fitCamera() {
     if (!this.mainObject && !this._historyObject) return;
     const target = this._historyObject || this.mainObject;
@@ -178,23 +177,8 @@ class CascadeEnvironment {
     const fov = this.environment.camera.fov * (Math.PI / 180);
     const dist = (maxDim / (2 * Math.tan(fov / 2))) * 1.6;
 
-    // Auto-detect "up" axis: the tallest dimension is treated as vertical.
-    // This makes revolution solids (pawns, vases, etc.) render upright
-    // regardless of which axis they were revolved around.
-    let up, dir;
-    if (size.y >= size.x && size.y >= size.z) {
-      // Y is tallest — camera looks from XZ, Y is up
-      up = new THREE.Vector3(0, 1, 0);
-      dir = new THREE.Vector3(1, 0.5, 1).normalize();
-    } else if (size.z >= size.x && size.z >= size.y) {
-      // Z is tallest — camera looks from XY, Z is up
-      up = new THREE.Vector3(0, 0, 1);
-      dir = new THREE.Vector3(1, 1, 0.5).normalize();
-    } else {
-      // X is tallest — camera looks from YZ, X is up (unusual but handled)
-      up = new THREE.Vector3(1, 0, 0);
-      dir = new THREE.Vector3(0.5, 1, 1).normalize();
-    }
+    const up = new THREE.Vector3(0, 1, 0);
+    const dir = new THREE.Vector3(1, 0.5, 1).normalize();
 
     this.environment.camera.up.copy(up);
     this.environment.camera.position.copy(center).addScaledVector(dir, dist);

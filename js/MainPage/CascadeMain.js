@@ -116,6 +116,9 @@ class CascadeStudioApp {
           ? CascadeStudioApp.OPENSCAD_STARTER_CODE
           : CascadeStudioApp.STARTER_CODE;
         this.editor.setCode(this._savedCode[newMode] || starter);
+        // Re-fit camera and auto-evaluate
+        if (this.viewport) { this.viewport._fitOnNextRender = true; }
+        this.editor.evaluateCode();
       });
     }
 
@@ -570,15 +573,10 @@ CascadeStudioApp.OPENSCAD_STARTER_CODE =
 size = 14;
 depth = 24;
 
-// Approximate centering for the default (Roboto) font
-cx = -4;
-cy = -5;
-
 // A centered, extruded letter
 module letter(t) {
-  translate([cx, cy, 0])
-    linear_extrude(height = depth, center = true)
-      text(t, size = size);
+  linear_extrude(height = depth, center = true)
+    text(t, size = size, halign = "center", valign = "center");
 }
 
 // GEB sculpture: intersection from three orthogonal axes
