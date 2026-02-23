@@ -398,8 +398,9 @@ class CascadeEnvironment {
       }
 
       this.environment.scene.add(this.mainObject);
-      if (this._isFirstRender) {
+      if (this._isFirstRender || this._fitOnNextRender) {
         this._isFirstRender = false;
+        this._fitOnNextRender = false;
         this.fitCamera();
       }
       this.environment.viewDirty = true;

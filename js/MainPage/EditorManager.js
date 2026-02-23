@@ -170,6 +170,22 @@ class EditorManager {
   /** Set editor mode: 'cascadestudio' or 'openscad'. */
   setMode(newMode) {
     if (newMode === this.mode) return;
+
+    // Swap starter code if current content matches the other mode's starter
+    const currentCode = this.editor.getValue();
+    const csStarter = this._app.constructor.STARTER_CODE;
+    const osStarter = this._app.constructor.OPENSCAD_STARTER_CODE;
+    if (newMode === 'openscad' && osStarter && currentCode === csStarter) {
+      this.editor.setValue(osStarter);
+    } else if (newMode === 'cascadestudio' && currentCode === osStarter) {
+      this.editor.setValue(csStarter);
+    }
+
+    // Fit camera on the next render after a mode switch
+    if (this._app.viewport) {
+      this._app.viewport._fitOnNextRender = true;
+    }
+
     this.mode = newMode;
 
     // Dispose existing OpenSCAD providers

@@ -552,4 +552,40 @@ console.log("Surface: " + SurfaceArea(tray).toFixed(0) + " mm\\u00B2");
 let com = CenterOfMass(tray);
 console.log("Center:  [" + com.map(v => v.toFixed(1)).join(", ") + "]");`;
 
+/** Default OpenSCAD starter code shown when switching to OpenSCAD mode. */
+CascadeStudioApp.OPENSCAD_STARTER_CODE =
+`// GEB - Gödel, Escher, Bach
+// Three letters viewed from three orthogonal axes
+// Adapted from the OpenSCAD Advanced examples
+
+module G() translate([-4, -5, 0]) text("G", size = 14, font = "Roboto");
+module E() translate([-4, -5, 0]) text("E", size = 14, font = "Roboto");
+module B() translate([-4, -5, 0]) text("B", size = 14, font = "Roboto");
+
+module GEB() {
+  intersection() {
+    linear_extrude(height = 24, center = true)
+      B();
+
+    rotate([90, 0, 0])
+      linear_extrude(height = 24, center = true)
+        E();
+
+    rotate([90, 0, 90])
+      linear_extrude(height = 24, center = true)
+        G();
+  }
+}
+
+GEB();
+
+// Pedestal
+translate([3, -3, -14])
+  difference() {
+    cube([18, 18, 2]);
+    translate([2, 2, -1])
+      cube([14, 14, 4]);
+  }
+`;
+
 export { CascadeStudioApp };

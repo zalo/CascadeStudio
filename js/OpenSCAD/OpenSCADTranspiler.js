@@ -310,8 +310,12 @@ class OpenSCADTranspiler {
     const args = this._parseNamedArgs(stmt.args, ['text']);
     const text = args.text ? this._transpileExpr(args.text) : '""';
     const size = args.size ? this._transpileExpr(args.size) : '10';
-    // Text3D(text, size, height, fontName)
-    return `Text3D(${text}, ${size}, 0.15);`;
+    const font = args.font ? this._transpileExpr(args.font) : null;
+    // OpenSCAD text() is 2D; use Text3D with height=0 to return a face
+    if (font) {
+      return `Text3D(${text}, ${size}, 0, ${font});`;
+    }
+    return `Text3D(${text}, ${size}, 0);`;
   }
 
   // --- Transforms ---
@@ -453,15 +457,22 @@ class OpenSCADTranspiler {
   _transpileLinearExtrude(stmt, children) {
     const args = this._parseNamedArgs(stmt.args, ['height']);
     const h = args.height ? this._transpileExpr(args.height) : '1';
+    const centerExpr = args.center ? this._transpileExpr(args.center) : null;
+    const shouldCenter = centerExpr && centerExpr !== 'false';
 
     if (children.length === 0) return '';
     if (children.length === 1) {
       const childExpr = this._transpileChildAsExpr(children[0]);
+      if (shouldCenter) {
+        return `Translate([0, 0, -(${h})/2], Extrude(${childExpr}, [0, 0, ${h}]));`;
+      }
       return `Extrude(${childExpr}, [0, 0, ${h}]);`;
     }
     return this._wrapMultiChild(children, (varNames) => {
       const removeLines = varNames.map(v => `sceneShapes = Remove(sceneShapes, ${v});`);
-      const extrudeLines = varNames.map(v => `Extrude(${v}, [0, 0, ${h}]);`);
+      const extrudeLines = shouldCenter
+        ? varNames.map(v => `Translate([0, 0, -(${h})/2], Extrude(${v}, [0, 0, ${h}]));`)
+        : varNames.map(v => `Extrude(${v}, [0, 0, ${h}]);`);
       return removeLines.join('\n') + '\n' + extrudeLines.join('\n');
     });
   }
