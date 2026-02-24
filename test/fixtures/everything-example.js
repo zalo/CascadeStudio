@@ -4,11 +4,10 @@
 let t = Slider("Param", 1, 0.4, 1.75);
 
 // Sketch: An interface for drawing 2D shapes and curves
-let face = new Sketch([-10*t,-8*t]).
+let face = new Sketch([-10*t,-8*t]).Fillet(2*t).
                LineTo([ 10*t,-8*t]).Fillet(2*t).
                LineTo([  0*t, 8*t]).Fillet(2*t).
-               LineTo([-10*t,-8*t]).Fillet(2*t).
-               End().Face();
+               End(true).Face();
 
 let shapes = [
     // Box: Creates a rectangular prism with these X, Y, and Z Dimensions

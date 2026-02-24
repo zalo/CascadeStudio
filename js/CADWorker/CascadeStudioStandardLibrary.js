@@ -964,10 +964,6 @@ function Sketch(startingPoint, plane) {
 
   this.Fillet = function (radius) {
     this.argsString += self.ComputeHash(arguments, true);
-    if (this.currentIndex === 0) {
-      console.error("Sketch.Fillet() must be called after .LineTo() — it fillets the corner at the most recent vertex.");
-      return this;
-    }
     let [fa, fb] = this._getAB(this.lastPoint);
     this.fillets.push({ a: fa, b: fb, radius: radius });
     return this;
