@@ -1,9 +1,9 @@
 // This file governs the 3D Viewport which displays the 3D Model
 // It is also in charge of saving to STL and OBJ
 import * as THREE from 'three';
-import { OrbitControls } from '../../node_modules/three/examples/jsm/controls/OrbitControls.js';
-import { STLExporter } from '../../node_modules/three/examples/jsm/exporters/STLExporter.js';
-import { OBJExporter } from '../../node_modules/three/examples/jsm/exporters/OBJExporter.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { HandleManager } from './CascadeViewHandles.js';
 
 /** Base class for a 3D viewport environment.
@@ -91,10 +91,11 @@ class Environment {
 /** CAD-specific 3D viewport that extends Environment with shape rendering,
  *  edge/face highlighting, export functionality, and transform gizmos. */
 class CascadeEnvironment {
-  constructor(goldenContainer, messageBus, getNewFileHandle, writeFile, downloadFile) {
+  constructor(goldenContainer, app, getNewFileHandle, writeFile, downloadFile) {
     this.active          = true;
     this.goldenContainer = goldenContainer;
     this.environment     = new Environment(this.goldenContainer);
+    this._app            = app;
 
     // State for the Hover Highlighting
     this.raycaster       = new THREE.Raycaster();
@@ -121,7 +122,6 @@ class CascadeEnvironment {
     });
 
     // Store dependencies for export methods
-    this._messageBus = messageBus;
     this._getNewFileHandle = getNewFileHandle;
     this._writeFile = writeFile;
     this._downloadFile = downloadFile;
@@ -137,12 +137,6 @@ class CascadeEnvironment {
     // Fit camera on first render so the orbit target centers on the model
     this._isFirstRender = true;
 
-    // Register the shape rendering callback
-    this._registerRenderCallback(messageBus);
-
-    // Register the modeling history callback
-    this._registerHistoryCallback(messageBus);
-
     // Set up mouse tracking
     this.mouse = { x: 0, y: 0 };
     this.goldenContainer.element.addEventListener('mousemove', (event) => {
@@ -153,12 +147,85 @@ class CascadeEnvironment {
     // Create the timeline overlay DOM
     this._createTimelineOverlay();
 
-    // Initialize the Handle Manager
-    this.handleManager = new HandleManager(this, messageBus);
+    // Initialize the Handle Manager (no messageBus needed — app wires events)
+    this.handleManager = new HandleManager(this);
 
     // Start the animation loop
     this._animate();
     this.environment.renderer.render(this.environment.scene, this.environment.camera);
+  }
+
+  /** Render mesh data received from the engine.
+   *  Replaces the old _registerRenderCallback / "combineAndRenderShapes" handler. */
+  renderMeshData(meshData, sceneOptions) {
+    if (!meshData) return;
+    const { faces: facelist, edges: edgelist } = meshData;
+    window.workerWorking = false;
+    if (!facelist) { return; }
+    if (!sceneOptions) { sceneOptions = {}; }
+    this._lastSceneOptions = sceneOptions;
+
+    // The old mainObject is dead! Long live the mainObject!
+    this.environment.scene.remove(this.mainObject);
+
+    this.environment.scene.remove(this.groundMesh);
+    if (sceneOptions.groundPlaneVisible) {
+      this.groundMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(2000, 2000),
+        new THREE.MeshPhongMaterial({
+          color: 0x080808, depthWrite: true, dithering: true,
+          polygonOffset: true,
+          polygonOffsetFactor: 6.0, polygonOffsetUnits: 1.0
+        })
+      );
+      this.groundMesh.position.y = -0.1;
+      this.groundMesh.rotation.x = -Math.PI / 2;
+      this.groundMesh.receiveShadow = true;
+      this.environment.scene.add(this.groundMesh);
+    }
+
+    this.environment.scene.remove(this.grid);
+    if (sceneOptions.gridVisible) {
+      this.grid = new THREE.GridHelper(2000, 20, 0xcccccc, 0xcccccc);
+      this.grid.position.y = -0.01;
+      this.grid.material.opacity = 0.3;
+      this.grid.material.transparent = true;
+      this.environment.scene.add(this.grid);
+    }
+
+    this.mainObject = this._buildObjectFromMesh(facelist, edgelist);
+
+    // Expand fog distance to enclose the current object
+    this.boundingBox = new THREE.Box3().setFromObject(this.mainObject);
+    this.fogDist = Math.max(this.fogDist, this.boundingBox.min.distanceTo(this.boundingBox.max) * 1.5);
+    this.environment.scene.fog = new THREE.Fog(this.environment.backgroundColor, this.fogDist, this.fogDist + 400);
+
+    // Cache the final mesh data for the timeline's last step
+    this._finalMeshData = [facelist, edgelist];
+
+    // Reset timeline to show final result
+    this._historyCurrentStep = -1;
+    if (this._historyObject) {
+      this.environment.scene.remove(this._historyObject);
+      this._historyObject = null;
+    }
+
+    this.environment.scene.add(this.mainObject);
+    if (this._isFirstRender || this._fitOnNextRender) {
+      this._isFirstRender = false;
+      this._fitOnNextRender = false;
+      this.fitCamera();
+    }
+    this.environment.viewDirty = true;
+    console.log("Generation Complete!");
+  }
+
+  /** Set history steps metadata. Replaces the old "modelHistory" handler. */
+  setHistorySteps(steps) {
+    this._historySteps = steps || [];
+    this._historyMeshCache = {};
+    this._historyCurrentStep = -1;
+    this._updateTimelineDOM();
   }
 
   /** Fit the camera to frame the current model with a 3/4 elevated view.
@@ -188,12 +255,8 @@ class CascadeEnvironment {
     this.environment.viewDirty = true;
   }
 
-  /** Set the camera angle using azimuth and elevation (in degrees).
-   *  azimuth: horizontal rotation around the model (0=front, 90=right, 180=back, 270=left)
-   *  elevation: angle above the horizontal plane (0=level, 90=top-down)
-   *  Respects the auto-detected "up" axis from fitCamera(). */
+  /** Set the camera angle using azimuth and elevation (in degrees). */
   setCameraAngle(azimuthDeg, elevationDeg) {
-    // First fit to establish correct distance, up axis, and center
     this.fitCamera();
 
     const camera = this.environment.camera;
@@ -205,12 +268,10 @@ class CascadeEnvironment {
     const az = ((azimuthDeg != null) ? azimuthDeg : 45) * Math.PI / 180;
     const el = ((elevationDeg != null) ? elevationDeg : 30) * Math.PI / 180;
 
-    // Build orthonormal basis from up vector
     let temp = Math.abs(up.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
     let right = new THREE.Vector3().crossVectors(temp, up).normalize();
     let forward = new THREE.Vector3().crossVectors(up, right).normalize();
 
-    // Spherical coords: azimuth around up axis, elevation above horizontal
     const cosEl = Math.cos(el);
     const sinEl = Math.sin(el);
     const dir = new THREE.Vector3()
@@ -223,8 +284,6 @@ class CascadeEnvironment {
     camera.lookAt(target);
     controls.update();
     this.environment.viewDirty = true;
-
-    // Force render so the frame is ready for screenshot
     this.environment.renderer.render(this.environment.scene, camera);
   }
 
@@ -328,80 +387,6 @@ class CascadeEnvironment {
     return group;
   }
 
-  /** Register the callback that receives triangulated shapes from the worker. */
-  _registerRenderCallback(messageBus) {
-    messageBus.on("combineAndRenderShapes", ([[facelist, edgelist], sceneOptions]) => {
-      window.workerWorking = false;
-      if (!facelist) { return; }
-      if (!sceneOptions) { sceneOptions = {}; }
-      this._lastSceneOptions = sceneOptions;
-
-      // The old mainObject is dead! Long live the mainObject!
-      this.environment.scene.remove(this.mainObject);
-
-      this.environment.scene.remove(this.groundMesh);
-      if (sceneOptions.groundPlaneVisible) {
-        this.groundMesh = new THREE.Mesh(
-          new THREE.PlaneGeometry(2000, 2000),
-          new THREE.MeshPhongMaterial({
-            color: 0x080808, depthWrite: true, dithering: true,
-            polygonOffset: true,
-            polygonOffsetFactor: 6.0, polygonOffsetUnits: 1.0
-          })
-        );
-        this.groundMesh.position.y = -0.1;
-        this.groundMesh.rotation.x = -Math.PI / 2;
-        this.groundMesh.receiveShadow = true;
-        this.environment.scene.add(this.groundMesh);
-      }
-
-      this.environment.scene.remove(this.grid);
-      if (sceneOptions.gridVisible) {
-        this.grid = new THREE.GridHelper(2000, 20, 0xcccccc, 0xcccccc);
-        this.grid.position.y = -0.01;
-        this.grid.material.opacity = 0.3;
-        this.grid.material.transparent = true;
-        this.environment.scene.add(this.grid);
-      }
-
-      this.mainObject = this._buildObjectFromMesh(facelist, edgelist);
-
-      // Expand fog distance to enclose the current object
-      this.boundingBox = new THREE.Box3().setFromObject(this.mainObject);
-      this.fogDist = Math.max(this.fogDist, this.boundingBox.min.distanceTo(this.boundingBox.max) * 1.5);
-      this.environment.scene.fog = new THREE.Fog(this.environment.backgroundColor, this.fogDist, this.fogDist + 400);
-
-      // Cache the final mesh data for the timeline's last step
-      this._finalMeshData = [facelist, edgelist];
-
-      // Reset timeline to show final result
-      this._historyCurrentStep = -1;
-      if (this._historyObject) {
-        this.environment.scene.remove(this._historyObject);
-        this._historyObject = null;
-      }
-
-      this.environment.scene.add(this.mainObject);
-      if (this._isFirstRender || this._fitOnNextRender) {
-        this._isFirstRender = false;
-        this._fitOnNextRender = false;
-        this.fitCamera();
-      }
-      this.environment.viewDirty = true;
-      console.log("Generation Complete!");
-    });
-  }
-
-  /** Register the callback that receives modeling history metadata from the worker. */
-  _registerHistoryCallback(messageBus) {
-    messageBus.on("modelHistory", (steps) => {
-      this._historySteps = steps || [];
-      this._historyMeshCache = {};
-      this._historyCurrentStep = -1;
-      this._updateTimelineDOM();
-    });
-  }
-
   /** Create the timeline overlay DOM elements. */
   _createTimelineOverlay() {
     this._timelineContainer = document.createElement('div');
@@ -434,7 +419,6 @@ class CascadeEnvironment {
     let children = this._timelineTrack.children;
     if (children.length === 0) return;
 
-    // Find the step element closest to the mouse X
     let mouseX = e.clientX;
     let closestIndex = 0;
     let closestDist = Infinity;
@@ -460,7 +444,6 @@ class CascadeEnvironment {
     if (this._historyCurrentStep === -1) return;
     this._historyCurrentStep = -1;
 
-    // Swap visibility: show mainObject, hide history preview
     if (this._historyObject) {
       this.environment.scene.remove(this._historyObject);
       this._historyObject = null;
@@ -472,49 +455,43 @@ class CascadeEnvironment {
     this._updateTimelineHighlight();
     this.environment.viewDirty = true;
 
-    // Notify editor to clear line highlight
     if (this._onHistoryStepChange) this._onHistoryStepChange(null);
   }
 
-  /** Show an intermediate history step. Triangulates lazily via worker request. */
+  /** Show an intermediate history step. Triangulates lazily via engine request. */
   async _showHistoryStep(stepIndex) {
     if (stepIndex === this._historyCurrentStep) return;
     if (this._historyPending) return;
     this._historyCurrentStep = stepIndex;
     this._updateTimelineHighlight();
 
-    // Notify editor to highlight the corresponding line
     let step = this._historySteps[stepIndex];
     if (this._onHistoryStepChange && step) {
       this._onHistoryStepChange(step.lineNumber);
     }
 
-    // Hide the final mainObject
     if (this.mainObject) {
       this.mainObject.visible = false;
     }
 
-    // Check mesh cache
     if (this._historyMeshCache[stepIndex]) {
       this._displayHistoryMesh(this._historyMeshCache[stepIndex]);
       return;
     }
 
-    // Handle empty step (0 shapes)
     if (step && step.shapeCount === 0) {
       this._displayHistoryMesh(null);
       return;
     }
 
-    // Request triangulation from worker
+    // Request triangulation from engine
     this._historyPending = true;
     try {
-      let meshData = await this._messageBus.request("meshHistoryStep", {
-        stepIndex: stepIndex,
-        maxDeviation: this._lastSceneOptions.meshRes || 0.1
-      });
+      let meshData = await this._app.engine.meshHistoryStep(
+        stepIndex,
+        this._lastSceneOptions.meshRes || 0.1
+      );
       this._historyMeshCache[stepIndex] = meshData;
-      // Only display if we haven't scrubbed away during the await
       if (this._historyCurrentStep === stepIndex) {
         this._displayHistoryMesh(meshData);
       }
@@ -551,41 +528,16 @@ class CascadeEnvironment {
     this._timelineContainer.style.display = '';
     this._timelineTrack.innerHTML = '';
 
-    // Operation type → icon character (simple Unicode icons)
     const iconMap = {
-      // Primitives
-      'Box': '\u25A1',        // square
-      'Sphere': '\u25CB',     // circle
-      'Cylinder': '\u25AD',   // rectangle (horizontal)
-      'Cone': '\u25B3',       // triangle up
-      'Polygon': '\u2B23',    // hexagon
-      'Circle': '\u25EF',     // large circle
-      'BSpline': '\u223F',    // sine wave
-      'Text3D': 'T',
-      'Wedge': '\u25C7',      // diamond
-      // Transforms
-      'Translate': '\u2192',   // right arrow
-      'Rotate': '\u21BB',     // clockwise arrow
-      'Mirror': '\u2194',     // left-right arrow
-      'Scale': '\u2922',      // NE arrow
-      // Booleans
-      'Union': '\u222A',      // union
-      'Difference': '\u2216', // set minus
-      'Intersection': '\u2229', // intersection
-      // Operations
-      'Extrude': '\u2191',    // up arrow
-      'Revolve': '\u21BA',    // counterclockwise arrow
-      'Offset': '\u29C9',     // two joined squares
-      'Pipe': '\u2240',       // wreath product
-      'Loft': '\u22C8',       // bowtie
-      'Fillet': '\u25E0',     // upper half circle
-      'Chamfer': '\u25FA',    // lower left triangle
-      'Section': '\u2500',    // horizontal line
-      'Shell': '\u25A2',      // square with rounded corners
-      // Sketch operations
-      'Sketch': '\u270E',     // pencil
-      'MakeSolid': '\u25A0',  // filled square
-      'MakeWire': '\u2312',   // arc
+      'Box': '\u25A1', 'Sphere': '\u25CB', 'Cylinder': '\u25AD',
+      'Cone': '\u25B3', 'Polygon': '\u2B23', 'Circle': '\u25EF',
+      'BSpline': '\u223F', 'Text3D': 'T', 'Wedge': '\u25C7',
+      'Translate': '\u2192', 'Rotate': '\u21BB', 'Mirror': '\u2194', 'Scale': '\u2922',
+      'Union': '\u222A', 'Difference': '\u2216', 'Intersection': '\u2229',
+      'Extrude': '\u2191', 'Revolve': '\u21BA', 'Offset': '\u29C9',
+      'Pipe': '\u2240', 'Loft': '\u22C8', 'Fillet': '\u25E0',
+      'Chamfer': '\u25FA', 'Section': '\u2500', 'Shell': '\u25A2',
+      'Sketch': '\u270E', 'MakeSolid': '\u25A0', 'MakeWire': '\u2312',
     };
 
     for (let i = 0; i <= this._historySteps.length; i++) {
@@ -594,11 +546,10 @@ class CascadeEnvironment {
 
       if (i < this._historySteps.length) {
         let step = this._historySteps[i];
-        dot.textContent = iconMap[step.fnName] || '\u2022'; // bullet fallback
+        dot.textContent = iconMap[step.fnName] || '\u2022';
         dot.title = `${step.fnName}() — line ${step.lineNumber} (${step.shapeCount} shape${step.shapeCount !== 1 ? 's' : ''})`;
       } else {
-        // Final result marker
-        dot.textContent = '\u2713'; // checkmark
+        dot.textContent = '\u2713';
         dot.title = 'Final result';
         dot.classList.add('cs-timeline-final');
       }
@@ -615,7 +566,7 @@ class CascadeEnvironment {
     for (let i = 0; i < steps.length; i++) {
       let isActive;
       if (this._historyCurrentStep === -1) {
-        isActive = (i === steps.length - 1); // final result
+        isActive = (i === steps.length - 1);
       } else {
         isActive = (i === this._historyCurrentStep);
       }
@@ -624,10 +575,9 @@ class CascadeEnvironment {
   }
 
   /** Save the current shape to .step. */
-  saveShapeSTEP() {
-    this._messageBus.send("saveShapeSTEP");
-
-    this._messageBus.on("saveShapeSTEP", async (stepContent) => {
+  async saveShapeSTEP() {
+    try {
+      const stepContent = await this._app.engine.exportSTEP();
       if (window.showSaveFilePicker) {
         const fileHandle = await this._getNewFileHandle("STEP files", "text/plain", "step");
         this._writeFile(fileHandle, stepContent).then(() => {
@@ -636,7 +586,9 @@ class CascadeEnvironment {
       } else {
         await this._downloadFile(stepContent, "Untitled", "model/step", "step");
       }
-    });
+    } catch (e) {
+      console.error("Failed to export STEP: " + e.message);
+    }
   }
 
   /** Save the current shape to an ASCII .stl. */
@@ -678,7 +630,6 @@ class CascadeEnvironment {
 
     requestAnimationFrame(() => this._animate());
 
-    // Highlight faces/edges under the mouse cursor
     if (this.mainObject) {
       this.raycaster.setFromCamera(this.mouse, this.environment.camera);
       let intersects = this.raycaster.intersectObjects(this.mainObject.children);
@@ -721,7 +672,6 @@ class CascadeEnvironment {
       }
     }
 
-    // Only render if the view is dirty
     if (this.environment.viewDirty) {
       this.environment.renderer.render(this.environment.scene, this.environment.camera);
       this.environment.viewDirty = false;
