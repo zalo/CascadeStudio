@@ -655,6 +655,11 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
 function Revolve(shape, degrees, direction, keepShape, copy) {
   if (!degrees  ) { degrees   = 360.0; }
   if (!direction) { direction = [0, 0, 1]; }
+  // Negative angles produce inside-out faces; flip direction instead
+  if (degrees < 0) {
+    degrees = -degrees;
+    direction = [-direction[0], -direction[1], -direction[2]];
+  }
   let curRevolution = self.CacheOp(arguments, "Revolve", () => {
     if (degrees >= 360.0) {
       return new self.oc.BRepPrimAPI_MakeRevol_2(shape,
