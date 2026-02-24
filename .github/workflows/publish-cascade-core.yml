@@ -40,7 +40,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/cascade-core/package.json
+          git add package.json
           git commit -m "cascade-core v${{ steps.bump.outputs.version }} [skip ci]"
           git push
 
