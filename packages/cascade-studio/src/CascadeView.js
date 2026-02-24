@@ -242,7 +242,7 @@ class CascadeEnvironment {
 
     // Distance to fit the object in the camera frustum
     const fov = this.environment.camera.fov * (Math.PI / 180);
-    const dist = (maxDim / (2 * Math.tan(fov / 2))) * 0.8;
+    const dist = (maxDim / (2 * Math.tan(fov / 2))) * 1.5;
 
     const up = new THREE.Vector3(0, 1, 0);
     const dir = new THREE.Vector3(1, 0.5, 1).normalize();
