@@ -1,0 +1,53 @@
+name: Publish cascade-core to npm
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'packages/cascade-core/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Check if version changed
+        id: version-check
+        run: |
+          LOCAL_VERSION=$(node -p "require('./packages/cascade-core/package.json').version")
+          NPM_VERSION=$(npm view cascade-core version 2>/dev/null || echo "0.0.0")
+          echo "local=$LOCAL_VERSION" >> "$GITHUB_OUTPUT"
+          echo "npm=$NPM_VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$LOCAL_VERSION" = "$NPM_VERSION" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Version $LOCAL_VERSION already published — skipping"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing $LOCAL_VERSION (npm has $NPM_VERSION)"
+          fi
+
+      - name: Build cascade-core
+        if: steps.version-check.outputs.changed == 'true'
+        run: node packages/cascade-core/scripts/build.cjs
+
+      - name: Publish to npm
+        if: steps.version-check.outputs.changed == 'true'
+        run: npm publish --workspace packages/cascade-core --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

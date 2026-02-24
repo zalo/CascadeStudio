@@ -32,8 +32,7 @@
 	"files": [
 		"src/",
 		"dist/",
-		"types/",
-		"fonts/"
+		"types/"
 	],
 	"dependencies": {
 		"opencascade.js": "github:zalo/opencascade.js#cascadestudio-v2",
