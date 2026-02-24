@@ -1,7 +1,7 @@
 // CascadeAPI.js - Programmatic API for agent/CLI integration
 
-import { STLExporter } from '../../node_modules/three/examples/jsm/exporters/STLExporter.js';
-import { OBJExporter } from '../../node_modules/three/examples/jsm/exporters/OBJExporter.js';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 
 /** Exposes window.CascadeAPI for programmatic control of Cascade Studio.
  *  Designed for use by AI agents (via Playwright) and developer tooling. */
@@ -21,9 +21,6 @@ class CascadeAPI {
     }
     meta.content = 'window.CascadeAPI';
 
-    // Console messages for agent discovery — separate calls so each appears
-    // as its own [LOG] line in Playwright's Events section (multi-line strings
-    // get truncated to a single line and the agent misses the key info).
     console.log('[CascadeAPI] Ready. Run: CascadeAPI.getQuickStart() for docs');
     console.log('[CascadeAPI] Key methods: runCode(code), saveScreenshot(file), setCameraAngle(az,el)');
     console.log('[CascadeAPI] NEVER use browser_take_screenshot or browser_run_code');
@@ -167,24 +164,16 @@ Revolve(profile, 360);`,
   evaluate() {
     if (this._evaluatePromise) { return this._evaluatePromise; }
     this._evaluatePromise = new Promise((resolve) => {
-      const originalHandler = this._app.messageBus.handlers["combineAndRenderShapes"];
-      this._app.messageBus.on("combineAndRenderShapes", (payload) => {
-        if (originalHandler) {
-          this._app.messageBus.on("combineAndRenderShapes", originalHandler);
-        } else {
-          this._app.messageBus.off("combineAndRenderShapes");
-        }
-        if (originalHandler) originalHandler(payload);
+      // Listen for the engine's resetWorking event which fires when evaluation completes
+      const handler = () => {
+        this._app.engine.off('resetWorking', handler);
         this._evaluatePromise = null;
         resolve();
-      });
+      };
+      this._app.engine.on('resetWorking', handler);
       this._app.editor.evaluateCode(false);
       if (!window.workerWorking) {
-        if (originalHandler) {
-          this._app.messageBus.on("combineAndRenderShapes", originalHandler);
-        } else {
-          this._app.messageBus.off("combineAndRenderShapes");
-        }
+        this._app.engine.off('resetWorking', handler);
         this._evaluatePromise = null;
         resolve();
       }
@@ -213,7 +202,7 @@ Revolve(profile, 360);`,
     if (viewport) viewport.fitCamera();
   }
 
-  isReady() { return this._app.startup !== null; }
+  isReady() { return this._app.engine && this._app.engine.isReady; }
   isWorking() { return window.workerWorking; }
 
   setMode(mode) {
@@ -243,7 +232,7 @@ Revolve(profile, 360);`,
   }
 
   // Export formats
-  getSTEP() { return this._app.messageBus.request("saveShapeSTEP"); }
+  getSTEP() { return this._app.engine.exportSTEP(); }
   getSTL() {
     const viewport = this._app.viewport;
     if (!viewport || !viewport.mainObject) return '';

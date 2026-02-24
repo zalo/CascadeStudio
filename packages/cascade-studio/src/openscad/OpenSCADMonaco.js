@@ -1,6 +1,6 @@
 // OpenSCADMonaco.js - Monaco language integration for OpenSCAD
 
-import openscadParser from '../../lib/openscad-parser/openscad-parser.js';
+import openscadParser from 'openscad-parser';
 
 const { CodeFile, Lexer, Parser, ErrorCollector, ASTScopePopulator, Scope,
         ScopeSymbolCompletionProvider, KeywordsCompletionProvider, SymbolResolver } = openscadParser;

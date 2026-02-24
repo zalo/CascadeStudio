@@ -1,8 +1,8 @@
-// CascadeStudio Main Worker - ES Module
+// CascadeWorker - Main CAD worker entry point (cascade-core)
 
-import { CascadeStudioStandardLibrary } from './CascadeStudioStandardLibrary.js';
-import { CascadeStudioMesher } from './CascadeStudioShapeToMesh.js';
-import { CascadeStudioFileIO } from './CascadeStudioFileUtils.js';
+import { CascadeStudioStandardLibrary } from './StandardLibrary.js';
+import { CascadeStudioMesher } from './ShapeToMesh.js';
+import { CascadeStudioFileIO } from './FileUtils.js';
 
 /** Main CAD worker class. Initializes OpenCascade WASM, loads dependencies,
  *  and orchestrates evaluation/rendering of user CAD code. */
@@ -67,7 +67,7 @@ class CascadeStudioWorker {
     let initOpenCascade, opentype, potpack;
 
     try {
-      const ocMod = await import('../../node_modules/opencascade.js/dist/cascadestudio.js');
+      const ocMod = await import('opencascade.js/dist/cascadestudio.js');
       initOpenCascade = ocMod.default;
     } catch(e) {
       postMessage({ type: "log", payload: "ERROR loading opencascade: " + e.message });
@@ -75,7 +75,7 @@ class CascadeStudioWorker {
     }
 
     try {
-      const otMod = await import('../../node_modules/opentype.js/dist/opentype.module.js');
+      const otMod = await import('opentype.js/dist/opentype.module.js');
       opentype = otMod.default;
     } catch(e) {
       postMessage({ type: "log", payload: "ERROR loading opentype: " + e.message });
@@ -83,8 +83,8 @@ class CascadeStudioWorker {
     }
 
     try {
-      const ppMod = await import('../../node_modules/three/examples/jsm/libs/potpack.module.js');
-      potpack = ppMod.potpack;
+      const ppMod = await import('potpack');
+      potpack = ppMod.default || ppMod.potpack || ppMod;
     } catch(e) {
       postMessage({ type: "log", payload: "ERROR loading potpack: " + e.message });
       throw e;

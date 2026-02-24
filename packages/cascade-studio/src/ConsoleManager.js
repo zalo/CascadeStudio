@@ -26,12 +26,6 @@ class ConsoleManager {
       this._initialized = true;
       this._setupConsoleOverrides();
 
-      this._app.messageBus.on("log", (payload) => { console.log(payload); });
-      this._app.messageBus.on("error", (payload) => {
-        window.workerWorking = false;
-        console.error(payload);
-      });
-
       window.onerror = (err, url, line, colno, errorObj) => {
         let errorText = JSON.stringify(err, ConsoleManager._circularReplacer());
         if (errorText.startsWith('"')) { errorText = errorText.slice(1, -1); }
@@ -61,24 +55,9 @@ class ConsoleManager {
         }
       };
 
-      this._app.messageBus.on("Progress", (payload) => {
-        let el = this._consoleContainer.parentElement?.lastElementChild?.lastElementChild;
-        if (el) {
-          el.innerText = "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType) ? " (" + payload.opType + ")" : "");
-        }
-      });
-
       console.log("Welcome to Cascade Studio!");
       console.log("Loading CAD Kernel...");
     }
-  }
-
-  /** Legacy: Register the dockable Console component with Golden Layout.
-   *  Now delegates to initPanel. */
-  registerComponent(layout) {
-    layout.registerComponent('console', (container) => {
-      this.initPanel(container);
-    });
   }
 
   /** Get all logs since last clear. */

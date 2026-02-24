@@ -2292,9 +2292,9 @@ var require_ASTPrinter = __commonJS({
   }
 });
 
-// scripts/node-shims.js
+// packages/cascade-studio/scripts/node-shims.cjs
 var require_node_shims = __commonJS({
-  "scripts/node-shims.js"(exports, module) {
+  "packages/cascade-studio/scripts/node-shims.cjs"(exports, module) {
     module.exports = {};
   }
 });

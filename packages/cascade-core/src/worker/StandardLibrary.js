@@ -11,7 +11,7 @@
 //  - Upon push, Github Actions will build a new version of the library and commit it back to the repo
 //  - From there, you can graft those into CascadeStudio/node_modules/opencascade.js/dist (following its existing conventions)
 
-import { CascadeStudioUtils } from './CascadeStudioStandardUtils.js';
+import { CascadeStudioUtils } from './StandardUtils.js';
 
 // --- CAD API Functions ---
 // These are regular function declarations (NOT class methods) to preserve
