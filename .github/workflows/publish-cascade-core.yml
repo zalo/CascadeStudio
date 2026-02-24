@@ -28,7 +28,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Bump patch version
+      - name: Bump patch version and commit
         id: bump
         working-directory: packages/cascade-core
         run: |
@@ -38,6 +38,12 @@ jobs:
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "Bumped $OLD_VERSION → $NEW_VERSION"
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/cascade-core/package.json
+          git commit -m "cascade-core v${{ steps.bump.outputs.version }} [skip ci]"
+          git push
+
       - name: Build cascade-core
         run: node packages/cascade-core/scripts/build.cjs
 
@@ -46,11 +52,3 @@ jobs:
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/cascade-core/package.json
-          git commit -m "cascade-core v${{ steps.bump.outputs.version }} [skip ci]"
-          git push
