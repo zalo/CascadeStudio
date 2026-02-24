@@ -157,7 +157,11 @@ class CascadeStudioWorker {
     self.opNumber = 0;
     self.GUIState = payload.GUIState;
 
-    // Reset modeling history for this evaluation
+    // Reset cache counters and modeling history for this evaluation
+    this.standardLibrary.utils.cacheHits = 0;
+    this.standardLibrary.utils.cacheMisses = 0;
+    self.cacheHits = 0;
+    self.cacheMisses = 0;
     self.modelHistory = [];
     this.standardLibrary.utils.modelHistory = self.modelHistory;
     this.standardLibrary.utils._pendingHistoryOp = null;
@@ -180,13 +184,11 @@ class CascadeStudioWorker {
           index: i,
           fnName: step.fnName,
           lineNumber: step.lineNumber,
-          shapeCount: step.shapes.length,
-          volume: step.volume,
-          surfaceArea: step.surfaceArea,
-          solidCount: step.solidCount,
+          shapeCount: step.shapeCount,
         }))
       });
 
+      postMessage({ type: "log", payload: "Cache: " + self.cacheHits + " hits, " + self.cacheMisses + " misses" });
       postMessage({ type: "resetWorking" });
       // Clean cache; remove unused objects
       for (let hash in self.argCache) {

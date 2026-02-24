@@ -64,11 +64,15 @@ class CascadeStudioUtils {
     if (check && self.GUIState["Cache?"]) {
       toReturn = check;
       toReturn.hash = check.hash;
+      this.cacheHits = (this.cacheHits || 0) + 1;
     } else {
       toReturn = cacheMiss();
       toReturn.hash = curHash;
       if (self.GUIState["Cache?"]) { this.AddToCache(curHash, toReturn); }
+      this.cacheMisses = (this.cacheMisses || 0) + 1;
     }
+    self.cacheHits = this.cacheHits;
+    self.cacheMisses = this.cacheMisses;
 
     // Record this op so the NEXT CacheOp call (or flushHistoryStep) can snapshot its result
     this._pendingHistoryOp = { fnName, lineNumber: this.currentLineNumber };
@@ -79,38 +83,15 @@ class CascadeStudioUtils {
 
   /** Flush the pending history step by snapshotting the current sceneShapes.
    *  Called at the start of each CacheOp (to capture the previous op's result)
-   *  and after eval() completes (to capture the final op's result). */
+   *  and after eval() completes (to capture the final op's result).
+   *  Metadata (volume, surfaceArea) is deferred to avoid O(n²) cost during eval. */
   flushHistoryStep() {
     if (this._pendingHistoryOp) {
-      let shapes = [...self.sceneShapes];
-
-      // Compute per-step metadata (volume, surfaceArea, solidCount)
-      let volume = 0, surfaceArea = 0, solidCount = 0;
-      try {
-        let oc = self.oc;
-        for (let shape of shapes) {
-          if (!shape || shape.IsNull()) continue;
-          let vProps = new oc.GProp_GProps_1();
-          oc.BRepGProp.VolumeProperties_1(shape, vProps, false, false, false);
-          volume += Math.abs(vProps.Mass());
-          let sProps = new oc.GProp_GProps_1();
-          oc.BRepGProp.SurfaceProperties_1(shape, sProps, false, false);
-          surfaceArea += sProps.Mass();
-          // Count solids
-          let explorer = new oc.TopExp_Explorer_2(shape, oc.TopAbs_ShapeEnum.TopAbs_SOLID, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
-          for (explorer.Init(shape, oc.TopAbs_ShapeEnum.TopAbs_SOLID, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); explorer.More(); explorer.Next()) {
-            solidCount++;
-          }
-        }
-      } catch (e) { /* Metadata is best-effort */ }
-
       this.modelHistory.push({
         fnName: this._pendingHistoryOp.fnName,
         lineNumber: this._pendingHistoryOp.lineNumber,
-        shapes,
-        volume: Math.round(volume * 100) / 100,
-        surfaceArea: Math.round(surfaceArea * 100) / 100,
-        solidCount,
+        shapes: [...self.sceneShapes],
+        shapeCount: self.sceneShapes.length,
       });
       self.modelHistory = this.modelHistory;
       this._pendingHistoryOp = null;
