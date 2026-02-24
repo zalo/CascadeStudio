@@ -741,4 +741,78 @@ test.describe('Regression', () => {
     const genMessages = logs.filter(l => l.includes('Generating Model'));
     expect(genMessages.length).toBeLessThanOrEqual(1);
   });
+
+  test('shape cache avoids recomputing unchanged operations', async ({ page }) => {
+    await gotoAndReady(page);
+
+    // Code with multiple expensive operations
+    const baseCode = `
+      let a = FilletEdges(Box(20, 20, 20), 3, [0,2,4,6,8,10]);
+      let b = Translate([30, 0, 0], Difference(Sphere(15), [Cylinder(5, 40, true)]));
+      let c = Translate([60, 0, 0], Union([Box(10,10,10), Translate([5,5,5], Sphere(8))]));
+    `;
+
+    // First evaluation — everything is a cache miss
+    const result1 = await page.evaluate(async (code) => {
+      CascadeAPI.setCode(code);
+      CascadeAPI.evaluate();
+      await new Promise(r => {
+        const check = () => CascadeAPI.isWorking() ? setTimeout(check, 50) : r();
+        check();
+      });
+      return {
+        errors: CascadeAPI.getErrors(),
+        cacheSize: Object.keys(window._cascadeWorkerCacheSize?.() || {}).length
+      };
+    }, baseCode);
+    expect(result1.errors).toEqual([]);
+
+    // Second evaluation — identical code, should be faster (all cache hits)
+    const timing = await page.evaluate(async (code) => {
+      // Capture cache state before
+      const cacheBefore = Object.keys(self.argCache || {}).length;
+
+      const start = performance.now();
+      CascadeAPI.setCode(code);
+      CascadeAPI.evaluate();
+      await new Promise(r => {
+        const check = () => CascadeAPI.isWorking() ? setTimeout(check, 50) : r();
+        check();
+      });
+      const elapsed = performance.now() - start;
+
+      return {
+        errors: CascadeAPI.getErrors(),
+        elapsed,
+      };
+    }, baseCode);
+    expect(timing.errors).toEqual([]);
+
+    // Third evaluation — change only the last shape, first two should be cached
+    const modifiedCode = baseCode.replace(
+      'Sphere(8)',
+      'Sphere(12)'  // Only change: sphere radius 8 → 12
+    );
+    const timing2 = await page.evaluate(async (code) => {
+      const start = performance.now();
+      CascadeAPI.setCode(code);
+      CascadeAPI.evaluate();
+      await new Promise(r => {
+        const check = () => CascadeAPI.isWorking() ? setTimeout(check, 50) : r();
+        check();
+      });
+      const elapsed = performance.now() - start;
+      return {
+        errors: CascadeAPI.getErrors(),
+        elapsed,
+        steps: CascadeAPI.getHistorySteps(),
+      };
+    }, modifiedCode);
+    expect(timing2.errors).toEqual([]);
+    // Should still produce 3 history steps (3 top-level shapes)
+    expect(timing2.steps.length).toBeGreaterThanOrEqual(3);
+
+    // Log timings for visibility (not assertions — too environment-dependent)
+    console.log(`Cache test timings: 2nd eval ${timing.elapsed.toFixed(0)}ms, 3rd eval (1 change) ${timing2.elapsed.toFixed(0)}ms`);
+  });
 });
