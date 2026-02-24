@@ -191,10 +191,11 @@ class CascadeStudioWorker {
       postMessage({ type: "log", payload: "Cache: " + self.cacheHits + " hits, " + self.cacheMisses + " misses" });
       postMessage({ type: "resetWorking" });
       // Clean cache; remove unused objects
+      let usedHashes = this.standardLibrary.utils.usedHashes;
       for (let hash in self.argCache) {
-        if (!self.usedHashes.hasOwnProperty(hash)) { delete self.argCache[hash]; }
+        if (!usedHashes.hasOwnProperty(hash)) { delete self.argCache[hash]; }
       }
-      self.usedHashes = {};
+      for (let key in usedHashes) { delete usedHashes[key]; }
     }
   }
 
