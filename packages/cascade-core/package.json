@@ -1,0 +1,23 @@
+{
+	"name": "cascade-core",
+	"version": "2.0.0",
+	"type": "module",
+	"description": "Reusable CAD modeling engine built on OpenCascade WASM.",
+	"license": "MIT",
+	"exports": {
+		".": "./src/index.js",
+		"./worker": "./dist/cascade-worker.js"
+	},
+	"files": [
+		"src/",
+		"dist/",
+		"types/",
+		"fonts/"
+	],
+	"dependencies": {
+		"opencascade.js": "github:zalo/opencascade.js#cascadestudio-v2",
+		"openscad-parser": "^0.6.3",
+		"opentype.js": "^1.3.4",
+		"potpack": "^2.0.0"
+	}
+}

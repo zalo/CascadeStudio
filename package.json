@@ -1,6 +1,7 @@
 {
-	"name": "cascadestudio",
+	"name": "cascadestudio-monorepo",
 	"version": "2.0.0",
+	"private": true,
 	"productName": "CascadeStudio",
 	"description": "A full live-scripted CAD kernel and IDE in the browser.",
 	"homepage": "https://zalo.github.io/CascadeStudio",
@@ -12,24 +13,18 @@
 		"name": "Johnathon Selstad"
 	},
 	"license": "MIT",
-	"dependencies": {
-		"@types/three": "0.170.0",
-		"dockview-core": "^4.13.1",
-		"monaco-editor": "^0.52.0",
-		"opencascade.js": "github:zalo/opencascade.js#cascadestudio-v2",
-		"openscad-parser": "^0.6.3",
-		"opentype.js": "^1.3.4",
-		"three": "^0.170.0",
-		"tweakpane": "^4.0.5"
-	},
+	"workspaces": [
+		"packages/cascade-core",
+		"packages/cascade-studio"
+	],
 	"devDependencies": {
 		"@playwright/test": "^1.58.2",
 		"esbuild": "^0.24.0",
 		"http-server": "^14.1.1"
 	},
 	"scripts": {
-		"postinstall": "node scripts/postinstall.js",
-		"build": "node scripts/build.js",
+		"postinstall": "node packages/cascade-studio/scripts/postinstall.cjs",
+		"build": "node packages/cascade-core/scripts/build.cjs && node packages/cascade-studio/scripts/build.cjs",
 		"test": "playwright test"
 	}
 }
