@@ -135,10 +135,11 @@ class CascadeStudioWorker {
 
   /** Preload the various fonts available via Text3D. */
   _loadFonts(opentype) {
+    const fontBase = typeof ESBUILD !== 'undefined' ? './fonts/' : '../../fonts/';
     const preloadedFonts = [
-      '../../fonts/Roboto.ttf',
-      '../../fonts/Papyrus.ttf',
-      '../../fonts/Consolas.ttf'
+      fontBase + 'Roboto.ttf',
+      fontBase + 'Papyrus.ttf',
+      fontBase + 'Consolas.ttf'
     ];
     self.loadedFonts = {};
     preloadedFonts.forEach((fontURL) => {
