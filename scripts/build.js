@@ -1,98 +1,85 @@
 /**
- * Build script for cascade-studio.
- * Bundles the main app JS, copies Monaco/assets, generates dist/index.html.
+ * Build script for CascadeStudio.
+ * Bundles JS with esbuild, copies Monaco/WASM/assets, generates build/index.html.
  */
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const pkgRoot = path.join(__dirname, '..');
-const monoRoot = path.join(pkgRoot, '..', '..');
-const coreRoot = path.join(monoRoot, 'packages', 'cascade-core');
+const root = path.join(__dirname, '..');
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-const distDir = path.join(pkgRoot, 'dist');
+const buildDir = path.join(root, 'build');
 
-// Clean dist directory
-if (fs.existsSync(distDir)) {
-  fs.rmSync(distDir, { recursive: true });
+// Clean build directory
+if (fs.existsSync(buildDir)) {
+  fs.rmSync(buildDir, { recursive: true });
 }
-fs.mkdirSync(distDir, { recursive: true });
+fs.mkdirSync(buildDir, { recursive: true });
 
-// 1. Bundle main app JS with esbuild
-console.log('[cascade-studio] Bundling main app...');
-const nodeShim = path.join(__dirname, 'node-shims.cjs');
+// 1. Bundle with esbuild
+console.log('Bundling with esbuild...');
 execFileSync(npx, [
   'esbuild',
-  path.join(pkgRoot, 'src', 'main.js'),
+  './js/MainPage/main.js',
+  './js/CADWorker/CascadeStudioMainWorker.js',
   '--bundle', '--minify', '--keep-names', '--sourcemap',
   '--format=esm', '--target=es2022',
-  '--outdir=' + distDir, '--entry-names=[name]',
+  '--outdir=./build', '--entry-names=[name]',
   '--external:fs', '--external:path', '--external:os',
   '--external:module', '--external:worker_threads',
-  '--alias:openscad-parser=' + path.join(pkgRoot, 'lib', 'openscad-parser', 'openscad-parser.js'),
-  '--alias:fs=' + nodeShim,
-  '--alias:path=' + nodeShim,
-  '--alias:os=' + nodeShim,
+  '--loader:.wasm=file',
   '--define:ESBUILD=true',
-], { cwd: monoRoot, stdio: 'inherit' });
+], { cwd: root, stdio: 'inherit' });
 
-// 2. Copy cascade-core dist (worker bundle + WASM + fonts)
-console.log('[cascade-studio] Copying cascade-core dist...');
-const coreDist = path.join(coreRoot, 'dist');
-if (fs.existsSync(coreDist)) {
-  for (const entry of fs.readdirSync(coreDist, { withFileTypes: true })) {
-    const src = path.join(coreDist, entry.name);
-    const dest = path.join(distDir, entry.name);
-    if (entry.isDirectory()) {
-      copyDirRecursive(src, dest);
-    } else {
-      fs.copyFileSync(src, dest);
-    }
-  }
-}
-
-// 3. Copy Monaco Editor (AMD loader + min files)
-console.log('[cascade-studio] Copying Monaco Editor...');
+// 2. Copy Monaco Editor (AMD loader + min files)
+console.log('Copying Monaco Editor...');
 copyDirRecursive(
-  path.join(monoRoot, 'node_modules', 'monaco-editor', 'min'),
-  path.join(distDir, 'monaco-editor', 'min')
+  path.join(root, 'node_modules', 'monaco-editor', 'min'),
+  path.join(buildDir, 'monaco-editor', 'min')
+);
+
+// 3. Copy OpenCascade WASM
+console.log('Copying OpenCascade WASM...');
+fs.copyFileSync(
+  path.join(root, 'node_modules', 'opencascade.js', 'dist', 'cascadestudio.wasm'),
+  path.join(buildDir, 'cascadestudio.wasm')
 );
 
 // 4. Copy type definitions for Monaco intellisense
-console.log('[cascade-studio] Copying type definitions...');
-const typedefsDir = path.join(distDir, 'typedefs');
+console.log('Copying type definitions...');
+const typedefsDir = path.join(buildDir, 'typedefs');
 fs.mkdirSync(typedefsDir, { recursive: true });
 fs.copyFileSync(
-  path.join(monoRoot, 'node_modules', 'opencascade.js', 'dist', 'cascadestudio.d.ts'),
+  path.join(root, 'node_modules', 'opencascade.js', 'dist', 'cascadestudio.d.ts'),
   path.join(typedefsDir, 'cascadestudio.d.ts')
 );
 fs.copyFileSync(
-  path.join(monoRoot, 'node_modules', '@types', 'three', 'index.d.ts'),
+  path.join(root, 'node_modules', '@types', 'three', 'index.d.ts'),
   path.join(typedefsDir, 'three.d.ts')
 );
 fs.copyFileSync(
-  path.join(coreRoot, 'types', 'StandardLibraryIntellisense.ts'),
+  path.join(root, 'js', 'StandardLibraryIntellisense.ts'),
   path.join(typedefsDir, 'StandardLibraryIntellisense.ts')
 );
 
-// 5. Copy static assets (css, textures, icon, lib)
-console.log('[cascade-studio] Copying static assets...');
-for (const dir of ['css', 'textures', 'icon', 'lib']) {
-  const src = path.join(pkgRoot, dir);
+// 5. Copy static assets (css, fonts, textures, icon, lib)
+console.log('Copying static assets...');
+for (const dir of ['css', 'fonts', 'textures', 'icon', 'lib']) {
+  const src = path.join(root, dir);
   if (fs.existsSync(src)) {
-    copyDirRecursive(src, path.join(distDir, dir));
+    copyDirRecursive(src, path.join(buildDir, dir));
   }
 }
 for (const file of ['manifest.webmanifest', 'service-worker.js']) {
-  const src = path.join(pkgRoot, file);
+  const src = path.join(root, file);
   if (fs.existsSync(src)) {
-    fs.copyFileSync(src, path.join(distDir, file));
+    fs.copyFileSync(src, path.join(buildDir, file));
   }
 }
 
-// 6. Generate dist/index.html
-console.log('[cascade-studio] Generating index.html...');
-fs.writeFileSync(path.join(distDir, 'index.html'), `<!DOCTYPE html>
+// 6. Generate build/index.html
+console.log('Generating build/index.html...');
+fs.writeFileSync(path.join(buildDir, 'index.html'), `<!DOCTYPE html>
 <html lang="en">
     <head>
         <title>Cascade Studio</title>
@@ -167,7 +154,7 @@ fs.writeFileSync(path.join(distDir, 'index.html'), `<!DOCTYPE html>
 </html>
 `);
 
-console.log('[cascade-studio] Build complete!');
+console.log('Build complete!');
 
 /** Recursively copy a directory */
 function copyDirRecursive(src, dest) {

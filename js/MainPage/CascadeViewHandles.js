@@ -1,11 +1,14 @@
 // This file handles Transformation Gizmos
 import * as THREE from 'three';
-import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { TransformControls } from '../../node_modules/three/examples/jsm/controls/TransformControls.js';
 
 /** Manages Transform Gizmo handles in the 3D viewport. */
 class HandleManager {
-  constructor(viewport) {
+  constructor(viewport, messageBus) {
     this.viewport = viewport;
+
+    // Register the message handler for creating transform handles
+    messageBus.on("createTransformHandle", this.createTransformHandle.bind(this));
 
     // Listen for keyboard shortcuts to change gizmo mode
     this._setupKeyboardShortcuts();

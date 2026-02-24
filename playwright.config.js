@@ -26,7 +26,7 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: 'npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent',
+    command: 'npx http-server ./build -p 8080 -c-1 --silent',
     port: 8080,
     reuseExistingServer: !process.env.CI,
     timeout: 30000,

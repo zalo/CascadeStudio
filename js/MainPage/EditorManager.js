@@ -104,10 +104,9 @@ class EditorManager {
     if (this.editor) { this.editor.setValue(code); }
   }
 
-  /** Evaluate the current code: transpile if OpenSCAD, then send to worker via engine. */
+  /** Evaluate the current code: transpile if OpenSCAD, then send to worker. */
   evaluateCode(saveToURL = false) {
     if (window.workerWorking) { return; }
-    if (!this._app.engine || !this._app.engine.isReady) { return; }
     window.workerWorking = true;
 
     monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
@@ -117,7 +116,14 @@ class EditorManager {
     // Clear console and refresh the GUI Panel
     this._app.console.clear();
     this._app.gui.reset();
-    if (this._app.viewport) this._app.viewport.clearTransformHandles();
+    this._app.viewport.clearTransformHandles();
+
+    this._app.messageBus.on("saveFile", (payload) => {
+      let link = document.createElement("a");
+      link.href = payload.fileURL;
+      link.download = payload.filename;
+      link.click();
+    });
 
     // Transpile OpenSCAD if needed
     let codeToEval = newCode;
@@ -131,16 +137,17 @@ class EditorManager {
       }
     }
 
-    // Use CascadeEngine to evaluate and get mesh data
-    this._app.engine.evaluate(codeToEval, {
-      guiState: this._app.gui.state,
-    }).then((result) => {
-      if (this._app.viewport && result.meshData) {
-        this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);
+    this._app.messageBus.send("Evaluate", {
+      code: codeToEval,
+      GUIState: this._app.gui.state
+    });
+
+    this._app.messageBus.send("combineAndRenderShapes", {
+      maxDeviation: this._app.gui.state["MeshRes"],
+      sceneOptions: {
+        groundPlaneVisible: this._app.gui.state["GroundPlane?"],
+        gridVisible: this._app.gui.state["Grid?"]
       }
-    }).catch((err) => {
-      console.error("Evaluation error: " + err.message);
-      window.workerWorking = false;
     });
 
     this._codeContainer.setState({ code: newCode });

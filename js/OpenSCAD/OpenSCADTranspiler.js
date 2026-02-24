@@ -1,6 +1,6 @@
 // OpenSCADTranspiler.js - Transpile OpenSCAD AST to CascadeStudio JS
 
-import openscadParser from 'openscad-parser';
+import openscadParser from '../../lib/openscad-parser/openscad-parser.js';
 
 const { CodeFile, Lexer, Parser, ErrorCollector, ASTScopePopulator, Scope } = openscadParser;
 

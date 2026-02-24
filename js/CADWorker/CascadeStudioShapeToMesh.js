@@ -1,16 +1,4 @@
-// ShapeToMesh - Triangulation and meshing of OpenCascade shapes for rendering
-// No Three.js dependency — uses inline Vec3 class
-
-/** Lightweight 3D vector (replaces THREE.Vector3 for worker-side meshing). */
-class Vec3 {
-  constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
-  set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
-  copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
-  distanceTo(v) {
-    const dx = this.x - v.x, dy = this.y - v.y, dz = this.z - v.z;
-    return Math.sqrt(dx * dx + dy * dy + dz * dz);
-  }
-}
+import { Vector3 } from '../../node_modules/three/build/three.module.js';
 
 /** Handles triangulation and meshing of OpenCascade shapes for 3D rendering. */
 class CascadeStudioMesher {
@@ -22,7 +10,7 @@ class CascadeStudioMesher {
   }
 
   static lengthOfCurve(geomAdaptor, UMin, UMax, segments = 5) {
-    let point1 = new Vec3(), point2 = new Vec3(), arcLength = 0, gpPnt = new self.oc.gp_Pnt_1();
+    let point1 = new Vector3(), point2 = new Vector3(), arcLength = 0, gpPnt = new self.oc.gp_Pnt_1();
     for (let s = UMin; s <= UMax; s += (UMax - UMin) / segments) {
       geomAdaptor.D0(s, gpPnt);
       point1.set(gpPnt.X(), gpPnt.Y(), gpPnt.Z());

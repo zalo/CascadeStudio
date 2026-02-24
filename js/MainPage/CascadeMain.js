@@ -1,15 +1,18 @@
 // CascadeMain.js - ES Module
 // This script governs the layout and initialization of all of the sub-windows
+// If you're looking for the internals of the CAD System, they're in /js/CADWorker
+// If you're looking for the 3D Three.js Viewport, they're in /js/MainPage/CascadeView*
 
-import { createDockview } from '../lib/dockview-core/dockview-core.js';
+import { createDockview } from '../../lib/dockview-core/dockview-core.js';
 import { CascadeEnvironment } from './CascadeView.js';
-import { CascadeEngine, OpenSCADTranspiler } from 'cascade-core';
+import { MessageBus } from './MessageBus.js';
 import { EditorManager } from './EditorManager.js';
 import { ConsoleManager } from './ConsoleManager.js';
 import { GUIManager } from './GUIManager.js';
-import { OpenSCADMonaco } from './openscad/OpenSCADMonaco.js';
+import { OpenSCADTranspiler } from '../OpenSCAD/OpenSCADTranspiler.js';
+import { OpenSCADMonaco } from '../OpenSCAD/OpenSCADMonaco.js';
 import { CascadeAPI } from './CascadeAPI.js';
-import { deflateSync, inflateSync, strToU8, strFromU8 } from 'fflate';
+import { deflateSync, inflateSync, strToU8, strFromU8 } from '../../node_modules/three/examples/jsm/libs/fflate.module.js';
 
 /** Adapter that wraps a dockview panel to provide a Golden-Layout-compatible container API.
  *  This minimizes changes needed in EditorManager, ConsoleManager, and CascadeView. */
@@ -53,7 +56,7 @@ class CascadeStudioApp {
   constructor() {
     this.myLayout = null;
     this._dockviewApi = null;
-    this.engine = null;
+    this.messageBus = null;
     this.editor = null;
     this.console = null;
     this.gui = null;
@@ -69,22 +72,24 @@ class CascadeStudioApp {
     window.workerWorking = false;
   }
 
-  // Backward compatibility: messageBus accessor via engine
-  get messageBus() { return this.engine ? this.engine.messageBus : null; }
-
-  /** Start the application: create the engine, wire up events, and initialize. */
+  /** Start the application: create the worker, wire up messages, and initialize. */
   start() {
-    // Create the CascadeEngine (wraps Worker + MessageBus)
-    const workerPath = typeof ESBUILD !== 'undefined' ? './cascade-worker.js' : './js/CADWorker/CascadeStudioMainWorker.js';
-    this.engine = new CascadeEngine({ workerUrl: workerPath });
+    // Create the CAD Worker with module type
+    const workerPath = typeof ESBUILD !== 'undefined' ? './CascadeStudioMainWorker.js' : './js/CADWorker/CascadeStudioMainWorker.js';
+    const worker = new Worker(workerPath, { type: 'module' });
 
     // Create subsystem managers
+    this.messageBus = new MessageBus(worker);
     this.editor = new EditorManager(this);
     this.console = new ConsoleManager(this);
     this.gui = new GUIManager(this);
 
+    // Register GUI handlers with the message bus
+    this.gui.registerHandlers(this.messageBus);
+
     // Backward compatibility: expose functions to window for inline HTML event handlers
     window.cascadeApp = this;
+    window.messageHandlers = this.messageBus.handlers;
     window.saveProject = () => this.saveProject();
     window.loadProject = () => this.loadProject();
     window.loadFiles = (id) => this.loadFiles(id);
@@ -117,70 +122,7 @@ class CascadeStudioApp {
       });
     }
 
-    // Initialize the engine (loads worker + WASM), then start the layout
-    this.engine.init().then(() => {
-      // The engine is ready — register event handlers and initialize the UI
-
-      // Wire up engine events for GUI controls
-      this.gui.registerHandlers(this.engine);
-
-      // Wire up engine events for console (log, error, progress)
-      this.engine.on('log', (payload) => { console.log(payload); });
-      this.engine.on('error', (payload) => {
-        window.workerWorking = false;
-        console.error(payload);
-      });
-      this.engine.on('Progress', (payload) => {
-        let el = this.console._consoleContainer?.parentElement?.lastElementChild?.lastElementChild;
-        if (el) {
-          el.innerText = "> Generating Model" + ".".repeat(payload.opNumber) + ((payload.opType) ? " (" + payload.opType + ")" : "");
-        }
-      });
-      this.engine.on('resetWorking', () => { window.workerWorking = false; });
-
-      // Wire up engine events for viewport
-      this.engine.on('modelHistory', (steps) => {
-        if (this.viewport) {
-          this.viewport.setHistorySteps(steps);
-        }
-      });
-
-      // Wire up file loading callback
-      this.engine.on('loadFiles', (extFiles) => {
-        console.log("Storing loaded files!");
-        this.console.goldenContainer.setState(extFiles);
-      });
-
-      // Wire up file saving callback
-      this.engine.on('saveFile', (payload) => {
-        let link = document.createElement("a");
-        link.href = payload.fileURL;
-        link.download = payload.filename;
-        link.click();
-      });
-
-      // Wire up transform handle creation
-      this.engine.on('createTransformHandle', (payload) => {
-        if (this.viewport && this.viewport.handleManager) {
-          this.viewport.handleManager.createTransformHandle(payload);
-        }
-      });
-
-      // Backward compat: expose messageHandlers to window
-      window.messageHandlers = this.engine.messageBus.handlers;
-
-      // Start the application with startup callback behavior
-      this.startup = () => {
-        let curState = this.console.goldenContainer?.getState();
-        if (curState && Object.keys(curState).length > 0) {
-          this.engine.loadPrexistingExternalFiles(curState);
-        }
-        this.editor.evaluateCode();
-      };
-      this.startup();
-    });
-
-    // Initialize the layout immediately (don't wait for WASM)
+    // Start the application
     this.initialize();
   }
 
@@ -339,6 +281,21 @@ class CascadeStudioApp {
     window.addEventListener('resize', this._updateLayoutSize);
     window.addEventListener('orientationchange', this._updateLayoutSize);
     requestAnimationFrame(this._updateLayoutSize);
+
+    // Register startup callback from the CAD Worker
+    this.messageBus.on("startupCallback", () => {
+      this.startup = () => {
+        let curState = this.console.goldenContainer.getState();
+        if (curState && Object.keys(curState).length > 0) {
+          this.messageBus.send("loadPrexistingExternalFiles", curState);
+        }
+        this.editor.evaluateCode();
+      };
+      this.startup();
+    });
+    if (this.startup) { this.startup(); }
+
+    this.messageBus.on("resetWorking", () => { window.workerWorking = false; });
   }
 
   /** Initialize the Three.js 3D Viewport. */
@@ -357,7 +314,7 @@ class CascadeStudioApp {
     container.element.appendChild(floatingGUIContainer);
 
     this.viewport = new CascadeEnvironment(
-      container, this,
+      container, this.messageBus,
       CascadeStudioApp.getNewFileHandle, CascadeStudioApp.writeFile, CascadeStudioApp.downloadFile
     );
     window.threejsViewport = this.viewport;
@@ -429,12 +386,17 @@ class CascadeStudioApp {
   /** Trigger the CAD WebWorker to load one or more .stl, .step, or .iges files. */
   loadFiles(fileElementID = "files") {
     let files = document.getElementById(fileElementID).files;
-    this.engine.importFiles(files);
+    this.messageBus.send("loadFiles", files);
+
+    this.messageBus.on("loadFiles", (extFiles) => {
+      console.log("Storing loaded files!");
+      this.console.goldenContainer.setState(extFiles);
+    });
   }
 
   /** Clear all externally loaded files from the `externalFiles` dict. */
   clearExternalFiles() {
-    this.engine.clearExternalFiles();
+    this.messageBus.send("clearExternalFiles");
     this.console.goldenContainer.setState({});
   }
 

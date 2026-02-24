@@ -9,53 +9,30 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ## Quick Start
 
 ```bash
-npm run build          # builds cascade-core then cascade-studio
-npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 12 tests, ~40s
+npm run build          # esbuild bundles → build/
+npx http-server ./build -p 8080 -c-1 --silent
+npx playwright test    # 11 tests, ~2 min
 ```
 
-## Architecture (Monorepo)
-
-The project is split into two npm workspace packages:
-
-- **cascade-core** — Reusable CAD engine (no GUI deps). Worker + OpenCascade WASM + mesher.
-- **cascade-studio** — Browser IDE. Three.js viewport, Monaco editor, Tweakpane GUI.
+## Architecture
 
 ```
-packages/
-  cascade-core/
-    src/
-      engine/
-        CascadeEngine.js       ← Main-thread API wrapping Worker + MessageBus
-        MessageBus.js          ← Typed worker message routing
-      worker/
-        CascadeWorker.js       ← Web Worker entry; evaluates user code
-        StandardLibrary.js     ← CAD primitives (Box, Sphere, etc.)
-        StandardUtils.js       ← Caching, hashing, history tracking
-        ShapeToMesh.js         ← OpenCascade → mesh triangulation (no Three.js)
-        FileUtils.js           ← STEP/IGES/STL import/export
-      openscad/
-        OpenSCADTranspiler.js  ← OpenSCAD → CascadeStudio JS transpiler
-      index.js                 ← Package entry (exports CascadeEngine, MessageBus, etc.)
-    types/
-      StandardLibraryIntellisense.ts
-    fonts/                     ← TTF fonts for Text3D
+js/MainPage/
+  main.js              ← ESM entry point
+  CascadeMain.js       ← App shell, layout (Dockview), default STARTER_CODE
+  CascadeAPI.js        ← window.CascadeAPI — programmatic API for agents
+  CascadeView.js       ← 3D viewport, Three.js rendering, modeling timeline
+  EditorManager.js     ← Monaco editor, code evaluation, keyboard shortcuts
+  ConsoleManager.js    ← Console panel, log/error capture
+  GUIManager.js        ← Tweakpane GUI panel (sliders, checkboxes)
+  FileManager.js       ← File system access (save/load projects)
 
-  cascade-studio/
-    src/
-      main.js                  ← ESM entry point
-      CascadeMain.js           ← App shell, layout (Dockview), default STARTER_CODE
-      CascadeAPI.js            ← window.CascadeAPI — programmatic API for agents
-      CascadeView.js           ← 3D viewport, Three.js rendering, modeling timeline
-      EditorManager.js         ← Monaco editor, code evaluation, keyboard shortcuts
-      ConsoleManager.js        ← Console panel, log/error capture
-      GUIManager.js            ← Tweakpane GUI panel (sliders, checkboxes)
-      CascadeViewHandles.js    ← 3D gizmo handle visualization
-      openscad/
-        OpenSCADMonaco.js      ← Monaco language support for OpenSCAD
-    css/, textures/, icon/, lib/  ← Static assets
+js/CADWorker/
+  CascadeStudioMainWorker.js  ← Web Worker entry; evaluates user code
+  CascadeStudioStandardLibrary.js  ← CAD primitives (Box, Sphere, etc.)
+  CascadeStudioSelectors.js   ← Edges()/Faces() selector API
 
-test/                          ← Playwright tests (monorepo root)
+js/StandardLibraryIntellisense.ts  ← TypeScript definitions for all CAD functions
 ```
 
 ## Agent API (window.CascadeAPI)
@@ -233,7 +210,7 @@ descriptive error with early return instead of cascading cryptic failures.
 When building a model interactively via Playwright:
 
 1. **Build**: `npm run build`
-2. **Start server**: `npx http-server ./packages/cascade-studio/dist -p PORT -c-1 --silent`
+2. **Start server**: `npx http-server ./build -p PORT -c-1 --silent`
    - Use `-c-1` to disable caching
    - Use a **new port** if changing JS code — browsers cache ESM aggressively
 3. **Navigate**: `page.goto('http://localhost:PORT')`
@@ -281,15 +258,13 @@ await page.evaluate(() => CascadeAPI.showFinalResult());
 ## Build System
 
 - **Bundler**: esbuild (ESM, minified, source maps)
-- **Monorepo**: npm workspaces (`packages/cascade-core`, `packages/cascade-studio`)
-- **cascade-core build** (`packages/cascade-core/scripts/build.cjs`):
-  - Bundles `src/worker/CascadeWorker.js` → `dist/cascade-worker.js`
-  - Copies WASM + fonts to `dist/`
-- **cascade-studio build** (`packages/cascade-studio/scripts/build.cjs`):
-  - Bundles `src/main.js` → `dist/main.js`
-  - Copies cascade-core dist, Monaco, type defs, static assets
-  - Generates `dist/index.html`
-- **Output**: `packages/cascade-studio/dist/`
+- **Entry points**: `js/MainPage/main.js` + `js/CADWorker/CascadeStudioMainWorker.js`
+- **Static assets**: `css/`, `fonts/`, `textures/`, `lib/`, `icon/` → `build/`
+- **Type definitions**: Copied to `build/typedefs/` for Monaco IntelliSense
+- **WASM**: `node_modules/opencascade.js/dist/cascadestudio.wasm` → `build/`
+
+The build script is `scripts/build.js`. It generates `build/index.html` with
+the Monaco AMD loader and ESM script tag for `main.js`.
 
 ## URL Encoding
 
@@ -317,7 +292,7 @@ Run in the background so you can continue working:
 ```javascript
 // 1. Build and start server
 npm run build
-npx http-server ./packages/cascade-studio/dist -p 8113 -c-1 --silent &
+npx http-server ./build -p 8113 -c-1 --silent &
 
 // 2. Launch via Task tool
 Task({
