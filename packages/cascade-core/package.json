@@ -2,8 +2,29 @@
 	"name": "cascade-core",
 	"version": "2.0.0",
 	"type": "module",
-	"description": "Reusable CAD modeling engine built on OpenCascade WASM.",
+	"description": "Reusable CAD modeling engine built on OpenCascade WASM. Evaluate CAD code in a Web Worker and get triangle mesh data back.",
 	"license": "MIT",
+	"author": {
+		"name": "Johnathon Selstad"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/zalo/CascadeStudio.git",
+		"directory": "packages/cascade-core"
+	},
+	"homepage": "https://github.com/zalo/CascadeStudio",
+	"keywords": [
+		"cad",
+		"opencascade",
+		"occt",
+		"wasm",
+		"3d",
+		"modeling",
+		"parametric",
+		"brep",
+		"step",
+		"iges"
+	],
 	"exports": {
 		".": "./src/index.js",
 		"./worker": "./dist/cascade-worker.js"
