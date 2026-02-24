@@ -67,6 +67,8 @@ class EditorManager {
       theme: "vs-dark",
       automaticLayout: true,
       minimap: { enabled: false },
+      cursorStyle: 'line',
+      cursorWidth: 2,
       wordWrap: isMobile ? 'on' : 'off',
       ...(isMobile && {
         glyphMargin: false,
