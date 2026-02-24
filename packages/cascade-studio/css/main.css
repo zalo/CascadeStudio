@@ -1,0 +1,374 @@
+/* Cascade Studio — Modern Dark Theme */
+
+:root {
+  /* Base palette — matches master's neutral dark theme */
+  --cs-bg-primary: #222;
+  --cs-bg-secondary: #111;
+  --cs-bg-surface: #2e2e2e;
+  --cs-bg-elevated: #404040;
+
+  /* Text */
+  --cs-text-primary: #f2f2f2;
+  --cs-text-secondary: #aeb5b8;
+  --cs-text-muted: #777;
+
+  /* Accent */
+  --cs-accent: #4CAF50;
+  --cs-accent-hover: #66BB6A;
+  --cs-accent-dim: #388E3C;
+
+  /* Borders & separators */
+  --cs-border: #333;
+  --cs-border-active: #4CAF50;
+
+  /* Scrollbar */
+  --cs-scrollbar-track: var(--cs-bg-secondary);
+  --cs-scrollbar-thumb: #777;
+
+  /* Radius */
+  --cs-radius: 4px;
+
+  /* Transition */
+  --cs-transition: 150ms ease;
+
+  /* Fonts */
+  --cs-font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --cs-font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+/* Visually hidden but accessible — stays in Playwright's accessibility snapshot.
+   Uses offscreen positioning instead of clip (clip: rect(0,0,0,0) causes
+   Playwright to strip the text from the accessibility tree entirely). */
+.sr-only {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--cs-bg-primary);
+  color: var(--cs-text-primary);
+  font-family: var(--cs-font-ui);
+  overflow: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--cs-scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--cs-scrollbar-thumb);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* ============================================================
+   Top Navigation Bar
+   ============================================================ */
+
+.topnav {
+  background: var(--cs-bg-secondary);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  height: 36px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.topnav-brand {
+  color: var(--cs-text-primary) !important;
+  font-size: 14px;
+  font-family: Consolas, monospace;
+  padding: 4px 16px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topnav-brand:hover {
+  background: #aaa !important;
+  color: black !important;
+}
+
+.topnav-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.topnav a, .topnav label {
+  color: var(--cs-text-primary);
+  text-decoration: none;
+  font-size: 14px;
+  font-family: Consolas, monospace;
+  padding: 4px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.topnav a:hover, .topnav label:hover {
+  background: #aaa;
+  color: black;
+}
+
+.topnav a:active, .topnav label:active {
+  background: var(--cs-accent);
+  color: white;
+}
+
+.topnav-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--cs-border);
+  margin: 0 4px;
+}
+
+.topnav-select {
+  background: var(--cs-bg-surface);
+  color: var(--cs-text-secondary);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--cs-font-ui);
+  margin-left: 8px;
+  cursor: pointer;
+  transition: border-color var(--cs-transition);
+}
+
+.topnav-select:hover {
+  border-color: var(--cs-accent);
+}
+
+.topnav-select:focus {
+  outline: none;
+  border-color: var(--cs-accent);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
+}
+
+.topnav-import {
+  cursor: pointer;
+}
+
+/* ============================================================
+   App Body (Dockview container)
+   ============================================================ */
+
+#appbody {
+  width: 100%;
+  overflow: hidden;
+  background: var(--cs-bg-primary);
+}
+
+/* ============================================================
+   Dockview Theme Overrides
+   ============================================================ */
+
+.dockview-theme-dark {
+  --dv-background-color: var(--cs-bg-primary);
+  --dv-paneview-header-border-color: var(--cs-border);
+  --dv-tabs-and-actions-container-background-color: transparent;
+  --dv-tabs-and-actions-container-height: 20px;
+  --dv-tabs-and-actions-container-font-size: 11px;
+  --dv-activegroup-visiblepanel-tab-background-color: #222;
+  --dv-activegroup-hiddenpanel-tab-background-color: #1a1a1a;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #222;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #1a1a1a;
+  --dv-tab-divider-color: var(--cs-border);
+  --dv-activegroup-visiblepanel-tab-color: #ddd;
+  --dv-activegroup-hiddenpanel-tab-color: var(--cs-text-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: #ddd;
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--cs-text-muted);
+  --dv-separator-border: var(--cs-border);
+  --dv-group-view-background-color: var(--cs-bg-primary);
+}
+
+/* ============================================================
+   Centered overlay
+   ============================================================ */
+
+.centered {
+  position: fixed;
+  top: 10%;
+  left: 25%;
+  z-index: 1000;
+  width: 50%;
+  height: 80%;
+  background: var(--cs-bg-primary);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border);
+  border-radius: 8px;
+  overflow: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   TweakPane (GUI Panel) Theme
+   ============================================================ */
+
+:root {
+  --tp-font-family: Arial, sans-serif;
+  --tp-base-background-color: var(--cs-bg-surface);
+  --tp-button-background-color: hsl(0, 0%, 25%);
+  --tp-button-background-color-active: hsl(0, 0%, 40%);
+  --tp-button-background-color-focus: hsl(0, 0%, 35%);
+  --tp-button-background-color-hover: hsl(0, 0%, 30%);
+  --tp-button-foreground-color: #eee;
+  --tp-label-foreground-color: #aeb5b8;
+}
+
+.gui-panel {
+  position: absolute;
+  right: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.gui-panel::-webkit-scrollbar {
+  width: 8px;
+  background: var(--cs-bg-surface);
+}
+
+.gui-panel::-webkit-scrollbar-thumb {
+  background: var(--cs-scrollbar-thumb);
+  border-radius: 4px;
+}
+
+.tp-rotv {
+  text-shadow: 1px 1px #000;
+  border-radius: var(--cs-radius);
+}
+
+.tp-rotv button {
+  text-shadow: inherit;
+}
+
+/* ============================================================
+   Console Panel Styling
+   ============================================================ */
+
+/* Enhance console output readability */
+#appbody .dv-content-container div[style*="monospace"] {
+  padding: 2px 8px;
+  font-family: var(--cs-font-mono);
+}
+
+/* ============================================================
+   Modeling History Timeline
+   ============================================================ */
+
+.cs-timeline {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  pointer-events: auto;
+  max-width: calc(100% - 32px);
+}
+
+.cs-timeline-track {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(34, 34, 34, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--cs-border);
+  border-radius: 16px;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.cs-timeline-track::-webkit-scrollbar {
+  display: none;
+}
+
+.cs-timeline-step {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--cs-text-muted);
+  background: transparent;
+  transition: color var(--cs-transition), background var(--cs-transition),
+              transform var(--cs-transition);
+  flex-shrink: 0;
+}
+
+.cs-timeline-step:hover {
+  color: var(--cs-text-primary);
+  background: var(--cs-bg-elevated);
+  transform: scale(1.15);
+}
+
+.cs-timeline-step.cs-timeline-active {
+  color: var(--cs-accent);
+  background: var(--cs-bg-elevated);
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.3);
+}
+
+.cs-timeline-step.cs-timeline-final {
+  color: var(--cs-text-secondary);
+}
+
+/* Editor line highlight when scrubbing timeline */
+.cs-history-line-highlight {
+  background: rgba(76, 175, 80, 0.12);
+  border-left: 2px solid var(--cs-accent);
+}
+
+.cs-history-glyph {
+  background: var(--cs-accent);
+  width: 4px !important;
+  margin-left: 3px;
+  border-radius: 2px;
+}
+
+/* ============================================================
+   Mobile Responsive Overrides
+   ============================================================ */
+
+@media (orientation: portrait) {
+  .dv-tabs-and-actions-container {
+    display: none !important;
+  }
+  .gui-panel {
+    max-width: 70%;
+    font-size: 11px;
+  }
+  .cs-timeline-step {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+  /* Remove outer padding around Monaco editor */
+  .monaco-editor,
+  .monaco-editor .overflow-guard,
+  .monaco-editor .margin {
+    padding: 0 !important;
+  }
+}

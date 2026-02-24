@@ -1,7 +1,9 @@
 {
-	"name": "cascadestudio",
+	"name": "cascadestudio-monorepo",
+	"version": "2.0.0",
+	"private": true,
 	"productName": "CascadeStudio",
-	"description": "BRep SCAD in your browser.",
+	"description": "A full live-scripted CAD kernel and IDE in the browser.",
 	"homepage": "https://zalo.github.io/CascadeStudio",
 	"repository": {
 		"type": "git",
@@ -11,13 +13,18 @@
 		"name": "Johnathon Selstad"
 	},
 	"license": "MIT",
-	"bundleDependencies": false,
-	"dependencies": {
-		"tweakpane": "^3.0.5",
-		"golden-layout": "^1.5.9",
-		"jquery": "^3.5.1",
-		"monaco-editor": "^0.20.0",
-		"opencascade.js": "^0.1.15",
-		"three": "^0.129.0"
+	"workspaces": [
+		"packages/cascade-core",
+		"packages/cascade-studio"
+	],
+	"devDependencies": {
+		"@playwright/test": "^1.58.2",
+		"esbuild": "^0.24.0",
+		"http-server": "^14.1.1"
+	},
+	"scripts": {
+		"postinstall": "node packages/cascade-studio/scripts/postinstall.cjs",
+		"build": "node packages/cascade-core/scripts/build.cjs && node packages/cascade-studio/scripts/build.cjs",
+		"test": "playwright test"
 	}
 }
