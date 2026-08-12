@@ -51,7 +51,9 @@ print("B123D_MEASURE " + _b123d_lite_mod._measure_globals_json(globals()))
 `;
 
 function classifyError(errors) {
-  const text = errors.join('\n');
+  // worker error strings carry LITERAL "\n" sequences — normalize so the
+  // per-gap regexes stop at the message end instead of swallowing tracebacks
+  const text = errors.join('\n').replace(/\\n/g, '\n');
   let m;
   if ((m = text.match(/NameError: name '([^']+)'/))) return `NameError: ${m[1]}`;
   if ((m = text.match(/AttributeError:.*?(?:attribute|no attribute) '([^']+)'/)))
