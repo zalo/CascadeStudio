@@ -6,6 +6,7 @@ import { SelectTool } from './SelectTool.js';
 import { BoxTool } from './BoxTool.js';
 import { CylinderTool } from './CylinderTool.js';
 import { SphereTool } from './SphereTool.js';
+import { SketchTool } from './SketchTool.js';
 import { FilletTool } from './FilletTool.js';
 
 /** Owns the viewport toolbar, routes pointer events to the active tool
@@ -26,6 +27,7 @@ class ToolManager {
       box:      new BoxTool(this),
       cylinder: new CylinderTool(this),
       sphere:   new SphereTool(this),
+      sketch:   new SketchTool(this),
       fillet:   new FilletTool(this),
     };
     this.activeToolName = 'select';
@@ -244,6 +246,7 @@ class ToolManager {
       { tool: 'box',      icon: '□', label: 'Box — drag footprint on the ground, then drag height, click to commit' },
       { tool: 'cylinder', icon: '▭', label: 'Cylinder — click center, drag radius, then drag height, click to commit' },
       { tool: 'sphere',   icon: '○', label: 'Sphere — click center, drag radius, release to commit' },
+      { tool: 'sketch',   icon: '✎', label: 'Sketch — click to place vertices, click the first vertex (or Enter) to close, then Extrude/Revolve; Escape removes the last vertex' },
       { tool: 'fillet',   icon: '◠', label: 'Fillet — click edges to select, set radius, Enter to commit' },
     ];
     for (let { tool, icon, label } of buttons) {
@@ -292,13 +295,17 @@ class ToolManager {
       }
     };
     this._onKeyDown = (e) => {
-      if (!this.viewport.active || e.code !== 'Escape') return;
+      if (!this.viewport.active) return;
       const ae = document.activeElement;
       if (ae && ae.closest && ae.closest('.monaco-editor')) return;
-      if (this.activeTool.isInteracting()) {
-        this.activeTool.cancel();
-      } else if (this.activeToolName !== 'select') {
-        this.activate('select');
+      if (e.code === 'Escape') {
+        // Tools may consume Escape for stage-level undo (e.g. Sketch vertex
+        // removal); unconsumed Escape returns to the Select tool.
+        if (!this.activeTool.onEscape() && this.activeToolName !== 'select') {
+          this.activate('select');
+        }
+      } else if (!(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) {
+        if (this.activeTool.onKeyDown(e)) { e.preventDefault(); }
       }
     };
 
@@ -311,7 +318,7 @@ class ToolManager {
   /** True if the event targets a UI overlay (toolbar, panels, GUI, timeline). */
   _isUIEvent(e) {
     return !!(e.target && e.target.closest &&
-      e.target.closest('.cs-toolbar, .cs-fillet-panel, .cs-timeline, .gui-panel'));
+      e.target.closest('.cs-toolbar, .cs-fillet-panel, .cs-sketch-panel, .cs-timeline, .gui-panel'));
   }
 }
 

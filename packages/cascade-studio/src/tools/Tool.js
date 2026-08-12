@@ -31,6 +31,20 @@ class Tool {
 
   /** @param {PointerEvent} event @returns {boolean} consumed */
   onPointerUp(event) { return false; }
+
+  /** Handle Escape. Return true if consumed (e.g. stepped back one stage);
+   *  returning false lets the ToolManager switch back to the Select tool.
+   *  Stateful tools (Sketch) override this for finer-grained undo. */
+  onEscape() {
+    if (this.isInteracting()) {
+      this.cancel();
+      return true;
+    }
+    return false;
+  }
+
+  /** @param {KeyboardEvent} event @returns {boolean} consumed */
+  onKeyDown(event) { return false; }
 }
 
 export { Tool };

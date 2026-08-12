@@ -393,7 +393,8 @@ body {
   border-color: var(--cs-accent-dim);
 }
 
-.cs-fillet-panel {
+.cs-fillet-panel,
+.cs-sketch-panel {
   position: absolute;
   top: 8px;
   left: 48px;
@@ -410,7 +411,8 @@ body {
   color: var(--cs-text-secondary);
 }
 
-.cs-fillet-panel input {
+.cs-fillet-panel input,
+.cs-sketch-panel input {
   width: 52px;
   background: var(--cs-bg-secondary);
   color: var(--cs-text-primary);
@@ -420,7 +422,17 @@ body {
   font-size: 12px;
 }
 
-.cs-fillet-panel button {
+.cs-sketch-panel select {
+  background: var(--cs-bg-secondary);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.cs-fillet-panel button,
+.cs-sketch-panel button {
   background: var(--cs-accent-dim);
   color: var(--cs-text-primary);
   border: none;
@@ -430,8 +442,23 @@ body {
   cursor: pointer;
 }
 
-.cs-fillet-panel button:hover {
+.cs-fillet-panel button:hover,
+.cs-sketch-panel button:hover {
   background: var(--cs-accent);
+}
+
+.cs-sketch-panel button.cs-sketch-cancel {
+  background: var(--cs-bg-elevated);
+}
+
+.cs-sketch-panel button.cs-sketch-cancel:hover {
+  background: #555;
+}
+
+/* Line/Arc segment-type toggle */
+.cs-sketch-panel button.cs-seg-active {
+  background: var(--cs-accent);
+  color: #fff;
 }
 
 .cs-tool-label {
