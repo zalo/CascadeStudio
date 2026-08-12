@@ -39,7 +39,14 @@ if (fs.existsSync(wasmSrc)) {
   fs.copyFileSync(wasmSrc, path.join(distDir, 'cascadestudio.wasm'));
 }
 
-// 3. Copy fonts to dist/fonts/
+// 3. Copy Brython (lazy-loaded by the worker for Python/build123d mode)
+console.log('[cascade-core] Copying Brython...');
+const brythonSrc = path.join(monoRoot, 'node_modules', 'brython', 'brython.js');
+if (fs.existsSync(brythonSrc)) {
+  fs.copyFileSync(brythonSrc, path.join(distDir, 'brython.js'));
+}
+
+// 4. Copy fonts to dist/fonts/
 console.log('[cascade-core] Copying fonts...');
 const fontsDir = path.join(pkgRoot, 'fonts');
 const distFontsDir = path.join(distDir, 'fonts');

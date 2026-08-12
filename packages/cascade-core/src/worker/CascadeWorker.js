@@ -4,6 +4,7 @@ import { CascadeStudioStandardLibrary } from './StandardLibrary.js';
 import { CascadeStudioMesher } from './ShapeToMesh.js';
 import { CascadeStudioFileIO } from './FileUtils.js';
 import { USED_OCCT_SYMBOLS } from './UsedOCCTSymbols.generated.js';
+import { ensurePythonRuntime } from './PythonRuntime.js';
 
 /** Main CAD worker class. Initializes OpenCascade WASM, loads dependencies,
  *  and orchestrates evaluation/rendering of user CAD code. */
@@ -44,7 +45,11 @@ class CascadeStudioWorker {
     const realError = this.realConsoleError;
 
     console.log = function (...args) {
-      const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+      const message = args.map(a => {
+        if (typeof a === 'string') { return a; }
+        // Circular objects (e.g. Brython internals) must not break logging
+        try { return JSON.stringify(a); } catch (e) { return String(a); }
+      }).join(' ');
       setTimeout(() => { postMessage({ type: "log", payload: message }); }, 0);
       realLog.apply(console, args);
     };
@@ -130,13 +135,25 @@ class CascadeStudioWorker {
         console.error(message);
       }
 
-      // Route incoming messages to registered handlers
+      // Route incoming messages to registered handlers. Handlers may return
+      // a Promise (e.g. meshing that waits on an async Python evaluation);
+      // the response is posted once it resolves.
       onmessage = function (e) {
+        const respond = (response) => {
+          if (response !== undefined || e.data.requestId) {
+            const msg = { "type": e.data.type, payload: response };
+            if (e.data.requestId) { msg.requestId = e.data.requestId; }
+            postMessage(msg);
+          }
+        };
         let response = self.messageHandlers[e.data.type](e.data.payload);
-        if (response !== undefined || e.data.requestId) {
-          const msg = { "type": e.data.type, payload: response };
-          if (e.data.requestId) { msg.requestId = e.data.requestId; }
-          postMessage(msg);
+        if (response instanceof Promise) {
+          response.then(respond, (err) => {
+            postMessage({ type: "resetWorking" });
+            setTimeout(() => { throw err; }, 0);
+          });
+        } else {
+          respond(response);
         }
       };
 
@@ -168,10 +185,14 @@ class CascadeStudioWorker {
     });
   }
 
-  /** Evaluate user CAD code (the contents of the Editor Window) and set the GUI State. */
+  /** Evaluate user CAD code (the contents of the Editor Window) and set the GUI State.
+   *  payload.language selects the runtime: undefined/'cascadestudio' (and
+   *  transpiled OpenSCAD) eval JS synchronously; 'python' runs build123d-lite
+   *  code through the lazily-bootstrapped Brython runtime (async). */
   evaluate(payload) {
     self.opNumber = 0;
     self.GUIState = payload.GUIState;
+    self.evalLanguage = payload.language || 'cascadestudio';
 
     // Reset cache counters and modeling history for this evaluation
     this.standardLibrary.utils.cacheHits = 0;
@@ -182,6 +203,14 @@ class CascadeStudioWorker {
     this.standardLibrary.utils.modelHistory = self.modelHistory;
     this.standardLibrary.utils._pendingHistoryOp = null;
 
+    if (self.evalLanguage === 'python') {
+      // Async path: the pending promise is stored so combineAndRenderShapes
+      // (the engine queues it right behind this message) waits for the
+      // evaluation to finish before meshing the scene.
+      this._pendingEvaluation = this._evaluatePython(payload);
+      return;
+    }
+
     try {
       eval(payload.code);
     } catch (e) {
@@ -190,34 +219,66 @@ class CascadeStudioWorker {
         throw e;
       }, 0);
     } finally {
-      // Flush the final operation's history step
-      self.flushHistoryStep();
-
-      // Send lightweight history metadata to main thread (no shape data)
-      postMessage({
-        type: "modelHistory",
-        payload: self.modelHistory.map((step, i) => ({
-          index: i,
-          fnName: step.fnName,
-          lineNumber: step.lineNumber,
-          shapeCount: step.shapeCount,
-        }))
-      });
-
-      postMessage({ type: "log", payload: "Cache: " + self.cacheHits + " hits, " + self.cacheMisses + " misses" });
-      postMessage({ type: "resetWorking" });
-      // Clean cache; remove unused objects
-      let usedHashes = this.standardLibrary.utils.usedHashes;
-      for (let hash in self.argCache) {
-        if (!usedHashes.hasOwnProperty(hash)) { delete self.argCache[hash]; }
-      }
-      for (let key in usedHashes) { delete usedHashes[key]; }
+      this._finishEvaluation();
     }
   }
 
-  /** Accumulate all shapes in `sceneShapes` into a compound,
-   *  triangulate with ShapeToMesh, and return for rendering. */
+  /** Run user Python through Brython (bootstrapped on first use). Never
+   *  rejects: Python errors are re-thrown asynchronously so they surface on
+   *  the main thread exactly like JS-mode evaluation errors. */
+  async _evaluatePython(payload) {
+    try {
+      const runtime = await ensurePythonRuntime();
+      runtime.run(payload.code);
+    } catch (e) {
+      setTimeout(() => { throw e; }, 0);
+    } finally {
+      this._finishEvaluation();
+    }
+  }
+
+  /** Post-evaluation bookkeeping shared by the JS and Python paths:
+   *  flush history, report it, signal resetWorking, and clean the cache. */
+  _finishEvaluation() {
+    // Flush the final operation's history step
+    self.flushHistoryStep();
+
+    // Send lightweight history metadata to main thread (no shape data)
+    postMessage({
+      type: "modelHistory",
+      payload: self.modelHistory.map((step, i) => ({
+        index: i,
+        fnName: step.fnName,
+        lineNumber: step.lineNumber,
+        shapeCount: step.shapeCount,
+      }))
+    });
+
+    postMessage({ type: "log", payload: "Cache: " + self.cacheHits + " hits, " + self.cacheMisses + " misses" });
+    postMessage({ type: "resetWorking" });
+    // Clean cache; remove unused objects
+    let usedHashes = this.standardLibrary.utils.usedHashes;
+    for (let hash in self.argCache) {
+      if (!usedHashes.hasOwnProperty(hash)) { delete self.argCache[hash]; }
+    }
+    for (let key in usedHashes) { delete usedHashes[key]; }
+  }
+
+  /** Accumulate all shapes in `sceneShapes` into a compound, triangulate
+   *  with ShapeToMesh, and return for rendering. If an async (Python)
+   *  evaluation is still in flight, meshing waits for it and a Promise is
+   *  returned instead (the onmessage router posts it once resolved). */
   combineAndRenderShapes(payload) {
+    if (this._pendingEvaluation) {
+      const pending = this._pendingEvaluation;
+      this._pendingEvaluation = null;
+      return pending.then(() => this._combineAndRenderShapes(payload));
+    }
+    return this._combineAndRenderShapes(payload);
+  }
+
+  /** Synchronous meshing of the accumulated sceneShapes. */
+  _combineAndRenderShapes(payload) {
     let oc = self.oc;
     // Initialize currentShape as an empty Compound Solid
     self.currentShape = new oc.TopoDS_Compound();

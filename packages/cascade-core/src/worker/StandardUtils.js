@@ -51,7 +51,12 @@ class CascadeStudioUtils {
 
     this.currentOp = fnName;
     self.currentOp = this.currentOp;
-    this.currentLineNumber = CascadeStudioUtils.getCallingLocation()[0];
+    // getCallingLocation() parses JS eval stack frames, which is meaningless
+    // for Brython-generated code — Python mode resolves the user's source
+    // line from Brython's frame chain instead (see PythonRuntime.js).
+    this.currentLineNumber = (self.evalLanguage === 'python')
+      ? (self.getPythonUserLine ? self.getPythonUserLine() : 0)
+      : CascadeStudioUtils.getCallingLocation()[0];
     self.currentLineNumber = this.currentLineNumber;
     postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber++, "opType": fnName } });
     self.opNumber = this.opNumber;
