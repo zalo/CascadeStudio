@@ -126,6 +126,63 @@ resolve a click to an editor line.
 **Testing hooks**: `CascadeAPI._tools` exposes the ToolManager; tests drive tools with
 synthetic PointerEvents on the canvas (see `test/gui-tools.spec.js`).
 
+## Python (build123d) Mode
+
+A third editor language mode `'python'` (alongside `'cascadestudio'` and `'openscad'`):
+users write **build123d algebra-mode** Python that evaluates in the existing CAD worker.
+
+**Architecture — Brython in the worker (NOT Pyodide, deliberate to stay lean)**:
+- `packages/cascade-core/src/worker/PythonRuntime.js` lazily bootstraps Brython on the
+  FIRST Python evaluation: brython.js (~1.38 MB raw / ~300 KB gz, copied to dist by the
+  cascade-core build) is fetched as text and indirect-eval'd in the worker global scope
+  (module workers lack importScripts; brython.js is strict-mode, so its `__BRYTHON__`/`$B`
+  are exported onto `globalThis` from inside the eval'd text). JS mode pays zero cost.
+- `packages/cascade-core/src/worker/Build123dLite.js` embeds the **build123d-lite**
+  Python source (a JS template string — beware: it must contain no backticks or `${`).
+  It is registered as the importable module `build123d` via
+  `__BRYTHON__.runPythonSource(src, 'build123d')`; user code runs as module `'main'`,
+  so user line numbers map 1:1 to editor lines (nothing is prepended).
+- Python accesses the worker's standard library via `from browser import self as w` —
+  e.g. `w.Box(...)`, `w.Union([...])`. The JS functions own all sceneShapes bookkeeping,
+  so wrapped shapes are never double-added. (Brython wrappers defeat `indexOf` identity;
+  use Python `is` to compare shapes across the boundary.)
+- `CascadeWorker.evaluate` branches on `payload.language === 'python'`: the evaluation
+  becomes async (Brython bootstrap) and its pending promise gates
+  `combineAndRenderShapes`; the worker's onmessage router supports Promise-returning
+  handlers. `resetWorking`/`modelHistory` still fire in the same order as JS mode.
+- Python errors throw a JS Error whose message is `Python <summary>\n<full traceback>`
+  (extracted via `$B.error_trace(exc)`); it surfaces through the usual worker →
+  `window.onerror` → `CascadeAPI.getErrors()` path. NOTE: worker logs/errors post
+  asynchronously — tests must poll for console content, not sample right after runCode.
+- **Line mapping works in Python mode**: `CacheOp` calls `self.getPythonUserLine()`
+  (walks Brython's frame chain to the innermost `'main'` frame, `frame.$lineno`) instead
+  of parsing JS eval stack frames. History steps, Select-pick → line flash, and the
+  Fillet tool's variable resolution all work on Python lines.
+
+**build123d-lite subset coverage** (vs real build123d):
+
+| Area | Supported | Not supported |
+|---|---|---|
+| Primitives | `Box(l,w,h)`, `Cylinder(r,h)`, `Sphere(r)`, `Cone(r1,r2,h)` — all **centered** like build123d | align=, holes, arbitrary planes |
+| 2D | `Rectangle(w,h)`, `Circle(r)` faces on XY | BuildSketch, polylines, arcs, text |
+| Algebra | `a + b`, `a - b`, `a & b` | in-place ops on Compounds, `Part()` wrappers |
+| Locations | `Pos(x,y,z)`, `Rot(x,y,z)` (deg, X→Y→Z about origin), `Pos * Rot` composition | `Plane.XZ * ...`, `Location()` class, arbitrary axes |
+| Selectors | `shape.edges()` (all edges), `shape.edges(indices=[...])` escape hatch | `group_by/filter_by/sort_by`, `.faces()`, `.vertices()`, Axis selectors |
+| Ops | `fillet(edges, r)`, `chamfer(edges, l)`, `extrude(face, amount)`, `revolve(face, axis, arc)` | offset, shell, sweep, loft, mirror, split |
+| Measure/show | `volume(s)` / `s.volume`, `s.area`, `s.center()`, `show(*s)`, `show_object(s)` | mass properties, bounding boxes |
+| Context managers | — | `with BuildPart(): ...` (algebra mode only) |
+| Stdlib imports | Python builtins only | `import math` etc. (would try to fetch the Brython stdlib — brython_stdlib.js is not shipped) |
+
+**Known gaps / future work**: no BuildPart contexts; selectors beyond `.edges()`;
+`Rot` composition is per-axis sequential, not a true quaternion Location; GUI Sketch
+tool is disabled in Python mode (JS-only emission); Slider/GUI functions are not
+exposed to Python yet; `print()` output arrives in the console asynchronously.
+
+**GUI tools in Python mode**: Box/Cylinder/Sphere emit `name = Pos(cx, cy, cz) *
+Primitive(...)` — since build123d primitives are centered, the emission converts the
+dragged corner/base placement into the shape's center. Fillet emits
+`var = fillet(var.edges(indices=[...]), r)`. See `test/python-mode.spec.js`.
+
 ## Playwright Testing
 
 WebGL requires `--use-gl=angle --use-angle=swiftshader` in playwright.config.js launch args.
