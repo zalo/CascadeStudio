@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 12 tests, ~40s
+npx playwright test    # 32 tests (incl. 10 frozen build123d example scripts)
 ```
 
 ## Architecture (Monorepo)
@@ -159,29 +159,49 @@ users write **build123d algebra-mode** Python that evaluates in the existing CAD
   of parsing JS eval stack frames. History steps, Select-pick → line flash, and the
   Fillet tool's variable resolution all work on Python lines.
 
-**build123d-lite subset coverage** (vs real build123d):
+**build123d-lite coverage** (vs real build123d 0.11.1 — validated by running the
+upstream docs/examples scripts through both, see `test/b123d-validation/`; currently
+**50/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 10 MISMATCH,
+the rest fail on honestly-unimplemented features — full breakdown in the generated
+`test/b123d-validation/report.md`):
 
 | Area | Supported | Not supported |
 |---|---|---|
-| Primitives | `Box(l,w,h)`, `Cylinder(r,h)`, `Sphere(r)`, `Cone(r1,r2,h)` — all **centered** like build123d | align=, holes, arbitrary planes |
-| 2D | `Rectangle(w,h)`, `Circle(r)` faces on XY | BuildSketch, polylines, arcs, text |
-| Algebra | `a + b`, `a - b`, `a & b` | in-place ops on Compounds, `Part()` wrappers |
-| Locations | `Pos(x,y,z)`, `Rot(x,y,z)` (deg, X→Y→Z about origin), `Pos * Rot` composition | `Plane.XZ * ...`, `Location()` class, arbitrary axes |
-| Selectors | `shape.edges()` (all edges), `shape.edges(indices=[...])` escape hatch | `group_by/filter_by/sort_by`, `.faces()`, `.vertices()`, Axis selectors |
-| Ops | `fillet(edges, r)`, `chamfer(edges, l)`, `extrude(face, amount)`, `revolve(face, axis, arc)` | offset, shell, sweep, loft, mirror, split |
-| Measure/show | `volume(s)` / `s.volume`, `s.area`, `s.center()`, `show(*s)`, `show_object(s)` | mass properties, bounding boxes |
-| Context managers | — | `with BuildPart(): ...` (algebra mode only) |
-| Stdlib imports | Python builtins only | `import math` etc. (would try to fetch the Brython stdlib — brython_stdlib.js is not shipped) |
+| Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple workplanes, pending faces/edges/path), `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `add()`, `Select.LAST` for edges | `Workplanes()` context |
+| 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=` | `Wedge`, partial spheres/cones |
+| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Polygon`, `RegularPolygon`, `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `BaseSketchObject`/`BasePartObject` subclassing | `Text` (font metrics differ), `Ellipse` (no binding), `Triangle` |
+| 1D objects | `Line`, `Polyline`, `PolarLine` (angle/direction), `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc`, `TangentArc`, `JernArc`, `Bezier`, `Spline` (natural-cubic approx of the exact interpolation), `curve @ u` / `curve % u` | `Spline(tangents=)`, `EllipticalCenterArc`, `Helix`, `@/%` on multi-edge curves |
+| Ops | `extrude` (dir/both, pending sketches), `revolve` (arbitrary Axis), `loft`, `sweep`, `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, Kind.ARC), `mirror` (any plane, spec-level inside BuildLine), `split` (Keep.TOP/BOTTOM), `scale` (uniform), `make_face` | `extrude(until=/taper=)`, `offset(openings=/Kind.INTERSECTION)`, `loft(ruled=)`, `split(Keep.BOTH)`, `make_hull`, `project`, `thicken`, `section`, non-uniform scale |
+| Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `Pos`, `Rot`/`Rotation` (intrinsic XYZ, matches b123d), `Plane` (named planes, `Plane(face)` with UV x_dir, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations` (context managers AND iterables), `planes * shape`, `locs * shape` | `Location.orientation` edge cases |
+| Selectors | `.edges()/.faces()/.vertices()/.solids()` as ShapeLists with `filter_by` (Axis/GeomType/callable), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy incl. RADIUS), `sort_by_distance`, slicing | `Wire` topology exploration (`.wires()`) |
+| Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy` | — |
+| Measure | `volume/area/length`, `center()`, `bounding_box()` (mesh-approximated — no Bnd_Box binding), `.wrapped` | mass properties |
+| Stdlib | `math` (JS-Math shim), `copy`, `typing`, `functools`, `itertools`, `operator`, `logging` (registered Brython modules) | anything else (`numpy`, `scipy`, ...) |
+| Other | joints/`Mesher`/`ExportSVG` raise NotImplementedError; `export_stl/step/gltf` are no-ops; `Color` accepted+ignored | — |
 
-**Known gaps / future work**: no BuildPart contexts; selectors beyond `.edges()`;
-`Rot` composition is per-axis sequential, not a true quaternion Location; GUI Sketch
-tool is disabled in Python mode (JS-only emission); Slider/GUI functions are not
-exposed to Python yet; `print()` output arrives in the console asynchronously.
+**Known honest gaps** (kept as errors rather than fake geometry): `Text` (font
+parity), `Spline(tangents=)`, `extrude(until=..., taper=...)`,
+`offset(openings=...)` (no ThickSolid binding), joints (`connect_to` relocates
+parts), `make_hull`/`project`/`thicken`. `Spline` interpolation uses a natural
+cubic (GeomAPI_Interpolate is not bound) — geometry can differ ~0.1-0.7 mm
+mid-span. Sequential boolean cuts can hit an OCCT 8.0.0-RC4 robustness bug
+(third cut of overlapping tools may empty the body — see
+`general_examples/ex28` in the validation report); the stdlib's near-zero-volume
+warnings flag it loudly. GUI Sketch tool is disabled in Python mode (JS-only
+emission); Slider/GUI functions are not exposed to Python yet; `print()` output
+arrives in the console asynchronously.
 
 **GUI tools in Python mode**: Box/Cylinder/Sphere emit `name = Pos(cx, cy, cz) *
 Primitive(...)` — since build123d primitives are centered, the emission converts the
 dragged corner/base placement into the shape's center. Fillet emits
 `var = fillet(var.edges(indices=[...]), r)`. See `test/python-mode.spec.js`.
+
+**Validation against real build123d**: `test/b123d-validation/` (see its README)
+runs the upstream build123d examples through BOTH real build123d 0.11.1 (native
+venv) and Python mode, comparing per-variable volume/bbox. Re-run it whenever
+Build123dLite.js changes. Ten representative passing scripts are frozen as
+regression tests in `test/python-mode-examples.spec.js` (part of the default
+suite) with volumes hardcoded from the native run.
 
 ## Playwright Testing
 
