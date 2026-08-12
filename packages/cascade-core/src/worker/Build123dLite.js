@@ -232,15 +232,17 @@ def show(*shapes):
     """Ensure shapes are in the render scene (build123d-sandbox compat).
 
     The standard library already scene-registers every produced shape, so
-    this only re-adds a shape if something explicitly removed it.
+    this only re-adds a shape if something explicitly removed it. Membership
+    is tested with 'is' — Brython compares the underlying JS objects, so it
+    works across wrapper instances (plain .indexOf() does not).
     """
     for s in shapes:
         try:
             topo = _topo(s)
-            if w.sceneShapes.indexOf(topo) < 0:
-                w.sceneShapes.push(topo)
         except TypeError:
-            pass
+            continue
+        if not any(existing is topo for existing in w.sceneShapes):
+            w.sceneShapes.push(topo)
 
 
 def show_object(shape, name=None, options=None):

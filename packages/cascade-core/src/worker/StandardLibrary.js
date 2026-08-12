@@ -22,7 +22,12 @@ function Box(x, y, z, centered) {
   let curBox = self.CacheOp(arguments, "Box", () => {
     let box = new self.oc.BRepPrimAPI_MakeBox_2(x, y, z).Shape();
     if (centered) {
-      return Translate([-x / 2, -y / 2, -z / 2], box);
+      let centeredBox = Translate([-x / 2, -y / 2, -z / 2], box);
+      // Translate() scene-registers its result, and Box pushes curBox below —
+      // deregister the nested result so a cache miss doesn't double-add it
+      // (same pattern as Text3D's internal Rotate/Extrude).
+      self.sceneShapes = self.Remove(self.sceneShapes, centeredBox);
+      return centeredBox;
     } else {
       return box;
     }
