@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { HandleManager } from './CascadeViewHandles.js';
+import { ToolManager } from './tools/ToolManager.js';
 
 /** Base class for a 3D viewport environment.
  *  Includes floor, grid, fog, camera, lights, and orbit controls. */
@@ -147,8 +148,14 @@ class CascadeEnvironment {
     // Create the timeline overlay DOM
     this._createTimelineOverlay();
 
+    // Per-sceneShape producing line numbers (from the worker's mesh payload)
+    this._shapeLines = [];
+
     // Initialize the Handle Manager (no messageBus needed — app wires events)
     this.handleManager = new HandleManager(this);
+
+    // Initialize the GUI modeling tools (toolbar + tool state machines)
+    this.toolManager = new ToolManager(this);
 
     // Start the animation loop
     this._animate();
@@ -164,6 +171,8 @@ class CascadeEnvironment {
     if (!facelist) { return; }
     if (!sceneOptions) { sceneOptions = {}; }
     this._lastSceneOptions = sceneOptions;
+    this._shapeLines = meshData.shapeLines || [];
+    if (this.toolManager) { this.toolManager.onSceneRebuilt(); }
 
     // The old mainObject is dead! Long live the mainObject!
     this.environment.scene.remove(this.mainObject);
@@ -309,8 +318,10 @@ class CascadeEnvironment {
         );
       }
 
+      // Per-vertex metadata: (local face index, global face index, owning sceneShape index)
+      let faceShapeIndex = (face.shape_index !== undefined) ? face.shape_index : -1;
       for (let i = 0; i < face.vertex_coord.length; i += 3) {
-        colors.push(face.face_index, globalFaceIndex, 0);
+        colors.push(face.face_index, globalFaceIndex, faceShapeIndex);
       }
 
       globalFaceIndex++;
@@ -338,6 +349,8 @@ class CascadeEnvironment {
     edgelist.forEach((edge) => {
       let edgeMetadata = {};
       edgeMetadata.localEdgeIndex = edge.edge_index;
+      edgeMetadata.shapeIndex = (edge.shape_index !== undefined) ? edge.shape_index : -1;
+      edgeMetadata.globalEdgeIndex = curGlobalEdgeIndex;
       edgeMetadata.start = globalEdgeIndices.length;
       for (let i = 0; i < edge.vertex_coord.length - 3; i += 3) {
         lineVertices.push(new THREE.Vector3(
@@ -366,13 +379,22 @@ class CascadeEnvironment {
     line.name = "Model Edges";
     line.lineColors = lineColors;
     line.globalEdgeMetadata = globalEdgeMetadata;
+    // Global edge indices selected by tools (e.g. the Fillet tool); rendered
+    // in orange and preserved across hover highlight repaints.
+    line.selectedEdges = new Set();
     line.highlightEdgeAtLineIndex = function (lineIndex) {
       let edgeIndex  = lineIndex >= 0 ? this.globalEdgeIndices[lineIndex] : lineIndex;
       let startIndex = this.globalEdgeMetadata[edgeIndex].start;
       let endIndex   = this.globalEdgeMetadata[edgeIndex].end;
-      for (let i = 0; i < this.lineColors.length; i++) {
-        let colIndex       = Math.floor(i / 3);
-        this.lineColors[i] = (colIndex >= startIndex && colIndex <= endIndex) ? 1 : 0;
+      for (let v = 0; v < this.lineColors.length / 3; v++) {
+        let isHovered  = (v >= startIndex && v <= endIndex);
+        let isSelected = this.selectedEdges.has(this.globalEdgeIndices[v]);
+        let r = 0, g = 0, b = 0;
+        if (isSelected) { r = 1.0; g = 0.55; b = 0.1; }
+        if (isHovered)  { r = 1.0; g = isSelected ? 0.8 : 1.0; b = isSelected ? 0.4 : 1.0; }
+        this.lineColors[(v * 3) + 0] = r;
+        this.lineColors[(v * 3) + 1] = g;
+        this.lineColors[(v * 3) + 2] = b;
       }
       this.geometry.setAttribute('color', new THREE.Float32BufferAttribute(this.lineColors, 3));
     }.bind(line);
@@ -385,6 +407,37 @@ class CascadeEnvironment {
     group.add(line);
 
     return group;
+  }
+
+  /** Resolve pick metadata from a raycast intersection against mainObject.
+   *  Returns { kind, shapeIndex, ... } or null. */
+  getPickInfo(intersect) {
+    if (!intersect || !intersect.object) return null;
+    if (intersect.object.type === "LineSegments") {
+      let meta = intersect.object.getEdgeMetadataAtLineIndex(intersect.index);
+      if (!meta) return null;
+      return {
+        kind: "edge",
+        shapeIndex: meta.shapeIndex,
+        localEdgeIndex: meta.localEdgeIndex,
+        globalEdgeIndex: meta.globalEdgeIndex
+      };
+    }
+    if (intersect.face && intersect.object.geometry.attributes.color) {
+      let colors = intersect.object.geometry.attributes.color;
+      return {
+        kind: "face",
+        shapeIndex: colors.getZ(intersect.face.a),
+        faceIndex: colors.getX(intersect.face.a)
+      };
+    }
+    return null;
+  }
+
+  /** Get the editor line number (1-based) that produced a sceneShape index. */
+  getShapeLine(shapeIndex) {
+    if (shapeIndex == null || shapeIndex < 0) return -1;
+    return this._shapeLines[shapeIndex] || -1;
   }
 
   /** Create the timeline overlay DOM elements. */

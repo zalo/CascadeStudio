@@ -205,6 +205,12 @@ Revolve(profile, 360);`,
   isReady() { return this._app.engine && this._app.engine.isReady; }
   isWorking() { return window.workerWorking; }
 
+  /** Internal: the viewport's GUI ToolManager (for tests/tooling). */
+  get _tools() {
+    const viewport = this._app.viewport;
+    return viewport ? viewport.toolManager : null;
+  }
+
   setMode(mode) {
     this._app.editor.setMode(mode);
     const modeSelect = document.getElementById('editorMode');

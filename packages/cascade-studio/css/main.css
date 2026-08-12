@@ -349,6 +349,113 @@ body {
 }
 
 /* ============================================================
+   GUI Modeling Tools (viewport toolbar + overlays)
+   ============================================================ */
+
+.cs-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(34, 34, 34, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: 4px;
+}
+
+.cs-tool-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--cs-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--cs-radius);
+  cursor: pointer;
+  transition: color var(--cs-transition), background var(--cs-transition);
+}
+
+.cs-tool-btn:hover {
+  color: var(--cs-text-primary);
+  background: var(--cs-bg-elevated);
+}
+
+.cs-tool-btn.cs-tool-active {
+  color: var(--cs-accent);
+  background: var(--cs-bg-elevated);
+  border-color: var(--cs-accent-dim);
+}
+
+.cs-fillet-panel {
+  position: absolute;
+  top: 8px;
+  left: 48px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 34, 34, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--cs-text-secondary);
+}
+
+.cs-fillet-panel input {
+  width: 52px;
+  background: var(--cs-bg-secondary);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.cs-fillet-panel button {
+  background: var(--cs-accent-dim);
+  color: var(--cs-text-primary);
+  border: none;
+  border-radius: var(--cs-radius);
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cs-fillet-panel button:hover {
+  background: var(--cs-accent);
+}
+
+.cs-tool-label {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  background: rgba(17, 17, 17, 0.85);
+  color: var(--cs-text-primary);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: var(--cs-font-mono);
+  white-space: nowrap;
+}
+
+/* Editor line flash when picking a shape with the Select tool */
+.cs-pick-line-flash {
+  background: rgba(76, 175, 80, 0.25);
+  border-left: 2px solid var(--cs-accent);
+  transition: background 400ms ease;
+}
+
+/* ============================================================
    Mobile Responsive Overrides
    ============================================================ */
 

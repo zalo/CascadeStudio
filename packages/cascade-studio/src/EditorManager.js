@@ -106,6 +106,63 @@ class EditorManager {
     if (this.editor) { this.editor.setValue(code); }
   }
 
+  /** Insert a snippet on a new line after the last non-empty line of the
+   *  document. Uses executeEdits so the Monaco undo stack is preserved.
+   *  Returns the 1-based line number the snippet's first line landed on. */
+  insertCode(snippet) {
+    if (!this.editor) return -1;
+    const model = this.editor.getModel();
+    let lastLine = model.getLineCount();
+    while (lastLine > 1 && model.getLineContent(lastLine).trim() === '') { lastLine--; }
+    const isEmptyDoc = (lastLine === 1 && model.getLineContent(1).trim() === '');
+    const col = model.getLineMaxColumn(lastLine);
+    const text = isEmptyDoc ? snippet : '\n' + snippet;
+    this.editor.pushUndoStop();
+    this.editor.executeEdits('cascade-gui-tools', [{
+      range: new monaco.Range(lastLine, col, lastLine, col),
+      text: text
+    }]);
+    this.editor.pushUndoStop();
+    return isEmptyDoc ? lastLine : lastLine + 1;
+  }
+
+  /** Get the text of a 1-based line (empty string if out of range). */
+  getLineContent(lineNumber) {
+    if (!this.editor) return '';
+    const model = this.editor.getModel();
+    if (lineNumber < 1 || lineNumber > model.getLineCount()) return '';
+    return model.getLineContent(lineNumber);
+  }
+
+  /** Replace the full text of a 1-based line (undo-friendly). */
+  replaceLine(lineNumber, newText) {
+    if (!this.editor) return;
+    const model = this.editor.getModel();
+    if (lineNumber < 1 || lineNumber > model.getLineCount()) return;
+    this.editor.pushUndoStop();
+    this.editor.executeEdits('cascade-gui-tools', [{
+      range: new monaco.Range(lineNumber, 1, lineNumber, model.getLineMaxColumn(lineNumber)),
+      text: newText
+    }]);
+    this.editor.pushUndoStop();
+  }
+
+  /** Reveal a line and flash a temporary highlight on it.
+   *  Used by the Select tool's pick → code line mapping. */
+  flashLine(lineNumber) {
+    if (!this.editor || !lineNumber || lineNumber < 1) return;
+    this.editor.revealLineInCenterIfOutsideViewport(lineNumber);
+    const decorations = this.editor.deltaDecorations(this._flashDecorations || [], [{
+      range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+      options: { isWholeLine: true, className: 'cs-pick-line-flash' }
+    }]);
+    this._flashDecorations = decorations;
+    clearTimeout(this._flashTimeout);
+    this._flashTimeout = setTimeout(() => {
+      this._flashDecorations = this.editor.deltaDecorations(this._flashDecorations || [], []);
+    }, 1200);
+  }
+
   /** Evaluate the current code: transpile if OpenSCAD, then send to worker via engine. */
   evaluateCode(saveToURL = false) {
     if (window.workerWorking) { return; }
