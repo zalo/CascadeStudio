@@ -61,14 +61,14 @@ const POINTER_HELPERS = `
 `;
 
 test.describe('GUI Modeling Tools', () => {
-  test('toolbar renders with 5 tools, Select active, Escape returns to Select', async ({ page }) => {
+  test('toolbar renders with 6 tools, Select active, Escape returns to Select', async ({ page }) => {
     await gotoAndReady(page);
 
     const buttons = page.locator('.cs-toolbar .cs-tool-btn');
-    await expect(buttons).toHaveCount(5);
+    await expect(buttons).toHaveCount(6);
 
     const toolNames = await buttons.evaluateAll((els) => els.map((el) => el.dataset.tool));
-    expect(toolNames).toEqual(['select', 'box', 'cylinder', 'sphere', 'fillet']);
+    expect(toolNames).toEqual(['select', 'box', 'cylinder', 'sphere', 'sketch', 'fillet']);
 
     // Select is the default active tool
     const active = await page.evaluate(() =>
@@ -168,6 +168,119 @@ test.describe('GUI Modeling Tools', () => {
     await waitForToolEvaluation(page, 1);
     const steps = await page.evaluate(() => window.CascadeAPI.getHistorySteps());
     expect(steps.some((s) => s.fnName === 'FilletEdges')).toBe(true);
+  });
+
+  test('Sketch tool: multi-click profile with arc + fillet extrudes and round-trips', async ({ page }) => {
+    await gotoAndReady(page);
+    await runCodeAndRender(page, 'Box(10, 10, 10);', 1);
+
+    // Draw a profile: two lines, a three-point arc (two clicks), a line,
+    // then close by clicking the first vertex; fillet one corner; extrude.
+    const result = await page.evaluate((helpers) => {
+      eval(helpers);
+      function click(x, y) {
+        const pt = screenOfCad(x, y, 0);
+        fire('pointerdown', pt);
+        fire('pointerup', pt);
+      }
+      function key(code) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+      }
+      window.CascadeAPI._tools.activate('sketch');
+      const sk = window.CascadeAPI._tools.tools.sketch;
+
+      click(20, 5);            // vertex 0
+      click(35, 5);            // vertex 1 (line)
+      key('KeyA');             // arc mode
+      click(42, 12);           // arc through-point (click 1 of 2)
+      const pendingThrough = sk._pendingThrough && sk._pendingThrough.slice();
+      click(35, 20);           // vertex 2 = arc end (click 2 of 2)
+      key('KeyL');             // back to line mode
+      click(20, 20);           // vertex 3
+      click(20, 5);            // close onto vertex 0
+      const stateAfterClose = sk.state;
+      const panelVisible = sk._panel.style.display !== 'none';
+
+      click(20, 20);           // toggle corner fillet on vertex 3
+      const filletVerts = [...sk.filletVerts];
+      click(20, 5);            // vertex 0 must be refused
+      const filletVertsAfterV0 = [...sk.filletVerts];
+
+      sk._valueInput.value = '15';
+      sk._valueInput.dispatchEvent(new Event('input'));
+      sk.commit();
+      return {
+        pendingThrough, stateAfterClose, panelVisible,
+        filletVerts, filletVertsAfterV0,
+        stateAfterCommit: sk.state,
+        code: window.CascadeAPI.getCode(),
+      };
+    }, POINTER_HELPERS);
+
+    expect(result.pendingThrough).toEqual([42, 12]);
+    expect(result.stateAfterClose).toBe(2);  // CLOSED
+    expect(result.panelVisible).toBe(true);
+    expect(result.filletVerts).toEqual([3]);
+    expect(result.filletVertsAfterV0).toEqual([3]); // start point not filletable
+    expect(result.stateAfterCommit).toBe(0); // back to IDLE
+    expect(result.code).toContain('new Sketch([20, 5])');
+    expect(result.code).toContain('.ArcTo([42, 12], [35, 20])');
+    expect(result.code).toContain('.LineTo([20, 20]).Fillet(3)');
+    expect(result.code).toContain('.End(true).Face();');
+    expect(result.code).toContain('let part1 = Extrude(profile1, [0, 0, 15]);');
+
+    // The emitted sketch evaluates with no errors (Box + extruded part)
+    await waitForToolEvaluation(page, 2);
+
+    // Round-trip: the emitted editor code re-runs cleanly through runCode
+    const editorCode = await page.evaluate(() => window.CascadeAPI.getCode());
+    const rerun = await page.evaluate((c) => window.CascadeAPI.runCode(c), editorCode);
+    expect(rerun.errors).toEqual([]);
+  });
+
+  test('Sketch tool: Escape steps back one stage at a time', async ({ page }) => {
+    await gotoAndReady(page);
+    await runCodeAndRender(page, 'Box(10, 10, 10);', 1);
+
+    const result = await page.evaluate((helpers) => {
+      eval(helpers);
+      function click(x, y) {
+        const pt = screenOfCad(x, y, 0);
+        fire('pointerdown', pt);
+        fire('pointerup', pt);
+      }
+      function key(code) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+      }
+      window.CascadeAPI._tools.activate('sketch');
+      const sk = window.CascadeAPI._tools.tools.sketch;
+      const steps = [];
+      const snap = (label) => steps.push({
+        label,
+        verts: sk.vertices.length,
+        pending: !!sk._pendingThrough,
+        state: sk.state,
+        tool: window.CascadeAPI._tools.activeToolName,
+      });
+
+      click(20, 5); click(35, 5); click(35, 20);
+      key('KeyA');
+      click(42, 12);            // half-placed arc through-point
+      snap('drawn');
+      key('Escape'); snap('esc1'); // drops the through-point only
+      key('Escape'); snap('esc2'); // removes vertex 2
+      key('Escape'); snap('esc3'); // removes vertex 1
+      key('Escape'); snap('esc4'); // single vertex left → cancels the sketch
+      key('Escape'); snap('esc5'); // idle → back to Select
+      return steps;
+    }, POINTER_HELPERS);
+
+    expect(result[0]).toMatchObject({ label: 'drawn', verts: 3, pending: true,  state: 1 });
+    expect(result[1]).toMatchObject({ label: 'esc1',  verts: 3, pending: false, state: 1 });
+    expect(result[2]).toMatchObject({ label: 'esc2',  verts: 2, pending: false, state: 1 });
+    expect(result[3]).toMatchObject({ label: 'esc3',  verts: 1, pending: false, state: 1 });
+    expect(result[4]).toMatchObject({ label: 'esc4',  verts: 0, state: 0, tool: 'sketch' });
+    expect(result[5]).toMatchObject({ label: 'esc5',  tool: 'select' });
   });
 
   test('Select tool: clicking a shape maps to its producing code line', async ({ page }) => {

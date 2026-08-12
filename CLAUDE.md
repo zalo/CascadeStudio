@@ -75,14 +75,30 @@ LeapShape-style tools in the viewport toolbar (top-left overlay). **Every GUI op
 emits JavaScript into the Monaco editor — the code IS the scene.** Committing a tool
 action appends a snippet (via `executeEdits`, so Monaco undo works) and re-evaluates.
 
-**Tools**: Select (default), Box, Cylinder, Sphere, Fillet. One active at a time;
-Escape cancels the current interaction, then returns to Select. OrbitControls are
-disabled while a creation drag is in progress (like HandleManager's gizmo drags).
+**Tools**: Select (default), Box, Cylinder, Sphere, Sketch, Fillet. One active at a
+time; Escape cancels the current interaction, then returns to Select. OrbitControls
+are disabled while a creation drag is in progress (like HandleManager's gizmo drags).
 
 - **Box**: pointerdown on the ground plane (snapped to integer mm) → drag footprint →
   release → move to set height → click commits `let box1 = Translate([x,y,0], Box(w,d,h));`
 - **Cylinder**: click center → drag radius → drag height → click commits
 - **Sphere**: click center → drag radius → release commits
+- **Sketch**: stateful multi-click profile drawing (Fusion-style sketch → extrude).
+  Clicks place grid-snapped vertices with a rubber-band preview (length/angle label);
+  the Line/Arc toggle (or `L`/`A` keys) picks the segment type — Arc segments take two
+  clicks (through-point, then end) and preview the live three-point arc. Escape is
+  vertex-level undo (a half-placed arc through-point is its own undo step); Enter or
+  clicking the first vertex closes (min 3 vertices; closing works from Arc mode too).
+  Once closed, corner-vertex clicks toggle sketch fillets (vertex 0, the Sketch start
+  point, can't be filleted — pitfall 5), and an inline panel commits as
+  **Extrude / Revolve / Face only**; for Extrude, dragging vertically inside the
+  profile sets the height interactively (the input reflects the drag). Emits the
+  Sketch builder chain, e.g.
+  `let profile1 = new Sketch([20,5]).LineTo([35,5]).ArcTo([42,12],[35,20])`
+  `.LineTo([20,20]).Fillet(3).End(true).Face(); let part1 = Extrude(profile1, [0,0,15]);`
+  The sketch plane is a parameter on the tool (CAD origin + u/v basis in
+  `SketchTool.plane`) to make sketch-on-face feasible later; v1 always uses the
+  ground plane (XY at z=0), which maps 1:1 onto the default `new Sketch([u,v])` plane.
 - **Fillet**: click edges to multi-select (orange highlight), set radius in the inline
   panel, Enter/Apply commits `shapeVar = FilletEdges(shapeVar, r, [indices]);`. The edge
   indices are exactly the per-shape indices the hover tooltip shows. If the producing
@@ -91,9 +107,10 @@ disabled while a creation drag is in progress (like HandleManager's gizmo drags)
 
 **File map** (`packages/cascade-studio/src/tools/`):
 - `ToolManager.js` — toolbar DOM, capture-phase pointer routing (fires before
-  OrbitControls), raycast/snap/CAD↔three helpers, variable naming, code emission
+  OrbitControls), raycast/snap/CAD↔three helpers, variable naming, code emission,
+  Escape/keyboard routing (tools can consume Escape for stage-level undo)
 - `Tool.js` — base class; `SelectTool.js`, `BoxTool.js`, `CylinderTool.js`,
-  `SphereTool.js`, `FilletTool.js` — per-tool state machines
+  `SphereTool.js`, `SketchTool.js`, `FilletTool.js` — per-tool state machines
 
 **Pick → line mapping**: `CacheOp` (StandardUtils.js) tags every produced shape with
 `.producingLine`; `combineAndRenderShapes` (CascadeWorker.js) builds face/edge-hash →
