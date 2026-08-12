@@ -71,6 +71,13 @@ class CascadeStudioUtils {
       if (self.GUIState["Cache?"]) { this.AddToCache(curHash, toReturn); }
       this.cacheMisses = (this.cacheMisses || 0) + 1;
     }
+    // Tag the shape with the 1-based editor line that produced it so the
+    // main thread can map picked shapes back to their source line.
+    // (Refreshed on every call, including cache hits, since the same cached
+    //  shape may be produced from a different line after edits.)
+    if (toReturn && typeof toReturn === 'object') {
+      toReturn.producingLine = this.currentLineNumber;
+    }
     self.cacheHits = this.cacheHits;
     self.cacheMisses = this.cacheMisses;
 

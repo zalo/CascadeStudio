@@ -65,8 +65,15 @@ class CascadeStudioMesher {
     return edgeHashes;
   }
 
-  shapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes) {
+  /** Triangulate `shape` into face/edge records for rendering.
+   *  `faceHashToShapeIndex`/`edgeHashToShapeIndex` (optional) map subshape
+   *  hashes to their owning top-level sceneShape index; when provided, each
+   *  face/edge record carries a `shape_index` for pick → shape resolution. */
+  shapeToMesh(shape, maxDeviation, fullShapeEdgeHashes, fullShapeFaceHashes,
+              faceHashToShapeIndex, edgeHashToShapeIndex) {
     let facelist = [], edgeList = [];
+    let shapeIndexOfFace = (hash) => (faceHashToShapeIndex && hash in faceHashToShapeIndex) ? faceHashToShapeIndex[hash] : -1;
+    let shapeIndexOfEdge = (hash) => (edgeHashToShapeIndex && hash in edgeHashToShapeIndex) ? edgeHashToShapeIndex[hash] : -1;
     try {
       let oc = self.oc;
       // Set up the Incremental Mesh builder, with a precision
@@ -82,13 +89,15 @@ class CascadeStudioMesher {
         let myT = oc.BRep_Tool.Triangulation(myFace, aLocation, 0 /* Poly_MeshPurpose_NONE */);
         if (myT.IsNull()) { console.error("Encountered Null Face!"); for (let k in self.argCache) delete self.argCache[k]; return; }
 
+        let faceHash = self.oc.OCJS.HashCode(myFace, 100000000);
         let this_face = {
           vertex_coord: [],
           uv_coord: [],
           normal_coord: [],
           tri_indexes: [],
           number_of_triangles: 0,
-          face_index: fullShapeFaceHashes[self.oc.OCJS.HashCode(myFace, 100000000)]
+          face_index: fullShapeFaceHashes[faceHash],
+          shape_index: shapeIndexOfFace(faceHash)
         };
 
         let nbNodes = myT.get().NbNodes();
@@ -184,7 +193,8 @@ class CascadeStudioMesher {
           if (fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
             let this_edge = {
               vertex_coord: [],
-              edge_index: -1
+              edge_index: -1,
+              shape_index: shapeIndexOfEdge(edgeHash)
             };
 
             try {
@@ -254,7 +264,8 @@ class CascadeStudioMesher {
         if (!fullShapeEdgeHashes2.hasOwnProperty(edgeHash)) {
           let this_edge = {
             vertex_coord: [],
-            edge_index: -1
+            edge_index: -1,
+            shape_index: shapeIndexOfEdge(edgeHash)
           };
 
           // BRepAdaptor_Curve already applies the edge's location transform,

@@ -225,6 +225,11 @@ class CascadeStudioWorker {
     // Note: BRep_Builder and TopoDS_Compound have no overloaded constructors in v2
     sceneBuilder.MakeCompound(self.currentShape);
     let fullShapeEdgeHashes = {}; let fullShapeFaceHashes = {};
+    // Map each face/edge hash to the index of its owning top-level sceneShape,
+    // and record each sceneShape's producing editor line (tagged by CacheOp).
+    // These flow into the mesh payload so the viewport can map picks → code lines.
+    let faceHashToShapeIndex = {}; let edgeHashToShapeIndex = {};
+    let shapeLines = [];
     postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Combining Shapes" } });
 
     // If there are sceneShapes, iterate through them and add them to currentShape
@@ -232,31 +237,39 @@ class CascadeStudioWorker {
       for (let shapeInd = 0; shapeInd < self.sceneShapes.length; shapeInd++) {
         if (!self.sceneShapes[shapeInd] || !self.sceneShapes[shapeInd].IsNull || self.sceneShapes[shapeInd].IsNull()) {
           console.error("Null Shape detected in sceneShapes; skipping: " + JSON.stringify(self.sceneShapes[shapeInd]));
+          shapeLines[shapeInd] = -1;
           continue;
         }
         if (!self.sceneShapes[shapeInd].ShapeType) {
           console.error("Non-Shape detected in sceneShapes; " +
             "are you sure it is a TopoDS_Shape and not something else that needs to be converted to one?");
           console.error(JSON.stringify(self.sceneShapes[shapeInd]));
+          shapeLines[shapeInd] = -1;
           continue;
         }
 
         // Scan the edges and faces and add to the edge list
-        Object.assign(fullShapeEdgeHashes, self.ForEachEdge(self.sceneShapes[shapeInd], (index, edge) => { }));
+        let shapeEdgeHashes = self.ForEachEdge(self.sceneShapes[shapeInd], (index, edge) => { });
+        Object.assign(fullShapeEdgeHashes, shapeEdgeHashes);
+        for (let edgeHash in shapeEdgeHashes) { edgeHashToShapeIndex[edgeHash] = shapeInd; }
         self.ForEachFace(self.sceneShapes[shapeInd], (index, face) => {
-          fullShapeFaceHashes[self.oc.OCJS.HashCode(face, 100000000)] = index;
+          let faceHash = self.oc.OCJS.HashCode(face, 100000000);
+          fullShapeFaceHashes[faceHash] = index;
+          faceHashToShapeIndex[faceHash] = shapeInd;
         });
 
+        shapeLines[shapeInd] = self.sceneShapes[shapeInd].producingLine || -1;
         sceneBuilder.Add(self.currentShape, self.sceneShapes[shapeInd]);
       }
 
       // Use ShapeToMesh to output triangulated faces and discretized edges to the 3D Viewport
       postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Triangulating Faces" } });
       let facesAndEdges = self.ShapeToMesh(self.currentShape,
-        payload.maxDeviation || 0.1, fullShapeEdgeHashes, fullShapeFaceHashes);
+        payload.maxDeviation || 0.1, fullShapeEdgeHashes, fullShapeFaceHashes,
+        faceHashToShapeIndex, edgeHashToShapeIndex);
       self.sceneShapes = [];
       postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
-      return [facesAndEdges, payload.sceneOptions];
+      return [facesAndEdges, payload.sceneOptions, shapeLines];
     } else {
       console.error("There were no scene shapes returned!");
     }

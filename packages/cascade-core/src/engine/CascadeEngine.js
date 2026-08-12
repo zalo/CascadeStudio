@@ -83,9 +83,9 @@ class CascadeEngine {
 
     if (!result) return { meshData: null, sceneOptions: {} };
 
-    const [[faces, edges], resultSceneOptions] = result;
+    const [[faces, edges], resultSceneOptions, shapeLines] = result;
     return {
-      meshData: { faces, edges },
+      meshData: { faces, edges, shapeLines: shapeLines || [] },
       sceneOptions: resultSceneOptions || {}
     };
   }
