@@ -17,7 +17,8 @@ if (fs.existsSync(distDir)) {
 }
 fs.mkdirSync(distDir, { recursive: true });
 
-// 1. Bundle the worker entry point
+// 1. Regenerate the oc.* symbol manifest, then bundle the worker entry point
+require('./generate-occt-symbols.cjs');
 console.log('[cascade-core] Bundling worker...');
 execFileSync(npx, [
   'esbuild',

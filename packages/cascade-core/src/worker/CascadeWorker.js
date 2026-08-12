@@ -3,6 +3,7 @@
 import { CascadeStudioStandardLibrary } from './StandardLibrary.js';
 import { CascadeStudioMesher } from './ShapeToMesh.js';
 import { CascadeStudioFileIO } from './FileUtils.js';
+import { USED_OCCT_SYMBOLS } from './UsedOCCTSymbols.generated.js';
 
 /** Main CAD worker class. Initializes OpenCascade WASM, loads dependencies,
  *  and orchestrates evaluation/rendering of user CAD code. */
@@ -114,6 +115,20 @@ class CascadeStudioWorker {
 
       // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
       self.oc = openCascade;
+
+      // Numbered Embind overload suffixes (e.g. BRepBuilderAPI_MakeEdge_24)
+      // are derived from each class's overload set and can be renumbered by
+      // an OCCT upgrade. Verify every symbol the worker references so a
+      // mismatched WASM build fails loudly at startup instead of surfacing
+      // as cryptic errors mid-evaluation.
+      const missingSymbols = USED_OCCT_SYMBOLS.filter((s) => !(s in openCascade));
+      if (missingSymbols.length > 0) {
+        const message = "OCCT build is missing " + missingSymbols.length +
+          " symbol(s) used by the standard library (overload suffixes may " +
+          "have been renumbered by an OCCT upgrade): " + missingSymbols.join(", ");
+        postMessage({ type: "error", payload: message });
+        console.error(message);
+      }
 
       // Route incoming messages to registered handlers
       onmessage = function (e) {
