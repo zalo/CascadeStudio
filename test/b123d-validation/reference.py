@@ -87,11 +87,16 @@ def main():
             add(name, obj)
         elif isinstance(obj, (list, tuple)) and obj and \
                 all(isinstance(x, Shape) for x in obj):
-            # skip face-less elements (edge/vertex selector lists): their
-            # order differs between build123d and lite, so per-index
-            # comparison would be noise (same rule as the lite measurer)
+            # skip face-less elements (edge/vertex selector lists) and sort
+            # the rest by bbox center — element order frequently differs
+            # between build123d and lite (same rule as the lite measurer)
             solids = [x for x in obj if len(x.faces()) > 0]
-            for i, x in enumerate(solids[:32]):
+            def bbkey(x):
+                bb = x.bounding_box()
+                return (round((bb.min.X + bb.max.X) / 2, 3),
+                        round((bb.min.Y + bb.max.Y) / 2, 3),
+                        round((bb.min.Z + bb.max.Z) / 2, 3))
+            for i, x in enumerate(sorted(solids[:32], key=bbkey)):
                 add("%s[%d]" % (name, i), x)
 
     print("B123D_REF_JSON " + json.dumps({"shapes": shapes}))

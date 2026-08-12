@@ -201,6 +201,19 @@ async function main() {
       ]);
       // Don't let a still-busy worker poison the next script's run.
       if (!(await workerIdle(page, 20000))) throw new Error('worker stayed busy');
+      // After long run sequences Brython's traceback FORMATTER sometimes
+      // dies ("reading 'substr'"), masking the real Python error — retry
+      // the script once on a fresh page to recover the true message.
+      if (!out.measure &&
+          out.errors.some((e) => e.includes("reading 'substr'"))) {
+        try { await page.close(); } catch (_) {}
+        page = await newReadyPage(browser);
+        out = await Promise.race([
+          runScript(page, entry.code + MEASURE_FOOTER),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SCRIPT_TIMEOUT)),
+        ]);
+        await workerIdle(page, 20000);
+      }
     } catch (e) {
       results[entry.id] = { status: 'TIMEOUT' };
       console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} TIMEOUT - reloading page`);
