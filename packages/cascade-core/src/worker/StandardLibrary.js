@@ -207,7 +207,10 @@ function ForEachSolid(shape, callback) {
   let solid_index = 0;
   let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SOLID, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
   for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SOLID, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-    callback(solid_index++, self.oc.TopoDS_Cast.Solid_1(anExplorer.Current()));
+    let solid = self.oc.TopoDS_Cast.Solid_1(anExplorer.Current());
+    // sub-shapes need a stable hash for CacheOp (see EdgeSelector)
+    if (solid.hash === undefined) { solid.hash = self.oc.OCJS.HashCode(solid, 100000000); }
+    callback(solid_index++, solid);
   }
 }
 function GetNumSolidsInCompound(shape) {
@@ -1746,8 +1749,11 @@ function MeasureShape(shape, deflection) {
   if (!shape || shape.IsNull()) { console.error("MeasureShape: input shape is null!"); return null; }
   let nFaces = 0; ForEachFace(shape, () => { nFaces++; });
   let nEdges = 0; ForEachEdge(shape, () => { nEdges++; });
+  // VolumeProperties on OPEN faces yields meaningless partial integrals —
+  // report 0 for shapes with no solid (matches build123d's Sketch.volume)
+  let nSolids = 0; ForEachSolid(shape, () => { nSolids++; });
   return {
-    volume: Math.abs(Volume(shape)),
+    volume: nSolids > 0 ? Math.abs(Volume(shape)) : 0,
     area: SurfaceArea(shape),
     faces: nFaces,
     edges: nEdges,

@@ -21,7 +21,7 @@
 //     numbers refer 1:1 to the user's editor lines (the library is a
 //     separate module, nothing is prepended to user code).
 
-import { BUILD123D_LITE_PY } from './Build123dLite.js';
+import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
 
 /** The Brython module name user scripts execute under. */
 const PY_USER_MODULE = 'main';
@@ -91,8 +91,13 @@ async function _bootstrap() {
     return 0;
   };
 
-  // Register build123d-lite as an importable module: executing a source
-  // under a module name caches it in $B.imported for subsequent imports.
+  // Register stdlib shims first (brython.js cannot import even its own
+  // built-in `math` inside a module worker, and brython_stdlib.js is not
+  // shipped), then build123d-lite — executing a source under a module name
+  // caches it in $B.imported for subsequent imports.
+  for (const name of Object.keys(PY_SHIM_MODULES)) {
+    _runGuarded(B, PY_SHIM_MODULES[name], name);
+  }
   _runGuarded(B, BUILD123D_LITE_PY, 'build123d');
 
   return {
@@ -100,6 +105,10 @@ async function _bootstrap() {
      *  message starts with the one-line Python summary followed by the full
      *  traceback (line numbers = the user's editor lines). */
     run(code) {
+      // The build123d module persists across evaluations — clear its
+      // builder-context stacks in case a previous run aborted inside a
+      // `with BuildPart():` block without unwinding.
+      _runGuarded(B, 'import build123d\nbuild123d._reset_state()', '_b123d_reset');
       _runGuarded(B, code, PY_USER_MODULE);
     }
   };
