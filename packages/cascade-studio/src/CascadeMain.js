@@ -107,9 +107,12 @@ class CascadeStudioApp {
         this._savedCode[this.editor.mode] = this.editor.getCode();
         this.editor.setMode(newMode);
         // Load saved code or starter code for the new mode
-        const starter = newMode === 'openscad'
-          ? CascadeStudioApp.OPENSCAD_STARTER_CODE
-          : CascadeStudioApp.STARTER_CODE;
+        const starters = {
+          cascadestudio: CascadeStudioApp.STARTER_CODE,
+          openscad: CascadeStudioApp.OPENSCAD_STARTER_CODE,
+          python: CascadeStudioApp.PYTHON_STARTER_CODE,
+        };
+        const starter = starters[newMode] || CascadeStudioApp.STARTER_CODE;
         this.editor.setCode(this._savedCode[newMode] || starter);
         // Re-fit camera and auto-evaluate
         if (this.viewport) { this.viewport._fitOnNextRender = true; }
@@ -647,6 +650,23 @@ translate([0, 0, shaft_h + 2])
     hex(hex_r, hex_h);
     cylinder(h = hex_h + 1, r = bore_r, center = true);
   }
+`;
+
+/** Default Python (build123d-lite) starter code shown when switching to Python mode. */
+CascadeStudioApp.PYTHON_STARTER_CODE =
+`# Welcome to Python mode! Powered by Brython + build123d-lite,
+# an algebra-mode subset of build123d (https://build123d.readthedocs.io).
+#
+# Algebra mode: a + b fuses, a - b cuts, a & b intersects.
+# Box/Cylinder/Sphere/Cone are CENTERED on the origin (build123d convention);
+# place them with Pos(x, y, z) * shape and Rot(x, y, z) * shape (degrees).
+from build123d import *
+
+part = Box(40, 30, 10) - Pos(0, 0, 0) * Cylinder(8, 20)
+part = fillet(part.edges(), 2)
+show(part)
+
+print("volume:", round(volume(part), 1), "mm^3")
 `;
 
 export { CascadeStudioApp };

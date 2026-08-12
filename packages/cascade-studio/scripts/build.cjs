@@ -157,6 +157,7 @@ fs.writeFileSync(path.join(distDir, 'index.html'), `<!DOCTYPE html>
                 <select id="editorMode" class="topnav-select" title="Editor Language Mode">
                     <option value="cascadestudio">CascadeStudio JS</option>
                     <option value="openscad">OpenSCAD</option>
+                    <option value="python">Python (build123d)</option>
                 </select>
             </div>
         </div>

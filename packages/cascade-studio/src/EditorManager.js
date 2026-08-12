@@ -190,9 +190,11 @@ class EditorManager {
       }
     }
 
-    // Use CascadeEngine to evaluate and get mesh data
+    // Use CascadeEngine to evaluate and get mesh data.
+    // Python code is passed through as-is; the worker runs it via Brython.
     this._app.engine.evaluate(codeToEval, {
       guiState: this._app.gui.state,
+      language: this.mode === 'python' ? 'python' : undefined,
     }).then((result) => {
       if (this._app.viewport && result.meshData) {
         this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);
@@ -219,18 +221,20 @@ class EditorManager {
     console.log("Generating Model");
   }
 
-  /** Set editor mode: 'cascadestudio' or 'openscad'. */
+  /** Set editor mode: 'cascadestudio', 'openscad', or 'python'. */
   setMode(newMode) {
     if (newMode === this.mode) return;
 
-    // Swap starter code if current content matches the other mode's starter
+    // Swap starter code if the current content is any known mode's starter
+    const AppClass = this._app.constructor;
+    const starters = {
+      cascadestudio: AppClass.STARTER_CODE,
+      openscad: AppClass.OPENSCAD_STARTER_CODE,
+      python: AppClass.PYTHON_STARTER_CODE,
+    };
     const currentCode = this.editor.getValue();
-    const csStarter = this._app.constructor.STARTER_CODE;
-    const osStarter = this._app.constructor.OPENSCAD_STARTER_CODE;
-    if (newMode === 'openscad' && osStarter && currentCode === csStarter) {
-      this.editor.setValue(osStarter);
-    } else if (newMode === 'cascadestudio' && currentCode === osStarter) {
-      this.editor.setValue(csStarter);
+    if (starters[newMode] && Object.values(starters).includes(currentCode)) {
+      this.editor.setValue(starters[newMode]);
     }
 
     // Fit camera on the next render after a mode switch
@@ -244,20 +248,27 @@ class EditorManager {
     this._openscadProviders.forEach(d => d.dispose());
     this._openscadProviders = [];
 
+    const model = this.editor.getModel();
     if (newMode === 'openscad') {
       // Switch to OpenSCAD language
-      const model = this.editor.getModel();
       monaco.editor.setModelLanguage(model, 'openscad');
 
       // Register OpenSCAD providers if available
       if (this._app._openscadMonaco) {
         this._openscadProviders = this._app._openscadMonaco.registerProviders(this.editor);
       }
+    } else if (newMode === 'python') {
+      // Monaco ships a built-in Python tokenizer — no custom language needed
+      monaco.editor.setModelLanguage(model, 'python');
     } else {
       // Switch back to TypeScript
-      const model = this.editor.getModel();
       monaco.editor.setModelLanguage(model, 'typescript');
       monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
+    }
+
+    // Let the GUI tools react (e.g. the Sketch tool is JS-only for now)
+    if (this._app.viewport && this._app.viewport.toolManager) {
+      this._app.viewport.toolManager.onLanguageChanged();
     }
   }
 
