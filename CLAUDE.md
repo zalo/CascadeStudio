@@ -69,9 +69,54 @@ Four methods — that's it:
 
 **NEVER** use `browser_take_screenshot` (captures full page UI, not the 3D model) or `browser_run_code` (use `setCameraAngle` instead).
 
+## GUI Modeling Tools
+
+LeapShape-style tools in the viewport toolbar (top-left overlay). **Every GUI operation
+emits JavaScript into the Monaco editor — the code IS the scene.** Committing a tool
+action appends a snippet (via `executeEdits`, so Monaco undo works) and re-evaluates.
+
+**Tools**: Select (default), Box, Cylinder, Sphere, Fillet. One active at a time;
+Escape cancels the current interaction, then returns to Select. OrbitControls are
+disabled while a creation drag is in progress (like HandleManager's gizmo drags).
+
+- **Box**: pointerdown on the ground plane (snapped to integer mm) → drag footprint →
+  release → move to set height → click commits `let box1 = Translate([x,y,0], Box(w,d,h));`
+- **Cylinder**: click center → drag radius → drag height → click commits
+- **Sphere**: click center → drag radius → release commits
+- **Fillet**: click edges to multi-select (orange highlight), set radius in the inline
+  panel, Enter/Apply commits `shapeVar = FilletEdges(shapeVar, r, [indices]);`. The edge
+  indices are exactly the per-shape indices the hover tooltip shows. If the producing
+  line is a bare expression (`Box(10,10,10);`), it is rewritten to `let box1 = ...` first.
+- **Select**: clicking a shape reveals + flashes the editor line that produced it.
+
+**File map** (`packages/cascade-studio/src/tools/`):
+- `ToolManager.js` — toolbar DOM, capture-phase pointer routing (fires before
+  OrbitControls), raycast/snap/CAD↔three helpers, variable naming, code emission
+- `Tool.js` — base class; `SelectTool.js`, `BoxTool.js`, `CylinderTool.js`,
+  `SphereTool.js`, `FilletTool.js` — per-tool state machines
+
+**Pick → line mapping**: `CacheOp` (StandardUtils.js) tags every produced shape with
+`.producingLine`; `combineAndRenderShapes` (CascadeWorker.js) builds face/edge-hash →
+sceneShape-index maps plus a `shapeLines` array that flow through ShapeToMesh into the
+mesh payload (`face.shape_index`, `edge.shape_index`, `meshData.shapeLines`). The
+viewport stores the shape index in the third vertex-color channel (faces) and in
+`globalEdgeMetadata` (edges); `viewport.getPickInfo(intersect)` + `getShapeLine(i)`
+resolve a click to an editor line.
+
+**Coordinates**: three.js scene is Y-up, CAD is Z-up. CAD `[x,y,z]` ↔ three `(x, z, -y)`
+(see `ToolManager.cadToThree/threeToCad`, same mapping as CascadeViewHandles.js).
+
+**Testing hooks**: `CascadeAPI._tools` exposes the ToolManager; tests drive tools with
+synthetic PointerEvents on the canvas (see `test/gui-tools.spec.js`).
+
 ## Playwright Testing
 
 WebGL requires `--use-gl=angle --use-angle=swiftshader` in playwright.config.js launch args.
+
+Environment overrides (for machines where the defaults don't work):
+- `CS_TEST_PORT=8517` — test server port (default 8080; use when 8080 is occupied)
+- `CS_TEST_HEADFUL=1 DISPLAY=:99` — run headful against an X server (use when headless
+  Chromium cannot create a SwiftShader WebGL context, as on this machine)
 
 ```javascript
 await page.goto('http://localhost:8080');
