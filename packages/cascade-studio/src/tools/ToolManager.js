@@ -41,9 +41,19 @@ class ToolManager {
   get editor() { return this.viewport._app.editor; }
   get scene() { return this.environment.scene; }
 
+  /** Current editor language mode ('cascadestudio' | 'openscad' | 'python').
+   *  Tools dispatch on this when emitting code. */
+  get codeLanguage() { return this.editor.mode; }
+  get isPythonMode() { return this.codeLanguage === 'python'; }
+
   /** Activate a tool by name; the previous tool's interaction is cancelled. */
   activate(name) {
     if (!this.tools[name] || name === this.activeToolName) return;
+    if (name === 'sketch' && this.isPythonMode) {
+      console.error('The Sketch tool is not available in Python mode yet — ' +
+        'switch the editor to CascadeStudio JS mode to sketch profiles.');
+      return;
+    }
     this.activeTool.deactivate();
     this.activeToolName = name;
     this.activeTool.activate();
@@ -61,6 +71,25 @@ class ToolManager {
    *  (its cached edge/shape selection is no longer valid). */
   onSceneRebuilt() {
     if (this.activeTool.onSceneRebuilt) { this.activeTool.onSceneRebuilt(); }
+  }
+
+  /** Called by EditorManager.setMode when the language mode changes.
+   *  The Sketch tool emits JS-only Sketch chains, so it is disabled in
+   *  Python mode (grayed out with an explanatory tooltip). */
+  onLanguageChanged() {
+    const sketchBtn = [...this._toolbarEl.children]
+      .find((btn) => btn.dataset.tool === 'sketch');
+    if (sketchBtn) {
+      const disabled = this.isPythonMode;
+      sketchBtn.classList.toggle('cs-tool-disabled', disabled);
+      if (!sketchBtn.dataset.defaultTitle) { sketchBtn.dataset.defaultTitle = sketchBtn.title; }
+      sketchBtn.title = disabled
+        ? 'Sketch — not available in Python mode yet (switch to CascadeStudio JS mode)'
+        : sketchBtn.dataset.defaultTitle;
+    }
+    if (this.isPythonMode && this.activeToolName === 'sketch') {
+      this.activate('select');
+    }
   }
 
   // ===== Coordinate helpers (three.js scene is Y-up, CAD code is Z-up) =====

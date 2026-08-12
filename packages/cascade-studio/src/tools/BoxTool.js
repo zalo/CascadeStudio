@@ -137,6 +137,21 @@ class BoxTool extends Tool {
   /** Emit code for a box with CAD min-corner `corner` and dims [w, d, h]. */
   emitBox(corner, dims) {
     const name = this.manager.nextVarName('box');
+    if (this.manager.isPythonMode) {
+      // build123d's Box is CENTERED on the origin (unlike the JS Box, which
+      // is corner-origin), so place it via Pos at the box's center point.
+      const center = [
+        corner[0] + dims[0] / 2,
+        corner[1] + dims[1] / 2,
+        corner[2] + dims[2] / 2,
+      ];
+      const boxCall = 'Box(' + dims.join(', ') + ')';
+      const needsPos = center[0] !== 0 || center[1] !== 0 || center[2] !== 0;
+      this.manager.commitCode(needsPos
+        ? name + ' = Pos(' + center.join(', ') + ') * ' + boxCall
+        : name + ' = ' + boxCall);
+      return;
+    }
     const boxCall = 'Box(' + dims[0] + ', ' + dims[1] + ', ' + dims[2] + ')';
     const needsTranslate = corner[0] !== 0 || corner[1] !== 0 || corner[2] !== 0;
     const snippet = needsTranslate

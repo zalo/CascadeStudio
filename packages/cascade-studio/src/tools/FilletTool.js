@@ -105,8 +105,15 @@ class FilletTool extends Tool {
       }
       claimedNames.add(varName);
       const indices = [...indexSet].sort((a, b) => a - b);
-      snippets.push(varName + ' = FilletEdges(' + varName + ', ' + radius +
-        ', [' + indices.join(', ') + ']);');
+      if (this.manager.isPythonMode) {
+        // build123d-lite: edges(indices=[...]) is the escape hatch carrying
+        // the same per-shape edge indices the hover tooltip shows.
+        snippets.push(varName + ' = fillet(' + varName + '.edges(indices=[' +
+          indices.join(', ') + ']), ' + radius + ')');
+      } else {
+        snippets.push(varName + ' = FilletEdges(' + varName + ', ' + radius +
+          ', [' + indices.join(', ') + ']);');
+      }
     }
 
     this._clearSelection();
@@ -117,7 +124,8 @@ class FilletTool extends Tool {
 
   /** Find (or create) the variable name holding the shape produced at
    *  `lineNumber`. Bare expression statements like `Box(10, 10, 10);` are
-   *  rewritten in place to `let box1 = Box(10, 10, 10);`. */
+   *  rewritten in place to `let box1 = Box(10, 10, 10);` (or, in Python
+   *  mode, `box1 = Box(10, 10, 10)`). */
   _resolveVarName(lineNumber, claimedNames) {
     const editor = this.manager.editor;
     const lineText = editor.getLineContent(lineNumber);
@@ -130,7 +138,8 @@ class FilletTool extends Tool {
     const expr = lineText.match(/^(\s*)((?:new\s+)?([A-Za-z_$][\w$]*)\s*\(.*)$/);
     if (!expr) { return null; }
     const name = this.manager.nextVarName(expr[3].toLowerCase(), claimedNames);
-    editor.replaceLine(lineNumber, expr[1] + 'let ' + name + ' = ' + expr[2]);
+    const decl = this.manager.isPythonMode ? '' : 'let ';
+    editor.replaceLine(lineNumber, expr[1] + decl + name + ' = ' + expr[2]);
     return name;
   }
 

@@ -393,6 +393,12 @@ body {
   border-color: var(--cs-accent-dim);
 }
 
+/* Tool unavailable in the current language mode (e.g. Sketch in Python) */
+.cs-tool-btn.cs-tool-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .cs-fillet-panel,
 .cs-sketch-panel {
   position: absolute;

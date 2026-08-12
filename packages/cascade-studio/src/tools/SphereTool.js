@@ -87,8 +87,14 @@ class SphereTool extends Tool {
   emitSphere(center, radius) {
     const name = this.manager.nextVarName('sphere');
     const sphereCall = 'Sphere(' + radius + ')';
-    const needsTranslate = center[0] !== 0 || center[1] !== 0 || center[2] !== 0;
-    const snippet = needsTranslate
+    const needsMove = center[0] !== 0 || center[1] !== 0 || center[2] !== 0;
+    if (this.manager.isPythonMode) {
+      this.manager.commitCode(needsMove
+        ? name + ' = Pos(' + center.join(', ') + ') * ' + sphereCall
+        : name + ' = ' + sphereCall);
+      return;
+    }
+    const snippet = needsMove
       ? 'let ' + name + ' = Translate([' + center[0] + ', ' + center[1] + ', ' + center[2] + '], ' + sphereCall + ');'
       : 'let ' + name + ' = ' + sphereCall + ';';
     this.manager.commitCode(snippet);

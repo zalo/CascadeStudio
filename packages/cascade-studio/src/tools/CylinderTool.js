@@ -124,6 +124,16 @@ class CylinderTool extends Tool {
   emitCylinder(base, radius, height) {
     const name = this.manager.nextVarName('cylinder');
     const cylCall = 'Cylinder(' + radius + ', ' + height + ')';
+    if (this.manager.isPythonMode) {
+      // build123d's Cylinder is CENTERED along Z (spans -h/2 .. +h/2), so
+      // place it via Pos at the cylinder's mid-height point.
+      const center = [base[0], base[1], base[2] + height / 2];
+      const needsPos = center[0] !== 0 || center[1] !== 0 || center[2] !== 0;
+      this.manager.commitCode(needsPos
+        ? name + ' = Pos(' + center.join(', ') + ') * ' + cylCall
+        : name + ' = ' + cylCall);
+      return;
+    }
     const needsTranslate = base[0] !== 0 || base[1] !== 0 || base[2] !== 0;
     const snippet = needsTranslate
       ? 'let ' + name + ' = Translate([' + base[0] + ', ' + base[1] + ', ' + base[2] + '], ' + cylCall + ');'
