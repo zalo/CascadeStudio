@@ -329,9 +329,7 @@ test.describe('Export, GUI & Console', () => {
 
 test.describe('Everything Example', () => {
   test('full gallery renders without errors', async ({ page }) => {
-    await page.goto('/');
-    await waitForReady(page);
-    await page.waitForFunction(() => !window.CascadeAPI.isWorking(), { timeout: 60000 });
+    await gotoAndReady(page); // selects CascadeStudio JS mode (Python is the default)
     await evaluateCode(page, EVERYTHING_EXAMPLE, 120000);
     const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
     expect(errors).toEqual([]);

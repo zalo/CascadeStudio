@@ -62,18 +62,35 @@ const POINTER_HELPERS = `
   }
 `;
 
-/** Screen (client) coordinates of a CAD point — the Node-side twin of the
- *  in-page `screenOfCad` helper, for driving Playwright's real mouse API. */
-async function screenOfCad(page, x, y, z) {
-  return await page.evaluate(([cx, cy, cz]) => {
-    const env = window.threejsViewport.environment;
-    const rect = env.renderer.domElement.getBoundingClientRect();
-    const v = env.camera.position.clone().set(cx, cz, -cy).project(env.camera);
-    return {
-      x: rect.left + (v.x + 1) / 2 * rect.width,
-      y: rect.top + (1 - (v.y + 1) / 2) * rect.height,
+/** Probe the live camera for two canvas points whose ground-plane hits differ
+ *  in BOTH CAD x and y, plus a point above the second one for a height drag.
+ *
+ *  Fixed CAD coordinates can project outside the canvas (the mouse event then
+ *  goes to another panel) and fixed screen offsets can happen to run parallel
+ *  to a projected axis (one CAD coordinate then never changes), so ask the
+ *  tool's own raycaster instead of assuming a framing. */
+async function groundDragPoints(page, minDelta = 5) {
+  const points = await page.evaluate((min) => {
+    const tools = window.CascadeAPI._tools;
+    const r = window.threejsViewport.environment.renderer.domElement.getBoundingClientRect();
+    const probe = (fx, fy) => {
+      const pt = { clientX: r.left + r.width * fx, clientY: r.top + r.height * fy };
+      const hit = tools.raycastGround(pt);
+      return hit ? { pt: { x: pt.clientX, y: pt.clientY }, cad: tools.threeToCad(hit).map(Math.round) } : null;
     };
-  }, [x, y, z]);
+    const a = probe(0.5, 0.62);
+    if (!a) return null;
+    for (const [fx, fy] of [[0.75, 0.8], [0.25, 0.8], [0.72, 0.68], [0.28, 0.68],
+                            [0.8, 0.9], [0.2, 0.9], [0.62, 0.85], [0.38, 0.85]]) {
+      const b = probe(fx, fy);
+      if (b && Math.abs(b.cad[0] - a.cad[0]) >= min && Math.abs(b.cad[1] - a.cad[1]) >= min) {
+        return { a: a.pt, b: b.pt, up: { x: b.pt.x, y: r.top + r.height * 0.25 } };
+      }
+    }
+    return null;
+  }, minDelta);
+  expect(points, 'the viewport should expose a usable ground-plane drag').not.toBeNull();
+  return points;
 }
 
 /** Snapshot of a creation tool's state machine. */
@@ -169,13 +186,12 @@ test.describe('GUI Modeling Tools', () => {
     await runCodeAndRender(page, 'Box(10, 10, 10);', 1);
     await page.evaluate(() => window.CascadeAPI._tools.activate('box'));
 
-    const a = await screenOfCad(page, 20, 20, 0);   // footprint corner A
-    const b = await screenOfCad(page, 60, 50, 0);   // footprint corner B
-    const c = await screenOfCad(page, 40, 35, 25);  // height 25 above center
+    const { a, b, up: c } = await groundDragPoints(page);
 
     // Stage 1: press, drag the footprint, release
     await page.mouse.move(a.x, a.y);
     await page.mouse.down();
+    expect(await toolState(page, 'box')).toMatchObject({ state: 1, controls: false });
     await page.mouse.move(b.x, b.y, { steps: 8 });
     await page.mouse.up();
     expect(await toolState(page, 'box')).toMatchObject({ state: 2, controls: false });
@@ -189,13 +205,28 @@ test.describe('GUI Modeling Tools', () => {
 
     // ...drag up, then release to commit
     await page.mouse.move(c.x, c.y, { steps: 8 });
-    expect((await toolState(page, 'box')).height).toBe(25);
+    const dims = await page.evaluate(() => {
+      const t = window.CascadeAPI._tools.tools.box;
+      return {
+        w: Math.abs(t.cornerCAD[0] - t.baseCAD[0]),
+        d: Math.abs(t.cornerCAD[1] - t.baseCAD[1]),
+        h: t.height,
+        minX: Math.min(t.baseCAD[0], t.cornerCAD[0]),
+        minY: Math.min(t.baseCAD[1], t.cornerCAD[1]),
+      };
+    });
+    expect(dims.w).toBeGreaterThan(0);
+    expect(dims.d).toBeGreaterThan(0);
+    expect(dims.h).toBeGreaterThan(0);
     await page.mouse.up();
 
-    const after = await toolState(page, 'box');
-    expect(after).toMatchObject({ state: 0, controls: true, activeTool: 'box' });
+    expect(await toolState(page, 'box')).toMatchObject({
+      state: 0, controls: true, activeTool: 'box',
+    });
+    // The dragged dimensions are exactly what got emitted
     const code = await page.evaluate(() => window.CascadeAPI.getCode());
-    expect(code).toContain('let box1 = Translate([20, 20, 0], Box(40, 30, 25));');
+    expect(code).toContain(
+      `let box1 = Translate([${dims.minX}, ${dims.minY}, 0], Box(${dims.w}, ${dims.d}, ${dims.h}));`);
 
     await waitForToolEvaluation(page, 2);
   });
@@ -205,9 +236,7 @@ test.describe('GUI Modeling Tools', () => {
     await runCodeAndRender(page, 'Box(10, 10, 10);', 1);
     await page.evaluate(() => window.CascadeAPI._tools.activate('cylinder'));
 
-    const center = await screenOfCad(page, 40, 0, 0);
-    const rim    = await screenOfCad(page, 55, 0, 0);   // radius 15
-    const top    = await screenOfCad(page, 40, 0, 18);  // height 18
+    const { a: center, b: rim, up: top } = await groundDragPoints(page);
 
     // Click the center (no drag) — must arm the radius stage, not cancel
     await page.mouse.move(center.x, center.y);
@@ -216,17 +245,23 @@ test.describe('GUI Modeling Tools', () => {
 
     // Move to size the radius, click to lock it
     await page.mouse.move(rim.x, rim.y, { steps: 5 });
-    expect((await toolState(page, 'cylinder')).radius).toBe(15);
+    expect((await toolState(page, 'cylinder')).radius).toBeGreaterThan(0);
     await page.mouse.click(rim.x, rim.y);
     expect(await toolState(page, 'cylinder')).toMatchObject({ state: 2 });
 
     // Move to size the height, click to commit
     await page.mouse.move(top.x, top.y, { steps: 5 });
+    const shape = await page.evaluate(() => {
+      const t = window.CascadeAPI._tools.tools.cylinder;
+      return { r: t.radius, h: t.height, cx: t.centerCAD[0], cy: t.centerCAD[1] };
+    });
+    expect(shape.h).toBeGreaterThan(0);
     await page.mouse.click(top.x, top.y);
     expect(await toolState(page, 'cylinder')).toMatchObject({ state: 0, controls: true });
 
     const code = await page.evaluate(() => window.CascadeAPI.getCode());
-    expect(code).toMatch(/let cylinder1 = Translate\(\[40, 0, 0\], Cylinder\(15, \d+\)\);/);
+    expect(code).toContain(
+      `let cylinder1 = Translate([${shape.cx}, ${shape.cy}, 0], Cylinder(${shape.r}, ${shape.h}));`);
 
     await waitForToolEvaluation(page, 2);
   });
