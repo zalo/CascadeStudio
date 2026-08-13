@@ -122,4 +122,388 @@ test.describe('Python mode: frozen build123d example scripts', () => {
       .toBeLessThan(44436.460392133944 * 0.005);
   });
 
+
+  // examples/heat_exchanger — HexLocations, SortBy.RADIUS, tube arrays (was a timeout on the old bbox hook)
+  test("examples/heat_exchanger", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Code]\n\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import show\n\nexchanger_diameter = 10 * CM\nexchanger_length = 30 * CM\nplate_thickness = 5 * MM\n# 149 tubes\ntube_diameter = 5 * MM\ntube_spacing = 2 * MM\ntube_wall_thickness = 0.5 * MM\ntube_extension = 3 * MM\nbundle_diameter = exchanger_diameter - 2 * tube_diameter\nfillet_radius = tube_spacing / 3\nassert tube_extension > fillet_radius\n\n# Build the heat exchanger\nwith BuildPart() as heat_exchanger:\n    # Generate list of tube locations\n    tube_locations = [\n        l\n        for l in HexLocations(\n            radius=(tube_diameter + tube_spacing) / 2,\n            x_count=exchanger_diameter // tube_diameter,\n            y_count=exchanger_diameter // tube_diameter,\n        )\n        if l.position.length < bundle_diameter / 2\n    ]\n    tube_count = len(tube_locations)\n    with BuildSketch() as tube_plan:\n        with Locations(*tube_locations):\n            Circle(radius=tube_diameter / 2)\n            Circle(radius=tube_diameter / 2 - tube_wall_thickness, mode=Mode.SUBTRACT)\n    extrude(amount=exchanger_length / 2)\n    with BuildSketch(\n        Plane(\n            origin=(0, 0, exchanger_length / 2 - tube_extension - plate_thickness),\n            z_dir=(0, 0, 1),\n        )\n    ) as plate_plan:\n        Circle(radius=exchanger_diameter / 2)\n        with Locations(*tube_locations):\n            Circle(radius=tube_diameter / 2 - tube_wall_thickness, mode=Mode.SUBTRACT)\n    extrude(amount=plate_thickness)\n    half_volume_before_fillet = heat_exchanger.part.volume\n    # Simulate welded tubes by adding a fillet to the outside radius of the tubes\n    fillet(\n        heat_exchanger.edges()\n        .filter_by(GeomType.CIRCLE)\n        .sort_by(SortBy.RADIUS)\n        .sort_by(Axis.Z, reverse=True)[2 * tube_count : 3 * tube_count],\n        radius=fillet_radius,\n    )\n    half_volume_after_fillet = heat_exchanger.part.volume\n    mirror(about=Plane.XY)\n\nfillet_volume = 2 * (half_volume_after_fillet - half_volume_before_fillet)\nassert abs(fillet_volume - 469.88331045553787) < 1e-3\n\nshow(heat_exchanger)\n# [End]\n");
+    // real build123d: heat_exchanger.volume == 363795.07369811094
+    expect(Math.abs(measured["heat_exchanger"].volume - 363795.07369811094))
+      .toBeLessThan(363795.07369811094 * 0.005);
+  });
+
+  // examples/lego — Kind.INTERSECTION 2D offsets + GridLocations wall grid
+  test("examples/lego", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import show_object\n\nGEN_DOCS = False\npip_count = 6\n\nlego_unit_size = 8\npip_height = 1.8\npip_diameter = 4.8\nblock_length = lego_unit_size * pip_count\nblock_width = 16\nbase_height = 9.6\nblock_height = base_height + pip_height\nsupport_outer_diameter = 6.5\nsupport_inner_diameter = 4.8\nridge_width = 0.6\nridge_depth = 0.3\nwall_thickness = 1.2\n\nwith BuildPart() as lego:\n    # Draw the bottom of the block\n    with BuildSketch() as plan:\n        # Start with a Rectangle the size of the block\n        perimeter = Rectangle(width=block_length, height=block_width)\n        if GEN_DOCS:\n            exporter = ExportSVG(scale=6)\n            exporter.add_shape(plan.sketch)\n            exporter.write(\"assets/lego_step4.svg\")\n        # Subtract an offset to create the block walls\n        offset(\n            perimeter,\n            -wall_thickness,\n            kind=Kind.INTERSECTION,\n            mode=Mode.SUBTRACT,\n        )\n        if GEN_DOCS:\n            exporter = ExportSVG(scale=6)\n            exporter.add_shape(plan.sketch)\n            exporter.write(\"assets/lego_step5.svg\")\n        # Add a grid of lengthwise and widthwise bars\n        with GridLocations(x_spacing=0, y_spacing=lego_unit_size, x_count=1, y_count=2):\n            Rectangle(width=block_length, height=ridge_width)\n        with GridLocations(lego_unit_size, 0, pip_count, 1):\n            Rectangle(width=ridge_width, height=block_width)\n        if GEN_DOCS:\n            exporter = ExportSVG(scale=6)\n            exporter.add_shape(plan.sketch)\n            exporter.write(\"assets/lego_step6.svg\")\n        # Subtract a rectangle leaving ribs on the block walls\n        Rectangle(\n            block_length - 2 * (wall_thickness + ridge_depth),\n            block_width - 2 * (wall_thickness + ridge_depth),\n            mode=Mode.SUBTRACT,\n        )\n        if GEN_DOCS:\n            exporter = ExportSVG(scale=6)\n            exporter.add_shape(plan.sketch)\n            exporter.write(\"assets/lego_step7.svg\")\n        # Add a row of hollow circles to the center\n        with GridLocations(\n            x_spacing=lego_unit_size, y_spacing=0, x_count=pip_count - 1, y_count=1\n        ):\n            Circle(radius=support_outer_diameter / 2)\n            Circle(radius=support_inner_diameter / 2, mode=Mode.SUBTRACT)\n        if GEN_DOCS:\n            exporter = ExportSVG(scale=6)\n            exporter.add_shape(plan.sketch)\n            exporter.write(\"assets/lego_step8.svg\")\n    # Extrude this base sketch to the height of the walls\n    extrude(amount=base_height - wall_thickness)\n    if GEN_DOCS:\n        visible, hidden = lego.part.project_to_viewport((-5, -30, 50))\n        exporter = ExportSVG(scale=6)\n        exporter.add_layer(\"Visible\")\n        exporter.add_layer(\n            \"Hidden\", line_color=(99, 99, 99), line_type=LineType.ISO_DOT\n        )\n        exporter.add_shape(visible, layer=\"Visible\")\n        exporter.add_shape(hidden, layer=\"Hidden\")\n        exporter.write(\"assets/lego_step9.svg\")\n    # Create a box on the top of the walls\n    with Locations((0, 0, lego.vertices().sort_by(Axis.Z)[-1].Z)):\n        # Create the top of the block\n        Box(\n            length=block_length,\n            width=block_width,\n            height=wall_thickness,\n            align=(Align.CENTER, Align.CENTER, Align.MIN),\n        )\n    if GEN_DOCS:\n        visible, hidden = lego.part.project_to_viewport((-5, -30, 50))\n        exporter = ExportSVG(scale=6)\n        exporter.add_layer(\"Visible\")\n        exporter.add_layer(\n            \"Hidden\", line_color=(99, 99, 99), line_type=LineType.ISO_DOT\n        )\n        exporter.add_shape(visible, layer=\"Visible\")\n        exporter.add_shape(hidden, layer=\"Hidden\")\n        exporter.write(\"assets/lego_step10.svg\")\n    # Create a workplane on the top of the block\n    with BuildPart(lego.faces().sort_by(Axis.Z)[-1]):\n        # Create a grid of pips\n        with GridLocations(lego_unit_size, lego_unit_size, pip_count, 2):\n            Cylinder(\n                radius=pip_diameter / 2,\n                height=pip_height,\n                align=(Align.CENTER, Align.CENTER, Align.MIN),\n            )\n    if GEN_DOCS:\n        visible, hidden = lego.part.project_to_viewport((-100, -100, 50))\n        exporter = ExportSVG(scale=6)\n        exporter.add_layer(\"Visible\")\n        exporter.add_layer(\n            \"Hidden\", line_color=(99, 99, 99), line_type=LineType.ISO_DOT\n        )\n        exporter.add_shape(visible, layer=\"Visible\")\n        exporter.add_shape(hidden, layer=\"Hidden\")\n        exporter.write(\"assets/lego.svg\")\n\nassert abs(lego.part.volume - 3212.187337781355) < 1e-3\n\nshow_object(lego.part, name=\"lego\")\n");
+    // real build123d: lego.volume == 3212.1873377813517
+    expect(Math.abs(measured["lego"].volume - 3212.1873377813517))
+      .toBeLessThan(3212.1873377813517 * 0.005);
+  });
+
+  // examples/loft — loft between pending sketches
+  test("examples/loft", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Code]\n\nfrom math import pi, sin\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import show\n\nwith BuildPart() as art:\n    slice_count = 10\n    for i in range(slice_count + 1):\n        with BuildSketch(Plane(origin=(0, 0, i * 3), z_dir=(0, 0, 1))) as slice:\n            Circle(10 * sin(i * pi / slice_count) + 5)\n    loft()\n    top_bottom = art.faces().filter_by(GeomType.PLANE)\n    offset(openings=top_bottom, amount=0.5)\n\nwant = 1306.3405290344635\ngot = art.part.volume\ndelta = abs(got - want)\ntolerance = want * 1e-5\nassert delta < tolerance, f\"{delta=} is greater than {tolerance=}; {got=}, {want=}\"\n\nshow(art, names=[\"art\"])\n# [End]\n");
+    // real build123d: art.volume == 1306.3405290344635
+    expect(Math.abs(measured["art"].volume - 1306.3405290344635))
+      .toBeLessThan(1306.3405290344635 * 0.005);
+  });
+
+  // examples/packed_boxes — pack() port + exact MT19937 random shim + HLR projection
+  test("examples/packed_boxes", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "import functools\nimport operator\nimport random\nimport build123d as bd\n\nGEN_DOCS = False\n\nrandom.seed(123456)\ntest_boxes = [bd.Box(random.randint(1, 20), random.randint(1, 20), random.randint(1, 5))\n              for _ in range(50)]\npacked = bd.pack(test_boxes, 3)\n\n# Lifted from https://build123d.readthedocs.io/en/latest/import_export.html#d-to-2d-projection\ndef export_svg(parts, name):\n    part = functools.reduce(operator.add, parts, bd.Part())\n    view_port_origin=(0, 0, 150)\n    visible, hidden = part.project_to_viewport(view_port_origin)\n    max_dimension = max(*bd.Compound(children=visible + hidden).bounding_box().size)\n    exporter = bd.ExportSVG(scale=100 / max_dimension)\n    exporter.add_layer(\"Visible\")\n    exporter.add_layer(\"Hidden\", line_color=(99, 99, 99), line_type=bd.LineType.ISO_DOT)\n    exporter.add_shape(visible, layer=\"Visible\")\n    exporter.add_shape(hidden, layer=\"Hidden\")\n    if GEN_DOCS:\n        exporter.write(f\"../docs/assets/{name}.svg\")\n\nexport_svg(test_boxes, \"packed_boxes_input\")\nexport_svg(packed, \"packed_boxes_output\")\n");
+    // real build123d: packed[0].volume == 342.0
+    expect(Math.abs(measured["packed[0]"].volume - 342.0))
+      .toBeLessThan(342.0 * 0.005);
+    // real build123d: packed[10].volume == 340.00000000000006
+    expect(Math.abs(measured["packed[10]"].volume - 340.00000000000006))
+      .toBeLessThan(340.00000000000006 * 0.005);
+    // real build123d: packed[11].volume == 1020.0
+    expect(Math.abs(measured["packed[11]"].volume - 1020.0))
+      .toBeLessThan(1020.0 * 0.005);
+    // real build123d: packed[12].volume == 99.99999999999997
+    expect(Math.abs(measured["packed[12]"].volume - 99.99999999999997))
+      .toBeLessThan(99.99999999999997 * 0.005);
+    // real build123d: packed[13].volume == 280.0
+    expect(Math.abs(measured["packed[13]"].volume - 280.0))
+      .toBeLessThan(280.0 * 0.005);
+    // real build123d: packed[14].volume == 420.0
+    expect(Math.abs(measured["packed[14]"].volume - 420.0))
+      .toBeLessThan(420.0 * 0.005);
+    // real build123d: packed[15].volume == 96.0
+    expect(Math.abs(measured["packed[15]"].volume - 96.0))
+      .toBeLessThan(96.0 * 0.005);
+    // real build123d: packed[16].volume == 31.999999999999993
+    expect(Math.abs(measured["packed[16]"].volume - 31.999999999999993))
+      .toBeLessThan(31.999999999999993 * 0.005);
+    // real build123d: packed[17].volume == 627.0
+    expect(Math.abs(measured["packed[17]"].volume - 627.0))
+      .toBeLessThan(627.0 * 0.005);
+    // real build123d: packed[18].volume == 168.0
+    expect(Math.abs(measured["packed[18]"].volume - 168.0))
+      .toBeLessThan(168.0 * 0.005);
+    // real build123d: packed[19].volume == 18.0
+    expect(Math.abs(measured["packed[19]"].volume - 18.0))
+      .toBeLessThan(18.0 * 0.005);
+    // real build123d: packed[1].volume == 364.0
+    expect(Math.abs(measured["packed[1]"].volume - 364.0))
+      .toBeLessThan(364.0 * 0.005);
+    // real build123d: packed[20].volume == 120.0
+    expect(Math.abs(measured["packed[20]"].volume - 120.0))
+      .toBeLessThan(120.0 * 0.005);
+    // real build123d: packed[21].volume == 216.0
+    expect(Math.abs(measured["packed[21]"].volume - 216.0))
+      .toBeLessThan(216.0 * 0.005);
+    // real build123d: packed[22].volume == 48.0
+    expect(Math.abs(measured["packed[22]"].volume - 48.0))
+      .toBeLessThan(48.0 * 0.005);
+    // real build123d: packed[23].volume == 153.0
+    expect(Math.abs(measured["packed[23]"].volume - 153.0))
+      .toBeLessThan(153.0 * 0.005);
+    // real build123d: packed[24].volume == 255.99999999999994
+    expect(Math.abs(measured["packed[24]"].volume - 255.99999999999994))
+      .toBeLessThan(255.99999999999994 * 0.005);
+    // real build123d: packed[25].volume == 9.0
+    expect(Math.abs(measured["packed[25]"].volume - 9.0))
+      .toBeLessThan(9.0 * 0.005);
+    // real build123d: packed[26].volume == 34.0
+    expect(Math.abs(measured["packed[26]"].volume - 34.0))
+      .toBeLessThan(34.0 * 0.005);
+    // real build123d: packed[27].volume == 1275.0
+    expect(Math.abs(measured["packed[27]"].volume - 1275.0))
+      .toBeLessThan(1275.0 * 0.005);
+    // real build123d: packed[28].volume == 129.99999999999997
+    expect(Math.abs(measured["packed[28]"].volume - 129.99999999999997))
+      .toBeLessThan(129.99999999999997 * 0.005);
+    // real build123d: packed[29].volume == 60.0
+    expect(Math.abs(measured["packed[29]"].volume - 60.0))
+      .toBeLessThan(60.0 * 0.005);
+    // real build123d: packed[2].volume == 221.0
+    expect(Math.abs(measured["packed[2]"].volume - 221.0))
+      .toBeLessThan(221.0 * 0.005);
+    // real build123d: packed[30].volume == 12.0
+    expect(Math.abs(measured["packed[30]"].volume - 12.0))
+      .toBeLessThan(12.0 * 0.005);
+    // real build123d: packed[31].volume == 39.99999999999999
+    expect(Math.abs(measured["packed[31]"].volume - 39.99999999999999))
+      .toBeLessThan(39.99999999999999 * 0.005);
+    // real build123d: packed[32].volume == 56.0
+    expect(Math.abs(measured["packed[32]"].volume - 56.0))
+      .toBeLessThan(56.0 * 0.005);
+    // real build123d: packed[33].volume == 156.0
+    expect(Math.abs(measured["packed[33]"].volume - 156.0))
+      .toBeLessThan(156.0 * 0.005);
+    // real build123d: packed[34].volume == 182.00000000000003
+    expect(Math.abs(measured["packed[34]"].volume - 182.00000000000003))
+      .toBeLessThan(182.00000000000003 * 0.005);
+    // real build123d: packed[35].volume == 156.0
+    expect(Math.abs(measured["packed[35]"].volume - 156.0))
+      .toBeLessThan(156.0 * 0.005);
+    // real build123d: packed[36].volume == 585.0
+    expect(Math.abs(measured["packed[36]"].volume - 585.0))
+      .toBeLessThan(585.0 * 0.005);
+    // real build123d: packed[37].volume == 168.0
+    expect(Math.abs(measured["packed[37]"].volume - 168.0))
+      .toBeLessThan(168.0 * 0.005);
+    // real build123d: packed[38].volume == 17.999999999999996
+    expect(Math.abs(measured["packed[38]"].volume - 17.999999999999996))
+      .toBeLessThan(17.999999999999996 * 0.005);
+    // real build123d: packed[39].volume == 7.999999999999998
+    expect(Math.abs(measured["packed[39]"].volume - 7.999999999999998))
+      .toBeLessThan(7.999999999999998 * 0.005);
+    // real build123d: packed[3].volume == 1519.9999999999998
+    expect(Math.abs(measured["packed[3]"].volume - 1519.9999999999998))
+      .toBeLessThan(1519.9999999999998 * 0.005);
+    // real build123d: packed[40].volume == 95.99999999999999
+    expect(Math.abs(measured["packed[40]"].volume - 95.99999999999999))
+      .toBeLessThan(95.99999999999999 * 0.005);
+    // real build123d: packed[41].volume == 198.0
+    expect(Math.abs(measured["packed[41]"].volume - 198.0))
+      .toBeLessThan(198.0 * 0.005);
+    // real build123d: packed[42].volume == 27.0
+    expect(Math.abs(measured["packed[42]"].volume - 27.0))
+      .toBeLessThan(27.0 * 0.005);
+    // real build123d: packed[43].volume == 299.99999999999994
+    expect(Math.abs(measured["packed[43]"].volume - 299.99999999999994))
+      .toBeLessThan(299.99999999999994 * 0.005);
+    // real build123d: packed[44].volume == 19.999999999999996
+    expect(Math.abs(measured["packed[44]"].volume - 19.999999999999996))
+      .toBeLessThan(19.999999999999996 * 0.005);
+    // real build123d: packed[45].volume == 396.0
+    expect(Math.abs(measured["packed[45]"].volume - 396.0))
+      .toBeLessThan(396.0 * 0.005);
+    // real build123d: packed[46].volume == 121.0
+    expect(Math.abs(measured["packed[46]"].volume - 121.0))
+      .toBeLessThan(121.0 * 0.005);
+    // real build123d: packed[47].volume == 288.0
+    expect(Math.abs(measured["packed[47]"].volume - 288.0))
+      .toBeLessThan(288.0 * 0.005);
+    // real build123d: packed[48].volume == 81.0
+    expect(Math.abs(measured["packed[48]"].volume - 81.0))
+      .toBeLessThan(81.0 * 0.005);
+    // real build123d: packed[49].volume == 2.9999999999999996
+    expect(Math.abs(measured["packed[49]"].volume - 2.9999999999999996))
+      .toBeLessThan(2.9999999999999996 * 0.005);
+    // real build123d: packed[4].volume == 1425.0
+    expect(Math.abs(measured["packed[4]"].volume - 1425.0))
+      .toBeLessThan(1425.0 * 0.005);
+    // real build123d: packed[5].volume == 918.0
+    expect(Math.abs(measured["packed[5]"].volume - 918.0))
+      .toBeLessThan(918.0 * 0.005);
+    // real build123d: packed[6].volume == 112.0
+    expect(Math.abs(measured["packed[6]"].volume - 112.0))
+      .toBeLessThan(112.0 * 0.005);
+    // real build123d: packed[7].volume == 510.0
+    expect(Math.abs(measured["packed[7]"].volume - 510.0))
+      .toBeLessThan(510.0 * 0.005);
+    // real build123d: packed[8].volume == 680.0
+    expect(Math.abs(measured["packed[8]"].volume - 680.0))
+      .toBeLessThan(680.0 * 0.005);
+    // real build123d: packed[9].volume == 36.0
+    expect(Math.abs(measured["packed[9]"].volume - 36.0))
+      .toBeLessThan(36.0 * 0.005);
+    // real build123d: test_boxes[0].volume == 19.999999999999996
+    expect(Math.abs(measured["test_boxes[0]"].volume - 19.999999999999996))
+      .toBeLessThan(19.999999999999996 * 0.005);
+    // real build123d: test_boxes[10].volume == 60.0
+    expect(Math.abs(measured["test_boxes[10]"].volume - 60.0))
+      .toBeLessThan(60.0 * 0.005);
+    // real build123d: test_boxes[11].volume == 18.0
+    expect(Math.abs(measured["test_boxes[11]"].volume - 18.0))
+      .toBeLessThan(18.0 * 0.005);
+    // real build123d: test_boxes[12].volume == 627.0
+    expect(Math.abs(measured["test_boxes[12]"].volume - 627.0))
+      .toBeLessThan(627.0 * 0.005);
+    // real build123d: test_boxes[13].volume == 1275.0
+    expect(Math.abs(measured["test_boxes[13]"].volume - 1275.0))
+      .toBeLessThan(1275.0 * 0.005);
+    // real build123d: test_boxes[14].volume == 396.0
+    expect(Math.abs(measured["test_boxes[14]"].volume - 396.0))
+      .toBeLessThan(396.0 * 0.005);
+    // real build123d: test_boxes[15].volume == 96.0
+    expect(Math.abs(measured["test_boxes[15]"].volume - 96.0))
+      .toBeLessThan(96.0 * 0.005);
+    // real build123d: test_boxes[16].volume == 27.0
+    expect(Math.abs(measured["test_boxes[16]"].volume - 27.0))
+      .toBeLessThan(27.0 * 0.005);
+    // real build123d: test_boxes[17].volume == 420.0
+    expect(Math.abs(measured["test_boxes[17]"].volume - 420.0))
+      .toBeLessThan(420.0 * 0.005);
+    // real build123d: test_boxes[18].volume == 7.999999999999998
+    expect(Math.abs(measured["test_boxes[18]"].volume - 7.999999999999998))
+      .toBeLessThan(7.999999999999998 * 0.005);
+    // real build123d: test_boxes[19].volume == 56.0
+    expect(Math.abs(measured["test_boxes[19]"].volume - 56.0))
+      .toBeLessThan(56.0 * 0.005);
+    // real build123d: test_boxes[1].volume == 2.9999999999999996
+    expect(Math.abs(measured["test_boxes[1]"].volume - 2.9999999999999996))
+      .toBeLessThan(2.9999999999999996 * 0.005);
+    // real build123d: test_boxes[20].volume == 156.0
+    expect(Math.abs(measured["test_boxes[20]"].volume - 156.0))
+      .toBeLessThan(156.0 * 0.005);
+    // real build123d: test_boxes[21].volume == 99.99999999999997
+    expect(Math.abs(measured["test_boxes[21]"].volume - 99.99999999999997))
+      .toBeLessThan(99.99999999999997 * 0.005);
+    // real build123d: test_boxes[22].volume == 280.0
+    expect(Math.abs(measured["test_boxes[22]"].volume - 280.0))
+      .toBeLessThan(280.0 * 0.005);
+    // real build123d: test_boxes[23].volume == 680.0
+    expect(Math.abs(measured["test_boxes[23]"].volume - 680.0))
+      .toBeLessThan(680.0 * 0.005);
+    // real build123d: test_boxes[24].volume == 340.00000000000006
+    expect(Math.abs(measured["test_boxes[24]"].volume - 340.00000000000006))
+      .toBeLessThan(340.00000000000006 * 0.005);
+    // real build123d: test_boxes[25].volume == 585.0
+    expect(Math.abs(measured["test_boxes[25]"].volume - 585.0))
+      .toBeLessThan(585.0 * 0.005);
+    // real build123d: test_boxes[26].volume == 95.99999999999999
+    expect(Math.abs(measured["test_boxes[26]"].volume - 95.99999999999999))
+      .toBeLessThan(95.99999999999999 * 0.005);
+    // real build123d: test_boxes[27].volume == 39.99999999999999
+    expect(Math.abs(measured["test_boxes[27]"].volume - 39.99999999999999))
+      .toBeLessThan(39.99999999999999 * 0.005);
+    // real build123d: test_boxes[28].volume == 31.999999999999993
+    expect(Math.abs(measured["test_boxes[28]"].volume - 31.999999999999993))
+      .toBeLessThan(31.999999999999993 * 0.005);
+    // real build123d: test_boxes[29].volume == 216.0
+    expect(Math.abs(measured["test_boxes[29]"].volume - 216.0))
+      .toBeLessThan(216.0 * 0.005);
+    // real build123d: test_boxes[2].volume == 9.0
+    expect(Math.abs(measured["test_boxes[2]"].volume - 9.0))
+      .toBeLessThan(9.0 * 0.005);
+    // real build123d: test_boxes[30].volume == 288.0
+    expect(Math.abs(measured["test_boxes[30]"].volume - 288.0))
+      .toBeLessThan(288.0 * 0.005);
+    // real build123d: test_boxes[31].volume == 153.0
+    expect(Math.abs(measured["test_boxes[31]"].volume - 153.0))
+      .toBeLessThan(153.0 * 0.005);
+    // real build123d: test_boxes[32].volume == 918.0
+    expect(Math.abs(measured["test_boxes[32]"].volume - 918.0))
+      .toBeLessThan(918.0 * 0.005);
+    // real build123d: test_boxes[33].volume == 1519.9999999999998
+    expect(Math.abs(measured["test_boxes[33]"].volume - 1519.9999999999998))
+      .toBeLessThan(1519.9999999999998 * 0.005);
+    // real build123d: test_boxes[34].volume == 168.0
+    expect(Math.abs(measured["test_boxes[34]"].volume - 168.0))
+      .toBeLessThan(168.0 * 0.005);
+    // real build123d: test_boxes[35].volume == 299.99999999999994
+    expect(Math.abs(measured["test_boxes[35]"].volume - 299.99999999999994))
+      .toBeLessThan(299.99999999999994 * 0.005);
+    // real build123d: test_boxes[36].volume == 182.00000000000003
+    expect(Math.abs(measured["test_boxes[36]"].volume - 182.00000000000003))
+      .toBeLessThan(182.00000000000003 * 0.005);
+    // real build123d: test_boxes[37].volume == 129.99999999999997
+    expect(Math.abs(measured["test_boxes[37]"].volume - 129.99999999999997))
+      .toBeLessThan(129.99999999999997 * 0.005);
+    // real build123d: test_boxes[38].volume == 168.0
+    expect(Math.abs(measured["test_boxes[38]"].volume - 168.0))
+      .toBeLessThan(168.0 * 0.005);
+    // real build123d: test_boxes[39].volume == 198.0
+    expect(Math.abs(measured["test_boxes[39]"].volume - 198.0))
+      .toBeLessThan(198.0 * 0.005);
+    // real build123d: test_boxes[3].volume == 255.99999999999994
+    expect(Math.abs(measured["test_boxes[3]"].volume - 255.99999999999994))
+      .toBeLessThan(255.99999999999994 * 0.005);
+    // real build123d: test_boxes[40].volume == 121.0
+    expect(Math.abs(measured["test_boxes[40]"].volume - 121.0))
+      .toBeLessThan(121.0 * 0.005);
+    // real build123d: test_boxes[41].volume == 1425.0
+    expect(Math.abs(measured["test_boxes[41]"].volume - 1425.0))
+      .toBeLessThan(1425.0 * 0.005);
+    // real build123d: test_boxes[42].volume == 120.0
+    expect(Math.abs(measured["test_boxes[42]"].volume - 120.0))
+      .toBeLessThan(120.0 * 0.005);
+    // real build123d: test_boxes[43].volume == 342.0
+    expect(Math.abs(measured["test_boxes[43]"].volume - 342.0))
+      .toBeLessThan(342.0 * 0.005);
+    // real build123d: test_boxes[44].volume == 81.0
+    expect(Math.abs(measured["test_boxes[44]"].volume - 81.0))
+      .toBeLessThan(81.0 * 0.005);
+    // real build123d: test_boxes[45].volume == 221.0
+    expect(Math.abs(measured["test_boxes[45]"].volume - 221.0))
+      .toBeLessThan(221.0 * 0.005);
+    // real build123d: test_boxes[46].volume == 17.999999999999996
+    expect(Math.abs(measured["test_boxes[46]"].volume - 17.999999999999996))
+      .toBeLessThan(17.999999999999996 * 0.005);
+    // real build123d: test_boxes[47].volume == 12.0
+    expect(Math.abs(measured["test_boxes[47]"].volume - 12.0))
+      .toBeLessThan(12.0 * 0.005);
+    // real build123d: test_boxes[48].volume == 364.0
+    expect(Math.abs(measured["test_boxes[48]"].volume - 364.0))
+      .toBeLessThan(364.0 * 0.005);
+    // real build123d: test_boxes[49].volume == 112.0
+    expect(Math.abs(measured["test_boxes[49]"].volume - 112.0))
+      .toBeLessThan(112.0 * 0.005);
+    // real build123d: test_boxes[4].volume == 34.0
+    expect(Math.abs(measured["test_boxes[4]"].volume - 34.0))
+      .toBeLessThan(34.0 * 0.005);
+    // real build123d: test_boxes[5].volume == 156.0
+    expect(Math.abs(measured["test_boxes[5]"].volume - 156.0))
+      .toBeLessThan(156.0 * 0.005);
+    // real build123d: test_boxes[6].volume == 48.0
+    expect(Math.abs(measured["test_boxes[6]"].volume - 48.0))
+      .toBeLessThan(48.0 * 0.005);
+    // real build123d: test_boxes[7].volume == 1020.0
+    expect(Math.abs(measured["test_boxes[7]"].volume - 1020.0))
+      .toBeLessThan(1020.0 * 0.005);
+    // real build123d: test_boxes[8].volume == 510.0
+    expect(Math.abs(measured["test_boxes[8]"].volume - 510.0))
+      .toBeLessThan(510.0 * 0.005);
+    // real build123d: test_boxes[9].volume == 36.0
+    expect(Math.abs(measured["test_boxes[9]"].volume - 36.0))
+      .toBeLessThan(36.0 * 0.005);
+  });
+
+  // examples/clock — 2D vertex fillets (FilletFace2D) + PolarLocations + Text
+  test("examples/clock", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Code]\n\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import show\n\nclock_radius = 10\nwith BuildSketch() as minute_indicator:\n    with BuildLine() as outline:\n        l1 = CenterArc((0, 0), clock_radius * 0.975, 0.75, 4.5)\n        l2 = CenterArc((0, 0), clock_radius * 0.925, 0.75, 4.5)\n        Line(l1 @ 0, l2 @ 0)\n        Line(l1 @ 1, l2 @ 1)\n    make_face()\n    fillet(minute_indicator.vertices(), radius=clock_radius * 0.01)\n\nwith BuildSketch() as clock_face:\n    Circle(clock_radius)\n    with PolarLocations(0, 60):\n        add(minute_indicator.sketch, mode=Mode.SUBTRACT)\n    with PolarLocations(clock_radius * 0.875, 12):\n        SlotOverall(clock_radius * 0.05, clock_radius * 0.025, mode=Mode.SUBTRACT)\n    for hour in range(1, 13):\n        with PolarLocations(clock_radius * 0.75, 1, -hour * 30 + 90, 360, rotate=False):\n            Text(\n                str(hour),\n                font_size=clock_radius * 0.175,\n                font_style=FontStyle.BOLD,\n                mode=Mode.SUBTRACT,\n            )\n\nshow(clock_face)\n# [End]\n");
+  });
+
+  // general_examples/ex23 — revolve of pending sketches around Axis.X
+  test("general_examples/ex23", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\n# 23. Revolve\n# [Ex. 23]\npts = [\n    (-25, 35),\n    (-25, 0),\n    (-20, 0),\n    (-20, 5),\n    (-15, 10),\n    (-15, 35),\n]\n\nwith BuildPart() as ex23:\n    with BuildSketch(Plane.XZ) as ex23_sk:\n        with BuildLine() as ex23_ln:\n            l1 = Polyline(pts)\n            l2 = Line(l1 @ 1, l1 @ 0)\n        make_face()\n        with Locations((0, 35)):\n            Circle(25)\n        split(bisect_by=Plane.ZY)\n    revolve(axis=Axis.Z)\n    # [Ex. 23]\n# [removed by collect.py] write_svg()\n\n# show_object(ex23.part)\n");
+    // real build123d: ex23.volume == 88619.09277001212
+    expect(Math.abs(measured["ex23"].volume - 88619.09277001212))
+      .toBeLessThan(88619.09277001212 * 0.005);
+  });
+
+  // general_examples/ex29 — classic OCC bottle: arcs, make_face orientation, offset(openings=)
+  test("general_examples/ex29", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\n# 29. The Classic OCC Bottle\n# [Ex. 29]\nL, w, t, b, h, n = 60.0, 18.0, 9.0, 0.9, 90.0, 6.0\n\nwith BuildPart() as ex29:\n    with BuildSketch(Plane.XY.offset(-b)) as ex29_ow_sk:\n        with BuildLine() as ex29_ow_ln:\n            l1 = Line((0, 0), (0, w / 2))\n            l2 = ThreePointArc(l1 @ 1, (L / 2.0, w / 2.0 + t), (L, w / 2.0))\n            l3 = Line(l2 @ 1, ((l2 @ 1).X, 0, 0))\n            mirror(ex29_ow_ln.line)\n        make_face()\n    extrude(amount=h + b)\n    fillet(ex29.edges(), radius=w / 6)\n    with BuildSketch(ex29.faces().sort_by(Axis.Z)[-1]):\n        Circle(t)\n    extrude(amount=n)\n    necktopf = ex29.faces().sort_by(Axis.Z)[-1]\n    offset(ex29.solids()[0], amount=-b, openings=necktopf)\n    # [Ex. 29]\n# [removed by collect.py] write_svg()\n\n# show_object(ex29.part)\n");
+    // real build123d: ex29.volume == 15796.616314840601
+    expect(Math.abs(measured["ex29"].volume - 15796.616314840601))
+      .toBeLessThan(15796.616314840601 * 0.005);
+  });
+
+  // general_examples/ex35 — SlotCenterToCenter + SlotArc from raw arc edges
+  test("general_examples/ex35", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\n# 35. Slots\n# [Ex. 35]\nlength, width, thickness = 80.0, 60.0, 10.0\n\nwith BuildPart() as ex35:\n    Box(length, length, thickness)\n    topf = ex35.faces().sort_by(Axis.Z)[-1]\n    with BuildSketch(topf) as ex35_sk:\n        SlotCenterToCenter(width / 2, 10)\n        with BuildLine(mode=Mode.PRIVATE) as ex35_ln:\n            RadiusArc((-width / 2, 0), (0, width / 2), radius=width / 2)\n        SlotArc(arc=ex35_ln.edges()[0], height=thickness, rotation=0)\n        with BuildLine(mode=Mode.PRIVATE) as ex35_ln2:\n            RadiusArc((0, -width / 2), (width / 2, 0), radius=-width / 2)\n        SlotArc(arc=ex35_ln2.edges()[0], height=thickness, rotation=0)\n    extrude(amount=-thickness, mode=Mode.SUBTRACT)\n    # [Ex. 35]\n# [removed by collect.py] write_svg()\n\n# show_object(ex35.part)\n");
+    // real build123d: ex35.volume == 49219.02754903829
+    expect(Math.abs(measured["ex35"].volume - 49219.02754903829))
+      .toBeLessThan(49219.02754903829 * 0.005);
+  });
+
+  // general_examples/ex36 — extrude(until=Until.NEXT) boolean trim
+  test("general_examples/ex36", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\n# 36. Extrude-Until\n# [Ex. 36]\nrad, rev = 6, 50\n\nwith BuildPart() as ex36:\n    with BuildSketch() as ex36_sk:\n        with Locations((0, rev)):\n            Circle(rad)\n    revolve(axis=Axis.X, revolution_arc=180)\n    with BuildSketch() as ex36_sk2:\n        Rectangle(rad, rev)\n    extrude(until=Until.NEXT)\n    # [Ex. 36]\n# [removed by collect.py] write_svg()\n\n# show_object(ex36.part)\n");
+    // real build123d: ex36.volume == 30298.935241110394
+    expect(Math.abs(measured["ex36"].volume - 30298.935241110394))
+      .toBeLessThan(30298.935241110394 * 0.005);
+  });
+
+  // examples/boxes_on_faces — BuildSketch(*faces) with UV-derived Plane(face) x_dir
+  test("examples/boxes_on_faces", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Imports]\nimport build123d as bd\n# [removed by collect.py] from ocp_vscode import *\n\n# [Code]\nwith bd.BuildPart() as bp:\n    bd.Box(3, 3, 3)\n    with bd.BuildSketch(*bp.faces()):\n        bd.Rectangle(1, 2, rotation=45)\n    bd.extrude(amount=0.1)\n\nassert abs(bp.part.volume - (3**3 + 6 * (1 * 2 * 0.1)) < 1e-3)\n\nif \"show_object\" in locals():\n    show_object(bp.part.wrapped, name=\"box on faces\")\n# [End]");
+    // real build123d: bp.volume == 28.20000000000004
+    expect(Math.abs(measured["bp"].volume - 28.20000000000004))
+      .toBeLessThan(28.20000000000004 * 0.005);
+  });
 });
