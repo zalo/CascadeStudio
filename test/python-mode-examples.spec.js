@@ -31,6 +31,12 @@ async function runAndMeasure(page, code) {
 }
 
 test.describe('Python mode: frozen build123d example scripts', () => {
+  // Heavy scripts (hex-array booleans, Gordon-surface projection) exceed the
+  // default 120s on slow CI runners (SwiftShader WebGL, 2 cores) — the
+  // push-event run of bb1ce0f timed out on heat_exchanger/bracelet while the
+  // pull_request run passed on a faster machine. Give every frozen example
+  // generous headroom; wall-clock locally is unaffected (they finish early).
+  test.setTimeout(360000);
 
   // general_examples/ex02 — builder mode: Box + Mode.SUBTRACT Cylinder
   test("general_examples/ex02", async ({ page }) => {
