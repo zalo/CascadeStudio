@@ -558,4 +558,68 @@ test.describe('Python mode: frozen build123d example scripts', () => {
       .toBeLessThan(81746795.99163055 * 0.005);
   });
 
+
+  // examples/canadian_flag — surface-from-points (GeomAPI_PointsToBSplineSurface
+  // via Handle_Geom_BSplineSurface.AsGeomSurface), projection onto the wavy
+  // surface, per-variable bbox parity with real build123d
+  test("examples/canadian_flag", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Imports]\nfrom math import sin, cos, pi\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import show_object, show, show_all\n\n# [Parameters]\n# Canadian Flags have a 2:1 aspect ratio\nheight = 50\nwidth = 2 * height\nwave_amplitude = 3\n\n# [Code]\n\n\ndef surface(amplitude, u, v):\n    \"\"\"Calculate the surface displacement of the flag at a given position\"\"\"\n    return v * amplitude / 20 * cos(3.5 * pi * u) + amplitude / 10 * v * sin(\n        1.1 * pi * v\n    )\n\n\n# Note that the surface to project on must be a little larger than the faces\n# being projected onto it to create valid projected faces\nthe_wind = Face.make_surface_from_array_of_points(\n    [\n        [\n            Vector(\n                width * (v * 1.1 / 40 - 0.05),\n                height * (u * 1.2 / 40 - 0.1),\n                height * surface(wave_amplitude, u / 40, v / 40) / 2,\n            )\n            for u in range(41)\n        ]\n        for v in range(41)\n    ]\n)\nwith BuildSketch(Plane.XY.offset(10)) as west_field_builder:\n    Rectangle(width / 4, height, align=(Align.MIN, Align.MIN))\nwest_field_planar = west_field_builder.sketch.faces()[0]\neast_field_planar = west_field_planar.mirror(Plane.YZ.offset(width / 2))\n\nwith BuildSketch(Plane((width / 2, 0, 10))) as center_field_builder:\n    Rectangle(width / 2, height, align=(Align.CENTER, Align.MIN))\n    with BuildLine() as outline:\n        l1 = Polyline((0.0000, 0.0771), (0.0187, 0.0771), (0.0094, 0.2569))\n        l2 = Polyline((0.0325, 0.2773), (0.2115, 0.2458), (0.1873, 0.3125))\n        RadiusArc(l1 @ 1, l2 @ 0, 0.0271)\n        l3 = Polyline((0.1915, 0.3277), (0.3875, 0.4865), (0.3433, 0.5071))\n        TangentArc(l2 @ 1, l3 @ 0, tangent=l2 % 1)\n        l4 = Polyline((0.3362, 0.5235), (0.375, 0.6427), (0.2621, 0.6188))\n        SagittaArc(l3 @ 1, l4 @ 0, 0.003)\n        l5 = Polyline((0.2469, 0.6267), (0.225, 0.6781), (0.1369, 0.5835))\n        ThreePointArc(l4 @ 1, (l4 @ 1 + l5 @ 0) * 0.5 + Vector(-0.002, -0.002), l5 @ 0)\n        l6 = Polyline((0.1138, 0.5954), (0.1562, 0.8146), (0.0881, 0.7752))\n        Spline(\n            l5 @ 1,\n            l6 @ 0,\n            tangents=(l5 % 1, l6 % 0),\n            tangent_scalars=(2, 2),\n        )\n        l7 = Line((0.0692, 0.7808), (0.0000, 0.9167))\n        TangentArc(l6 @ 1, l7 @ 0, tangent=l6 % 1)\n        mirror(about=Plane.YZ)\n        scale(by=height)\n    maple_leaf_planar = make_face(mode=Mode.SUBTRACT).face()\n\nmaple_leaf_planar.position += (width / 2, 0, 10)  # Created on local Plane.XY\ncenter_field_planar = center_field_builder.sketch.faces()[0]\n\nwest_field = west_field_planar.project_to_shape(the_wind, (0, 0, -1))[0]\nwest_field.color = Color(\"red\")\neast_field = east_field_planar.project_to_shape(the_wind, (0, 0, -1))[0]\neast_field.color = Color(\"red\")\ncenter_field = center_field_planar.project_to_shape(the_wind, (0, 0, -1))[0]\ncenter_field.color = Color(\"white\")\nmaple_leaf = maple_leaf_planar.project_to_shape(the_wind, (0, 0, -1))[0]\nmaple_leaf.color = Color(\"red\")\n\ncanadian_flag = Compound(children=[west_field, east_field, center_field, maple_leaf])\nshow(Rot(90, 0, 0) * canadian_flag)\n# [End]\n");
+    // real build123d bboxes (harness tolerance: 1e-3 per axis)
+    const expected = {
+      "the_wind": [-5.0, -5.0, -6.0737848329, 105.0, 55.0, 6.2444043552],
+      "maple_leaf": [30.625, 3.855, 1.4673525215, 69.375, 45.835, 6.2439667576],
+    };
+    for (const [name, bbox] of Object.entries(expected)) {
+      for (let i = 0; i < 6; i++) {
+        expect(Math.abs(measured[name].bbox[i] - bbox[i])).toBeLessThan(1e-3);
+      }
+    }
+  });
+
+
+  // examples/platonic_solids — scipy ConvexHull shim (bundled quickhull3d),
+  // Solid(Shell(faces)) sewing, user BasePartObject subclass
+  test("examples/platonic_solids", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Code]\nfrom build123d import *\nfrom math import sqrt\nfrom typing import Union, Literal\nfrom scipy.spatial import ConvexHull\n\n# [removed by collect.py] from ocp_vscode import show\n\nPHI = (1 + sqrt(5)) / 2  # The Golden Ratio\n\n\nclass PlatonicSolid(BasePartObject):\n    \"\"\"Part Object: Platonic Solid\n\n    Create one of the five convex Platonic solids.\n\n    Args:\n        face_count (Literal[4,6,8,12,20]): number of faces\n        diameter (float): double distance to vertices, i.e. maximum size\n        rotation (RotationLike, optional): angles to rotate about axes. Defaults to (0, 0, 0).\n        align (Union[None, Align, tuple[Align, Align, Align]], optional): align min, center,\n            or max of object. Defaults to None.\n        mode (Mode, optional): combine mode. Defaults to Mode.ADD.\n    \"\"\"\n\n    tetrahedron_vertices = [(1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1)]\n\n    cube_vertices = [(i, j, k) for i in [-1, 1] for j in [-1, 1] for k in [-1, 1]]\n\n    octahedron_vertices = (\n        [(i, 0, 0) for i in [-1, 1]]\n        + [(0, i, 0) for i in [-1, 1]]\n        + [(0, 0, i) for i in [-1, 1]]\n    )\n\n    dodecahedron_vertices = (\n        [(i, j, k) for i in [-1, 1] for j in [-1, 1] for k in [-1, 1]]\n        + [(0, i / PHI, j * PHI) for i in [-1, 1] for j in [-1, 1]]\n        + [(i / PHI, j * PHI, 0) for i in [-1, 1] for j in [-1, 1]]\n        + [(i * PHI, 0, j / PHI) for i in [-1, 1] for j in [-1, 1]]\n    )\n\n    icosahedron_vertices = (\n        [(0, i, j * PHI) for i in [-1, 1] for j in [-1, 1]]\n        + [(i, j * PHI, 0) for i in [-1, 1] for j in [-1, 1]]\n        + [(i * PHI, 0, j) for i in [-1, 1] for j in [-1, 1]]\n    )\n\n    vertices_lookup = {\n        4: tetrahedron_vertices,\n        6: cube_vertices,\n        8: octahedron_vertices,\n        12: dodecahedron_vertices,\n        20: icosahedron_vertices,\n    }\n    _applies_to = [BuildPart._tag]\n\n    def __init__(\n        self,\n        face_count: Literal[4, 6, 8, 12, 20],\n        diameter: float = 1.0,\n        rotation: RotationLike = (0, 0, 0),\n        align: Union[None, Align, tuple[Align, Align, Align]] = None,\n        mode: Mode = Mode.ADD,\n    ):\n        try:\n            platonic_vertices = PlatonicSolid.vertices_lookup[face_count]\n        except KeyError:\n            raise ValueError(\n                f\"face_count must be one of 4, 6, 8, 12, or 20 not {face_count}\"\n            )\n\n        # Create a convex hull from the vertices\n        hull = ConvexHull(platonic_vertices).simplices.tolist()\n\n        # Create faces from the vertex indices\n        platonic_faces = []\n        for face_vertex_indices in hull:\n            corner_vertices = [platonic_vertices[i] for i in face_vertex_indices]\n            platonic_faces.append(Face(Wire.make_polygon(corner_vertices)))\n\n        # Create the solid from the Faces\n        platonic_solid = Solid(Shell(platonic_faces)).clean()\n\n        # By definition, all vertices are the same distance from the origin so\n        # scale proportionally to this distance\n        platonic_solid = platonic_solid.scale(\n            (diameter / 2) / Vector(platonic_solid.vertices()[0]).length\n        )\n\n        super().__init__(part=platonic_solid, rotation=rotation, align=align, mode=mode)\n\n\nsolids = [\n    Rot(0, 0, 72 * i) * Pos(1, 0, 0) * PlatonicSolid(faces)\n    for i, faces in enumerate([4, 6, 8, 12, 20])\n]\nshow(solids)\n\n# [End]\n");
+    // real build123d: unit-edge platonic solid volumes
+    const volumes = [0.3481454829, 0.1666666667, 0.3170188388, 0.1924500897, 0.0641500299];
+    for (let i = 0; i < 5; i++) {
+      expect(Math.abs(measured[`solids[${i}]`].volume - volumes[i]))
+        .toBeLessThan(volumes[i] * 0.005);
+    }
+  });
+
+
+  // examples/tea_cup_algebra — offset shells, multisection sweep handle,
+  // loft/thicken pipeline that used to fault the wasm kernel outright
+  test("examples/tea_cup_algebra", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Code]\n\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import show\n\nwall_thickness = 3 * MM\nfillet_radius = wall_thickness * 0.49\n\n# Create the bowl of the cup as a revolved cross section\n\n# Start & end points with control tangents\ns = Spline(\n    (30 * MM, 10 * MM),\n    (69 * MM, 105 * MM),\n    tangents=((1, 0.5), (0.7, 1)),\n    tangent_scalars=(1.75, 1),\n)\n# Lines to finish creating \u00bd the bowl shape\ns += Polyline(s @ 0, s @ 0 + (10 * MM, -10 * MM), (0, 0), (0, (s @ 1).Y), s @ 1)\nbowl_section = Plane.XZ * make_face(s)  # Create a filled 2D shape\ntea_cup = revolve(bowl_section, axis=Axis.Z)\n\n# Hollow out the bowl with openings on the top and bottom\ntea_cup = offset(\n    tea_cup, -wall_thickness, openings=tea_cup.faces().filter_by(GeomType.PLANE)\n)\n\n# Add a bottom to the bowl\ntea_cup += Pos(0, 0, (s @ 0).Y) * Cylinder(radius=(s @ 0).X, height=wall_thickness)\n\n# Smooth out all the edges\ntea_cup = fillet(tea_cup.edges(), radius=fillet_radius)\n\n# Determine where the handle contacts the bowl\nhandle_intersections = [\n    tea_cup.find_intersection_points(\n        Axis(origin=(0, 0, vertical_offset), direction=(1, 0, 0))\n    )[-1][0]\n    for vertical_offset in [35 * MM, 80 * MM]\n]\n\n# Create a path for handle creation\npath_spline = Spline(\n    handle_intersections[0] - (wall_thickness / 2, 0, 0),\n    handle_intersections[0] + (35 * MM, 0, 30 * MM),\n    handle_intersections[0] + (40 * MM, 0, 60 * MM),\n    handle_intersections[1] - (wall_thickness / 2, 0, 0),\n    tangents=((1, 0, 1.25), (-0.2, 0, -1)),\n)\n\n# Align the cross section to the beginning of the path\nlocation = path_spline ^ 0\nhandle_cross_section = location * RectangleRounded(wall_thickness, 8 * MM, fillet_radius)\n\n# Sweep handle cross section along path\ntea_cup += sweep(handle_cross_section, path=path_spline)\n\n# assert abs(tea_cup.part.volume - 130326.77052487945) < 1e-3\n\nshow(tea_cup, names=[\"tea cup\"])\n# [End]\n");
+    // real build123d: tea_cup.volume == 130326.75447606308
+    expect(Math.abs(measured["tea_cup"].volume - 130326.75447606308))
+      .toBeLessThan(130326.75447606308 * 0.005);
+    const bbox = [-67.7762442353, -67.7762446391, 0.0, 101.6138783918, 67.7762446391, 105.0];
+    for (let i = 0; i < 6; i++) {
+      expect(Math.abs(measured["tea_cup"].bbox[i] - bbox[i])).toBeLessThan(1e-3);
+    }
+  });
+
+
+  // general_examples_algebra/ex34 — embossed/debossed text fused onto a box
+  // face: per-glyph +Z text normals and the general-fuse fallback for the
+  // 8.0.1 coplanar-fuse operand-drop fault
+  test("general_examples_algebra/ex34", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\n# 34. Embossed and Debossed Text\n# [Ex. 34]\nlength, width, thickness, fontsz, fontht = 80.0, 60.0, 10.0, 25.0, 4.0\n\nex34 = Box(length, width, thickness)\nplane = Plane(ex34.faces().sort_by().last)\nex34_sk = plane * Text(\"Hello\", font_size=fontsz, align=(Align.CENTER, Align.MIN))\nex34 += extrude(ex34_sk, amount=fontht)\nex34_sk2 = plane * Text(\"World\", font_size=fontsz, align=(Align.CENTER, Align.MAX))\nex34 -= extrude(ex34_sk2, amount=-fontht)\n# [Ex. 34]\n# show_object(ex34)\n");
+    // real build123d: ex34.volume == 47754.582611832375
+    expect(Math.abs(measured["ex34"].volume - 47754.582611832375))
+      .toBeLessThan(47754.582611832375 * 0.005);
+    // embossed "Hello" must rise ABOVE the box top (z=5 -> 9), debossed
+    // "World" must not push below it (the logo-regression failure mode)
+    expect(Math.abs(measured["ex34"].bbox[5] - 9.0)).toBeLessThan(1e-3);
+    expect(Math.abs(measured["ex34"].bbox[2] - (-5.0))).toBeLessThan(1e-3);
+  });
+
 });
