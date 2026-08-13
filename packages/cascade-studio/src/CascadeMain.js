@@ -734,8 +734,8 @@ mount = fillet(mount.edges().group_by(Axis.Z)[-1], 1.5)
 show(mount)                # show() puts a shape in the 3-D viewport
 print("volume:", round(volume(mount), 1), "mm^3")
 
-# 2-D -> 3-D works too: extrude(RectangleRounded(L, W, 12), T) instead of
-# the Box above, or sweep/revolve/loft a Curve — see Help for the full list.
+# 2-D -> 3-D works too: extrude(RectangleRounded(L, W, 12), T) instead of the
+# Box above, or sweep/revolve/loft a Curve. Full API: build123d.readthedocs.io
 `;
 
 export { CascadeStudioApp };
