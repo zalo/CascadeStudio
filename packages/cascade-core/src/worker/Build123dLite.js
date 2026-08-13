@@ -157,6 +157,13 @@ class FontStyle:
     BOLDITALIC = 'BOLDITALIC'
 
 
+# Type aliases build123d exports for annotations (used in signatures of
+# user subclasses like the PlatonicSolid example); the actual accepted
+# values are whatever the receiving function converts.
+VectorLike = tuple
+RotationLike = tuple
+
+
 # -------------------------------------------------------- vector algebra ---
 
 def _num(x):
@@ -738,6 +745,19 @@ class Shape:
     empty algebra starters like Part()). Supports build123d algebra."""
 
     def __init__(self, topo=None):
+        # graceful promotions like build123d: Shape(list_of_shapes) makes a
+        # compound, Shape(other_shape) adopts its geometry
+        if isinstance(topo, (list, tuple, ShapeList)):
+            topos = [_topo(s) for s in topo
+                     if not (isinstance(s, Shape) and s.topo is None)]
+            if len(topos) == 0:
+                topo = None
+            elif len(topos) == 1:
+                topo = topos[0]
+            else:
+                topo = w.MakeCompound(topos)
+        elif isinstance(topo, Shape):
+            topo = topo.topo
         self.topo = topo
         self.label = ''
         self.color = None
@@ -1021,6 +1041,42 @@ class Shape:
             out.extend(Face(f.topo).project_to_shape(target, direction))
         return out
 
+    def find_intersection_points(self, other, tolerance=1e-6):
+        """(point, unit surface normal) pairs where the Axis crosses this
+        shape's surface, sorted along the axis —
+        BRepIntCurveSurface_Inter, like build123d."""
+        hits = w.IntersectLineShape(self.topo, list(other.position),
+                                    list(other.direction), tolerance)
+        return [(Vector(tuple(h[0])), Vector(tuple(h[1]))) for h in hits]
+
+    def project_faces(self, faces, path, start=0):
+        """Project faces onto this shape following a path on the shape —
+        upstream Shape.project_faces: each face is positioned on the
+        surface-normal plane at its path position and projected inward."""
+        path_length = path.length
+        shape_center = self.center()
+        if isinstance(faces, Shape):
+            faces = faces.faces()
+        faces = [f for f in faces]
+        first_face_min_x = faces[0].bounding_box().min[0]
+        projected = ShapeList()
+        for face in faces:
+            bbox = face.bounding_box()
+            face_center_x = (bbox.min[0] + bbox.max[0]) / 2.0
+            u = start + (face_center_x - first_face_min_x) / path_length
+            path_position = path.position_at(u)
+            path_tangent = path.tangent_at(u)
+            axis = Axis(path_position, shape_center - path_position)
+            surface_point, surface_normal = \
+                self.find_intersection_points(axis)[0]
+            pl = Plane(origin=surface_point, x_dir=path_tangent,
+                       z_dir=surface_normal)
+            projection_face = pl * face.moved(
+                Location((-face_center_x, 0, 0)))
+            projected.append(Face(projection_face.topo).project_to_shape(
+                self, surface_normal * -1)[0])
+        return projected
+
     def project_to_viewport(self, viewport_origin, viewport_up=(0, 0, 1),
                             look_at=None):
         """Hidden-line projection (HLRBRep): returns (visible, hidden)
@@ -1057,6 +1113,92 @@ class Shape:
 
 
 class Part(Shape):
+    def __init__(self, topo=None):
+        # Solid(Shell(faces)) sews the faces into a closed solid, and
+        # Solid(other_shape) adopts its geometry — like build123d.
+        if isinstance(topo, Shape):
+            fl = getattr(topo, '_face_shapes', None) \
+                if isinstance(topo, Shell) else None
+            if fl:
+                topo = w.SewSolidFromFaces([_topo(f) for f in fl])
+            else:
+                topo = topo.topo
+        Shape.__init__(self, topo)
+
+    @classmethod
+    def extrude(cls, obj, direction):
+        """Extrude a Face into a Solid (build123d Solid.extrude)."""
+        d = Vector(direction)
+        return cls(w.Extrude(_topo(obj), [d.X, d.Y, d.Z], True))
+
+    @classmethod
+    def make_sphere(cls, radius, plane=None, angle1=-90, angle2=90,
+                    angle3=360):
+        """A sphere solid (full spheres only, like the examples use)."""
+        if angle1 != -90 or angle2 != 90 or angle3 != 360:
+            raise NotImplementedError(
+                'partial spheres are not supported in build123d-lite')
+        s = cls(w.Sphere(radius))
+        if plane is not None:
+            s = plane * s
+            s._loc = None  # the plane is BAKED (upstream keeps identity)
+        return s
+
+    @classmethod
+    def make_cylinder(cls, radius, height, plane=None, angle=360):
+        """A cylinder solid with its base on the given plane's origin,
+        extending along the plane normal (build123d Solid.make_cylinder)."""
+        if angle != 360:
+            raise NotImplementedError(
+                'partial cylinders are not supported in build123d-lite')
+        s = cls(w.Cylinder(radius, height, False))
+        if plane is not None:
+            s = plane * s
+            s._loc = None  # the plane is BAKED (upstream keeps identity)
+        return s
+
+    @classmethod
+    def make_loft(cls, objs, ruled=False):
+        """Loft through wires (build123d Solid.make_loft)."""
+        wires = []
+        for o in objs:
+            t = _topo(o)
+            wires.append(t if t.ShapeType().value == 5
+                         else w.GetWire(t, 0, True))
+        return cls(w.Loft(wires))
+
+    @classmethod
+    def revolve(cls, section, angle=360, axis=None, inner_wires=None):
+        """Revolve a Face/Wire section about an Axis
+        (build123d Solid.revolve)."""
+        if axis is None:
+            axis = Axis.Z
+        sec = section if isinstance(section, Face) or not inner_wires \
+            else Face(section, list(inner_wires))
+        o = tuple(axis.position)
+        d = list(axis.direction)
+        topo = _topo(sec)
+        shift = (abs(o[0]) > _TOL or abs(o[1]) > _TOL or abs(o[2]) > _TOL)
+        if shift:
+            topo = w.Translate([-o[0], -o[1], -o[2]], topo)
+        topo = w.Revolve(topo, angle, d)
+        if shift:
+            topo = w.Translate([o[0], o[1], o[2]], topo)
+        return cls(topo)
+
+    @classmethod
+    def thicken(cls, surface, depth, normal_override=None):
+        """Thicken a Face/Shell into a Solid along its normals — the exact
+        BRepOffset construction of build123d's Solid.thicken (full offset
+        shell, GeomAbs_Intersection join)."""
+        f = surface
+        d = float(depth)
+        if normal_override is not None and isinstance(f, Face):
+            n = f.normal_at()
+            if n.dot(Vector(normal_override).normalized()) < 0:
+                d = -d
+        return cls(w.ThickenSolid(_topo(f), d))
+
     @classmethod
     def extrude_linear_with_rotation(cls, section, center=(0, 0, 0),
                                      normal=(0, 0, 1), angle=0,
@@ -1188,6 +1330,12 @@ class Curve(Shape):
     def end_point(self):
         return self @ 1
 
+    @classmethod
+    def make_polygon(cls, pts, close=True):
+        """Closed polygonal wire through pts (build123d Wire.make_polygon)."""
+        return Polyline(*[tuple(_v3(p)) for p in pts], close=close,
+                        mode=Mode.PRIVATE)
+
 
 Solid = Part
 Wire = Curve
@@ -1204,6 +1352,26 @@ class Compound(Shape):
         Shape.__init__(self, topo)
         self.label = label
         self.children = _tolist(children)
+
+    @classmethod
+    def make_text(cls, txt, font_size, font='Arial', font_path=None,
+                  font_style=None,
+                  text_align=('center', 'center'),  # TextAlign values
+                  align=None, position_on_path=0.0, text_path=None):
+        """2D text as a compound of faces (build123d Compound.make_text).
+        Like upstream, align defaults to None: only the Font_TextFormatter
+        (advance-based) text_align applies, NOT bbox alignment."""
+        if text_path is not None:
+            raise NotImplementedError(
+                'Compound.make_text(text_path=) is not supported in '
+                'build123d-lite')
+        t = Text(txt, font_size, font=font, font_path=font_path,
+                 font_style=font_style if font_style is not None
+                 else FontStyle.REGULAR,
+                 text_align=text_align, align=align, mode=Mode.PRIVATE)
+        res = cls.__new__(cls)
+        Shape.__init__(res, t.topo)
+        return res
 
 
 class Edge(Curve):
@@ -1389,6 +1557,33 @@ class Face(Shape):
             raise ValueError('B-spline surface approximation failed')
         return cls(topo)
 
+    def __neg__(self):
+        """The same face with reversed orientation (build123d -face)."""
+        return Face(w.ReverseFace(self.topo, True))
+
+    @classmethod
+    def extrude(cls, obj, direction):
+        """Extrude an Edge into a Face (build123d Face.extrude)."""
+        d = Vector(direction)
+        return cls(w.Extrude(_topo(obj), [d.X, d.Y, d.Z], True))
+
+    @classmethod
+    def revolve(cls, profile, angle=360, axis=None):
+        """Revolve an Edge/Wire profile into a Face of revolution
+        (build123d Face.revolve)."""
+        if axis is None:
+            axis = Axis.Z
+        o = tuple(axis.position)
+        d = list(axis.direction)
+        topo = _topo(profile)
+        shift = (abs(o[0]) > _TOL or abs(o[1]) > _TOL or abs(o[2]) > _TOL)
+        if shift:
+            topo = w.Translate([-o[0], -o[1], -o[2]], topo)
+        topo = w.Revolve(topo, angle, d)
+        if shift:
+            topo = w.Translate([o[0], o[1], o[2]], topo)
+        return cls(topo)
+
     @classmethod
     def make_rect(cls, width, height, plane=None):
         """A width x height rectangle face on the given plane (Plane.XY)."""
@@ -1402,8 +1597,48 @@ class Face(Shape):
         return face
 
 
+class Shell(Shape):
+    """A shell — only the build123d forms the examples use: Shell(faces)
+    collects faces (Solid(Shell(faces)) then sews them into a closed
+    solid via BRepBuilderAPI_Sewing + ShapeFix_Solid), Shell(shape)
+    adopts the shape's faces."""
+
+    _face_shapes = None  # default for instances made via _wrap_like
+
+    def __init__(self, faces=None):
+        if faces is None:
+            Shape.__init__(self, None)
+            self._face_shapes = []
+            return
+        if isinstance(faces, Shape):
+            Shape.__init__(self, faces.topo)
+            self._face_shapes = list(faces.faces())
+            return
+        fl = [f for f in _tolist(faces)]
+        self._face_shapes = fl
+        if len(fl) == 0:
+            topo = None
+        elif len(fl) == 1:
+            topo = _topo(fl[0])
+        else:
+            topo = w.MakeCompound([_topo(f) for f in fl])
+        Shape.__init__(self, topo)
+
+
 class Vertex(Shape):
-    def __init__(self, topo, parent=None):
+    def __init__(self, topo=None, *args, parent=None):
+        # Vertex(Vector) / Vertex(x, y, z) / Vertex((x, y, z)) like build123d
+        if topo is None or isinstance(topo, (int, float)) or \
+                isinstance(topo, (Vector, tuple, list)):
+            if topo is None:
+                pt = (0.0, 0.0, 0.0)
+            elif isinstance(topo, (int, float)):
+                pt = (float(topo),) + tuple(float(a) for a in args) + \
+                    (0.0, 0.0)
+                pt = pt[:3]
+            else:
+                pt = tuple(Vector(topo))
+            topo = w.PointVertex(list(pt))
         Shape.__init__(self, topo)
         self.parent = parent
         p = w._vertexPoint(topo)
@@ -3822,8 +4057,29 @@ def project(objects=None, workplane=None, target=None, mode=Mode.ADD):
                               'BuildPart pending-faces form)')
 
 
-def thicken(*args, **kwargs):
-    raise NotImplementedError('thicken is not supported in build123d-lite')
+def thicken(to_thicken=None, amount=None, normal_override=None, both=False,
+            clean=True, mode=Mode.ADD):
+    """Thicken face(s) into solid(s) along their normals — build123d's
+    operations_part.thicken over Solid.thicken."""
+    if amount is None:
+        raise ValueError('An amount must be provided')
+    builder = _active_builder(BuildPart)
+    if to_thicken is None:
+        faces = [Face(t) for t, _pl in _pending_or_given(None)]
+    elif isinstance(to_thicken, (list, tuple, ShapeList)):
+        faces = [f for f in to_thicken]
+    else:
+        faces = list(to_thicken.faces())
+    solids = []
+    for f in faces:
+        n = normal_override if normal_override is not None else f.normal_at()
+        for direction in ([1, -1] if both else [1]):
+            solids.append(Part.thicken(
+                f, amount, normal_override=Vector(n) * direction))
+    result = solids[0] if len(solids) == 1 else Part().fuse(*solids)
+    if builder is not None:
+        return _combine(builder, result, mode, Part)
+    return Part(_topo(result))
 
 
 def section(obj=None, section_by=Plane.XZ, height=0.0, clean=True,
@@ -5029,7 +5285,37 @@ def _raising(name):
     return f
 
 
-ConvexHull = _raising('spatial.ConvexHull')
+class _IndexRows(list):
+    """Nested int lists standing in for scipy's ndarray of indices."""
+
+    def tolist(self):
+        return [list(r) if isinstance(r, list) else r for r in self]
+
+
+class ConvexHull:
+    """3-D convex hull computed by the worker's bundled quickhull3d.
+    Only the attributes the examples use are provided: .points,
+    .simplices (triangulated facets, scipy convention) and .vertices.
+    2-D hulls are not implemented (scipy uses qhull; the 2-D case in
+    lite is served by make_hull's own Andrew-monotone hull)."""
+
+    def __init__(self, points, *args, **kwargs):
+        pts = [[float(c) for c in p] for p in points]
+        if len(pts) == 0 or len(pts[0]) != 3:
+            raise NotImplementedError(
+                'scipy shim: only 3-D ConvexHull is supported in '
+                'build123d-lite')
+        from browser import self as _w
+        tris = _w.ConvexHull3D(pts)
+        self.points = pts
+        self.simplices = _IndexRows(
+            _IndexRows(int(i) for i in t) for t in tris)
+        seen = set()
+        for t in self.simplices:
+            seen.update(t)
+        self.vertices = _IndexRows(sorted(seen))
+
+
 Voronoi = _raising('spatial.Voronoi')
 
 

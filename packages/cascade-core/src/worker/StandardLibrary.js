@@ -135,20 +135,88 @@ function _kernValue(fontName, leftGlyph, rightGlyph) {
  *  itself (advance + kern-table pairs, like FreeType) instead of relying on
  *  opentype's getPath kerning. Returns the face, or null when the font is
  *  not loaded yet. */
-function _opentypeTextFace(text, size, fontName) {
+function _opentypeTextFace(text, size, fontName, perGlyphCompound) {
     if (self.loadedFonts[fontName] === undefined) { for (let k in self.argCache) delete self.argCache[k]; console.log("Font not loaded or found yet!  Try again..."); return null; }
     let font = self.loadedFonts[fontName];
     let scale = size / font.unitsPerEm;
-    let commands = [];
+    let glyphCommandRuns = [];
     let penX = 0;
     let prevGlyph = null;
     for (const ch of text) {
       let glyph = font.charToGlyph(ch);
       if (prevGlyph) { penX += _kernValue(fontName, prevGlyph, glyph) * scale; }
-      commands = commands.concat(glyph.getPath(penX, 0, size).commands);
+      glyphCommandRuns.push(glyph.getPath(penX, 0, size).commands);
       penX += glyph.advanceWidth * scale;
       prevGlyph = glyph;
     }
+    if (!perGlyphCompound) {
+      return _textCommandsToFace([].concat.apply([], glyphCommandRuns));
+    }
+    // Per-glyph faces collected in a compound — the topology build123d's
+    // Text produces (its faces() are the individual glyphs, with DISJOINT
+    // outer contours as separate faces: the dot of an 'i'/'j' is its own
+    // face, while nested contours like the counter of an 'o' stay holes).
+    let glyphFaces = [];
+    for (let g = 0; g < glyphCommandRuns.length; g++) {
+      glyphFaces = glyphFaces.concat(_glyphContourFaces(glyphCommandRuns[g]));
+    }
+    if (glyphFaces.length === 0) { return null; }
+    if (glyphFaces.length === 1) { return glyphFaces[0]; }
+    let builder = new self.oc.BRep_Builder();
+    let compound = new self.oc.TopoDS_Compound();
+    builder.MakeCompound(compound);
+    for (let g = 0; g < glyphFaces.length; g++) { builder.Add(compound, glyphFaces[g]); }
+    compound.hash = self.oc.OCJS.HashCode(compound, 100000000);
+    return compound;
+}
+
+/** Split one glyph's path commands into faces by contour winding: TrueType
+ *  outlines wind outer contours one way and holes the other, so contours
+ *  matching the first contour's winding start a NEW face and
+ *  opposite-winding contours become holes of the most recent outer. This
+ *  reproduces Font_BRepTextBuilder's topology (i/j dots are separate
+ *  faces; o/a/d counters are holes). */
+function _glyphContourFaces(commands) {
+  let contours = [];
+  let cur = null;
+  for (let i = 0; i < commands.length; i++) {
+    if (commands[i].type === "M") { cur = []; contours.push(cur); }
+    if (cur) { cur.push(commands[i]); }
+  }
+  let signedArea = (cmds) => {
+    let pts = [];
+    for (let i = 0; i < cmds.length; i++) {
+      if (cmds[i].x !== undefined) { pts.push([cmds[i].x, cmds[i].y]); }
+    }
+    let a = 0;
+    for (let i = 0; i < pts.length; i++) {
+      let p = pts[i], q = pts[(i + 1) % pts.length];
+      a += p[0] * q[1] - q[0] * p[1];
+    }
+    return a / 2;
+  };
+  let outerSign = null;
+  let groups = [];
+  for (let i = 0; i < contours.length; i++) {
+    let s = Math.sign(signedArea(contours[i])) || 1;
+    if (outerSign === null) { outerSign = s; }
+    if (s === outerSign || groups.length === 0) {
+      groups.push(contours[i].slice());
+    } else {
+      // hole: append to the most recent outer's command run
+      let last = groups[groups.length - 1];
+      for (let k = 0; k < contours[i].length; k++) { last.push(contours[i][k]); }
+    }
+  }
+  let faces = [];
+  for (let i = 0; i < groups.length; i++) {
+    let f = _textCommandsToFace(groups[i]);
+    if (f) { faces.push(f); }
+  }
+  return faces;
+}
+
+function _textCommandsToFace(commands) {
     let textFaces = [];
     for (let idx = 0; idx < commands.length; idx++) {
       if (commands[idx].type === "M") {
@@ -1287,9 +1355,26 @@ function _vertexPoint(vertex) {
   return [p.X(), p.Y(), p.Z()];
 }
 
+/** Curve parameter at the given ARC-LENGTH fraction u of an edge —
+ *  GCPnts_AbscissaPoint, matching build123d's default
+ *  PositionMode.LENGTH for position_at/tangent_at. (Raw parameter
+ *  fraction only coincides with this for uniform-speed curves like
+ *  lines and circles; it diverges on BSplines, e.g. surface-surface
+ *  intersection curves.) */
+function _edgeParamAtFraction(curve, u) {
+  let first = curve.FirstParameter();
+  let last = curve.LastParameter();
+  if (u <= 0) { return first; }
+  if (u >= 1) { return last; }
+  let len = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, last);
+  let ap = new self.oc.GCPnts_AbscissaPoint_2(curve, len * u, first);
+  if (ap.IsDone()) { return ap.Parameter(); }
+  return first + (last - first) * u;
+}
+
 function _edgePointAt(edge, u) {
   let curve = new self.oc.BRepAdaptor_Curve_2(edge);
-  let param = curve.FirstParameter() + (curve.LastParameter() - curve.FirstParameter()) * u;
+  let param = _edgeParamAtFraction(curve, u);
   let pnt = new self.oc.gp_Pnt_1();
   curve.D0(param, pnt);
   return [pnt.X(), pnt.Y(), pnt.Z()];
@@ -1297,7 +1382,7 @@ function _edgePointAt(edge, u) {
 
 function _edgeTangentAt(edge, u) {
   let curve = new self.oc.BRepAdaptor_Curve_2(edge);
-  let param = curve.FirstParameter() + (curve.LastParameter() - curve.FirstParameter()) * u;
+  let param = _edgeParamAtFraction(curve, u);
   let pnt = new self.oc.gp_Pnt_1();
   let vec = new self.oc.gp_Vec_1();
   curve.D1(param, pnt, vec);
@@ -2162,6 +2247,115 @@ function ThickSolidOffset(shape, openingFaces, offsetDistance, tolerance, keepSh
   return result;
 }
 
+/** Thicken a face into a solid along its normals like build123d's
+ *  Solid.thicken. COMPROMISE(thicken): upstream drives BRepOffset_MakeOffset
+ *  with Thickening=true (offset shell + MakeMissingWalls + MakeSolid); that
+ *  class is unbound here and BRepOffsetAPI_MakeThickSolid never builds the
+ *  missing walls for open input. So this reconstructs the same solid
+ *  manually: the offset surface comes from the identical BRepOffset engine
+ *  (MakeThickSolidByJoin with no closing faces, Skin/Intersection join like
+ *  upstream), the side walls are RULED ThruSections lofts between each
+ *  boundary wire and its offset image (upstream's MakeMissingWalls also
+ *  builds ruled walls between matching edges), and the three sheets are
+ *  sewn and solidified. */
+function ThickenSolid(surface, depth) {
+  if (!surface || surface.IsNull()) { console.error("ThickenSolid: input surface is null!"); return surface; }
+  let result = self.CacheOp(arguments, "ThickenSolid", () => {
+    // Closed surfaces (e.g. a full sphere face) have no free boundary to
+    // build walls from — upstream produces a hollow two-shell solid there,
+    // which this reconstruction does not support.
+    let edgeCounts = [];
+    let edgeExp = new self.oc.TopExp_Explorer_2(surface,
+      self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    for (; edgeExp.More(); edgeExp.Next()) {
+      let e = self.oc.TopoDS_Cast.Edge_1(edgeExp.Current());
+      let found = null;
+      for (let k = 0; k < edgeCounts.length; k++) {
+        if (edgeCounts[k].edge.IsSame(e)) { found = edgeCounts[k]; break; }
+      }
+      if (found) { found.count++; } else { edgeCounts.push({ edge: e, count: 1, degen: self.oc.BRep_Tool.Degenerated(e) }); }
+    }
+    let freeEdges = edgeCounts.filter((e) => e.count === 1 && !e.degen).length;
+    if (freeEdges === 0) {
+      console.error("ThickenSolid: the surface is closed (no free boundary); thicken of closed surfaces is not supported");
+      return null;
+    }
+
+    // 1) the offset surface (pure offset of the input, no walls)
+    let closingFaces = new self.oc.TopTools_ListOfShape();
+    let mkThick = new self.oc.BRepOffsetAPI_MakeThickSolid();
+    mkThick.MakeThickSolidByJoin(surface, closingFaces, depth, 1.0e-5,
+      self.oc.BRepOffset_Mode.BRepOffset_Skin, true, false,
+      self.oc.GeomAbs_JoinType.GeomAbs_Intersection, true,
+      new self.oc.Message_ProgressRange_1());
+    let offsetShell = mkThick.Shape();
+    if (!offsetShell || offsetShell.IsNull()) {
+      console.error("ThickenSolid: offset surface construction failed");
+      return null;
+    }
+
+    // 2) pair each boundary wire with its offset image (nearest centroid)
+    let wiresOf = (shape) => {
+      let out = [];
+      ForEachWire(shape, (i, wire) => { out.push(wire); });
+      return out;
+    };
+    let wireCenter = (wire) => {
+      let props = new self.oc.GProp_GProps_1();
+      self.oc.BRepGProp.LinearProperties(wire, props, false, false);
+      let p = props.CentreOfMass();
+      return [p.X(), p.Y(), p.Z()];
+    };
+    let baseWires = wiresOf(surface);
+    let offWires = wiresOf(offsetShell);
+    if (baseWires.length === 0 || offWires.length === 0 ||
+        baseWires.length !== offWires.length) {
+      console.error("ThickenSolid: could not match boundary wires (" +
+        baseWires.length + " vs " + offWires.length + ")");
+      return null;
+    }
+    let offCenters = offWires.map(wireCenter);
+
+    // 3) ruled walls per wire pair + 4) sew everything into a solid
+    let facesToSew = [];
+    ForEachFace(surface, (i, f) => { facesToSew.push(f); });
+    ForEachFace(offsetShell, (i, f) => { facesToSew.push(f); });
+    for (let i = 0; i < baseWires.length; i++) {
+      let c = wireCenter(baseWires[i]);
+      let best = 0, bestD = Infinity;
+      for (let j = 0; j < offWires.length; j++) {
+        let d = Math.pow(c[0] - offCenters[j][0], 2) +
+                Math.pow(c[1] - offCenters[j][1], 2) +
+                Math.pow(c[2] - offCenters[j][2], 2);
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      let loft = new self.oc.BRepOffsetAPI_ThruSections(false, true, 1.0e-6);
+      loft.AddWire(self.oc.TopoDS_Cast.Wire_1(baseWires[i]));
+      loft.AddWire(self.oc.TopoDS_Cast.Wire_1(offWires[best]));
+      loft.Build(new self.oc.Message_ProgressRange_1());
+      ForEachFace(loft.Shape(), (k, f) => { facesToSew.push(f); });
+    }
+
+    let sew = new self.oc.BRepBuilderAPI_Sewing(1.0e-5, true, true, true, false);
+    for (let i = 0; i < facesToSew.length; i++) { sew.Add(facesToSew[i]); }
+    sew.Perform(new self.oc.Message_ProgressRange_1());
+    let solids = [];
+    ForEachShell(sew.SewedShape(), (i, shell) => {
+      let fixer = new self.oc.ShapeFix_Solid_1();
+      let solid = fixer.SolidFromShell(shell);
+      if (solid && !solid.IsNull()) { solids.push(solid); }
+    });
+    if (solids.length === 0) {
+      console.error("ThickenSolid: sewing the thickened boundary failed");
+      return null;
+    }
+    return solids[0];
+  });
+  self.sceneShapes = self.Remove(self.sceneShapes, surface);
+  self.sceneShapes.push(result);
+  return result;
+}
+
 /** Draft-angle ("tapered") extrusion of a planar face — LocOpe_DPrism, the
  *  primitive behind build123d's extrude(taper=...). Positive taper angles
  *  narrow the profile with height. */
@@ -2189,7 +2383,7 @@ function TaperExtrude(face, height, angleDeg, keepFace) {
 function Text2D(text, size, fontName, halign, valign) {
   if (!fontName) { fontName = "FreeSans"; }
   let curText = self.CacheOp(arguments, "Text2D", () => {
-    let face = _opentypeTextFace(text, size, fontName);
+    let face = _opentypeTextFace(text, size, fontName, true);
     if (!face) { return; }
     let font = self.loadedFonts[fontName];
     let upm = font.unitsPerEm;
@@ -2228,7 +2422,26 @@ function Text2D(text, size, fontName, halign, valign) {
     // mirrored geometry (fresh alignment, stale glyphs).
     face.hash = self.oc.OCJS.HashCode(face, 100000000);
     let mirrored = Mirror([0, 1, 0], face);
-    let moved = self.oc.TopoDS_Cast.Face_1(Translate([dx, dy, 0], mirrored).Reversed());
+    let translated = Translate([dx, dy, 0], mirrored);
+    let moved;
+    if (translated.ShapeType().value === 4) {
+      moved = self.oc.TopoDS_Cast.Face_1(translated.Reversed());
+    } else {
+      // per-glyph compound: give each glyph face a +Z ORIENTED normal (the
+      // same rule as the single-face branch). The mirror transform above
+      // already flipped the sub-face orientation flags inside the compound
+      // (BRepTools_TrsfModification keeps oriented normals consistent for
+      // container shapes), so reverse CONDITIONALLY on the actual oriented
+      // normal instead of blindly — a blind .Reversed() double-flips.
+      let builder = new self.oc.BRep_Builder();
+      let compound = new self.oc.TopoDS_Compound();
+      builder.MakeCompound(compound);
+      ForEachFace(translated, (i, f) => {
+        builder.Add(compound, _faceNormal(f)[2] < 0 ? f.Reversed() : f);
+      });
+      compound.hash = self.oc.OCJS.HashCode(compound, 100000000);
+      moved = compound;
+    }
     self.sceneShapes = self.Remove(self.sceneShapes, moved);
     return moved;
   });
@@ -2341,6 +2554,42 @@ function SewSolidFromFaces(faces) {
   return curSolid;
 }
 
+/** Intersect an infinite line with a shape's surface —
+ *  BRepIntCurveSurface_Inter, exactly build123d's
+ *  Shape.find_intersection_points. Returns [[point, unitNormalAtPoint,
+ *  distanceAlongLine], ...] sorted by distance along the line. */
+function IntersectLineShape(shape, origin, direction, tolerance) {
+  if (!tolerance) { tolerance = 1e-6; }
+  let pnt = new self.oc.gp_Pnt_3(origin[0], origin[1], origin[2]);
+  let dir = new self.oc.gp_Dir_5(direction[0], direction[1], direction[2]);
+  let line = new self.oc.gp_Lin_3(pnt, dir);
+  let inter = new self.oc.BRepIntCurveSurface_Inter();
+  inter.Init_2(shape, line, tolerance);
+  let out = [];
+  while (inter.More()) {
+    let p = inter.Pnt();
+    let face = inter.Face();
+    let gpf = new self.oc.BRepGProp_Face_2(face, false);
+    let np = new self.oc.gp_Pnt_1();
+    let nv = new self.oc.gp_Vec_1();
+    gpf.Normal(inter.U(), inter.V(), np, nv);
+    let mag = nv.Magnitude();
+    let n = mag > 1e-12 ? [nv.X() / mag, nv.Y() / mag, nv.Z() / mag] : [0, 0, 1];
+    out.push([[p.X(), p.Y(), p.Z()], n, inter.W()]);
+    inter.Next();
+  }
+  out.sort((a, b) => a[2] - b[2]);
+  return out;
+}
+
+/** A TopoDS_Vertex at the given [x,y,z] point (BRepBuilderAPI_MakeVertex). */
+function PointVertex(p) {
+  let v = new self.oc.BRepBuilderAPI_MakeVertex(
+    new self.oc.gp_Pnt_3(p[0], p[1], p.length > 2 ? p[2] : 0)).Vertex();
+  v.hash = self.oc.OCJS.HashCode(v, 100000000);
+  return v;
+}
+
 // --- Library Class (organizes initialization and self-registration) ---
 
 /** Wraps initialization of all CAD standard library functions.
@@ -2412,6 +2661,7 @@ class CascadeStudioStandardLibrary {
     self.MeasureShape = MeasureShape;
     self.WireFromSegments = WireFromSegments;
     self.ThickSolidOffset = ThickSolidOffset;
+    self.ThickenSolid = ThickenSolid;
     self.TaperExtrude = TaperExtrude;
     self.Text2D = Text2D;
     self.ScaleXYZ = ScaleXYZ;
@@ -2450,6 +2700,8 @@ class CascadeStudioStandardLibrary {
     self.Section = Section;
     self.ConvexHull3D = ConvexHull3D;
     self.SewSolidFromFaces = SewSolidFromFaces;
+    self.IntersectLineShape = IntersectLineShape;
+    self.PointVertex = PointVertex;
   }
 }
 
