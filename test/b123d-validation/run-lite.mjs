@@ -239,13 +239,23 @@ async function main() {
       }
 
       const pyErrors = out.errors.filter((e) => /error/i.test(e) || e.includes('Python'));
+      // A raw wasm kernel abort corrupts the OCCT heap — every following
+      // script on this page would fail with "memory access out of bounds".
+      // Classify this script honestly, then recycle the page.
+      const poisoned = out.errors.some((e) =>
+        e.includes('memory access out of bounds') ||
+        e.includes('table index is out of bounds') ||
+        e.includes('(a raw wasm exception)') ||
+        e.includes('RuntimeError: unreachable'));
       done++;
       if (!out.measure) {
         const gap = classifyError(pyErrors.length ? pyErrors : out.errors.concat(['no measurement produced']));
         results[entry.id] = { status: 'ERROR', gap, errors: pyErrors.slice(0, 3) };
         console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} ERROR  ${gap.split('\n')[0]}`);
+        if (poisoned) { await freshPage(); }
         continue;
       }
+      if (poisoned) { await freshPage(); }
       const problems = compareShapes(ref.shapes, out.measure);
       if (problems.length === 0) {
         results[entry.id] = { status: 'PASS', shapes: Object.keys(ref.shapes).length };

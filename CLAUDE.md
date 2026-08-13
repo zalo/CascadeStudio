@@ -161,45 +161,75 @@ users write **build123d algebra-mode** Python that evaluates in the existing CAD
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running the
 upstream docs/examples scripts through both, see `test/b123d-validation/`; currently
-**85/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 15 MISMATCH,
-0 timeouts; the rest fail on honestly-unimplemented features — full breakdown in the
-committed `test/b123d-validation/report.md`. A full 129-script harness pass takes
-~45 s with `--pages 4` (~2.5 min single-page); the harness MUST run with
+**110/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 4 MISMATCH,
+12 ERROR, 0 timeouts — full breakdown with per-script reasons in the committed
+`test/b123d-validation/report.md`. A full 129-script harness pass takes ~60 s with
+`--pages 4` (~2.5 min single-page); the harness MUST run with
 `CS_TEST_HEADFUL=1 DISPLAY=:99` on this machine (headless Chromium has no WebGL,
-which manifests as every script reporting "no measurement produced"). Since the
-OCCT 8.0.1 rounds: Text renders via opentype.js/FreeSans with FreeType-parity
-kerning, Spline supports tangents=, extrude supports taper= (LocOpe_DPrism) and
-until=Until.NEXT/LAST (boolean trims), offset supports openings=
-(MakeThickSolid) and Kind.INTERSECTION, scale supports non-uniform factors
-(gp_GTrsf), plus Helix, Ellipse/EllipticalCenterArc, SlotArc, weighted Bezier,
-HexLocations, pack(), project_to_viewport (HLRBRep), curve ^ t / location_at,
-and exact-CPython random/timeit shims:
+which manifests as every script reporting "no measurement produced"). Debug a
+single script with `test/b123d-validation/probe.mjs` (prints raw measurements +
+errors). Since the GeomAPI-array binding round: Spline/Helix interpolate EXACTLY
+(GeomAPI_Interpolate, incl. tangents=/tangent_scalars=/per-point tangents/periodic),
+sweep uses MakePipeShell with upstream's trihedron/transition modes (incl.
+multisection, normal=, binormal=), section()/make_hull/draft/project (BuildPart
+form) work, joints are live (RigidJoint/RevoluteJoint/LinearJoint/
+CylindricalJoint/BallJoint with connect_to), scipy.optimize.minimize is shimmed
+(pure-Python Nelder-Mead) with DoubleTangentArc on top,
+make_surface_from_array_of_points skins interpolated rows, Mesher writes STL
+into MEMFS, and known OCCT 8.0.1 wasm kernel faults RAISE instead of returning
+silently-wrong geometry:
 
 | Area | Supported | Not supported |
 |---|---|---|
-| Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple workplanes, pending faces/edges/path), `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `add()`, `Select.LAST` for edges | `Workplanes()` context |
-| 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=` | `Wedge`, partial spheres/cones |
-| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Polygon`, `RegularPolygon`, `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `BaseSketchObject`/`BasePartObject` subclassing | `Text` (font metrics differ), `Ellipse` (no binding), `Triangle` |
-| 1D objects | `Line`, `Polyline`, `PolarLine` (angle/direction), `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc`, `TangentArc`, `JernArc`, `Bezier`, `Spline` (natural-cubic approx of the exact interpolation), `curve @ u` / `curve % u` | `Spline(tangents=)`, `EllipticalCenterArc`, `Helix`, `@/%` on multi-edge curves |
-| Ops | `extrude` (dir/both, pending sketches), `revolve` (arbitrary Axis), `loft`, `sweep`, `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, Kind.ARC), `mirror` (any plane, spec-level inside BuildLine), `split` (Keep.TOP/BOTTOM), `scale` (uniform), `make_face` | `extrude(until=/taper=)`, `offset(openings=/Kind.INTERSECTION)`, `loft(ruled=)`, `split(Keep.BOTH)`, `make_hull`, `project`, `thicken`, `section`, non-uniform scale |
-| Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `Pos`, `Rot`/`Rotation` (intrinsic XYZ, matches b123d), `Plane` (named planes, `Plane(face)` with UV x_dir, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations` (context managers AND iterables), `planes * shape`, `locs * shape` | `Location.orientation` edge cases |
-| Selectors | `.edges()/.faces()/.vertices()/.solids()` as ShapeLists with `filter_by` (Axis/GeomType/callable), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy incl. RADIUS), `sort_by_distance`, slicing | `Wire` topology exploration (`.wires()`) |
-| Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy` | — |
-| Measure | `volume/area/length`, `center()`, `bounding_box()` (mesh-approximated — no Bnd_Box binding), `.wrapped` | mass properties |
-| Stdlib | `math` (JS-Math shim), `copy`, `typing`, `functools`, `itertools`, `operator`, `logging` (registered Brython modules) | anything else (`numpy`, `scipy`, ...) |
-| Other | joints/`Mesher`/`ExportSVG` raise NotImplementedError; `export_stl/step/gltf` are no-ops; `Color` accepted+ignored | — |
+| Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple workplanes, pending faces/edges/path), `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `add()` (incl. Locations-context replication into BuildLine), `Select.LAST` for edges, `Workplanes()` (shares the Locations fanout path — a plane basis IS its Location) | — |
+| 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=`; `Solid.extrude_linear_with_rotation` | `Wedge`, partial spheres/cones |
+| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning), `BaseSketchObject`/`BasePartObject` subclassing, `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points` | `Triangle`, `Text(path=/font_path=)` |
+| 1D objects | `Line`, `Polyline`, `PolarLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc`, `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `DoubleTangentArc`, `Helix`, `EllipticalCenterArc`, `curve @ u / % u / ^ u` (incl. multi-edge curves), `Edge.make_line/make_mid_way`, `Wire(edges)` | `BlendCurve`, conical `Helix` |
+| Ops | `extrude` (dir/both/`taper=`/`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `bounding_box()`, `pack()` | `thicken`, `full_round`, `trim`, one-sided `offset(side=)`, `split(Keep.BOTH)`, screen-projection `project()` forms |
+| Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `.position/.orientation/.x_axis/.y_axis/.z_axis`, `Pos`, `Rot`/`Rotation`, `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations`, `Workplanes` (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`; shapes track a composed `.location` (`locate()/located()` are absolute; `.position` settable) | `Location.orientation` edge cases |
+| Joints | `RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint` — upstream's exact relative-location algebra; `connect_to` repositions the other part; `copy.copy` rebinds joints; builder-scoped joints transfer to the part on exit | assembly structure / XCAF (roadmap), joint `symbol` rendering |
+| Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists with `filter_by` (Axis with DEGREES tolerance/GeomType/callable), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy incl. RADIUS), `sort_by_distance`, slicing, `+` keeps ShapeList; Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
+| Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy`, `Shape.__iter__` | — |
+| Measure | `volume/area/length` (volume = per-solid sum), `center()`, `bounding_box()` (exact Bnd_Box), `.wrapped`, `.is_forward` | mass properties |
+| Stdlib | `math`, `copy`, `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section) | `numpy`, `scipy.spatial` (raises loudly), everything else |
+| Export | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS) | 3MF (no lib3mf — raises), `export_step/gltf` (no-ops), `ExportDXF`, imports |
 
-**Known honest gaps** (kept as errors rather than fake geometry): `Text` (font
-parity), `Spline(tangents=)`, `extrude(until=..., taper=...)`,
-`offset(openings=...)` (no ThickSolid binding), joints (`connect_to` relocates
-parts), `make_hull`/`project`/`thicken`. `Spline` interpolation uses a natural
-cubic (GeomAPI_Interpolate is not bound) — geometry can differ ~0.1-0.7 mm
-mid-span. Sequential boolean cuts can hit an OCCT 8.0.0-RC4 robustness bug
-(third cut of overlapping tools may empty the body — see
-`general_examples/ex28` in the validation report); the stdlib's near-zero-volume
-warnings flag it loudly. GUI Sketch tool is disabled in Python mode (JS-only
-emission); Slider/GUI functions are not exposed to Python yet; `print()` output
-arrives in the console asynchronously.
+**Known honest gaps** (kept as ERRORs rather than fake geometry — see
+report.md for the per-script list): `thicken`, screen-projection `project()`,
+`Solid.make_sphere/make_loft` classmethods, `Face.extrude/revolve` classmethods,
+`wrap_faces`, `find_intersection_points`, `make_gordon_surface`, one-sided
+`offset(side=)`, 3D `scipy.spatial.ConvexHull` (platonic_solids), 3MF export.
+Two scripts die on KNOWN OCCT 8.0.1 wasm kernel faults that lite DETECTS and
+RAISES (never silently-wrong geometry): fusing coplanar BSpline-edged contact
+faces drops an operand (ex34 x2), and FilletEdges on certain hull/draft results
+aborts the wasm heap (cast_bearing_unit, toy_truck). `handle` fails only its own
+in-script 1e-3 volume assert (OCCT 8.0.1 vs OCP 7.x MakePipeShell differ ~0.02%).
+
+**Known compromises** (each marked in source with a grep-able
+`COMPROMISE(<topic>)` comment — `grep -rn "COMPROMISE(" packages/` is the
+authoritative list):
+- `scipy-shim` — pure-Python Nelder-Mead/golden-section instead of scipy; all other scipy APIs raise.
+- `joints` — location algebra on lite shapes; no assembly tree/XCAF (roadmap), no joint symbols.
+- `mesher` — STL only, written into the worker's in-memory Emscripten FS (no lib3mf, no disk).
+- `double-tangent-arc` — scan+bisection root solve over a sampled/refined curve distance; trims the over-extended target segment where upstream relies on wire fixing.
+- `kernel-guard` — fuse results smaller than the largest input RAISE naming the known 8.0.1 fuse fault.
+- `make-hull` — 2000 samples/edge; line/circle boundary runs reconstructed exactly, other curves stay simplified polylines.
+- `surface-from-points` — rows interpolated exactly + ThruSections skin (Handle_Geom_BSplineSurface is unbound); agrees with upstream's 2-D fit to ~5e-3 (canadian_flag x2 MISMATCH).
+- `sweep` — trihedron/transition calls match upstream exactly; residual MakePipeShell numeric differences are kernel-version.
+- `helix` — exact interpolation through dense samples with analytic tangents (no surface-curve segment type).
+- `edge-orientation` — sub-edge FORWARD/REVERSED can differ from OCP 7.x; Axis(edge)-based measuring can land at the other end (joints x2 MISMATCH).
+- `project` — only the BuildPart pending-faces form; projected pending planes use the reversed projection direction (validated on maker_coin).
+- `text` — bundled FreeSans only; non-Latin glyph metrics may differ from other Arial substitutes.
+- `raw-segments` — non-line/circle edges ride through wires as opaque TopoDS edges (exact, but not transformable at spec level).
+- `volume-measure` — volume is summed per solid (8.0.1's VolumeProperties picks up stray-face contributions on mixed compounds).
+
+**Roadmap (deliberately deferred)**:
+- XCAF-based assemblies: real part identities, STEP hierarchy/names/colors, a
+  viewport assembly tree, and upgrading joints from location algebra to real
+  assembly constraints.
+- Real-build123d-over-OCP-shim crossover: revisit once the remaining gap is
+  dominated by semantics-replication effort; current blockers are numpy in
+  geometry.py and the sheer OCP binding surface.
 
 **GUI tools in Python mode**: Box/Cylinder/Sphere emit `name = Pos(cx, cy, cz) *
 Primitive(...)` — since build123d primitives are centered, the emission converts the
@@ -209,8 +239,8 @@ dragged corner/base placement into the shape's center. Fillet emits
 **Validation against real build123d**: `test/b123d-validation/` (see its README)
 runs the upstream build123d examples through BOTH real build123d 0.11.1 (native
 venv) and Python mode, comparing per-variable volume/bbox. Re-run it whenever
-Build123dLite.js changes. Ten representative passing scripts are frozen as
-regression tests in `test/python-mode-examples.spec.js` (part of the default
+Build123dLite.js changes. Twenty-five representative passing scripts are frozen
+as regression tests in `test/python-mode-examples.spec.js` (part of the default
 suite) with volumes hardcoded from the native run.
 
 ## Playwright Testing

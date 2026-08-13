@@ -70,10 +70,10 @@ natively). On the OCCT 8.0.1 wasm build:
 
 | Status | Count | Note |
 |---|---|---|
-| PASS | 85 | volume within 0.5%, bbox within 1e-3/axis, per variable |
-| MISMATCH | 15 | see report.md; root causes: an 8.0.1 wasm kernel fault fusing coplanar BSpline-edged faces (ex34 ×2, examples/extrude), Plane(face) x_dir on rotated-sketch faces (boxes-on-faces family), sweep via MakePipe vs MakePipeShell profile rotation (roller_coaster), spline end-condition residuals of 0.016-0.03 mm (ex12, vase), BaseSketchObject scaling flows (custom_sketch_objects, shamrock, playing_cards ace) |
-| ERROR | 26 | honest NotImplemented/unbound: surface-from-point-grid (TColgp_Array2OfPnt unbound, 2), multisection sweep (2), wasm kernel "memory access out of bounds" (tea_cup_algebra boolean over lofted BSpline body; toy_truck LocOpe_DPrism on a filleted sketch), joints, make_hull, project_to_shape, DoubleTangentArc, scipy, one-offs |
-| TIMEOUT | 0 | (the old timeouts were the pre-Bnd_Box measurement cost) |
+| PASS | 110 | volume within 0.5%, bbox within 1e-3/axis, per variable |
+| MISMATCH | 4 | canadian_flag x2: the point-grid surface is skinned from exactly-interpolated rows (Handle_Geom_BSplineSurface is unbound), agreeing with upstream's 2-D least-squares fit only to ~5e-3; joints x2: sub-edge FORWARD/REVERSED orientation differs from OCP 7.x, so Axis(edge)-measured slider/pin positions land at the other end of the (correct) slot — see COMPROMISE(edge-orientation) |
+| ERROR | 12 | honest gaps + detected kernel faults: fusing coplanar BSpline-edged contact faces silently drops an operand — lite DETECTS and RAISES (ex34 x2); FilletEdges aborts the wasm heap on certain hull/draft solids (cast_bearing_unit, toy_truck); `handle` fails only its own 1e-3 in-script assert (8.0.1 vs 7.x MakePipeShell ~0.02%); the rest are unimplemented one-offs (thicken/wrap_faces/Face.extrude classmethods/screen-projection project()/3-D ConvexHull/3MF/one-sided offsets/find_intersection_points) |
+| TIMEOUT | 0 | |
 
 Iteration history: round 0 (pre-builders lite) 0 PASS / 126 ERROR → builders +
 algebra + selectors + stdlib shims 21 → 2D fillets, hole conventions, face
@@ -82,9 +82,13 @@ Plane.rotated, fused cuts 50 → OCCT 8.0.1 + exact Bnd_Box + deg→rad precisio
 fix 59 → Text (opentype/FreeSans + kern parity), tangent splines, thick-solid
 openings, taper, Kind.INTERSECTION 71 → same-frame builder gating,
 Face.offset, until=, HLR projection, pack/random shims, non-uniform scale
-85. Full harness pass: ~45 s (4 pages) / ~2.5 min (single page); ALWAYS run
-with CS_TEST_HEADFUL=1 DISPLAY=:99 (headless Chromium has no WebGL here — it
-manifests as every script reporting "no measurement produced").
+85 → exact GeomAPI_Interpolate splines, MakePipeShell sweeps (multisection/
+normal/binormal), section/make_hull/draft/project, joints, scipy shim +
+DoubleTangentArc, surface-from-points, Mesher STL, baked uniform scale,
+Text2D cache fix, kernel-fault guards 110. Full harness pass: ~60 s (4 pages)
+/ ~2.5 min (single page); ALWAYS run with CS_TEST_HEADFUL=1 DISPLAY=:99
+(headless Chromium has no WebGL here — it manifests as every script reporting
+"no measurement produced").
 <!-- COVERAGE:END -->
 
 ## Notes / caveats
@@ -96,8 +100,14 @@ manifests as every script reporting "no measurement produced").
 - Face/edge counts are recorded but NOT part of the pass criterion: the
   CascadeStudio standard library always runs ShapeUpgrade_UnifySameDomain
   after booleans, so counts legitimately differ from build123d.
-- `Spline()` in lite approximates (GeomAPI_PointsToBSpline, 1e-3) instead of
-  interpolating; scripts whose geometry depends on splines can land in
-  MISMATCH with small volume deltas even though they are "working".
-- The 10 best representative passing scripts are frozen as regression tests
+- Every deliberate deviation from upstream is marked in source with a
+  grep-able `COMPROMISE(<topic>)` comment (see CLAUDE.md's "Known
+  compromises" list for the index).
+- Debug a single script with
+  `CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/probe.mjs
+  [--id <manifest id> | /path/to/snippet.py]` — prints the raw measurement
+  JSON, worker errors and the last console lines.
+- After a raw wasm kernel abort ("memory access out of bounds") the OCCT
+  heap is corrupt; run-lite.mjs recycles the page before the next script.
+- The 25 best representative passing scripts are frozen as regression tests
   in `test/python-mode-examples.spec.js` (part of the default suite).
