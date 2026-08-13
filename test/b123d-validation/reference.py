@@ -96,7 +96,7 @@ def main():
                 return (round((bb.min.X + bb.max.X) / 2, 3),
                         round((bb.min.Y + bb.max.Y) / 2, 3),
                         round((bb.min.Z + bb.max.Z) / 2, 3))
-            for i, x in enumerate(sorted(solids[:32], key=bbkey)):
+            for i, x in enumerate(sorted(solids[:64], key=bbkey)):
                 add("%s[%d]" % (name, i), x)
 
     print("B123D_REF_JSON " + json.dumps({"shapes": shapes}))

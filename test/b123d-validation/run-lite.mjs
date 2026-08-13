@@ -37,6 +37,7 @@ const PORT = parseInt(argVal('--port', process.env.CS_TEST_PORT || '8517'), 10);
 const OUT = argVal('--out', join(HERE, 'results.json'));
 const REPORT = argVal('--report', join(HERE, 'report.md'));
 const SCRIPT_TIMEOUT = parseInt(argVal('--timeout', '60000'), 10);
+const PAGES = parseInt(argVal('--pages', '4'), 10);
 
 const VOL_REL_TOL = 0.005;    // 0.5% relative volume tolerance
 const VOL_ZERO_ABS = 1e-6;    // "zero volume" threshold for 2D/1D shapes
@@ -182,65 +183,86 @@ async function main() {
     headless,
     args: ['--use-gl=angle', '--use-angle=swiftshader'],
   });
-  let page = await newReadyPage(browser);
 
+  const t0 = Date.now();
   const results = {};
+  const queue = [];
   let done = 0;
   for (const entry of manifest) {
     const ref = reference[entry.id];
-    done++;
     if (!ref || ref.status !== 'ok') {
       results[entry.id] = { status: 'SKIP', reason: `reference ${ref ? ref.status : 'missing'}` };
+      done++;
       console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} SKIP (reference)`);
       continue;
     }
+    queue.push(entry);
+  }
 
-    let out;
-    try {
-      out = await Promise.race([
-        runScript(page, entry.code + MEASURE_FOOTER),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SCRIPT_TIMEOUT)),
-      ]);
-      // Don't let a still-busy worker poison the next script's run.
-      if (!(await workerIdle(page, 20000))) throw new Error('worker stayed busy');
-      // After long run sequences Brython's traceback FORMATTER sometimes
-      // dies ("reading 'substr'"), masking the real Python error — retry
-      // the script once on a fresh page to recover the true message.
-      if (!out.measure &&
-          out.errors.some((e) => e.includes("reading 'substr'"))) {
-        try { await page.close(); } catch (_) {}
-        page = await newReadyPage(browser);
+  /** One worker: owns a page, pulls scripts off the shared queue. */
+  async function pageWorker(wid) {
+    let page = await newReadyPage(browser);
+    const freshPage = async () => {
+      try { await page.close(); } catch (_) {}
+      page = await newReadyPage(browser);
+    };
+    while (queue.length > 0) {
+      const entry = queue.shift();
+      if (!entry) break;
+      const ref = reference[entry.id];
+      let out;
+      try {
         out = await Promise.race([
           runScript(page, entry.code + MEASURE_FOOTER),
           new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SCRIPT_TIMEOUT)),
         ]);
-        await workerIdle(page, 20000);
+        // Don't let a still-busy worker poison this page's next script.
+        if (!(await workerIdle(page, 20000))) throw new Error('worker stayed busy');
+        // Brython's traceback FORMATTER sometimes dies after long run
+        // sequences ("reading 'substr'"), masking the real Python error —
+        // retry once on a fresh page to recover the true message.
+        if (!out.measure &&
+            out.errors.some((e) => e.includes("reading 'substr'"))) {
+          await freshPage();
+          out = await Promise.race([
+            runScript(page, entry.code + MEASURE_FOOTER),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SCRIPT_TIMEOUT)),
+          ]);
+          await workerIdle(page, 20000);
+        }
+      } catch (e) {
+        results[entry.id] = { status: 'TIMEOUT' };
+        done++;
+        console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} TIMEOUT - recycling page ${wid}`);
+        await freshPage();
+        continue;
       }
-    } catch (e) {
-      results[entry.id] = { status: 'TIMEOUT' };
-      console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} TIMEOUT - reloading page`);
-      try { await page.close(); } catch (_) {}
-      page = await newReadyPage(browser);
-      continue;
-    }
 
-    const pyErrors = out.errors.filter((e) => /error/i.test(e) || e.includes('Python'));
-    if (!out.measure) {
-      const gap = classifyError(pyErrors.length ? pyErrors : out.errors.concat(['no measurement produced']));
-      results[entry.id] = { status: 'ERROR', gap, errors: pyErrors.slice(0, 3) };
-      console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} ERROR  ${gap}`);
-      continue;
+      const pyErrors = out.errors.filter((e) => /error/i.test(e) || e.includes('Python'));
+      done++;
+      if (!out.measure) {
+        const gap = classifyError(pyErrors.length ? pyErrors : out.errors.concat(['no measurement produced']));
+        results[entry.id] = { status: 'ERROR', gap, errors: pyErrors.slice(0, 3) };
+        console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} ERROR  ${gap.split('\n')[0]}`);
+        continue;
+      }
+      const problems = compareShapes(ref.shapes, out.measure);
+      if (problems.length === 0) {
+        results[entry.id] = { status: 'PASS', shapes: Object.keys(ref.shapes).length };
+        console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} PASS   (${Object.keys(ref.shapes).length} shapes)`);
+      } else {
+        results[entry.id] = { status: 'MISMATCH', problems: problems.slice(0, 8) };
+        console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} MISMATCH ${problems[0]}`);
+      }
     }
-
-    const problems = compareShapes(ref.shapes, out.measure);
-    if (problems.length === 0) {
-      results[entry.id] = { status: 'PASS', shapes: Object.keys(ref.shapes).length };
-      console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} PASS   (${Object.keys(ref.shapes).length} shapes)`);
-    } else {
-      results[entry.id] = { status: 'MISMATCH', problems: problems.slice(0, 8) };
-      console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} MISMATCH ${problems[0]}`);
-    }
+    try { await page.close(); } catch (_) {}
   }
+
+  const workers = [];
+  for (let i = 0; i < Math.max(1, Math.min(PAGES, queue.length)); i++) {
+    workers.push(pageWorker(i));
+  }
+  await Promise.all(workers);
 
   writeFileSync(OUT, JSON.stringify(results, null, 1));
   writeReport(results, REPORT);
@@ -249,7 +271,7 @@ async function main() {
 
   const counts = {};
   for (const r of Object.values(results)) counts[r.status] = (counts[r.status] || 0) + 1;
-  console.log('\n== totals ==', JSON.stringify(counts));
+  console.log(`\n== totals == ${JSON.stringify(counts)} in ${((Date.now() - t0) / 1000).toFixed(0)}s with ${PAGES} pages`);
   console.log(`results -> ${OUT}\nreport  -> ${REPORT}`);
 }
 
