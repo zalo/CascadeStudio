@@ -638,9 +638,8 @@ class Axis(metaclass=AxisMeta):
         direction (VectorLike): direction
         end_point (VectorLike): point used with origin to define direction
         edge (Edge): origin & direction defined by start of edge
-        canonical (bool): with ``edge``, take the origin & direction from the
-            edge's canonical traversal instead of from the underlying curve's
-            first parameter. Defaults to False (see ``Mixin1D.canonical``).
+        canonical (bool): with ``edge``, take the origin and direction from the
+            edge's canonical traversal. Defaults to False.
         location (Location): location to convert to axis
 
     Attributes:
@@ -673,15 +672,11 @@ class Axis(metaclass=AxisMeta):
     def __init__(self, edge: Edge, *, canonical: bool = False) -> None:
         """Axis: start of Edge
 
-        With ``canonical=False`` (the default, and the historical behaviour) the
-        origin and direction are read from the underlying curve at its first
-        parameter.  That depends on the Edge's construction history and
-        disagrees with ``edge.position_at(0)``/``edge.tangent_at(0)`` whenever
-        the Edge is REVERSED.
-
-        With ``canonical=True`` they come from the Edge's *canonical* traversal
-        (see ``Mixin1D.canonical``), so geometrically identical Edges always
-        give identical Axes.
+        By default the origin and direction are read from the underlying curve at
+        its first parameter, which depends on the Edge's construction history and
+        disagrees with ``edge.position_at(0)``/``tangent_at(0)`` when the Edge is
+        REVERSED.  ``canonical=True`` uses the Edge's canonical traversal (see
+        ``Mixin1D.canonical``), so identical geometry gives identical Axes.
         """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -727,8 +722,6 @@ class Axis(metaclass=AxisMeta):
                 raise ValueError(f"Invalid edge argument: {edge}")
 
             if canonical:
-                # Geometry decides which end is the origin, not the kernel's
-                # construction history - see Mixin1D.canonical()
                 canonical_edge = edge.canonical()
                 origin = canonical_edge.position_at(0)
                 direction = canonical_edge.tangent_at(0)

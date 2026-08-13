@@ -1,0 +1,138 @@
+diff --git a/src/build123d/geometry.py b/src/build123d/geometry.py
+index 1122b40..10e0306 100644
+--- a/src/build123d/geometry.py
++++ b/src/build123d/geometry.py
+@@ -638,6 +638,8 @@ class Axis(metaclass=AxisMeta):
+         direction (VectorLike): direction
+         end_point (VectorLike): point used with origin to define direction
+         edge (Edge): origin & direction defined by start of edge
++        canonical (bool): with ``edge``, take the origin and direction from the
++            edge's canonical traversal. Defaults to False.
+         location (Location): location to convert to axis
+ 
+     Attributes:
+@@ -667,8 +669,15 @@ class Axis(metaclass=AxisMeta):
+         """Axis: point and end point"""
+ 
+     @overload
+-    def __init__(self, edge: Edge) -> None:
+-        """Axis: start of Edge"""
++    def __init__(self, edge: Edge, *, canonical: bool = False) -> None:
++        """Axis: start of Edge
++
++        By default the origin and direction are read from the underlying curve at
++        its first parameter, which depends on the Edge's construction history and
++        disagrees with ``edge.position_at(0)``/``tangent_at(0)`` when the Edge is
++        REVERSED.  ``canonical=True`` uses the Edge's canonical traversal (see
++        ``Mixin1D.canonical``), so identical geometry gives identical Axes.
++        """
+ 
+     def __init__(self, *args: Any, **kwargs: Any) -> None:
+         # pylint: disable=too-many-branches, too-many-locals
+@@ -679,6 +688,7 @@ class Axis(metaclass=AxisMeta):
+         end_point = kwargs.pop("end_point", None)
+         edge = kwargs.pop("edge", None)
+         location = kwargs.pop("location", None)
++        canonical = kwargs.pop("canonical", False)
+ 
+         # Handle unexpected kwargs
+         if kwargs:
+@@ -711,14 +721,19 @@ class Axis(metaclass=AxisMeta):
+             if not (hasattr(edge, "wrapped") and isinstance(edge.wrapped, TopoDS_Edge)):
+                 raise ValueError(f"Invalid edge argument: {edge}")
+ 
+-            topods_edge: TopoDS_Edge = edge.wrapped  # type: ignore[annotation-unchecked]
+-            curve = BRep_Tool.Curve_s(topods_edge, float(), float())
+-            param_min, _ = BRep_Tool.Range_s(topods_edge)
+-            origin_pnt = gp_Pnt()
+-            tangent_vec = gp_Vec()
+-            curve.D1(param_min, origin_pnt, tangent_vec)
+-            origin = Vector(origin_pnt)
+-            direction = Vector(gp_Dir(tangent_vec))
++            if canonical:
++                canonical_edge = edge.canonical()
++                origin = canonical_edge.position_at(0)
++                direction = canonical_edge.tangent_at(0)
++            else:
++                topods_edge: TopoDS_Edge = edge.wrapped  # type: ignore[annotation-unchecked]
++                curve = BRep_Tool.Curve_s(topods_edge, float(), float())
++                param_min, _ = BRep_Tool.Range_s(topods_edge)
++                origin_pnt = gp_Pnt()
++                tangent_vec = gp_Vec()
++                curve.D1(param_min, origin_pnt, tangent_vec)
++                origin = Vector(origin_pnt)
++                direction = Vector(gp_Dir(tangent_vec))
+ 
+         # Convert location to axis
+         if location is not None:
+diff --git a/src/build123d/topology/one_d.py b/src/build123d/topology/one_d.py
+index 663d5e2..e3a103c 100644
+--- a/src/build123d/topology/one_d.py
++++ b/src/build123d/topology/one_d.py
+@@ -2423,7 +2423,11 @@ class Edge(Mixin1D[TopoDS_Edge]):
+         Returns:
+             Edge: linear Edge between two Edges
+         """
+-        flip = Axis(first).is_opposite(Axis(second))
++        # The direction and start point of the reference Edges are incidental -
++        # a section Edge starts wherever the intersector seamed it - so pair
++        # their ends up canonically instead of by construction history.
++        first, second = first.canonical(), second.canonical()
++        flip = Axis(first, canonical=True).is_opposite(Axis(second, canonical=True))
+         pnts = [
+             Edge.make_line(
+                 first.position_at(i), second.position_at(1 - i if flip else i)
+diff --git a/tests/test_direct_api/test_canonical.py b/tests/test_direct_api/test_canonical.py
+index 0e66ef5..3813a86 100644
+--- a/tests/test_direct_api/test_canonical.py
++++ b/tests/test_direct_api/test_canonical.py
+@@ -220,3 +220,49 @@ def test_canonical_free_edge_ignores_the_surface_frame(rotation):
+     assert canonical.length == pytest.approx(reference.length, abs=1e-3)
+     for position in (0.0, 0.25, 0.5, 0.75):
+         assert approx(canonical, position) == tuple(reference.position_at(position))
++
++
++@pytest.mark.parametrize(
++    "edge",
++    [
++        Edge.make_line((0, 0, 0), (10, 0, 0)),
++        Edge.make_line((10, 0, 0), (0, 0, 0)),
++        Edge.make_line((0, 0, 0), (10, 0, 0)).reversed(),
++    ],
++    ids=["forward", "built backwards", "reversed flag"],
++)
++def test_canonical_axis_from_edge(edge):
++    """Axis(edge, canonical=True) agrees with the canonical Edge - including for a
++    REVERSED Edge, where the default disagrees with position_at(0)."""
++    axis, canonical = Axis(edge, canonical=True), edge.canonical()
++    assert tuple(axis.position) == pytest.approx(tuple(canonical.position_at(0)), abs=1e-6)
++    assert tuple(axis.direction) == pytest.approx(tuple(canonical.tangent_at(0)), abs=1e-6)
++    assert tuple(axis.direction) == pytest.approx((1, 0, 0), abs=1e-6)
++
++
++def test_legacy_axis_from_edge_ignores_orientation():
++    """The default is unchanged: it reads the underlying curve, so a REVERSED
++    Edge gives an Axis that disagrees with the Edge's own start."""
++    edge = Edge.make_line((0, 0, 0), (10, 0, 0)).reversed()
++    assert tuple(edge.position_at(0)) == pytest.approx((10, 0, 0), abs=1e-6)
++    assert tuple(Axis(edge).position) == pytest.approx((0, 0, 0), abs=1e-6)
++
++
++@pytest.mark.parametrize("rotation", [0, 90, 180])
++def test_make_mid_way_is_frame_independent(rotation):
++    """examples/joints.py measures its slider axis from a mid way Edge between two
++    top edges.  Rotating the subtracted cylinder about its own axis is the
++    identical solid, but it flips those edges' directions."""
++    with BuildPart() as part:
++        with BuildSketch():
++            Rectangle(10, 10)
++        extrude(amount=10, taper=3)
++        Cylinder(2.5, 10, rotation=(0, 90, rotation), mode=Mode.SUBTRACT)
++    solid = Solid(part.part.wrapped)
++    top = solid.edges().filter_by(Axis.X, tolerance=30).sort_by(Axis.Z)[-2:]
++    # pick the two tied edges deterministically, so only make_mid_way is tested
++    top = sorted(top, key=lambda edge: tuple(edge.canonical().position_at(0)))
++    mid_way = Edge.make_mid_way(*top, 0.67)
++    assert tuple(mid_way.position_at(0)) == pytest.approx(
++        (-4.475922, 1.521814, 10), abs=1e-5
++    )

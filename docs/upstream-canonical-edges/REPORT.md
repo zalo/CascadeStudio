@@ -369,31 +369,56 @@ closes it.
 
 ---
 
-## 3. The patch
+## 3. The patches
 
-`patch/canonical-free-edges.diff` (against build123d **dev** @ `ef48b98`; +1001/-61 lines,
-regenerable with `experiments/apply_patch.py`):
+Three independent-as-possible patches against build123d **dev** @ `ef48b98`,
+regenerable with `experiments/apply_stack.py <package> <tests> <canonical.py> a|b|c`.
+One PR description each, next to this file.
 
-| file | change |
-|---|---|
-| `src/build123d/topology/canonical.py` | **new** - the rule: `canonical_form(sampler, length, closed)`, `lexicographic_key`, `loop_area_vector`, `CanonicalForm`. Pure geometry, no OCP import. |
-| `src/build123d/topology/one_d.py` | `Mixin1D.canonical()` and `Mixin1D.canonical_form()`; helpers `_reverse_1d`, `_split_1d_at_point`, `_walk_loop`, `_concatenate_edges`; `Edge.make_mid_way` canonicalises its two reference edges. |
-| `src/build123d/geometry.py` | `Axis(edge, canonical=True)` opt-in: origin/direction from the canonical traversal (also fixes `Axis(edge)` disagreeing with `edge.position_at(0)` for REVERSED edges). Default stays `False`. |
-| `src/build123d/topology/shape_core.py` | `ShapeList.sort_by(..., tie_break=True)` - **opt-in**: ties are resolved by `_canonical_sort_key` (the shape's vertex positions, sorted and rounded to `TOL_DIGITS`) with `_canonical_center_key` as a second stage for shapes whose vertices coincide, instead of by the incoming (kernel traversal) order. Default `False` keeps the sort stable, so chained sorts are untouched and the cost is zero. |
-| `tests/test_direct_api/test_canonical.py` | **new** - 18 tests, build123d unittest style. |
+| # | branch / diff | targets | size | contents |
+|---|---|---|---|---|
+| 1 | `sort-by-tie-break`, `patch/1-sort-by-tie-break.diff` | `dev` | **+70/-11** | `ShapeList.sort_by(..., tie_break=True)` (opt-in) + `_geometric_key`, 2 tests in the existing `test_shape_list.py` |
+| 2 | `canonical-free-edges-v2`, `patch/2-canonical-free-edges.diff` | `dev` | **+622/-4** | the rule (`topology/canonical.py`, 253 lines) + `Mixin1D.canonical()`/`canonical_form()` and their four helpers (`one_d.py`, +145) + `tests/test_direct_api/test_canonical.py` (222 lines, 31 cases) |
+| 3 | `canonical-consumers`, `patch/3-canonical-consumers.diff` | patch 2 | **+79/-14** | `Axis(edge, canonical=True)` (opt-in) and `Edge.make_mid_way` canonicalising its references, + 3 tests |
 
-The PR targets **gumyr/build123d `dev`**; the diff is generated from that branch.
+Patches 1 and 2 are independent of each other; 3 needs 2. Total +771/-29, against
++1001/-61 for the single patch this replaces - the saving is mostly a mechanical
+`sort_by` refactor that turned out to be avoidable (`sorted()` is stable, so making
+the *incoming* order geometric is enough) plus `pytest.mark.parametrize` over the
+frame x traversal x shape matrices.
+
+### 3.0 What the rule costs, and why
+
+`topology/canonical.py` is 253 lines: 43 of file header and license, ~54 of
+docstrings, and **86 executable lines**. Those 86 are mostly *conditioning*, not
+rule:
+
+| device | executable lines | why it is not optional |
+|---|---|---|
+| seam = arc-length midpoint of the extremal band, ends bisected | ~34 | the location of a smooth minimum is only computable to `O(sqrt(eps))` along the curve and moves with the sampling; a band's ends are transversal crossings that bisect exactly, and their midpoint cancels the quadratic term. It also gives a straight extremal side a defined seam (its middle) rather than an arbitrary corner. |
+| bands = local minima of the sampled coordinate, plateaus collapsed, levels refined by a parabolic fit | ~22 | a band is usually narrower than the sampling step, so thresholding samples misses bands whose samples sit just above the level, and a sampled value alone can sit far above the true minimum |
+| candidate bands compared through their midpoints, coordinates quantised to the band width | ~8 | comparing samples inside a band makes the answer a function of the sampling phase; comparing raw floats lets the last bits of a mirror-symmetric pair decide instead of the next coordinate |
+| winding from the loop's area vector + dominant axis | ~10 | a geometric direction rule; exact for planar loops, least-squares normal otherwise |
+| open-edge case, degenerate guards, assembly | ~12 | |
+
+Section 3.3 is the evidence that none of the three conditioning devices is
+decoration: an earlier draft omitted all three and the seam moved with the
+sampling phase and the traversal direction.
+
+The PRs target **gumyr/build123d `dev`**; the diffs are generated from that branch.
 The research above was done against 0.11.1 (the version the validation harness
 compares against) and the adaptation to `dev` needed exactly one change - see
 section 3.1.
 
 Test results on `dev` (OCP 7.9.3):
 
-| suite | pristine dev | with the patch |
-|---|---|---|
-| `tests/test_direct_api` | 1169 passed, 2 skipped, 0 failed | **1187 passed, 2 skipped, 0 failed** (+18 new) |
-| rest of `tests/` | 1037 passed, 1 skipped, 0 failed | 1037 passed, 1 skipped, 0 failed |
-| `tests/test_examples.py` (builds every example) | 115 passed, 1 skipped | 115 passed, 1 skipped |
+| suite | pristine dev | patch 1 | patch 2 | patches 2+3 |
+|---|---|---|---|---|
+| `tests/test_direct_api` | 1169 passed, 2 skipped | **1171** | **1200** | **1207** |
+| rest of `tests/` | 1037 passed, 1 skipped | 1037, 1 skipped | 1037, 1 skipped | 1037, 1 skipped |
+
+No failures anywhere, and `tests/test_examples.py` (which builds every example)
+passes 115/115 as it does on pristine `dev`.
 
 No upstream test needed changing: the sort tie-break is opt-in (see section 3.2), so
 default behaviour - including chained sorts - is unchanged.
@@ -501,11 +526,14 @@ own harness).
 V=~/Desktop/ocjs-deps/b123d-ref-venv/bin/python          # OCP 7.9.3
 cd docs/upstream-canonical-edges/experiments
 
-# PR-ready tree (what the diff was generated from):
+# Rebuild the three branches from a pristine dev checkout:
 #   git clone --depth 1 -b dev https://github.com/gumyr/build123d /tmp/b123d-pr
-#   ./repatch.sh /tmp/b123d-pr/src/build123d
-#   cp ../patch/tests/test_direct_api/test_canonical.py /tmp/b123d-pr/tests/test_direct_api/
-#   cd /tmp/b123d-pr && PYTHONPATH=$PWD/src $V -m pytest tests/test_direct_api -q
+#   cd /tmp/b123d-pr
+#   for p in a b c; do
+#     python3 .../experiments/apply_stack.py src/build123d tests \
+#             .../patch/src/build123d/topology/canonical.py $p
+#   done                       # or apply patch/{1,2,3}-*.diff with patch -p1
+#   PYTHONPATH=$PWD/src $V -m pytest tests/test_direct_api -q
 
 $V probe_native.py > native.json                          # battery on OCP 7.9.3
 node probe_wasm.mjs                                       # same battery on OCCT 8.0.1 wasm (~10 s boot)
@@ -551,9 +579,9 @@ the patch removes elsewhere. Rotating the same wire reproduces it inside 7.9.3.
 Not fixed in the port, which mirrors the patch byte-for-byte; the harness
 records it instead.
 
-`repatch.sh` copies the installed build123d 0.11.1 into `/tmp/b123d-0111` and applies
-`patch/src/build123d/topology/canonical.py` plus the source edits via
-`apply_patch.py` (override the source location with `SP=...`). The unified diff in
-`patch/canonical-free-edges.diff` applies to a build123d checkout with `patch -p1`
-(verified with `--dry-run`). Local OCCT 8.0.1 sources for the citations:
+`repatch.sh` still targets the installed 0.11.1 (`SP=...` to override) and is kept
+for the 0.11.1 measurements in sections 1 and 2; `apply_stack.py` is what generates
+the three PR branches. `patch/src/...` holds the resulting files in full (shape_core
+from patch 1, everything else from patches 2+3) for reading without applying
+anything. Local OCCT 8.0.1 sources for the citations:
 `~/Desktop/ocjs-deps/occt/src`.

@@ -50,7 +50,7 @@ import copy
 import itertools
 import warnings
 from abc import ABC, abstractmethod
-from collections import Counter, deque
+from collections import deque
 from collections.abc import Callable, Iterable, Iterator
 from functools import reduce
 from math import inf
@@ -3552,20 +3552,18 @@ class ShapeList(list[T]):
         Sort objects by provided criteria. Note that not all sort_by criteria apply to all
         objects.
 
-        Objects that tie on the criteria keep their current relative order, which is
-        what makes chained sorts such as ``sort_by(SortBy.RADIUS).sort_by(Axis.Z)``
-        work. That incoming order, however, is the CAD kernel's traversal order for
-        shapes that came out of a boolean operation, so it depends on construction
-        history (see ``Mixin1D.canonical``). Pass ``tie_break=True`` to resolve ties
-        by geometry instead - vertex positions, then centre - so that identical
-        geometry always sorts identically.
+        Objects that tie on the criteria keep their incoming order, which is what
+        makes chained sorts such as ``sort_by(SortBy.RADIUS).sort_by(Axis.Z)``
+        work.  For shapes that came out of a boolean operation that incoming order
+        is the CAD kernel's traversal order, i.e. a function of construction
+        history; ``tie_break=True`` orders tied objects by geometry instead.
 
         Args:
             sort_by (Callable[[T], K] | Axis | Edge | Wire | SortBy | property,
                 optional): sort criteria. Defaults to Axis.Z.
             reverse (bool, optional): flip order of sort. Defaults to False.
-            tie_break (bool, optional): resolve ties geometrically instead of
-                keeping the incoming order. Defaults to False.
+            tie_break (bool, optional): order tied objects by geometry rather than
+                by their incoming order. Defaults to False.
 
         Raises:
             ValueError: Cannot sort by an empty axis
@@ -3576,78 +3574,82 @@ class ShapeList(list[T]):
             ShapeList: sorted list of objects
         """
 
-        candidates: list = list(self)
+        candidates = sorted(self, key=_geometric_key) if tie_break else list(self)
 
         if callable(sort_by):
             # If a callable is provided, use it directly as the key
-            key_function = sort_by
+            objects = sorted(candidates, key=sort_by, reverse=reverse)
 
         elif isinstance(sort_by, property):
-            key_function = sort_by.__get__
+            objects = sorted(candidates, key=sort_by.__get__, reverse=reverse)
 
         elif isinstance(sort_by, Axis):
             if sort_by.wrapped is None:
                 raise ValueError("Cannot sort by an empty axis")
             assert sort_by.location is not None
             axis_as_location = sort_by.location.inverse()
-
-            def key_function(o):  # type: ignore[misc]
-                return tcast(
+            objects = sorted(
+                candidates,
+                key=lambda o: tcast(
                     Location, (axis_as_location * Location(o.center()))
-                ).position.Z
-
+                ).position.Z,
+                reverse=reverse,
+            )
         elif not sort_by:
             raise ValueError("Cannot sort by an empty object")
         elif hasattr(sort_by, "wrapped") and isinstance(
             sort_by.wrapped, (TopoDS_Edge, TopoDS_Wire)
         ):
 
-            def key_function(obj) -> float:  # type: ignore[misc]
+            def u_of_closest_center(obj) -> float:
                 """u-value of closest point between object center and sort_by"""
                 assert not isinstance(sort_by, SortBy)
                 pnt1, _pnt2 = sort_by.closest_points(obj.center())
                 return sort_by.param_at_point(pnt1)
 
+            # pylint: disable=unnecessary-lambda
+            objects = sorted(
+                candidates, key=lambda o: u_of_closest_center(o), reverse=reverse
+            )
+
         elif isinstance(sort_by, SortBy):
             if sort_by == SortBy.LENGTH:
-                key_function = lambda obj: obj.length  # noqa: E731
+                objects = sorted(
+                    candidates,
+                    key=lambda obj: obj.length,
+                    reverse=reverse,
+                )
             elif sort_by == SortBy.RADIUS:
-                candidates = [obj for obj in candidates if hasattr(obj, "radius")]
-                key_function = lambda obj: obj.radius  # type: ignore # noqa: E731
+                with_radius = [obj for obj in candidates if hasattr(obj, "radius")]
+                objects = sorted(
+                    with_radius,
+                    key=lambda obj: obj.radius,  # type: ignore
+                    reverse=reverse,
+                )
             elif sort_by == SortBy.DISTANCE:
-                key_function = lambda obj: obj.center().length  # noqa: E731
+                objects = sorted(
+                    candidates,
+                    key=lambda obj: obj.center().length,
+                    reverse=reverse,
+                )
             elif sort_by == SortBy.AREA:
-                candidates = [obj for obj in candidates if hasattr(obj, "area")]
-                key_function = lambda obj: obj.area  # type: ignore # noqa: E731
+                with_area = [obj for obj in candidates if hasattr(obj, "area")]
+                objects = sorted(
+                    with_area,
+                    key=lambda obj: obj.area,  # type: ignore
+                    reverse=reverse,
+                )
             elif sort_by == SortBy.VOLUME:
-                candidates = [obj for obj in candidates if hasattr(obj, "volume")]
-                key_function = lambda obj: obj.volume  # type: ignore # noqa: E731
+                with_volume = [obj for obj in candidates if hasattr(obj, "volume")]
+                objects = sorted(
+                    with_volume,
+                    key=lambda obj: obj.volume,  # type: ignore
+                    reverse=reverse,
+                )
         else:
             raise ValueError("Invalid sort_by criteria provided")
 
-        # With tie_break, objects that tie on the sort criterion are ordered by
-        # geometry instead of by the kernel's traversal order (which depends on
-        # construction history - see Mixin1D.canonical).  The keys are computed
-        # only for the objects that actually tie, and the cheap one (vertex
-        # positions) almost always settles it.  Without tie_break the sort stays
-        # stable, so chained sorts keep working.
-        # pylint: disable=possibly-used-before-assignment
-        decorated = [(key_function(obj), obj) for obj in candidates]
-        if tie_break:
-            for tie_break_key in (_canonical_sort_key, _canonical_center_key):
-                try:
-                    tied = Counter(key for key, _ in decorated)
-                except TypeError:  # unhashable keys from a custom callable
-                    break
-                if all(count == 1 for count in tied.values()):
-                    break
-                decorated = [
-                    ((key, tie_break_key(obj) if tied[key] > 1 else ()), obj)
-                    for key, obj in decorated
-                ]
-        decorated.sort(key=lambda pair: pair[0], reverse=reverse)
-
-        return ShapeList([obj for _, obj in decorated])
+        return ShapeList(objects)  # pylint: disable=possibly-used-before-assignment
 
     def sort_by_distance(
         self, other: Shape | VectorLike, reverse: bool = False
@@ -3812,49 +3814,26 @@ def _topods_bool_op(
     return result
 
 
-def _canonical_sort_key(shape: Shape | Vector) -> tuple[float, ...]:
-    """Deterministic, purely geometric ordering key.
+def _geometric_key(shape: Shape | Vector) -> tuple:
+    """A deterministic, purely geometric ordering key.
 
-    Used to break ties in :meth:`ShapeList.sort_by`, where the only alternative
-    is the CAD kernel's traversal order.  It is the shape's vertex positions,
-    sorted and rounded to ``TOL_DIGITS``: purely geometric, stable for geometry
-    that agrees to within tolerance, and cheap enough to compute inside a sort
-    (no bounding box, no curve evaluation).
+    Sorted vertex positions, then the center for shapes that share their vertices
+    (two arcs spanning the same end points), rounded to TOL_DIGITS so geometry
+    that agrees to within tolerance always sorts the same way.  Used by
+    ShapeList.sort_by(tie_break=True).
     """
-    if isinstance(shape, Vector):  # ShapeList also holds plain Vectors
-        return tuple(
-            round(coordinate, TOL_DIGITS) for coordinate in (shape.X, shape.Y, shape.Z)
-        )
-    topods_shape = getattr(shape, "wrapped", None)
-    if topods_shape is None:
-        return ()
-    points: list[tuple[float, ...]] = []
-    explorer = TopExp_Explorer(topods_shape, ta.TopAbs_VERTEX)
+    if isinstance(shape, Vector):  # a ShapeList can also hold plain Vectors
+        return (tuple(round(c, TOL_DIGITS) for c in (shape.X, shape.Y, shape.Z)), ())
+    positions = []
+    explorer = TopExp_Explorer(shape.wrapped, ta.TopAbs_VERTEX)
     while explorer.More():
         point = BRep_Tool.Pnt_s(TopoDS.Vertex_s(explorer.Current()))
-        points.append(
-            (
-                round(point.X(), TOL_DIGITS),
-                round(point.Y(), TOL_DIGITS),
-                round(point.Z(), TOL_DIGITS),
-            )
-        )
+        positions.append(tuple(round(c, TOL_DIGITS) for c in point.Coord()))
         explorer.Next()
-    return tuple(coordinate for point in sorted(points) for coordinate in point)
-
-
-def _canonical_center_key(shape: Shape | Vector) -> tuple[float, ...]:
-    """Second stage tie break, for shapes whose vertices coincide (two arcs
-    spanning the same end points, say).  Only reached when the vertex key above
-    leaves a tie."""
-    if isinstance(shape, Vector):
-        return ()
-    try:
-        center = shape.center()
-    except (ValueError, TypeError, AssertionError, AttributeError):
-        return ()
-    return tuple(
-        round(coordinate, TOL_DIGITS) for coordinate in (center.X, center.Y, center.Z)
+    center = shape.center()
+    return (
+        tuple(sorted(positions)),
+        tuple(round(c, TOL_DIGITS) for c in (center.X, center.Y, center.Z)),
     )
 
 
