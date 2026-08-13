@@ -71,6 +71,7 @@ export const USED_OCCT_SYMBOLS = [
   "GeomAPI_PointsToBSplineSurface_4",
   "GeomAPI_PointsToBSpline_2",
   "GeomAPI_ProjectPointOnCurve_2",
+  "GeomAPI_ProjectPointOnCurve_3",
   "GeomAbs_CurveType",
   "GeomAbs_JoinType",
   "GeomAbs_Shape",

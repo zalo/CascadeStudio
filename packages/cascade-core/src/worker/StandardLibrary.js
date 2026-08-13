@@ -1669,6 +1669,278 @@ function TrimEdge(edge, f0, f1) {
   return trimmed;
 }
 
+// ---------------------------------------------------------------------------
+// Canonical free-edge parametrization primitives (build123d-lite's
+// Mixin1D.canonical — see the upstream proposal in
+// docs/upstream-canonical-edges/). The rule itself is pure geometry and lives
+// in Python (Build123dLite.js); these are the four kernel operations it needs:
+// reverse a 1D shape, locate a point on an edge, measure a point's distance to
+// an edge, and concatenate an ordered edge chain into ONE edge (which is what
+// gives a re-seamed closed loop an unambiguous start point).
+// ---------------------------------------------------------------------------
+
+/** Reverse the topological orientation of an Edge or a Wire, keeping the
+ *  concrete TopoDS type (build123d's Edge.reversed / _reverse_1d). */
+function ReverseEdgeOrWire(shape) {
+  let reversed = shape.Reversed();
+  let kind = shape.ShapeType().value;
+  if (kind === 6) { reversed = self.oc.TopoDS_Cast.Edge_1(reversed); }
+  else if (kind === 5) { reversed = self.oc.TopoDS_Cast.Wire_1(reversed); }
+  reversed.hash = self.oc.OCJS.HashCode(reversed, 100000000);
+  self.sceneShapes.push(reversed);
+  return reversed;
+}
+
+/** Minimal distance from a point to an edge (build123d's Shape.distance_to for
+ *  the Edge/point case), measured on the edge's own parameter range. */
+function _edgeDistanceToPoint(edge, point) {
+  let e = _asEdge(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(e);
+  let first = curve.FirstParameter(), last = curve.LastParameter();
+  let pnt = new self.oc.gp_Pnt_3(point[0], point[1], point[2]);
+  let best = Infinity;
+  for (let u of [first, last]) {
+    let p = new self.oc.gp_Pnt_1();
+    curve.D0(u, p);
+    best = Math.min(best, p.Distance(pnt));
+  }
+  let handle = self.oc.BRep_Tool.Curve_2(e, { current: 0 }, { current: 0 });
+  let projector = new self.oc.GeomAPI_ProjectPointOnCurve_3(pnt, handle, first, last);
+  if (projector.NbPoints() > 0) { best = Math.min(best, projector.LowerDistance()); }
+  return best;
+}
+
+/** The normalized ARC-LENGTH position (0..1, measured along the underlying
+ *  curve from its first parameter) of the point on an edge closest to `point`
+ *  — build123d's Edge.param_at_point, same three-stage strategy: endpoint
+ *  snap, GeomAPI_ProjectPointOnCurve validated by re-evaluation, then a
+ *  sampled + golden-section search. Returns null when the point is not on the
+ *  edge. */
+function _edgeParamAtPoint(edge, point) {
+  let e = _asEdge(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(e);
+  let first = curve.FirstParameter(), last = curve.LastParameter();
+  let total = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, last);
+  if (!(total > 0)) { return 0.0; }
+  let pnt = new self.oc.gp_Pnt_3(point[0], point[1], point[2]);
+  let pointAtParam = (u) => {
+    let p = new self.oc.gp_Pnt_1();
+    curve.D0(Math.min(last, Math.max(first, u)), p);
+    return p;
+  };
+  let distAtFraction = (u) => {
+    let p = new self.oc.gp_Pnt_1();
+    curve.D0(_edgeParamAtFraction(curve, u), p);
+    return p.Distance(pnt);
+  };
+  // 1. endpoint snap (a vertex of the edge)
+  if (pointAtParam(first).Distance(pnt) <= 1e-6) { return 0.0; }
+  if (pointAtParam(last).Distance(pnt) <= 1e-6) { return 1.0; }
+  // 2. projection onto the curve, wrapped back into range when periodic
+  let handle = self.oc.BRep_Tool.Curve_2(e, { current: 0 }, { current: 0 });
+  let projector = new self.oc.GeomAPI_ProjectPointOnCurve_2(pnt, handle);
+  if (projector.NbPoints() > 0) {
+    let param = projector.LowerDistanceParameter();
+    if (curve.IsPeriodic()) {
+      let period = curve.Period();
+      param = first + (((param - first) % period) + period) % period;
+    }
+    if (param >= first - 1e-9 && param <= last + 1e-9) {
+      param = Math.min(last, Math.max(first, param));
+      let u = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, param) / total;
+      if (distAtFraction(u) <= 1e-6) { return u; }
+    }
+  }
+  // 3. sampled scan + golden-section refinement of the distance minimum
+  let samples = 512, bestU = 0.0, bestD = Infinity;
+  for (let i = 0; i <= samples; i++) {
+    let u = i / samples, d = distAtFraction(u);
+    if (d < bestD) { bestD = d; bestU = u; }
+  }
+  let invPhi = 0.6180339887498949;
+  let lo = Math.max(0, bestU - 1 / samples), hi = Math.min(1, bestU + 1 / samples);
+  let x1 = hi - invPhi * (hi - lo), x2 = lo + invPhi * (hi - lo);
+  let f1 = distAtFraction(x1), f2 = distAtFraction(x2);
+  for (let i = 0; i < 60; i++) {
+    if (f1 <= f2) { hi = x2; x2 = x1; f2 = f1; x1 = hi - invPhi * (hi - lo); f1 = distAtFraction(x1); }
+    else { lo = x1; x1 = x2; f1 = f2; x2 = lo + invPhi * (hi - lo); f2 = distAtFraction(x2); }
+  }
+  let u = f1 <= f2 ? x1 : x2;
+  return distAtFraction(u) <= 1e-6 ? u : null;
+}
+
+function _bsplineDataOf(curve) {
+  let data = {
+    deg: curve.Degree(), periodic: curve.IsPeriodic(),
+    knots: [], mults: [], poles: [], weights: null,
+  };
+  for (let i = 1; i <= curve.NbPoles(); i++) {
+    let p = curve.Pole(i);
+    data.poles.push([p.X(), p.Y(), p.Z()]);
+  }
+  for (let i = 1; i <= curve.NbKnots(); i++) {
+    data.knots.push(curve.Knot(i));
+    data.mults.push(curve.Multiplicity(i));
+  }
+  if (curve.IsRational()) {
+    data.weights = [];
+    for (let i = 1; i <= curve.NbPoles(); i++) { data.weights.push(curve.Weight(i)); }
+  }
+  return data;
+}
+
+function _bsplineFromData(data) {
+  let count = data.poles.length;
+  let poles = new self.oc.TColgp_Array1OfPnt_2(1, count);
+  for (let i = 0; i < count; i++) {
+    poles.SetValue(i + 1, new self.oc.gp_Pnt_3(
+      data.poles[i][0], data.poles[i][1], data.poles[i][2]));
+  }
+  let knots = new self.oc.TColStd_Array1OfReal_2(1, data.knots.length);
+  for (let i = 0; i < data.knots.length; i++) { knots.SetValue(i + 1, data.knots[i]); }
+  let mults = new self.oc.TColStd_Array1OfInteger_2(1, data.mults.length);
+  for (let i = 0; i < data.mults.length; i++) { mults.SetValue(i + 1, data.mults[i]); }
+  if (data.weights) {
+    let weights = new self.oc.TColStd_Array1OfReal_2(1, count);
+    for (let i = 0; i < count; i++) { weights.SetValue(i + 1, data.weights[i]); }
+    return new self.oc.Geom_BSplineCurve_2(
+      poles, weights, knots, mults, data.deg, !!data.periodic, false);
+  }
+  return new self.oc.Geom_BSplineCurve_1(poles, knots, mults, data.deg, !!data.periodic);
+}
+
+/** Exact rational-quadratic NURBS of a conic arc: built in the unit-circle
+ *  parameter plane (where the classic cos(alpha/2) construction is exact) and
+ *  mapped through the conic's own affine frame, which is exact for ellipses
+ *  too because an ellipse IS an affine image of a circle. */
+function _conicArcData(origin, xDir, yDir, radiusX, radiusY, u0, u1) {
+  let span = u1 - u0;
+  let segments = Math.max(1, Math.ceil(Math.abs(span) / (Math.PI / 2) - 1e-9));
+  let step = span / segments;
+  let half = Math.cos(step / 2);
+  let map = (px, py) => [0, 1, 2].map(
+    (k) => origin[k] + px * radiusX * xDir[k] + py * radiusY * yDir[k]);
+  let poles = [map(Math.cos(u0), Math.sin(u0))], weights = [1];
+  for (let i = 0; i < segments; i++) {
+    let a0 = u0 + i * step, a1 = a0 + step, mid = 0.5 * (a0 + a1);
+    poles.push(map(Math.cos(mid) / half, Math.sin(mid) / half));
+    weights.push(half);
+    poles.push(map(Math.cos(a1), Math.sin(a1)));
+    weights.push(1);
+  }
+  let knots = [], mults = [];
+  for (let i = 0; i <= segments; i++) {
+    knots.push(u0 + i * step);
+    mults.push(i === 0 || i === segments ? 3 : 2);
+  }
+  return { deg: 2, periodic: false, knots, mults, poles, weights };
+}
+
+/** An edge's curve as B-spline pole/knot data, trimmed to the edge's range and
+ *  oriented the way the EDGE runs (build123d's `bspline_of` inside
+ *  _concatenate_edges: CurveToBSplineCurve of a Geom_TrimmedCurve, reversed
+ *  for a REVERSED edge). This wasm build cannot bind
+ *  Convert_ParameterisationType, so GeomConvert is unavailable and the
+ *  analytic curve types are converted here instead — exactly, not by
+ *  approximation. */
+function _edgeBSplineData(edge) {
+  let e = _asEdge(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(e);
+  let type = curve.GetType(), types = self.oc.GeomAbs_CurveType;
+  let first = curve.FirstParameter(), last = curve.LastParameter();
+  let bspline;
+  if (type === types.GeomAbs_Line) {
+    let p0 = new self.oc.gp_Pnt_1(), p1 = new self.oc.gp_Pnt_1();
+    curve.D0(first, p0);
+    curve.D0(last, p1);
+    bspline = _bsplineFromData({
+      deg: 1, periodic: false, knots: [first, last], mults: [2, 2], weights: null,
+      poles: [[p0.X(), p0.Y(), p0.Z()], [p1.X(), p1.Y(), p1.Z()]],
+    });
+  } else if (type === types.GeomAbs_Circle || type === types.GeomAbs_Ellipse) {
+    let isCircle = type === types.GeomAbs_Circle;
+    let conic = isCircle ? curve.Circle() : curve.Ellipse();
+    let frame = conic.Position();
+    let origin = frame.Location(), xDir = frame.XDirection(), yDir = frame.YDirection();
+    bspline = _bsplineFromData(_conicArcData(
+      [origin.X(), origin.Y(), origin.Z()],
+      [xDir.X(), xDir.Y(), xDir.Z()],
+      [yDir.X(), yDir.Y(), yDir.Z()],
+      isCircle ? conic.Radius() : conic.MajorRadius(),
+      isCircle ? conic.Radius() : conic.MinorRadius(),
+      first, last));
+  } else if (type === types.GeomAbs_BezierCurve) {
+    let bezier = curve.Bezier().get();
+    let poles = [], weights = bezier.IsRational() ? [] : null;
+    for (let i = 1; i <= bezier.NbPoles(); i++) {
+      let p = bezier.Pole(i);
+      poles.push([p.X(), p.Y(), p.Z()]);
+      if (weights) { weights.push(bezier.Weight(i)); }
+    }
+    let deg = bezier.Degree();
+    bspline = _bsplineFromData({
+      deg, periodic: false, knots: [0, 1], mults: [deg + 1, deg + 1], poles, weights,
+    });
+    if (first > 0 || last < 1) { bspline.Segment(first, last, 1e-9); }
+  } else if (type === types.GeomAbs_BSplineCurve) {
+    // rebuild from data first: Segment() mutates in place and the adaptor's
+    // handle points at the edge's own basis curve
+    bspline = _bsplineFromData(_bsplineDataOf(curve.BSpline().get()));
+    bspline.Segment(first, last, 1e-9);
+  } else {
+    throw new Error(
+      "build123d-lite cannot canonicalize a closed shape containing a " +
+      "hyperbola, parabola or offset curve (no exact B-spline form)");
+  }
+  if (e.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED) {
+    bspline.Reverse();
+  }
+  return _bsplineDataOf(bspline);
+}
+
+/** ONE edge whose curve is the exact concatenation of an ordered, head-to-tail
+ *  edge chain (build123d's _concatenate_edges, which uses
+ *  GeomConvert_CompCurveToBSplineCurve — unavailable here, see
+ *  _edgeBSplineData). Used to give a re-seamed closed loop an unambiguous
+ *  start point: a closed TopoDS_Wire carries no distinguished first edge,
+ *  while an Edge's curve parametrization does. */
+function ConcatEdgesToEdge(edges) {
+  let pieces = edges.map(_edgeBSplineData);
+  let degree = pieces.reduce((d, piece) => Math.max(d, piece.deg), 1);
+  pieces = pieces.map((piece) => {
+    if (piece.deg === degree) { return piece; }
+    let raised = _bsplineFromData(piece);
+    raised.IncreaseDegree(degree);
+    return _bsplineDataOf(raised);
+  });
+  let joined = pieces[0];
+  for (let i = 1; i < pieces.length; i++) {
+    let next = pieces[i];
+    let shift = joined.knots[joined.knots.length - 1] - next.knots[0];
+    let rational = !!(joined.weights || next.weights);
+    let weightsA = joined.weights || joined.poles.map(() => 1);
+    let weightsB = next.weights || next.poles.map(() => 1);
+    // the junction pole is shared, so rescale the incoming weights to match
+    let scale = weightsA[weightsA.length - 1] / weightsB[0];
+    joined = {
+      deg: degree,
+      periodic: false,
+      poles: joined.poles.concat(next.poles.slice(1)),
+      weights: rational
+        ? weightsA.concat(weightsB.slice(1).map((weight) => weight * scale))
+        : null,
+      knots: joined.knots.concat(next.knots.slice(1).map((knot) => knot + shift)),
+      // C0 junction: multiplicity == degree instead of the clamped degree + 1
+      mults: joined.mults.slice(0, -1).concat([degree]).concat(next.mults.slice(1)),
+    };
+  }
+  let handle = new self.oc.Handle_Geom_Curve_2(_bsplineFromData(joined));
+  let out = new self.oc.BRepBuilderAPI_MakeEdge_24(handle).Edge();
+  out.hash = self.oc.OCJS.HashCode(out, 100000000);
+  self.sceneShapes.push(out);
+  return out;
+}
+
 /** An edge's 3D curve projected onto a face's surface (GeomProjLib::Project —
  *  build123d's "snap_to_face" step of _wrap_edge). */
 function ProjectEdgeOnFace(edge, face) {
@@ -3186,6 +3458,10 @@ class CascadeStudioStandardLibrary {
     self.AsSingleFace = AsSingleFace;
     self._edgeParam = _edgeParam;
     self.TrimEdge = TrimEdge;
+    self.ReverseEdgeOrWire = ReverseEdgeOrWire;
+    self._edgeDistanceToPoint = _edgeDistanceToPoint;
+    self._edgeParamAtPoint = _edgeParamAtPoint;
+    self.ConcatEdgesToEdge = ConcatEdgesToEdge;
     self.ProjectEdgeOnFace = ProjectEdgeOnFace;
     self.ExtendSplineOnFace = ExtendSplineOnFace;
     self.InterpolatedEdge = InterpolatedEdge;
