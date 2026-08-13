@@ -77,6 +77,16 @@ async function _bootstrap() {
   // getCallingLocation() parses eval stack frames, which is meaningless for
   // Brython-generated code.) This keeps modelHistory line numbers and the
   // viewport's pick → editor-line mapping working in Python mode.
+  // Frame of the code that CALLED the currently-executing Python function
+  // (build123d-lite's Builder.__enter__ uses it to replicate build123d's
+  // same-stack-frame rule for transferring a builder's result to its parent).
+  self._pythonCallerFrame = function () {
+    try {
+      const frameObj = B.frame_obj;
+      return frameObj && frameObj.prev ? frameObj.prev.frame : null;
+    } catch (e) { return null; }
+  };
+
   self.getPythonUserLine = function () {
     try {
       let frameObj = B.frame_obj;

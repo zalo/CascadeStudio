@@ -141,6 +141,7 @@ class FontStyle:
     REGULAR = 'REGULAR'
     BOLD = 'BOLD'
     ITALIC = 'ITALIC'
+    BOLDITALIC = 'BOLDITALIC'
 
 
 # -------------------------------------------------------- vector algebra ---
@@ -435,8 +436,9 @@ class Location:
             if isinstance(moved, Curve) and moved._specs:
                 # keep segment data consistent with the moved geometry so
                 # make_face()/sweep() can still chain the result exactly
-                moved._specs = [(k, [self._transform_point(p) for p in pts])
-                                for (k, pts) in moved._specs]
+                fn_dir = lambda d: _mat_vec(self._R, d)
+                moved._specs = [_seg_transform(s, self._transform_point, fn_dir)
+                                for s in moved._specs]
             return moved
         if isinstance(other, (list, tuple, ShapeList)):
             return ShapeList([self * s for s in other])
@@ -753,6 +755,15 @@ class Shape:
         w.ForEachSolid(self.topo, _cb)
         return out
 
+    def wires(self):
+        if self.topo is None:
+            return ShapeList()
+        out = ShapeList()
+        def _cb(i, s):
+            out.append(Curve(s))
+        w.ForEachWire(self.topo, _cb)
+        return out
+
     def face(self):
         fs = self.faces()
         return fs[0] if len(fs) > 0 else None
@@ -760,6 +771,14 @@ class Shape:
     def edge(self):
         es = self.edges()
         return es[0] if len(es) > 0 else None
+
+    def wire(self):
+        ws = self.wires()
+        return ws[0] if len(ws) > 0 else None
+
+    def wire(self):
+        ws = self.wires()
+        return ws[0] if len(ws) > 0 else None
 
     # --- measurement ---
     @property
@@ -867,17 +886,45 @@ class Curve(Shape):
         topo = topos[0] if len(topos) == 1 else w.MakeCompound(topos)
         return Curve(topo, specs)
 
-    def _edge_topo(self):
+    def _walk(self, u, tangent):
+        """Evaluate position/tangent at length-fraction u along the (possibly
+        multi-edge) curve, orienting each edge to chain head-to-tail."""
         es = list(w.Edges(self.topo).edges())
-        if len(es) != 1:
-            raise NotImplementedError('position/tangent along multi-edge curves')
-        return es[0]
+        if len(es) == 1:
+            fn = w._edgeTangentAt if tangent else w._edgePointAt
+            return Vector(tuple(fn(es[0], float(u))))
+        lens = [w._edgeLength(e) for e in es]
+        ends = [(tuple(w._edgePointAt(e, 0.0)), tuple(w._edgePointAt(e, 1.0)))
+                for e in es]
+        # orient edges into a chain (WireFromSegments adds them in order,
+        # but individual edges may run tip-to-tail reversed)
+        flips = [False] * len(es)
+        for i in range(1, len(es)):
+            prev_end = ends[i - 1][0] if flips[i - 1] else ends[i - 1][1]
+            d_fwd = math.dist(prev_end, ends[i][0])
+            d_rev = math.dist(prev_end, ends[i][1])
+            flips[i] = d_rev < d_fwd
+        total = sum(lens)
+        target = max(0.0, min(1.0, float(u))) * total
+        acc = 0.0
+        for i, e in enumerate(es):
+            if target <= acc + lens[i] + 1e-12 or i == len(es) - 1:
+                v = (target - acc) / lens[i] if lens[i] > 0 else 0.0
+                if flips[i]:
+                    v = 1.0 - v
+                fn = w._edgeTangentAt if tangent else w._edgePointAt
+                res = Vector(tuple(fn(e, v)))
+                if tangent and flips[i]:
+                    res = -res
+                return res
+            acc += lens[i]
+        raise ValueError('curve evaluation failed')
 
     def __matmul__(self, u):  # curve @ u -> position
-        return Vector(tuple(w._edgePointAt(self._edge_topo(), float(u))))
+        return self._walk(u, False)
 
     def __mod__(self, u):  # curve % u -> tangent
-        return Vector(tuple(w._edgeTangentAt(self._edge_topo(), float(u))))
+        return self._walk(u, True)
 
     @property
     def start_point(self):
@@ -1249,6 +1296,7 @@ def _combine(builder, obj, mode, warn_cls=None):
 
 class Builder:
     _shape_cls = Part
+    _tag = 'part'
 
     def __init__(self, *workplanes, mode=Mode.ADD):
         planes = []
@@ -1275,6 +1323,17 @@ class Builder:
 
     def __enter__(self):
         self._loc_depth = len(_loc_stack)
+        # build123d only transfers a builder's result to the enclosing
+        # builder when both with-statements share a stack frame (an inner
+        # builder inside e.g. a BaseSketchObject subclass __init__ must NOT
+        # auto-combine — the object machinery adds it instead)
+        self._python_frame = w._pythonCallerFrame()
+        enclosing = _builders[-1] if _builders else None
+        if enclosing is not None and \
+                enclosing._python_frame is self._python_frame:
+            self._parent = enclosing
+        else:
+            self._parent = None
         _builders.append(self)
         return self
 
@@ -1283,7 +1342,7 @@ class Builder:
         _builders.pop()
         if exc_type is not None:
             return False
-        self._finalize(_active_builder())
+        self._finalize(self._parent)
         return False
 
     def _finalize(self, parent):
@@ -1310,6 +1369,7 @@ class Builder:
 
 class BuildPart(Builder):
     _shape_cls = Part
+    _tag = 'part'
 
     @property
     def part(self):
@@ -1341,6 +1401,7 @@ class BuildPart(Builder):
 
 class BuildSketch(Builder):
     _shape_cls = Sketch
+    _tag = 'sketch'
 
     @property
     def sketch(self):
@@ -1370,6 +1431,7 @@ class BuildSketch(Builder):
 
 class BuildLine(Builder):
     _shape_cls = Curve
+    _tag = 'line'
 
     def __init__(self, *workplanes, mode=Mode.ADD):
         Builder.__init__(self, *workplanes, mode=mode)
@@ -1390,7 +1452,9 @@ class BuildLine(Builder):
         # transform local specs by this builder's workplane
         wp = self.workplanes[0]
         loc = wp.location
-        specs = [(k, [loc._transform_point(p) for p in pts]) for (k, pts) in self._specs]
+        fn_dir = lambda d: _mat_vec(loc._R, d)
+        specs = [_seg_transform(s, loc._transform_point, fn_dir)
+                 for s in self._specs]
         if specs:
             self._obj = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
         if isinstance(parent, BuildSketch):
@@ -1424,6 +1488,10 @@ class LocationList:
 
     def __len__(self):
         return len(self.locations)
+
+    @property
+    def local_locations(self):
+        return list(self.locations)
 
     def __mul__(self, other):
         # PolarLocations(...) * shape -> copies at every location (algebra)
@@ -1870,26 +1938,88 @@ def Trapezoid(width, height, left_side_angle, right_side_angle=None,
     return _sketch_object(maker, ((-x, -y), (x, y)), rotation, align, mode)
 
 
-def Text(*args, **kwargs):
-    raise NotImplementedError('Text is not supported in build123d-lite '
-                              '(font metrics differ between environments)')
+class TextAlign:
+    LEFT = 'left'
+    CENTER = 'center'
+    RIGHT = 'right'
+    BOTTOM = 'bottom'
+    TOP = 'top'
+
+
+def Text(txt, font_size, font='Arial', font_path=None,
+         font_style=FontStyle.REGULAR,
+         text_align=(TextAlign.CENTER, TextAlign.CENTER), align=None,
+         path=None, position_on_path=0.0, single_line_width=None,
+         rotation=0.0, mode=Mode.ADD):
+    """Text rendered with OCCT's StdPrs_BRepTextBuilder using Liberation
+    Sans (= what fontconfig resolves 'Arial' to on Linux, so geometry
+    matches native build123d there). Other font names fall back to
+    Liberation Sans with a warning; font_path/path are not supported."""
+    if path is not None:
+        raise NotImplementedError('Text along a path is not supported in '
+                                  'build123d-lite')
+    if font_path is not None:
+        raise NotImplementedError('Text font_path= is not supported in '
+                                  'build123d-lite (fonts are bundled)')
+    fname = {FontStyle.REGULAR: 'FreeSans',
+             FontStyle.BOLD: 'FreeSansBold',
+             FontStyle.ITALIC: 'FreeSansOblique',
+             FontStyle.BOLDITALIC: 'FreeSansBoldOblique'}.get(font_style)
+    if fname is None:
+        raise NotImplementedError('unsupported font_style in build123d-lite')
+    if font not in ('Arial', 'FreeSans'):
+        print('build123d-lite: font ' + repr(font) +
+              ' is not bundled; using FreeSans (what OCCT resolves Arial to)')
+    maker = lambda: w.Text2D(txt, float(font_size), fname,
+                             text_align[0], text_align[1])
+    return _sketch_object(maker, None, rotation, align, mode)
 
 
 # ---------------------------------------------------------- 1D objects ---
 
+def _seg_pts(seg):
+    return seg[1]
+
+
+def _seg_params(seg):
+    return seg[2] if len(seg) > 2 else None
+
+
+def _seg_make(kind, pts, params=None):
+    if params is None:
+        return [kind, [list(p) for p in pts]]
+    return [kind, [list(p) for p in pts], params]
+
+
+def _seg_reverse(seg):
+    return _seg_make(seg[0], list(reversed(_seg_pts(seg))), _seg_params(seg))
+
+
+def _seg_transform(seg, fn_point, fn_dir):
+    """Rigid-transform a segment: points via fn_point, directions via fn_dir
+    (earc params carry center/xdir/normal)."""
+    pts = [fn_point(_v3(p)) for p in _seg_pts(seg)]
+    params = _seg_params(seg)
+    if params is not None:
+        params = [list(fn_point(_v3(params[0]))), list(fn_dir(_v3(params[1]))),
+                  list(fn_dir(_v3(params[2])))] + list(params[3:])
+    return _seg_make(seg[0], pts, params)
+
+
 def _chain_segments(specs):
     """Greedy-chain segments end-to-start (reversing where needed) so OCCT's
-    MakeWire accepts them in order. Specs: (kind, [pts...])."""
+    MakeWire accepts them in order. Specs: (kind, [pts...][, params])."""
     if not specs:
         return []
-    remaining = [(k, [tuple(p) for p in pts]) for (k, pts) in specs]
+    remaining = [_seg_make(s[0], [tuple(p) for p in _seg_pts(s)], _seg_params(s))
+                 for s in specs]
     ordered = [remaining.pop(0)]
 
     def s_start(s):
-        return s[1][0]
+        return _seg_pts(s)[0]
 
     def s_end(s):
-        return s[1][-1]
+        return _seg_pts(s)[-1]
 
     def close(a, b):
         return (abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) < 1e-6 and
@@ -1905,8 +2035,7 @@ def _chain_segments(specs):
                 found = True
                 break
             if close(s_end(seg), tail):
-                k, pts = remaining.pop(i)
-                ordered.append((k, list(reversed(pts))))
+                ordered.append(_seg_reverse(remaining.pop(i)))
                 found = True
                 break
             if close(s_end(seg), head):
@@ -1914,15 +2043,14 @@ def _chain_segments(specs):
                 found = True
                 break
             if close(s_start(seg), head):
-                k, pts = remaining.pop(i)
-                ordered.insert(0, (k, list(reversed(pts))))
+                ordered.insert(0, _seg_reverse(remaining.pop(i)))
                 found = True
                 break
         if not found:
             # disconnected: append remaining as-is and let OCCT complain
             ordered.extend(remaining)
             break
-    return [[k, [list(p) for p in pts]] for (k, pts) in ordered]
+    return ordered
 
 
 def _line_object(specs, mode=Mode.ADD):
@@ -2072,60 +2200,122 @@ def PolarLine(start, length, angle=None, direction=None, mode=Mode.ADD,
     return _line_object([('line', [p1, p2])], mode)
 
 
-def Bezier(*cpts, mode=Mode.ADD):
+def Bezier(*cpts, weights=None, mode=Mode.ADD):
     if len(cpts) == 1 and hasattr(cpts[0], '__len__') and \
             hasattr(cpts[0][0], '__len__'):
         cpts = tuple(cpts[0])
-    return _line_object([('bezier', [_v3(p) for p in cpts])], mode)
-
-
-def _natural_cubic(pts, samples_per_seg=16):
-    """Densely sample a natural cubic spline through the points (chord-length
-    parametrized) — approximates GeomAPI_Interpolate, which the WASM build
-    does not bind. Returns the sampled polyline including the input points."""
+    pts = [_v3(p) for p in cpts]
+    if weights is None:
+        return _line_object([('bezier', pts)], mode)
+    # rational Bezier: the WASM build lacks the weighted Geom_BezierCurve
+    # array types, so sample the exact rational curve densely and fit
+    if len(weights) != len(pts):
+        raise ValueError('Bezier: weights must match control points')
     n = len(pts) - 1
-    if n < 2:
+    binom = [1] * (n + 1)
+    for i in range(1, n + 1):
+        binom[i] = binom[i - 1] * (n - i + 1) // i
+
+    def at(t):
+        num = [0.0, 0.0, 0.0]
+        den = 0.0
+        for i in range(n + 1):
+            b = binom[i] * (t ** i) * ((1 - t) ** (n - i)) * weights[i]
+            den += b
+            for k in range(3):
+                num[k] += b * pts[i][k]
+        return [num[0] / den, num[1] / den, num[2] / den]
+    dense = [at(i / 64.0) for i in range(65)]
+    return _line_object([('spline', dense)], mode)
+
+
+def _cubic_spline(pts, d0=None, d1=None, samples_per_seg=16):
+    """Densely sample a C2 cubic through the points (chord-length
+    parametrized) — approximates GeomAPI_Interpolate, whose point-array
+    types are not bound in the WASM build. End conditions: clamped to the
+    derivative vectors d0/d1 when given (validated against build123d's
+    Spline(tangents=..., tangent_scalars=...): end derivative =
+    unit(tangent) * scalar), else not-a-knot (closest match to OCCT's
+    free-end interpolation). Returns the sampled polyline."""
+    n = len(pts) - 1
+    if n < 1:
         return list(pts)
-    # chord-length parametrization
+    if n == 1 and d0 is None:
+        return list(pts)
     t = [0.0]
     for i in range(n):
         d = math.sqrt(sum((pts[i + 1][k] - pts[i][k]) ** 2 for k in range(3)))
         t.append(t[-1] + max(d, 1e-12))
+    h = [t[i + 1] - t[i] for i in range(n)]
+    N = n + 1
 
-    def solve_axis(vals):
-        # natural cubic spline second-derivative solve (tridiagonal)
-        h = [t[i + 1] - t[i] for i in range(n)]
-        alpha = [0.0] * (n + 1)
+    def solve_axis(dim):
+        vals = [p[dim] for p in pts]
+        A = [[0.0] * N for _ in range(N)]
+        r = [0.0] * N
+        if d0 is not None:
+            A[0][0] = 2 * h[0]
+            A[0][1] = h[0]
+            r[0] = 3.0 * ((vals[1] - vals[0]) / h[0] - d0[dim])
+            A[n][n - 1] = h[n - 1]
+            A[n][n] = 2 * h[n - 1]
+            r[n] = 3.0 * (d1[dim] - (vals[n] - vals[n - 1]) / h[n - 1])
+        elif n >= 2:
+            # not-a-knot
+            A[0][0] = h[1]
+            A[0][1] = -(h[0] + h[1])
+            A[0][2] = h[0]
+            A[n][n - 2] = h[n - 1]
+            A[n][n - 1] = -(h[n - 2] + h[n - 1])
+            A[n][n] = h[n - 2]
+        else:
+            A[0][0] = 1.0
+            A[n][n] = 1.0
         for i in range(1, n):
-            alpha[i] = (3.0 / h[i] * (vals[i + 1] - vals[i]) -
-                        3.0 / h[i - 1] * (vals[i] - vals[i - 1]))
-        l = [1.0] + [0.0] * n
-        mu = [0.0] * (n + 1)
-        z = [0.0] * (n + 1)
-        for i in range(1, n):
-            l[i] = 2.0 * (t[i + 1] - t[i - 1]) - h[i - 1] * mu[i - 1]
-            mu[i] = h[i] / l[i]
-            z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i]
-        c = [0.0] * (n + 1)
+            A[i][i - 1] = h[i - 1]
+            A[i][i] = 2.0 * (h[i - 1] + h[i])
+            A[i][i + 1] = h[i]
+            r[i] = 3.0 * ((vals[i + 1] - vals[i]) / h[i] -
+                          (vals[i] - vals[i - 1]) / h[i - 1])
+        # gaussian elimination with partial pivoting (N is small)
+        for i in range(N):
+            piv = i
+            for k in range(i + 1, N):
+                if abs(A[k][i]) > abs(A[piv][i]):
+                    piv = k
+            if piv != i:
+                A[i], A[piv] = A[piv], A[i]
+                r[i], r[piv] = r[piv], r[i]
+            for j in range(i + 1, N):
+                if A[j][i] != 0.0:
+                    f = A[j][i] / A[i][i]
+                    for k in range(i, N):
+                        A[j][k] -= f * A[i][k]
+                    r[j] -= f * r[i]
+        c = [0.0] * N
+        for i in range(N - 1, -1, -1):
+            s = r[i]
+            for k in range(i + 1, N):
+                s -= A[i][k] * c[k]
+            c[i] = s / A[i][i]
         b = [0.0] * n
-        d = [0.0] * n
-        for j in range(n - 1, -1, -1):
-            c[j] = z[j] - mu[j] * c[j + 1]
-            b[j] = ((vals[j + 1] - vals[j]) / h[j] -
-                    h[j] * (c[j + 1] + 2.0 * c[j]) / 3.0)
-            d[j] = (c[j + 1] - c[j]) / (3.0 * h[j])
-        return b, c, d
+        dd = [0.0] * n
+        for i in range(n):
+            b[i] = ((vals[i + 1] - vals[i]) / h[i] -
+                    h[i] * (2.0 * c[i] + c[i + 1]) / 3.0)
+            dd[i] = (c[i + 1] - c[i]) / (3.0 * h[i])
+        return b, c, dd
 
-    coeffs = [solve_axis([p[k] for p in pts]) for k in range(3)]
+    coeffs = [solve_axis(k) for k in range(3)]
     out = []
     for i in range(n):
         for s in range(samples_per_seg):
-            dt = (t[i + 1] - t[i]) * s / samples_per_seg
+            dt = h[i] * s / samples_per_seg
             pt = []
             for k in range(3):
-                b, c, d = coeffs[k]
+                b, c, dd = coeffs[k]
                 pt.append(pts[i][k] + b[i] * dt + c[i] * dt * dt +
-                          d[i] * dt * dt * dt)
+                          dd[i] * dt * dt * dt)
             out.append(tuple(pt))
     out.append(tuple(pts[-1]))
     return out
@@ -2133,29 +2323,115 @@ def _natural_cubic(pts, samples_per_seg=16):
 
 def Spline(*pts, tangents=None, tangent_scalars=None, periodic=False,
            mode=Mode.ADD):
-    if tangents is not None:
-        raise NotImplementedError('Spline tangents= is not supported in '
-                                  'build123d-lite (approximating fit only)')
     if len(pts) == 1 and hasattr(pts[0], '__len__') and \
             hasattr(pts[0][0], '__len__'):
         pts = tuple(pts[0])
     p3 = [_v3(p) for p in pts]
     if periodic and p3[0] != p3[-1]:
         p3.append(p3[0])
-    # sample a natural cubic through the points and fit tightly through the
-    # samples — much closer to build123d's exact interpolation than fitting
-    # the sparse control points directly
-    dense = [list(p) for p in _natural_cubic(p3)]
+    d0 = d1 = None
+    if tangents is not None:
+        tg = [Vector(t).normalized() for t in tangents]
+        if len(tg) != 2:
+            raise NotImplementedError('Spline with per-point tangents is not '
+                                      'supported in build123d-lite (ends only)')
+        sc = tangent_scalars if tangent_scalars is not None else (1.0, 1.0)
+        d0 = tuple(tg[0] * sc[0])
+        d1 = tuple(tg[1] * sc[1])
+    # sample a C2 cubic through the points and fit tightly through the
+    # samples — matches build123d's exact interpolation closely (end
+    # derivatives = unit tangent * scalar, calibrated against 0.11.1)
+    dense = [list(p) for p in _cubic_spline(p3, d0, d1)]
     return _line_object([('spline', dense)], mode)
 
 
-def EllipticalCenterArc(*args, **kwargs):
-    raise NotImplementedError('EllipticalCenterArc is not supported in '
-                              'build123d-lite')
+def EllipticalCenterArc(center, x_radius, y_radius, start_angle=0.0,
+                        arc_size=90.0, rotation=0.0, angular_direction=None,
+                        mode=Mode.ADD):
+    if not isinstance(arc_size, (int, float)):
+        raise NotImplementedError('EllipticalCenterArc arc limits (Shape/'
+                                  'Axis/...) are not supported in build123d-lite')
+    c = _v3(center)
+    if arc_size >= 0:
+        end_angle = start_angle + arc_size
+    else:
+        # negative size sweeps clockwise: same point set as the CCW arc
+        # from (start + arc_size) to start
+        start_angle, end_angle = start_angle + arc_size, start_angle
+    rot = math.radians(rotation)
+    xd = (math.cos(rot), math.sin(rot), 0.0)
+
+    def at(a):
+        ar = math.radians(a)
+        lx, ly = x_radius * math.cos(ar), y_radius * math.sin(ar)
+        return [c[0] + lx * xd[0] - ly * xd[1], c[1] + lx * xd[1] + ly * xd[0], c[2]]
+    # gp_Elips requires major >= minor: swap axes when y_radius dominates
+    if x_radius >= y_radius:
+        major, minor, a0, a1 = x_radius, y_radius, start_angle, end_angle
+        xdir = list(xd)
+    else:
+        major, minor = y_radius, x_radius
+        a0, a1 = start_angle - 90.0, end_angle - 90.0
+        xdir = [-xd[1], xd[0], 0.0]
+    spec = ('earc', [at(start_angle), at(end_angle)],
+            [list(c), xdir, [0.0, 0.0, 1.0], major, minor, a0, a1])
+    return _line_object([spec], mode)
+
+
+def Ellipse(x_radius, y_radius, rotation=0, align=(Align.CENTER, Align.CENTER),
+            mode=Mode.ADD):
+    """Elliptical sketch face (gp_Elips + GC_MakeArcOfEllipse)."""
+    if x_radius >= y_radius:
+        major, minor, xdir = x_radius, y_radius, [1.0, 0.0, 0.0]
+        p0 = [x_radius, 0, 0]
+    else:
+        major, minor, xdir = y_radius, x_radius, [0.0, 1.0, 0.0]
+        p0 = [0, y_radius, 0]
+    segs = [('earc', [p0, [-p0[0], -p0[1], 0]],
+             [[0.0, 0.0, 0.0], xdir, [0.0, 0.0, 1.0], major, minor, 0.0, 180.0]),
+            ('earc', [[-p0[0], -p0[1], 0], p0],
+             [[0.0, 0.0, 0.0], xdir, [0.0, 0.0, 1.0], major, minor, 180.0, 360.0])]
+    maker = lambda: w.MakeFace(w.WireFromSegments(_chain_segments(segs)))
+    return _sketch_object(maker, ((-x_radius, -y_radius), (x_radius, y_radius)),
+                          rotation, align, mode)
 
 
 def Helix(*args, **kwargs):
     raise NotImplementedError('Helix is not supported in build123d-lite')
+
+
+def _specs_from_topo_edges(shape):
+    """Reconstruct segment specs from raw edges (lines and circular arcs
+    exactly, via sampled points)."""
+    specs = []
+    for e in shape.edges() if not isinstance(shape, Edge) else [shape]:
+        t = w._edgeCurveType(e.topo)
+        p0 = list(w._edgePointAt(e.topo, 0.0))
+        p1 = list(w._edgePointAt(e.topo, 1.0))
+        if t == 'Line':
+            specs.append(('line', [p0, p1]))
+        elif t == 'Circle':
+            pm = list(w._edgePointAt(e.topo, 0.5))
+            specs.append(('arc3', [p0, pm, p1]))
+        else:
+            raise NotImplementedError('cannot reconstruct a ' + t +
+                                      ' edge as a segment in build123d-lite')
+    return specs
+
+
+def SlotArc(arc, height, rotation=0, mode=Mode.ADD):
+    """Slot along an arc path: BRepOffsetAPI_MakeOffset on the open wire
+    yields both offset sides plus round end caps — build123d's SlotArc."""
+    if isinstance(arc, Curve) and arc._specs:
+        specs = arc._specs
+    elif isinstance(arc, (Curve, Edge)):
+        specs = _specs_from_topo_edges(arc)
+    else:
+        raise NotImplementedError('SlotArc requires a curve/edge')
+    wire = w.WireFromSegments(_chain_segments(specs))
+    closed = w.OffsetWire(wire, height / 2.0)
+    face = w.MakeFace(closed)
+    return _sketch_object(lambda: face, None, rotation, None, mode)
 
 
 # ------------------------------------------------------------ operations ---
@@ -2187,18 +2463,23 @@ def extrude(to_extrude=None, amount=None, dir=None, until=None, target=None,
     if until is not None:
         raise NotImplementedError('extrude(until=...) is not supported in '
                                   'build123d-lite')
-    if taper:
-        raise NotImplementedError('extrude taper is not supported in '
-                                  'build123d-lite')
     if amount is None and isinstance(to_extrude, (int, float)):
         amount = to_extrude
         to_extrude = None
     if amount is None:
         raise ValueError('extrude requires amount=')
+    if taper and (both or dir is not None):
+        raise NotImplementedError('extrude taper with both=/dir= is not '
+                                  'supported in build123d-lite')
     builder = _active_builder(BuildPart)
     profiles = _pending_or_given(to_extrude)
     results = []
     for (face, plane) in profiles:
+        if taper:
+            # draft-angle extrusion (LocOpe_DPrism) along the face normal
+            solid = w.TaperExtrude(face, amount, taper)
+            results.append(Part(solid))
+            continue
         d = tuple(Vector(dir).normalized()) if dir is not None else tuple(plane.z_dir)
         vec = [d[0] * amount, d[1] * amount, d[2] * amount]
         if both:
@@ -2350,19 +2631,28 @@ def chamfer(objects, length, length2=None, angle=None):
 
 def offset(objects=None, amount=0, openings=None, kind=Kind.ARC,
            side=None, min_edge_length=None, mode=Mode.REPLACE):
-    if openings is not None:
-        raise NotImplementedError('offset(openings=...) needs thick-solid '
-                                  'support not present in build123d-lite')
-    if kind != Kind.ARC:
-        raise NotImplementedError('only Kind.ARC offsets are supported')
+    if kind == Kind.TANGENT:
+        raise NotImplementedError('Kind.TANGENT offsets are not supported in '
+                                  'build123d-lite')
+    join = 'intersection' if kind == Kind.INTERSECTION else 'arc'
     builder = _active_builder()
     targets = _tolist(objects) if objects is not None else \
         ([builder._obj] if builder is not None and builder._obj is not None else [])
     if not targets:
         raise ValueError('offset: nothing to offset')
+    if openings is not None:
+        # hollow the solid, removing the opening faces (MakeThickSolid —
+        # the same operation build123d performs)
+        if len(targets) != 1:
+            raise ValueError('offset(openings=...) expects a single target')
+        target = targets[0]
+        faces = [o.topo for o in _tolist(openings)]
+        result = _wrap_like(target,
+                            w.ThickSolidOffset(_topo(target), faces, amount, 1e-4))
+        return _combine(builder, result, mode)
     results = []
     for t in targets:
-        results.append(_wrap_like(t, w.Offset(_topo(t), amount, 1e-4)))
+        results.append(_wrap_like(t, w.Offset(_topo(t), amount, 1e-4, False, join)))
     obj = results[0] if len(results) == 1 else results[0] + results[1:]
     return _combine(builder, obj, mode)
 
@@ -2390,8 +2680,20 @@ def mirror(objects=None, about=Plane.XZ, mode=Mode.ADD):
                 src.extend(t._specs)
         o = tuple(about.origin)
         n = tuple(about.z_dir)
-        specs = [(k, [_mirror_point(_v3(p), o, n) for p in pts])
-                 for (k, pts) in src]
+
+        def _mirror_dir(d):
+            dd = 2.0 * (d[0] * n[0] + d[1] * n[1] + d[2] * n[2])
+            return (d[0] - dd * n[0], d[1] - dd * n[1], d[2] - dd * n[2])
+
+        def _mirror_seg(s):
+            m = _seg_transform(s, lambda p: _mirror_point(p, o, n), _mirror_dir)
+            params = _seg_params(m)
+            if params is not None:
+                # reflecting xdir AND normal keeps the frame right-handed but
+                # maps ellipse angle a -> -a: swap and negate the arc range
+                params[5], params[6] = -params[6], -params[5]
+            return m
+        specs = [_mirror_seg(s) for s in src]
         curve = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
         if isinstance(builder, BuildLine) and mode == Mode.ADD:
             builder._specs.extend(specs)
@@ -2515,9 +2817,43 @@ def make_face(edges=None, mode=Mode.ADD):
             else:
                 raise NotImplementedError('make_face from raw edges without '
                                           'segment data')
-    wire = w.WireFromSegments(_chain_segments(specs))
+    chained = _chain_segments(specs)
+    wire = w.WireFromSegments(chained)
     face = w.MakeFace(wire)
+    # normalize XY-planar faces to a +Z normal (build123d faces from wires
+    # come out +Z regardless of the chained winding; ours follow the wire)
+    n = w._faceNormal(face)
+    bb = w.BoundingBox(face)
+    if n[2] < -0.5 and bb and abs(bb[5] - bb[2]) < 1e-9:
+        rev = [_seg_reverse(s) for s in reversed(chained)]
+        face = w.MakeFace(w.WireFromSegments(rev))
     return _combine(builder, Sketch(face), mode)
+
+
+def bounding_box(objects=None, mode=Mode.PRIVATE):
+    """The bounding box as an object: a Rectangle sketch for 2D input, a Box
+    part for 3D (build123d's bounding_box operation)."""
+    builder = _active_builder()
+    targets = _tolist(objects) if objects is not None else \
+        ([builder._obj] if builder is not None and builder._obj is not None else [])
+    if not targets:
+        raise ValueError('bounding_box: nothing to measure')
+    results = []
+    for t in targets:
+        bb = list(w.BoundingBox(_topo(t)))
+        flat = abs(bb[5] - bb[2]) < 1e-9
+        if flat:
+            face = w.Polygon([[bb[0], bb[1], bb[2]], [bb[3], bb[1], bb[2]],
+                              [bb[3], bb[4], bb[2]], [bb[0], bb[4], bb[2]]])
+            results.append(Sketch(face))
+        else:
+            box = w.Translate([(bb[0] + bb[3]) / 2, (bb[1] + bb[4]) / 2,
+                               (bb[2] + bb[5]) / 2],
+                              w.Box(bb[3] - bb[0], bb[4] - bb[1],
+                                    bb[5] - bb[2], True))
+            results.append(Part(box))
+    obj = results[0] if len(results) == 1 else results[0] + results[1:]
+    return _combine(builder, obj, mode)
 
 
 def make_hull(*args, **kwargs):
@@ -2575,6 +2911,95 @@ def export_gltf(*args, **kwargs):
 class Color:
     def __init__(self, *args, **kwargs):
         self.args = args
+
+
+def _pack2d(objects, width_fn, length_fn):
+    """Growing rectangle packer (port of build123d.pack_utils._pack2d, which
+    is itself a port of jakesgordon/bin-packing packer.growing.js)."""
+    class _Node:
+        def __init__(self, x=0.0, y=0.0, w=0.0, h=0.0):
+            self.used = False
+            self.x, self.y, self.w, self.h = x, y, w, h
+            self.down = None
+            self.right = None
+
+    sizes = sorted(((o, width_fn(o), length_fn(o)) for o in objects),
+                   key=lambda t: max(t[1], t[2]), reverse=True)
+    root = _Node(w=sizes[0][1], h=sizes[0][2])
+
+    def find_node(start, ww, hh):
+        if start is None:
+            return None
+        if start.used:
+            return find_node(start.right, ww, hh) or find_node(start.down, ww, hh)
+        if ww <= start.w and hh <= start.h:
+            return start
+        return None
+
+    def split_node(node, ww, hh):
+        node.used = True
+        node.down = _Node(node.x, node.y + hh, node.w, node.h - hh)
+        node.right = _Node(node.x + ww, node.y, node.w - ww, hh)
+        return node
+
+    def grow_node(ww, hh):
+        nonlocal root
+        can_down = ww <= root.w
+        can_right = hh <= root.h
+        should_right = can_right and (root.h >= (root.w + ww))
+        should_down = can_down and (root.w >= (root.h + hh))
+        if should_right:
+            return grow_right(ww, hh)
+        if should_down:
+            return grow_down(ww, hh)
+        if can_right:
+            return grow_right(ww, hh)
+        if can_down:
+            return grow_down(ww, hh)
+        return None
+
+    def grow_right(ww, hh):
+        nonlocal root
+        new_root = _Node(0, 0, root.w + ww, root.h)
+        new_root.used = True
+        new_root.down = root
+        new_root.right = _Node(root.w, 0, ww, root.h)
+        root = new_root
+        node = find_node(root, ww, hh)
+        return split_node(node, ww, hh) if node else None
+
+    def grow_down(ww, hh):
+        nonlocal root
+        new_root = _Node(0, 0, root.w, root.h + hh)
+        new_root.used = True
+        new_root.right = root
+        new_root.down = _Node(0, root.h, root.w, hh)
+        root = new_root
+        node = find_node(root, ww, hh)
+        return split_node(node, ww, hh) if node else None
+
+    placements = {}
+    for (o, ww, hh) in sizes:
+        node = find_node(root, ww, hh)
+        node = split_node(node, ww, hh) if node else grow_node(ww, hh)
+        placements[id(o)] = (node.x, node.y)
+    return [placements[id(o)] for o in objects]
+
+
+def pack(objects, padding, align_z=False):
+    """Arrange shapes compactly in Plane.XY (port of build123d.pack.pack)."""
+    objects = list(objects)
+    bbs = {id(o): o.bounding_box() for o in objects}
+    translations = _pack2d(
+        objects,
+        lambda o: bbs[id(o)].size.X + padding,
+        lambda o: bbs[id(o)].size.Y + padding)
+    out = []
+    for o, t in zip(objects, translations):
+        bb = bbs[id(o)]
+        dz = -bb.min.Z if align_z else 0.0
+        out.append(Pos(t[0] - bb.min.X, t[1] - bb.min.Y, dz) * o)
+    return out
 
 
 # --------------------------------------------------- measurement / show ---
@@ -2676,7 +3101,7 @@ def _measure_globals_json(g):
                 return (round((bb[0] + bb[3]) / 2, 3),
                         round((bb[1] + bb[4]) / 2, 3),
                         round((bb[2] + bb[5]) / 2, 3))
-            solids = sorted(solids[:32], key=_bbkey)
+            solids = sorted(solids[:64], key=_bbkey)
             for i, x in enumerate(solids):
                 measure(name + '[' + str(i) + ']', x)
     return '{' + ','.join(entries) + '}'
@@ -3001,6 +3426,159 @@ def attrgetter(*attrs):
 
 def methodcaller(name, *args, **kwargs):
     return lambda obj: getattr(obj, name)(*args, **kwargs)
+`,
+  timeit: `
+# timeit shim (wall-clock via JS Date)
+from browser import self as _w
+
+
+def default_timer():
+    return _w.Date.now() / 1000.0
+
+
+def timeit(stmt='pass', setup='pass', number=1000000, globals=None):
+    raise NotImplementedError('timeit.timeit is not supported in the worker')
+
+
+class Timer:
+    def __init__(self, *a, **k):
+        pass
+
+    def timeit(self, number=1000000):
+        raise NotImplementedError('timeit.Timer is not supported in the worker')
+`,
+  random: `
+# random shim: exact CPython semantics (MT19937 + 53-bit random()) so that
+# seeded scripts reproduce the reference geometry bit-for-bit
+class _MT:
+    def __init__(self):
+        self.mt = [0] * 624
+        self.index = 625
+        self.seed_int(5489)
+
+    def seed_int(self, s):
+        self.mt[0] = s & 0xFFFFFFFF
+        for i in range(1, 624):
+            self.mt[i] = (1812433253 * (self.mt[i - 1] ^ (self.mt[i - 1] >> 30)) + i) & 0xFFFFFFFF
+        self.index = 624
+
+    def init_by_array(self, key):
+        self.seed_int(19650218)
+        i, j = 1, 0
+        k = max(624, len(key))
+        while k:
+            self.mt[i] = ((self.mt[i] ^ ((self.mt[i - 1] ^ (self.mt[i - 1] >> 30)) * 1664525)) + key[j] + j) & 0xFFFFFFFF
+            i += 1
+            j += 1
+            if i >= 624:
+                self.mt[0] = self.mt[623]
+                i = 1
+            if j >= len(key):
+                j = 0
+            k -= 1
+        k = 623
+        while k:
+            self.mt[i] = ((self.mt[i] ^ ((self.mt[i - 1] ^ (self.mt[i - 1] >> 30)) * 1566083941)) - i) & 0xFFFFFFFF
+            i += 1
+            if i >= 624:
+                self.mt[0] = self.mt[623]
+                i = 1
+            k -= 1
+        self.mt[0] = 0x80000000
+
+    def genrand(self):
+        if self.index >= 624:
+            for i in range(624):
+                y = (self.mt[i] & 0x80000000) + (self.mt[(i + 1) % 624] & 0x7FFFFFFF)
+                self.mt[i] = self.mt[(i + 397) % 624] ^ (y >> 1)
+                if y % 2:
+                    self.mt[i] ^= 2567483615
+            self.index = 0
+        y = self.mt[self.index]
+        self.index += 1
+        y ^= y >> 11
+        y ^= (y << 7) & 2636928640
+        y ^= (y << 15) & 4022730752
+        y ^= y >> 18
+        return y
+
+
+_state = _MT()
+
+
+def seed(a=None):
+    if a is None:
+        import time
+        a = 0
+    if isinstance(a, int):
+        # CPython: init_by_array over the absolute value's 32-bit chunks
+        v = abs(a)
+        key = []
+        while True:
+            key.append(v & 0xFFFFFFFF)
+            v >>= 32
+            if v == 0:
+                break
+        _state.init_by_array(key)
+    else:
+        raise NotImplementedError('random.seed only supports ints here')
+
+
+def random():
+    a = _state.genrand() >> 5
+    b = _state.genrand() >> 6
+    return (a * 67108864.0 + b) / 9007199254740992.0
+
+
+def getrandbits(k):
+    if k <= 32:
+        return _state.genrand() >> (32 - k)
+    out = 0
+    shift = 0
+    while k > 0:
+        take = min(k, 32)
+        out |= (_state.genrand() >> (32 - take)) << shift
+        shift += take
+        k -= take
+    return out
+
+
+def _randbelow(n):
+    if n <= 0:
+        return 0
+    k = n.bit_length()
+    r = getrandbits(k)
+    while r >= n:
+        r = getrandbits(k)
+    return r
+
+
+def randrange(start, stop=None, step=1):
+    if stop is None:
+        return _randbelow(start)
+    width = stop - start
+    if step == 1:
+        return start + _randbelow(width)
+    n = (width + step - 1) // step
+    return start + step * _randbelow(n)
+
+
+def randint(a, b):
+    return randrange(a, b + 1)
+
+
+def uniform(a, b):
+    return a + (b - a) * random()
+
+
+def choice(seq):
+    return seq[_randbelow(len(seq))]
+
+
+def shuffle(x):
+    for i in range(len(x) - 1, 0, -1):
+        j = _randbelow(i + 1)
+        x[i], x[j] = x[j], x[i]
 `,
   logging: `
 # logging shim: swallows everything (worker console is used via print)

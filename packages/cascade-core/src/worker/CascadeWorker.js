@@ -103,8 +103,9 @@ class CascadeStudioWorker {
     this.mesher = new CascadeStudioMesher();
     this.fileIO = new CascadeStudioFileIO();
 
-    // Preload fonts available via Text3D
-    this._loadFonts(opentype);
+    // Preload fonts available via Text3D/Text2D. Awaited so the first
+    // evaluation can never race the font fetch (they are small local TTFs).
+    await this._loadFonts(opentype);
 
     // Load the OpenCascade WebAssembly Module (v2 Embind)
     try {
@@ -171,18 +172,66 @@ class CascadeStudioWorker {
     const preloadedFonts = [
       fontBase + 'Roboto.ttf',
       fontBase + 'Papyrus.ttf',
-      fontBase + 'Consolas.ttf'
+      fontBase + 'Consolas.ttf',
+      fontBase + 'LiberationSans-Regular.ttf',
+      fontBase + 'FreeSans.ttf',
+      fontBase + 'FreeSansBold.ttf',
+      fontBase + 'FreeSansOblique.ttf',
+      fontBase + 'FreeSansBoldOblique.ttf'
     ];
     self.loadedFonts = {};
-    preloadedFonts.forEach((fontURL) => {
+    self.fontKernPairs = {};
+    return Promise.all(preloadedFonts.map((fontURL) => new Promise((resolve) => {
       // { isUrl: true } forces XHR instead of require('fs') since workers lack `window`
       opentype.load(fontURL, function (err, font) {
         if (err) { console.log(err); }
         let fontName = fontURL.split("./fonts/")[1] || fontURL.split("/fonts/")[1];
         fontName = fontName.split(".ttf")[0];
         self.loadedFonts[fontName] = font;
+        // opentype.js only reads the FIRST kern subtable — parse all of the
+        // format-0 subtables ourselves so Text2D can match FreeType's
+        // kerning (build123d text parity)
+        fetch(fontURL).then((r) => r.arrayBuffer()).then((buf) => {
+          self.fontKernPairs[fontName] = CascadeStudioWorker._parseKernTable(buf);
+          resolve();
+        }).catch(() => resolve());
       }, { isUrl: true });
-    });
+    })));
+  }
+
+  /** Parse every format-0 'kern' subtable of a TTF into a Map keyed by
+   *  "leftGid,rightGid" -> kern value in font units. */
+  static _parseKernTable(buf) {
+    const pairs = new Map();
+    try {
+      const dv = new DataView(buf);
+      const numTables = dv.getUint16(4);
+      let kernOffset = 0, kernLength = 0;
+      for (let i = 0; i < numTables; i++) {
+        const rec = 12 + i * 16;
+        const tag = String.fromCharCode(dv.getUint8(rec), dv.getUint8(rec + 1),
+          dv.getUint8(rec + 2), dv.getUint8(rec + 3));
+        if (tag === 'kern') { kernOffset = dv.getUint32(rec + 8); kernLength = dv.getUint32(rec + 12); }
+      }
+      if (!kernOffset) { return pairs; }
+      const nSub = dv.getUint16(kernOffset + 2);
+      let off = kernOffset + 4;
+      for (let t = 0; t < nSub; t++) {
+        const len = dv.getUint16(off + 2);
+        const coverage = dv.getUint16(off + 4);
+        const format = coverage >> 8;
+        if (format === 0) {
+          const nPairs = dv.getUint16(off + 6);
+          let p = off + 14;
+          for (let i = 0; i < nPairs; i++, p += 6) {
+            pairs.set(dv.getUint16(p) + ',' + dv.getUint16(p + 2), dv.getInt16(p + 4));
+          }
+        }
+        off += (len || 6);
+        if (off >= kernOffset + kernLength) { break; }
+      }
+    } catch (e) { /* kerning is best-effort */ }
+    return pairs;
   }
 
   /** Evaluate user CAD code (the contents of the Editor Window) and set the GUI State.

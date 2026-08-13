@@ -121,16 +121,34 @@ function BSpline(inPoints, closed) {
   return curSpline;
 }
 
-function Text3D(text, size, height, fontName) {
-  if (!size   ) { size    = 36; }
-  if (!height && height !== 0.0) { height  = 0.15; }
-  if (!fontName) { fontName = "Roboto"; }
+/** Kerning between two glyphs in font units, from the worker's own kern
+ *  table parse (opentype.js misses multi-subtable kern tables). */
+function _kernValue(fontName, leftGlyph, rightGlyph) {
+  let pairs = self.fontKernPairs && self.fontKernPairs[fontName];
+  if (!pairs) { return 0; }
+  return pairs.get(leftGlyph.index + ',' + rightGlyph.index) || 0;
+}
 
-  let textArgs = JSON.stringify(arguments);
-  let curText = self.CacheOp(arguments, "Text3D", () => {
-    if (self.loadedFonts[fontName] === undefined) { for (let k in self.argCache) delete self.argCache[k]; console.log("Font not loaded or found yet!  Try again..."); return; }
+/** Convert an opentype.js glyph path (y-down canvas coords, baseline at 0)
+ *  into a face-with-holes. Shared by Text3D and Text2D. Lays glyphs out
+ *  itself (advance + kern-table pairs, like FreeType) instead of relying on
+ *  opentype's getPath kerning. Returns the face, or null when the font is
+ *  not loaded yet. */
+function _opentypeTextFace(text, size, fontName) {
+    if (self.loadedFonts[fontName] === undefined) { for (let k in self.argCache) delete self.argCache[k]; console.log("Font not loaded or found yet!  Try again..."); return null; }
+    let font = self.loadedFonts[fontName];
+    let scale = size / font.unitsPerEm;
+    let commands = [];
+    let penX = 0;
+    let prevGlyph = null;
+    for (const ch of text) {
+      let glyph = font.charToGlyph(ch);
+      if (prevGlyph) { penX += _kernValue(fontName, prevGlyph, glyph) * scale; }
+      commands = commands.concat(glyph.getPath(penX, 0, size).commands);
+      penX += glyph.advanceWidth * scale;
+      prevGlyph = glyph;
+    }
     let textFaces = [];
-    let commands = self.loadedFonts[fontName].getPath(text, 0, 0, size).commands;
     for (let idx = 0; idx < commands.length; idx++) {
       if (commands[idx].type === "M") {
         var firstPoint = new self.oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
@@ -186,12 +204,23 @@ function Text3D(text, size, height, fontName) {
         lastPoint = nextPoint;
       }
     }
+    return textFaces.length > 0 ? textFaces[textFaces.length - 1] : null;
+}
 
+function Text3D(text, size, height, fontName) {
+  if (!size   ) { size    = 36; }
+  if (!height && height !== 0.0) { height  = 0.15; }
+  if (!fontName) { fontName = "Roboto"; }
+
+  let textArgs = JSON.stringify(arguments);
+  let curText = self.CacheOp(arguments, "Text3D", () => {
+    let textFace = _opentypeTextFace(text, size, fontName);
+    if (!textFace) { return; }
     if (height === 0) {
-      return textFaces[textFaces.length - 1];
+      return textFace;
     } else {
-      textFaces[textFaces.length - 1].hash = self.stringToHash(textArgs);
-      let textSolid = Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
+      textFace.hash = self.stringToHash(textArgs);
+      let textSolid = Rotate([1, 0, 0], -90, Extrude(textFace, [0, 0, height * size]));
       self.sceneShapes = self.Remove(self.sceneShapes, textSolid);
       return textSolid;
     }
@@ -407,13 +436,17 @@ function Rotate(axis, degrees, shapes, keepOriginal) {
       let transformation = new self.oc.gp_Trsf_1();
       transformation.SetRotation_1(
         new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0), new self.oc.gp_Dir_3(
-          new self.oc.gp_Vec_4(axis[0], axis[1], axis[2]))), degrees * 0.0174533);
-      let rotation = new self.oc.TopLoc_Location_4(transformation);
+          new self.oc.gp_Vec_4(axis[0], axis[1], axis[2]))), degrees * (Math.PI / 180));
+      // Bake the rotation into the geometry (deep copy) instead of hanging a
+      // TopLoc_Location on the shape: boolean ops in this WASM build silently
+      // fail to fuse/cut shapes that carry rotation Locations (they come out
+      // as unfused compounds), which broke e.g. subtracting a rotated copy.
       if (!self.isArrayLike(shapes)) {
-        newRot = shapes.Moved(rotation, false);
+        newRot = new self.oc.BRepBuilderAPI_Transform_2(shapes, transformation, true, false).Shape();
       } else if (shapes.length >= 1) {
+        newRot = [];
         for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-          shapes[shapeIndex].Move(rotation, false);
+          newRot.push(new self.oc.BRepBuilderAPI_Transform_2(shapes[shapeIndex], transformation, true, false).Shape());
         }
       }
       return newRot;
@@ -623,10 +656,13 @@ function RemoveInternalEdges(shape, keepShape) {
   return cleanShape;
 }
 
-function Offset(shape, offsetDistance, tolerance, keepShape) {
+function Offset(shape, offsetDistance, tolerance, keepShape, joinType) {
   if (!shape || shape.IsNull()) { console.error("Offset: input shape is null!"); return shape; }
   if (!tolerance) { tolerance = 0.1; }
   if (offsetDistance === 0.0) { return shape; }
+  let join = joinType === 'intersection'
+    ? self.oc.GeomAbs_JoinType.GeomAbs_Intersection
+    : self.oc.GeomAbs_JoinType.GeomAbs_Arc;
   let curOffset = self.CacheOp(arguments, "Offset", () => {
     let offset = null;
     let shapeType = shape.ShapeType().value;
@@ -638,8 +674,7 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
     } else if (shapeType === 4) {
       // Face: 2D boundary offset using the face's own surface as reference plane
       let face = self.oc.TopoDS_Cast.Face_1(shape);
-      offset = new self.oc.BRepOffsetAPI_MakeOffset_2(face,
-        self.oc.GeomAbs_JoinType.GeomAbs_Arc, false);
+      offset = new self.oc.BRepOffsetAPI_MakeOffset_2(face, join, false);
       offset.Perform(offsetDistance);
       // Result is a wire — extract and rebuild as a face
       let resultShape = offset.Shape();
@@ -654,7 +689,7 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
     } else {
       // Solid/Shell: 3D shell offset
       offset = new self.oc.BRepOffsetAPI_MakeOffsetShape();
-      offset.PerformByJoin(shape, offsetDistance, tolerance, self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false, self.oc.GeomAbs_JoinType.GeomAbs_Arc, false, new self.oc.Message_ProgressRange_1());
+      offset.PerformByJoin(shape, offsetDistance, tolerance, self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false, join, false, new self.oc.Message_ProgressRange_1());
     }
     let offsetShape = offset.Shape();
 
@@ -708,7 +743,7 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
       return new self.oc.BRepPrimAPI_MakeRevol_1(shape,
         new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0),
           new self.oc.gp_Dir_5(direction[0], direction[1], direction[2])),
-        degrees * 0.0174533, copy).Shape();
+        degrees * (Math.PI / 180), copy).Shape();
     }
   });
 
@@ -733,8 +768,8 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     for (let i = 0; i <= steps; i++) {
       let alpha = i / steps;
       aspinePoints.push([
-        20 * Math.sin(alpha * rotation * 0.0174533),
-        20 * Math.cos(alpha * rotation * 0.0174533),
+        20 * Math.sin(alpha * rotation * (Math.PI / 180)),
+        20 * Math.cos(alpha * rotation * (Math.PI / 180)),
         height * alpha]);
     }
 
@@ -1671,8 +1706,23 @@ function WireFromSegments(segments, keepInputs) {
       } else if (kind === 'spline') {
         let ptList = new self.oc.TColgp_Array1OfPnt_2(1, pts.length);
         for (let i = 0; i < pts.length; i++) { ptList.SetValue(i + 1, toPnt(pts[i])); }
-        curveHandle = new self.oc.GeomAPI_PointsToBSpline_2(ptList, 3, 8,
-          (self.oc.GeomAbs_Shape ? self.oc.GeomAbs_Shape.GeomAbs_C2 : 2), 1.0e-3).Curve();
+        // cubic fit only: higher degrees oscillate/overshoot on the densely
+        // sampled clamped splines build123d-lite feeds through here
+        curveHandle = new self.oc.GeomAPI_PointsToBSpline_2(ptList, 3, 3,
+          (self.oc.GeomAbs_Shape ? self.oc.GeomAbs_Shape.GeomAbs_C2 : 2), 1.0e-4).Curve();
+      } else if (kind === 'earc') {
+        // elliptical arc: pts = [start, end] (chaining bookkeeping only),
+        // params = [center, xdir, normal, major, minor, a1deg, a2deg]
+        let p = segments[s][2];
+        let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(p[0][0], p[0][1], p[0][2]),
+          new self.oc.gp_Dir_5(p[2][0], p[2][1], p[2][2]));
+        ax2.SetXDirection(new self.oc.gp_Dir_5(p[1][0], p[1][1], p[1][2]));
+        let elips = new self.oc.gp_Elips_2(ax2, p[3], p[4]);
+        let deg = Math.PI / 180;
+        let arc = new self.oc.GC_MakeArcOfEllipse_1(elips, p[5] * deg, p[6] * deg, true).Value();
+        let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(arc.get())).Edge();
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        continue;
       } else {
         console.error("WireFromSegments: unknown segment kind '" + kind + "'");
         continue;
@@ -1686,60 +1736,105 @@ function WireFromSegments(segments, keepInputs) {
   return curWire;
 }
 
-/** Approximate axis-aligned bounding box [minX,minY,minZ,maxX,maxY,maxZ].
- *  The WASM build has no Bnd_Box/BRepBndLib binding, so the bbox is taken
- *  from a fine triangulation (linear deflection `deflection`, default 5e-4)
- *  of a DEEP COPY of the shape — the copy keeps the fine measurement mesh
- *  away from the render pipeline, which re-uses existing triangulations.
- *  Face-less shapes (wires/edges) are sampled along their curves instead. */
+/** Hollow a solid with the given wall thickness, removing `openingFaces`
+ *  (raw face sub-shapes of `shape`) — BRepOffsetAPI_MakeThickSolid, the same
+ *  operation build123d's offset(openings=...) performs. Negative offset
+ *  shells inward. */
+function ThickSolidOffset(shape, openingFaces, offsetDistance, tolerance, keepShape) {
+  if (!shape || shape.IsNull()) { console.error("ThickSolidOffset: input shape is null!"); return shape; }
+  if (!tolerance) { tolerance = 1e-4; }
+  let result = self.CacheOp(arguments, "ThickSolidOffset", () => {
+    let facesToRemove = new self.oc.TopTools_ListOfShape();
+    for (let i = 0; i < openingFaces.length; i++) { facesToRemove.Append(openingFaces[i]); }
+    let mkThick = new self.oc.BRepOffsetAPI_MakeThickSolid();
+    mkThick.MakeThickSolidByJoin(shape, facesToRemove, offsetDistance, tolerance,
+      self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false,
+      self.oc.GeomAbs_JoinType.GeomAbs_Arc, false, new self.oc.Message_ProgressRange_1());
+    return mkThick.Shape();
+  });
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Draft-angle ("tapered") extrusion of a planar face — LocOpe_DPrism, the
+ *  primitive behind build123d's extrude(taper=...). Positive taper angles
+ *  narrow the profile with height. */
+function TaperExtrude(face, height, angleDeg, keepFace) {
+  if (!face || face.IsNull()) { console.error("TaperExtrude: input face is null!"); return face; }
+  let result = self.CacheOp(arguments, "TaperExtrude", () => {
+    let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+    // LocOpe_DPrism measures Height along the tapered slant; scale so the
+    // resulting solid is `height` tall like build123d's extrude(taper=)
+    let slant = height / Math.cos(angleDeg * (Math.PI / 180));
+    let dprism = new self.oc.LocOpe_DPrism_2(f, slant, angleDeg * (Math.PI / 180));
+    return dprism.Shape();
+  });
+  if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Render text as a planar face for build123d-lite's Text: opentype.js
+ *  outlines from the bundled Liberation Sans (what Linux fontconfig
+ *  resolves 'Arial' to, so glyph geometry matches native build123d), plus
+ *  OCCT-text-builder-compatible alignment offsets. Alignment references
+ *  the FONT LAYOUT metrics (advance width, ascender/descender), not the
+ *  ink bounding box — like Font_TextFormatter. */
+function Text2D(text, size, fontName, halign, valign) {
+  if (!fontName) { fontName = "FreeSans"; }
+  let curText = self.CacheOp(arguments, "Text2D", () => {
+    let face = _opentypeTextFace(text, size, fontName);
+    if (!face) { return; }
+    let font = self.loadedFonts[fontName];
+    let upm = font.unitsPerEm;
+    // Width for alignment: kerned advance PLUS a spurious kern(last, last)
+    // pair — Font_TextFormatter (which build123d's Text uses) evaluates the
+    // kerning of the final glyph against itself when flushing the line, and
+    // matching it here makes centered text line up exactly.
+    let advance = 0;
+    let prev = null;
+    for (const ch of text) {
+      let g = font.charToGlyph(ch);
+      if (prev) { advance += _kernValue(fontName, prev, g) / upm * size; }
+      advance += g.advanceWidth / upm * size;
+      prev = g;
+    }
+    if (prev) { advance += _kernValue(fontName, prev, prev) / upm * size; }
+    // Vertical alignment uses the OS/2 typographic metrics (verified against
+    // build123d 0.11.1: TOP = -typoAscender, CENTER = lineSpacing/2 -
+    // typoAscender, BOTTOM = baseline).
+    let os2 = font.tables.os2 || {};
+    let typoAsc = (os2.sTypoAscender !== undefined ? os2.sTypoAscender : font.ascender) / upm * size;
+    let typoDesc = (os2.sTypoDescender !== undefined ? os2.sTypoDescender : font.descender) / upm * size;
+    let typoGap = (os2.sTypoLineGap !== undefined ? os2.sTypoLineGap : 0) / upm * size;
+    let lineSpacing = typoAsc - typoDesc + typoGap;
+    let dx = halign === 'left' ? 0 : halign === 'right' ? -advance : -advance / 2;
+    let dy = valign === 'bottom' ? 0 :
+             valign === 'top' ? -typoAsc : lineSpacing / 2 - typoAsc;
+    // opentype glyph paths are y-DOWN (canvas convention) — mirror across
+    // the baseline (bakes geometry, keeping hole orientations valid)
+    let mirrored = Mirror([0, 1, 0], face);
+    let moved = Translate([dx, dy, 0], mirrored);
+    self.sceneShapes = self.Remove(self.sceneShapes, moved);
+    return moved;
+  });
+  if (curText) { self.sceneShapes.push(curText); }
+  return curText;
+}
+
+/** Axis-aligned bounding box [minX,minY,minZ,maxX,maxY,maxZ] via
+ *  BRepBndLib.AddOptimal — the exact box, no triangulation-tolerance
+ *  padding, matching build123d's Shape.bounding_box(optimal=True).
+ *  (The `deflection` parameter is legacy from the pre-OCCT-8.0.1 build,
+ *  which had no Bnd_Box binding and meshed a deep copy instead.) */
 function BoundingBox(shape, deflection) {
   if (!shape || shape.IsNull()) { console.error("BoundingBox: input shape is null!"); return null; }
-  if (!deflection) { deflection = 5e-4; }
-  let min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
-  let expand = (x, y, z) => {
-    if (x < min[0]) { min[0] = x; } if (x > max[0]) { max[0] = x; }
-    if (y < min[1]) { min[1] = y; } if (y > max[1]) { max[1] = y; }
-    if (z < min[2]) { min[2] = z; } if (z > max[2]) { max[2] = z; }
-  };
-
-  let hasFaces = false;
-  ForEachFace(shape, () => { hasFaces = true; });
-  if (hasFaces) {
-    let copy = new self.oc.BRepBuilderAPI_Transform_2(
-      shape, new self.oc.gp_Trsf_1(), true, false).Shape();
-    new self.oc.BRepMesh_IncrementalMesh_2(copy, deflection, false, 0.5, false);
-    ForEachFace(copy, (index, face) => {
-      let aLocation = new self.oc.TopLoc_Location_1();
-      let myT = self.oc.BRep_Tool.Triangulation(face, aLocation, 0);
-      if (myT.IsNull()) { return; }
-      let nbNodes = myT.get().NbNodes();
-      for (let i = 1; i <= nbNodes; i++) {
-        let p = myT.get().Node(i).Transformed(aLocation.Transformation());
-        expand(p.X(), p.Y(), p.Z());
-      }
-    });
-  } else {
-    // Wires/edges: sample each curve densely (arcs sag < ~1e-3 at 256 samples)
-    let sampled = false;
-    ForEachEdge(shape, (index, edge) => {
-      let curve = new self.oc.BRepAdaptor_Curve_2(edge);
-      let first = curve.FirstParameter(), last = curve.LastParameter();
-      let pnt = new self.oc.gp_Pnt_1();
-      for (let i = 0; i <= 256; i++) {
-        curve.D0(first + (last - first) * (i / 256), pnt);
-        expand(pnt.X(), pnt.Y(), pnt.Z());
-        sampled = true;
-      }
-    });
-    if (!sampled) {
-      ForEachVertex(shape, (vertex) => {
-        let p = self.oc.BRep_Tool.Pnt(vertex);
-        expand(p.X(), p.Y(), p.Z());
-      });
-    }
-  }
-  if (min[0] === Infinity) { return null; }
-  return [min[0], min[1], min[2], max[0], max[1], max[2]];
+  let box = new self.oc.Bnd_Box_1();
+  self.oc.BRepBndLib.AddOptimal(shape, box, false, false);
+  if (box.IsVoid()) { return null; }
+  return [box.GetXMin(), box.GetYMin(), box.GetZMin(),
+          box.GetXMax(), box.GetYMax(), box.GetZMax()];
 }
 
 /** Measure a shape for the build123d validation harness / lite bounding_box:
@@ -1858,6 +1953,9 @@ class CascadeStudioStandardLibrary {
     self.BoundingBox = BoundingBox;
     self.MeasureShape = MeasureShape;
     self.WireFromSegments = WireFromSegments;
+    self.ThickSolidOffset = ThickSolidOffset;
+    self.TaperExtrude = TaperExtrude;
+    self.Text2D = Text2D;
 
     // Per-entity introspection helpers (used by build123d-lite's Python
     // selectors: filter_by/group_by/sort_by need positions, directions,
