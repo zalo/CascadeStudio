@@ -161,15 +161,19 @@ users write **build123d algebra-mode** Python that evaluates in the existing CAD
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running the
 upstream docs/examples scripts through both, see `test/b123d-validation/`; currently
-**78/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 11 MISMATCH,
+**85/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 15 MISMATCH,
 0 timeouts; the rest fail on honestly-unimplemented features — full breakdown in the
-generated `test/b123d-validation/report.md`. A full 129-script harness pass takes
-~2.5 min single-page / faster with `--pages 4`; the harness MUST run with
+committed `test/b123d-validation/report.md`. A full 129-script harness pass takes
+~45 s with `--pages 4` (~2.5 min single-page); the harness MUST run with
 `CS_TEST_HEADFUL=1 DISPLAY=:99` on this machine (headless Chromium has no WebGL,
 which manifests as every script reporting "no measurement produced"). Since the
-OCCT 8.0.1 + Bnd_Box round, Text renders via Text3D/FreeSans, Spline supports
-tangents= (GeomAPI_Interpolate), extrude supports taper=, offset supports
-openings=):
+OCCT 8.0.1 rounds: Text renders via opentype.js/FreeSans with FreeType-parity
+kerning, Spline supports tangents=, extrude supports taper= (LocOpe_DPrism) and
+until=Until.NEXT/LAST (boolean trims), offset supports openings=
+(MakeThickSolid) and Kind.INTERSECTION, scale supports non-uniform factors
+(gp_GTrsf), plus Helix, Ellipse/EllipticalCenterArc, SlotArc, weighted Bezier,
+HexLocations, pack(), project_to_viewport (HLRBRep), curve ^ t / location_at,
+and exact-CPython random/timeit shims:
 
 | Area | Supported | Not supported |
 |---|---|---|
