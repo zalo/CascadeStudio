@@ -272,9 +272,9 @@ class ToolManager {
 
     const buttons = [
       { tool: 'select',   icon: '↖', label: 'Select (Esc) — click a shape to reveal its code line' },
-      { tool: 'box',      icon: '□', label: 'Box — drag footprint on the ground, then drag height, click to commit' },
-      { tool: 'cylinder', icon: '▭', label: 'Cylinder — click center, drag radius, then drag height, click to commit' },
-      { tool: 'sphere',   icon: '○', label: 'Sphere — click center, drag radius, release to commit' },
+      { tool: 'box',      icon: '□', label: 'Box — size the footprint on the ground, then the height (drag or click-move-click for each stage); Escape cancels' },
+      { tool: 'cylinder', icon: '▭', label: 'Cylinder — from the center, size the radius, then the height (drag or click-move-click for each stage); Escape cancels' },
+      { tool: 'sphere',   icon: '○', label: 'Sphere — from the center, size the radius (drag or click-move-click); Escape cancels' },
       { tool: 'sketch',   icon: '✎', label: 'Sketch — click to place vertices, click the first vertex (or Enter) to close, then Extrude/Revolve; Escape removes the last vertex' },
       { tool: 'fillet',   icon: '◠', label: 'Fillet — click edges to select, set radius, Enter to commit' },
     ];

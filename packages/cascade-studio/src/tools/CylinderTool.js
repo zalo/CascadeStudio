@@ -6,9 +6,12 @@ const IDLE = 0, DRAG_RADIUS = 1, DRAG_HEIGHT = 2;
 
 /** Cylinder creation tool:
  *  1. pointerdown on the ground plane sets the center (snapped to mm)
- *  2. drag sizes the radius (live preview)
- *  3. release, then move sizes the height
- *  4. click commits: emits `let cylinderN = Translate(..., Cylinder(r, h));` */
+ *  2. drag (or move) sizes the radius (live preview)
+ *  3. release/click locks the radius; drag or move then sizes the height
+ *  4. release/click commits: `let cylinderN = Translate(..., Cylinder(r, h));`
+ *
+ *  Both gestures work for every stage (see Tool.stageDown/stageUp):
+ *  press-drag-release, and click-move-click. Escape cancels. */
 class CylinderTool extends Tool {
   constructor(manager) {
     super(manager, 'cylinder');
@@ -32,16 +35,20 @@ class CylinderTool extends Tool {
       this.height = 0;
       this._createPreview();
       this.manager.beginInteraction();
+      this.stagePressed = true;
       this.state = DRAG_RADIUS;
       return true;
     }
 
+    // Click-move-click: a press with the stage's dimension already set locks
+    // it in; a press with nothing set yet starts a drag (and must NOT cancel).
+    if (this.state === DRAG_RADIUS) {
+      if (this.stageDown(this.radius !== 0)) { this.state = DRAG_HEIGHT; }
+      return true;
+    }
+
     if (this.state === DRAG_HEIGHT) {
-      if (Math.abs(this.height) > 0) {
-        this._commit();
-      } else {
-        this.cancel();
-      }
+      if (this.stageDown(this.height !== 0)) { this._commit(); }
       return true;
     }
     return false;
@@ -73,11 +80,11 @@ class CylinderTool extends Tool {
 
   onPointerUp(event) {
     if (this.state === DRAG_RADIUS) {
-      if (this.radius === 0) {
-        this.cancel();
-      } else {
-        this.state = DRAG_HEIGHT;
-      }
+      if (this.stageUp(this.radius !== 0)) { this.state = DRAG_HEIGHT; }
+      return true;
+    }
+    if (this.state === DRAG_HEIGHT) {
+      if (this.stageUp(this.height !== 0)) { this._commit(); }
       return true;
     }
     return false;
@@ -88,6 +95,7 @@ class CylinderTool extends Tool {
     this.preview = null;
     if (this.state !== IDLE) { this.manager.endInteraction(); }
     this.state = IDLE;
+    this.stagePressed = false;
     this.manager.hideLabel();
   }
 

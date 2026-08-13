@@ -6,9 +6,12 @@ const IDLE = 0, DRAG_BASE = 1, DRAG_HEIGHT = 2;
 
 /** Box creation tool (LeapShape-style state machine):
  *  1. pointerdown on the ground plane sets the base corner (snapped to mm)
- *  2. drag sizes the footprint rectangle (live preview)
- *  3. release, then move sizes the height
- *  4. click commits: emits `let boxN = Translate(..., Box(w, d, h));` */
+ *  2. drag (or move) sizes the footprint rectangle (live preview)
+ *  3. release/click locks the footprint; drag or move then sizes the height
+ *  4. release/click commits: emits `let boxN = Translate(..., Box(w, d, h));`
+ *
+ *  Both gestures work for every stage (see Tool.stageDown/stageUp):
+ *  press-drag-release, and click-move-click. Escape cancels. */
 class BoxTool extends Tool {
   constructor(manager) {
     super(manager, 'box');
@@ -32,16 +35,20 @@ class BoxTool extends Tool {
       this.height = 0;
       this._createPreview();
       this.manager.beginInteraction();
+      this.stagePressed = true;
       this.state = DRAG_BASE;
       return true;
     }
 
+    // Click-move-click: a press with the stage's dimension already set locks
+    // it in; a press with nothing set yet starts a drag (and must NOT cancel).
+    if (this.state === DRAG_BASE) {
+      if (this.stageDown(this._hasFootprint())) { this.state = DRAG_HEIGHT; }
+      return true;
+    }
+
     if (this.state === DRAG_HEIGHT) {
-      if (Math.abs(this.height) > 0) {
-        this._commit();
-      } else {
-        this.cancel();
-      }
+      if (this.stageDown(this.height !== 0)) { this._commit(); }
       return true;
     }
     return false;
@@ -71,12 +78,11 @@ class BoxTool extends Tool {
 
   onPointerUp(event) {
     if (this.state === DRAG_BASE) {
-      const { w, d } = this._dims();
-      if (w === 0 || d === 0) {
-        this.cancel();
-      } else {
-        this.state = DRAG_HEIGHT;
-      }
+      if (this.stageUp(this._hasFootprint())) { this.state = DRAG_HEIGHT; }
+      return true;
+    }
+    if (this.state === DRAG_HEIGHT) {
+      if (this.stageUp(this.height !== 0)) { this._commit(); }
       return true;
     }
     return false;
@@ -87,7 +93,14 @@ class BoxTool extends Tool {
     this.preview = null;
     if (this.state !== IDLE) { this.manager.endInteraction(); }
     this.state = IDLE;
+    this.stagePressed = false;
     this.manager.hideLabel();
+  }
+
+  /** True once the dragged footprint has a non-zero area. */
+  _hasFootprint() {
+    const { w, d } = this._dims();
+    return w !== 0 && d !== 0;
   }
 
   /** Footprint dimensions and min corner in CAD space. */
