@@ -392,6 +392,11 @@ class CanonicalForm:
                 repr(self.sign) + ', closed=' + repr(self.closed) + ')')
 
 
+def _coordinate(point, index):
+    """The index-th coordinate of a Vector."""
+    return (point.X, point.Y, point.Z)[index]
+
+
 def lexicographic_key(point):
     """The (x, y, z) sort key used by every canonical comparison."""
     if isinstance(point, Vector):
@@ -508,21 +513,21 @@ def canonical_form(sampler, length, closed, samples=CANONICAL_SAMPLES,
     area = loop_area_vector(points)
     axis = _dominant_axis(area)
     sign = 1
-    if abs(area.to_tuple()[axis]) > _TOL_1E6 * _TOL_1E6:
-        sign = 1 if area.to_tuple()[axis] > 0 else -1
+    if abs(_coordinate(area, axis)) > _TOL_1E6 * _TOL_1E6:
+        sign = 1 if _coordinate(area, axis) > 0 else -1
 
     # ---- seam: midpoint of the lexicographically extremal band
-    diagonal = max(max(p.to_tuple()[i] for p in points) -
-                   min(p.to_tuple()[i] for p in points) for i in range(3))
+    diagonal = max(max(_coordinate(p, i) for p in points) -
+                   min(_coordinate(p, i) for p in points) for i in range(3))
     tolerance_band = max(band * max(diagonal, _TOL_1E6), _TOL_1E6 * 1e-3)
 
     seam = 0.0
     for coordinate in (0, 1, 2):
 
         def value(distance, coordinate=coordinate):
-            return sampler(distance % length).to_tuple()[coordinate]
+            return _coordinate(sampler(distance % length), coordinate)
 
-        values = [p.to_tuple()[coordinate] for p in points]
+        values = [_coordinate(p, coordinate) for p in points]
         index = min(range(samples), key=lambda i: values[i])
         # the value of the minimum, refined so that the band below does not
         # depend on the (kernel supplied) phase of the sampling
@@ -541,11 +546,11 @@ def canonical_form(sampler, length, closed, samples=CANONICAL_SAMPLES,
         candidates = []
         for start, count in _cyclic_runs(inside):
             members = [points[(start + offset) % samples] for offset in range(count)]
-            key = tuple(min(member.to_tuple()[other] for member in members)
+            key = tuple(min(_coordinate(member, other) for member in members)
                         for other in others)
             candidates.append((key, start * step))
         seed_point = sampler(seed % length)
-        candidates.append((tuple(seed_point.to_tuple()[other] for other in others),
+        candidates.append((tuple(_coordinate(seed_point, other) for other in others),
                            seed))
 
         # A surviving tie means the loop is exactly symmetric, where no
@@ -2706,19 +2711,36 @@ _TOL_DIGITS = 6      # abs(log10(build123d's TOLERANCE))
 
 def _canonical_sort_key(shape):
     """Deterministic, purely geometric ordering key (build123d's
-    _canonical_sort_key). Used to break ties in ShapeList.sort_by, where the
-    alternative is the CAD kernel's traversal order. Coordinates are rounded to
-    TOL_DIGITS so that geometry which agrees to within tolerance always sorts
-    the same way."""
+    _canonical_sort_key): the shape's VERTEX positions, sorted and rounded to
+    TOL_DIGITS - no bounding box, no curve evaluation, so it is cheap enough to
+    compute inside a sort. Used to break ties in
+    ShapeList.sort_by(tie_break=True), where the only alternative is the order
+    the objects arrived in (the CAD kernel's traversal order).
+
+    Vector members are handled explicitly rather than by catching
+    AttributeError, so an API change surfaces as a failure instead of as a
+    silently disabled tie break."""
     if isinstance(shape, Vector):  # ShapeList also holds plain Vectors
-        coordinates = tuple(shape)
-    else:
-        try:
-            box = shape.bounding_box()
-            coordinates = tuple(shape.center()) + tuple(box.min) + tuple(box.max)
-        except Exception:
-            return ()
-    return tuple(round(coordinate, _TOL_DIGITS) for coordinate in coordinates)
+        return tuple(round(c, _TOL_DIGITS) for c in (shape.X, shape.Y, shape.Z))
+    if shape.topo is None:
+        return ()
+    points = sorted([(round(v.X, _TOL_DIGITS), round(v.Y, _TOL_DIGITS),
+                      round(v.Z, _TOL_DIGITS)) for v in shape.vertices()])
+    return tuple(c for point in points for c in point)
+
+
+def _canonical_center_key(shape):
+    """Second stage tie break, for shapes whose vertices coincide (two arcs
+    spanning the same end points, say). Only reached when the vertex key above
+    leaves a tie (build123d's _canonical_center_key)."""
+    if isinstance(shape, Vector):
+        return ()
+    try:
+        center = shape.center()
+    except Exception:
+        return ()
+    return tuple(round(c, _TOL_DIGITS)
+                 for c in (center.X, center.Y, center.Z))
 
 
 def _sort_key_fn(key):
@@ -2800,17 +2822,34 @@ class ShapeList(list):
                 out.append(s)
         return out
 
-    def sort_by(self, key=Axis.Z, reverse=False):
+    def sort_by(self, key=Axis.Z, reverse=False, tie_break=False):
+        """Sort by the given criterion (build123d ShapeList.sort_by).
+
+        tie_break=False (the default) keeps Python's stable sort exactly, so
+        ties carry the incoming order - which is itself a useful contract for
+        CHAINED sorts (sort_by(SortBy.RADIUS).sort_by(Axis.Z) keeps the radius
+        order inside each equal-Z group). tie_break=True instead resolves ties
+        with _canonical_sort_key, so identical geometry always sorts identically
+        rather than in the kernel's traversal order (see Curve.canonical). Like
+        upstream, the geometric key is computed only for objects inside a tie
+        group, and the center-based second stage only where the vertex key ties
+        too."""
         fn = _sort_key_fn(key)
-        # Objects that tie on the sort criterion would otherwise be ordered by
-        # the kernel's traversal order, which depends on the construction
-        # history of the shape (see Curve.canonical). Break those ties with a
-        # geometric key so that identical geometry always sorts identically.
-        # Zero extra cost when there are no ties. (build123d's tie break is
-        # default-on; mirrored here.)
         decorated = [(fn(s), s) for s in self]
-        if len(set([k for k, _ in decorated])) != len(decorated):
-            decorated = [((k, _canonical_sort_key(s)), s) for k, s in decorated]
+        if tie_break:
+            # keys are computed only for the objects that actually tie, and the
+            # cheap one (vertex positions) almost always settles it
+            for tie_break_key in (_canonical_sort_key, _canonical_center_key):
+                try:
+                    tied = {}
+                    for k, _ in decorated:
+                        tied[k] = tied.get(k, 0) + 1
+                except TypeError:  # unhashable keys from a custom callable
+                    break
+                if all([count == 1 for count in tied.values()]):
+                    break
+                decorated = [((k, tie_break_key(s) if tied[k] > 1 else ()), s)
+                             for k, s in decorated]
         decorated = sorted(decorated, key=lambda pair: pair[0], reverse=reverse)
         return ShapeList([s for _, s in decorated])
 

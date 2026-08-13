@@ -114,7 +114,7 @@ for rotation in (0, 90, 180):
         extrude(amount=10, taper=3)
         Cylinder(2.5, 10, rotation=(0, 90, rotation), mode=Mode.SUBTRACT)
     solid = part.part
-    top = solid.edges().filter_by(Axis.X, tolerance=30).sort_by(Axis.Z)[-2:]
+    top = solid.edges().filter_by(Axis.X, tolerance=30).sort_by(Axis.Z, tie_break=True)[-2:]
     midway = Edge.make_mid_way(top[0], top[1], 0.67)
     joints["rot" + str(rotation)] = {
         "volume": round(solid.volume, 4),

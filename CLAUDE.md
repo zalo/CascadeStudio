@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 54 tests (incl. 32 frozen build123d example scripts)
+npx playwright test    # 57 tests (incl. 32 frozen build123d example scripts)
 ```
 
 ## Architecture (Monorepo)
@@ -213,7 +213,8 @@ and `Trapezoid`'s obtuse-side-angle case matches upstream:
 | Ops | `extrude` (dir/both/`taper=`/`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `edges_to_wires` | `full_round`, `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
 | Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `.position/.orientation/.x_axis/.y_axis/.z_axis`, `Pos`, `Rot`/`Rotation`, `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations`, `Workplanes` (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`; shapes track a composed `.location` (`locate()/located()` are absolute; `.position` settable) | `Location.orientation` edge cases |
 | Joints | `RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint` — upstream's exact relative-location algebra; `connect_to` repositions the other part; `copy.copy` rebinds joints; builder-scoped joints transfer to the part on exit | assembly structure / XCAF (roadmap), joint `symbol` rendering |
-| Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists with `filter_by` (Axis with DEGREES tolerance/GeomType/callable), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy incl. RADIUS), `sort_by_distance`, slicing, `+` keeps ShapeList; Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
+| Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists with `filter_by` (Axis with DEGREES tolerance/GeomType/callable), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy incl. RADIUS, opt-in geometric `tie_break=`), `sort_by_distance`, slicing, `+` keeps ShapeList; Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
+| Canonical edges | `canonical()`/`canonical_form()` on Edge/Wire, `canonical_form(sampler, length, closed)`, `lexicographic_key`, `loop_area_vector`, `CanonicalForm`, `CANONICAL_SAMPLES`/`CANONICAL_BAND`, `Axis(edge, canonical=True)`, `Edge.reversed()`; `Edge.make_mid_way` canonicalizes its references (default-on) and `sort_by(..., tie_break=True)` breaks ties geometrically (opt-in) — defaults exactly as in the patch | automatic merging of C0-continuous free edges (out of scope upstream too — reassemble with `edges_to_wires` first) |
 | Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy`, `Shape.__iter__` | — |
 | Measure | `volume/area/length` (volume = per-solid sum), `center()`, `bounding_box()` (exact Bnd_Box), `.wrapped`, `.is_forward` | mass properties |
 | Stdlib | `math`, `copy`, `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d) | `numpy`, 2-D `ConvexHull`/`Voronoi` (raise loudly), everything else |
@@ -230,7 +231,10 @@ kernel fault with byte-identical fillet defaults to upstream
 solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT
 error (toy_truck). The 4 MISMATCHes (joints x2, projection x2) all reduce to
 COMPROMISE(edge-orientation): sub-edge FORWARD/REVERSED flags after booleans
-differ from OCP 7.x over identical curve geometry.
+differ from OCP 7.x over identical curve geometry. Canonical free edges (below)
+shrank two of joints' three residuals (pin_arm 8.16 -> 2.69 mm, slider_arm
+11.80 -> 9.11 mm) without changing any classification; closing the rest needs
+the example to opt into `sort_by(..., tie_break=True)`.
 
 **Known compromises** (each marked in source with a grep-able
 `COMPROMISE(<topic>)` comment — `grep -rn "COMPROMISE(" packages/` is the
@@ -261,6 +265,29 @@ authoritative list):
 - Real-build123d-over-OCP-shim crossover: revisit once the remaining gap is
   dominated by semantics-replication effort; current blockers are numpy in
   geometry.py and the sheer OCP binding surface.
+
+**Canonical free edges**: lite implements the upstream *canonical free-edge
+parametrization* proposal (research record + patch in
+`docs/upstream-canonical-edges/`). A free edge — one produced by a section,
+projection or boolean rather than drawn — inherits the seam, direction and
+parameter range the kernel found convenient, and those depend on the parametric
+frames of the operand surfaces, so `position_at(0)` / `Axis(edge)` move when a
+geometrically identical solid is re-framed. `edge.canonical()` returns the same
+geometry traversed from a geometry-defined start: open shapes from the
+lexicographically smaller end, closed shapes from the arc-length midpoint of the
+extremal band `{x ≤ x_min + 1e-6·bbox}` (x→y→z fall-through), winding CCW about
+the dominant axis of the loop's area vector. **Defaults match the patch exactly**:
+`canonical()`, `Axis(edge, canonical=True)` and `sort_by(..., tie_break=True)`
+are opt-in (the default sort stays a plain stable sort, so chained
+`sort_by(SortBy.RADIUS).sort_by(Axis.Z)` keeps working), while
+`Edge.make_mid_way`'s canonicalization is unconditional. The `tie_break` key is
+the shape's vertex positions sorted+rounded to 6 digits, with `center()` as a
+second stage, computed only inside a tie group. Verified against PATCHED
+upstream build123d on OCP 7.9.3: 185 canonical measurements agree to
+**0.00e+0 mm** while the raw seams differ
+(`test/b123d-validation/canonical-cross-kernel.mjs`, reference generated by
+`docs/upstream-canonical-edges/experiments/lite_cross_kernel.py`). Frozen in
+`test/python-mode-canonical.spec.js`.
 
 **GUI tools in Python mode**: Box/Cylinder/Sphere emit `name = Pos(cx, cy, cz) *
 Primitive(...)` — since build123d primitives are centered, the emission converts the

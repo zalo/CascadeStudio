@@ -1,6 +1,6 @@
 # build123d-lite validation report
 
-Generated 2026-08-13T16:31:26.047Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
+Generated 2026-08-13T18:02:12.656Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
@@ -16,18 +16,18 @@ Generated 2026-08-13T16:31:26.047Z - 129 scripts (126 scored, 3 excluded because
 |---|---|
 | `RuntimeError: INTERNAL OPENCASCADE ERROR DURING GENERATE: memory access out of bounds` | 1 |
 | `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf` | 1 |
-| `other: Line 5985: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
+| `other: Line 6457: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
 
 ## Mismatches (runs, but geometry differs)
 
 - **examples/joints**
-  - 'pin_arm' bbox[0] -0.0729 vs 8.0835 (d=8.1564)
+  - 'pin_arm' bbox[0] 5.3933 vs 8.0835 (d=2.6903)
   - 'screw_arm' bbox[0] 1.0688 vs 3.6800 (d=2.6113)
-  - 'slider_arm' bbox[0] 8.0158 vs -3.7834 (d=11.7992)
+  - 'slider_arm' bbox[0] 5.3255 vs -3.7834 (d=9.1089)
 - **examples/joints_algebra**
-  - 'pin_arm' bbox[0] -0.0729 vs 8.0835 (d=8.1564)
+  - 'pin_arm' bbox[0] 5.3933 vs 8.0835 (d=2.6903)
   - 'screw_arm' bbox[0] 1.0688 vs 3.6800 (d=2.6113)
-  - 'slider_arm' bbox[0] 8.0158 vs -3.7834 (d=11.7992)
+  - 'slider_arm' bbox[0] 5.3255 vs -3.7834 (d=9.1089)
 - **examples/projection**
   - 'projected_text' bbox[0] -49.7713 vs -49.6470 (d=0.1243)
 - **examples/projection_algebra**
@@ -41,16 +41,16 @@ Generated 2026-08-13T16:31:26.047Z - 129 scripts (126 scored, 3 excluded because
 - examples/build123d_customizable_logo (14 shapes)
 - examples/build123d_logo (13 shapes)
 - examples/build123d_logo_algebra (12 shapes)
-- examples/canadian_flag_algebra (25 shapes)
 - examples/canadian_flag (20 shapes)
+- examples/canadian_flag_algebra (25 shapes)
 - examples/circuit_board (1 shapes)
 - examples/circuit_board_algebra (1 shapes)
 - examples/clock_algebra (6 shapes)
 - examples/clock (5 shapes)
 - examples/custom_sketch_objects (9 shapes)
 - examples/custom_sketch_objects_algebra (9 shapes)
-- examples/din_rail (3 shapes)
 - examples/din_rail_algebra (41 shapes)
+- examples/din_rail (3 shapes)
 - examples/extrude (10 shapes)
 - examples/extrude_algebra (35 shapes)
 - examples/handle (10 shapes)
@@ -82,16 +82,16 @@ Generated 2026-08-13T16:31:26.047Z - 129 scripts (126 scored, 3 excluded because
 - examples/heat_exchanger_algebra (4 shapes)
 - examples/maker_coin (8 shapes)
 - examples/roller_coaster (4 shapes)
+- examples/playing_cards (14 shapes)
 - examples/roller_coaster_algebra (4 shapes)
 - examples/shamrock (1 shapes)
 - examples/stud_wall (2 shapes)
-- examples/playing_cards (14 shapes)
 - examples/twist_extrude (2 shapes)
 - examples/vase (8 shapes)
-- examples/vase_algebra (8 shapes)
-- general_examples/ex01 (1 shapes)
 - examples/tea_cup_algebra (5 shapes)
+- general_examples/ex01 (1 shapes)
 - general_examples/ex02 (1 shapes)
+- examples/vase_algebra (8 shapes)
 - general_examples/ex03 (2 shapes)
 - general_examples/ex08 (3 shapes)
 - general_examples/ex09 (1 shapes)
@@ -110,8 +110,8 @@ Generated 2026-08-13T16:31:26.047Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
 - general_examples/ex25 (4 shapes)
-- general_examples/ex24 (3 shapes)
 - general_examples/ex26 (2 shapes)
+- general_examples/ex24 (3 shapes)
 - general_examples/ex27 (2 shapes)
 - general_examples/ex28 (7 shapes)
 - general_examples/ex29 (7 shapes)
@@ -123,15 +123,15 @@ Generated 2026-08-13T16:31:26.047Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex36 (3 shapes)
 - general_examples/ex34 (4 shapes)
 - general_examples_algebra/ex01 (1 shapes)
-- general_examples_algebra/ex02 (1 shapes)
 - general_examples/ex37 (2 shapes)
+- general_examples_algebra/ex02 (1 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
 - general_examples_algebra/ex09 (1 shapes)
 - general_examples_algebra/ex12 (6 shapes)
 - general_examples_algebra/ex11 (2 shapes)
-- general_examples_algebra/ex14 (6 shapes)
 - general_examples_algebra/ex13 (1 shapes)
+- general_examples_algebra/ex14 (6 shapes)
 - general_examples_algebra/ex15 (8 shapes)
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
@@ -159,7 +159,7 @@ Generated 2026-08-13T16:31:26.047Z - 129 scripts (126 scored, 3 excluded because
 
 - examples/cast_bearing_unit: `RuntimeError: INTERNAL OPENCASCADE ERROR DURING GENERATE: memory access out of bounds`
 - examples/dual_color_3mf: `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf`
-- examples/toy_truck: `other: Line 5985: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
+- examples/toy_truck: `other: Line 6457: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
 
 ## Timeouts
 

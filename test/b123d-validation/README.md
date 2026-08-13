@@ -62,6 +62,55 @@ CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/run-lite.mjs \
 Env knobs: `B123D_SRC`, `B123D_REF_PY`, `B123D_REF_JOBS` (default 4),
 `CS_TEST_PORT` (default 8517), `CS_TEST_HEADFUL`/`DISPLAY`.
 
+## Canonical free edges (cross-kernel check)
+
+build123d-lite implements the upstream **canonical free-edge parametrization**
+proposal — research record, patch and reproduction scripts in
+`docs/upstream-canonical-edges/`. A free edge (section / projection / boolean
+output) inherits a seam, direction and parameter range that depend on the
+*parametric frames* of the operand surfaces, so `position_at(0)` and
+`Axis(edge)` move when a geometrically identical solid is re-framed;
+`edge.canonical()` replaces those with a rule computed from geometry alone.
+Lite ports the rule with the same names and the same defaults: `canonical()`,
+`Axis(edge, canonical=True)` and `sort_by(..., tie_break=True)` are opt-in — the
+default sort stays a plain stable sort, because ties carrying the incoming order
+is itself a contract that chained sorts rely on — while
+`Edge.make_mid_way`'s canonicalization is unconditional.
+
+`canonical-cross-kernel.mjs` checks lite's `canonical()` on **OCCT 8.0.1 (wasm)**
+against **patched upstream build123d 0.11.1 on OCP 7.9.3**, over three
+constructions: the `examples/projection.py` arch (a sphere ∩ cylinder section
+loop, 5 sphere frames), a sphere ∩ cylinder locus reassembled with
+`edges_to_wires` (each kernel chops it into a different NUMBER of edges), and
+`examples/joints.py`'s `make_mid_way` slider axis (3 cutter frames).
+
+```bash
+# 1. reference side (patched build123d on OCP 7.9.3)
+cd docs/upstream-canonical-edges/experiments && ./repatch.sh
+PYTHONPATH=/tmp/b123d-0111 ~/Desktop/ocjs-deps/b123d-ref-venv/bin/python \
+  lite_cross_kernel.py > canonical-lite-reference.json
+
+# 2. lite side + diff (needs `npm run build`)
+CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/canonical-cross-kernel.mjs
+```
+
+Result (committed in `canonical-cross-kernel.json`): **185 canonical
+measurements, worst delta 0.00e+0 mm**, against 5 recorded raw (pre-canonical)
+kernel differences — which is the premise, not a failure. The harness also
+checks frame consistency *inside* each kernel and reports one case
+(`sphere_cylinder_reassembled.rot0`) that is frame-inconsistent in BOTH kernels
+identically: an upstream fragility the port faithfully reproduces —
+`Mixin1D.canonical()`'s "already canonical" early return does not take
+`form.start` modulo 1, so a seam landing on the incoming wire's own start point
+re-seams instead, and `_walk_loop` then compares 1e-16 end-point distances
+before the tangent. Reproducible in patched upstream alone by reversing the same
+wire. (Separately, a loop with an exact mirror symmetry through its extremal
+band has a seam defined only up to that symmetry — documented upstream in
+REPORT.md §2.2, and likewise traversal-order dependent in upstream.)
+
+The rule itself is frozen in `test/python-mode-canonical.spec.js` (part of the
+default suite), including a section loop asserted against hand-computed values.
+
 ## Current coverage
 
 <!-- COVERAGE:BEGIN (updated by hand from report.md) -->
@@ -71,7 +120,7 @@ natively). On the OCCT 8.0.1 wasm build:
 | Status | Count | Note |
 |---|---|---|
 | PASS | 119 | volume within 0.5%, bbox within 1e-3/axis, per variable |
-| MISMATCH | 4 | all COMPROMISE(edge-orientation): joints x2 (sub-edge FORWARD/REVERSED differs from OCP 7.x, so Axis(edge)-measured slider/pin positions land at the other end of the correct slot) and projection x2 (the closed sphere-cylinder intersection path carries the opposite orientation flag over identical geometry, so the projected text wraps the other way; everything else — make_text align, arc-length position_at, per-contour glyph faces — matches exactly) |
+| MISMATCH | 4 | all COMPROMISE(edge-orientation): joints x2 (sub-edge FORWARD/REVERSED differs from OCP 7.x, so Axis(edge)-measured slider/pin positions land at the other end of the correct slot — canonical `Edge.make_mid_way` shrank two of the three residuals, pin_arm 8.16 -> 2.69 mm and slider_arm 11.80 -> 9.11 mm, screw_arm unchanged at 2.61 mm; the rest needs the example to opt into `sort_by(..., tie_break=True)`) and projection x2 (the closed sphere-cylinder intersection path carries the opposite orientation flag over identical geometry, so the projected text wraps the other way; everything else — make_text align, arc-length position_at, per-contour glyph faces — matches exactly) |
 | ERROR | 3 | detected kernel faults + one export gap: FilletEdges on certain hull/draft solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT error (toy_truck) with byte-identical fillet defaults to upstream; dual_color_3mf builds all six shapes correctly and then fails on `Mesher.write("*.3mf")` — COMPROMISE(mesher), there is no lib3mf in this wasm build |
 | TIMEOUT | 0 | |
 

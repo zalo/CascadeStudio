@@ -114,7 +114,15 @@ for rotation in (0, 90, 180):
         extrude(amount=10, taper=3)
         Cylinder(2.5, 10, rotation=(0, 90, rotation), mode=Mode.SUBTRACT)
     solid = part.part
-    top = solid.edges().filter_by(Axis.X, tolerance=30).sort_by(Axis.Z)[-2:]
+    tied = solid.edges().filter_by(Axis.X, tolerance=30)
+    # Selecting the two TIED top edges deterministically is the caller's half of
+    # the fix. The patch made that opt-in (`tie_break=True`) after the dev suite
+    # showed a default-on tie break breaks chained sorts; an older revision of
+    # the patch had it default-on and no keyword, hence the fallback.
+    try:
+        top = tied.sort_by(Axis.Z, tie_break=True)[-2:]
+    except TypeError:
+        top = tied.sort_by(Axis.Z)[-2:]
     midway = Edge.make_mid_way(*top, 0.67)
     joints["rot%d" % rotation] = {
         "volume": round(solid.volume, 4),

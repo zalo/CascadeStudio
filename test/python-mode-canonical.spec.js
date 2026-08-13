@@ -152,11 +152,20 @@ test.describe('Python mode: canonical free-edge parametrization', () => {
       '    twice = once.canonical()',
       '    p(name, tuple(once.position_at(0)) + tuple(twice.position_at(0))'
         + ' + tuple(once.position_at(0.3)) + tuple(twice.position_at(0.3)))',
-      // --- sort_by ties resolve geometrically, not by list/traversal order
+      // --- sort_by: the DEFAULT keeps the incoming order on ties (a stable
+      //     sort, which chained sorts rely on); tie_break=True resolves them
+      //     geometrically instead
       'ties = [Edge.make_line((0, -5, 10), (10, -5, 10)),'
         + ' Edge.make_line((0, 5, 10), (10, 5, 10))]',
-      'p("TIE", tuple(ShapeList(ties).sort_by(Axis.Z)[0].center())'
+      'p("TIE_DEFAULT", tuple(ShapeList(ties).sort_by(Axis.Z)[0].center())'
         + ' + tuple(ShapeList(ties[::-1]).sort_by(Axis.Z)[0].center()))',
+      'p("TIE_BREAK", tuple(ShapeList(ties).sort_by(Axis.Z, tie_break=True)[0].center())'
+        + ' + tuple(ShapeList(ties[::-1]).sort_by(Axis.Z, tie_break=True)[0].center()))',
+      // chained sorts must survive the default (the heat_exchanger.py idiom)
+      'radii = [Edge.make_line((0, 0, 0), (3, 0, 0)), Edge.make_line((0, 1, 0), (1, 1, 0)),'
+        + ' Edge.make_line((0, 2, 0), (2, 2, 0))]',
+      'p("CHAINED", [e.length for e in'
+        + ' ShapeList(radii).sort_by(SortBy.LENGTH).sort_by(Axis.Z)])',
       'show(Box(1, 1, 1))',
     ].join('\n'));
 
@@ -176,7 +185,13 @@ test.describe('Python mode: canonical free-edge parametrization', () => {
     expectClose(got.IDEM_CIRCLE.slice(6, 9), got.IDEM_CIRCLE.slice(9, 12), 5);
     expectClose(got.IDEM_RECT.slice(0, 3), got.IDEM_RECT.slice(3, 6), 5);
     expectClose(got.IDEM_RECT.slice(6, 9), got.IDEM_RECT.slice(9, 12), 5);
-    expectClose(got.TIE.slice(0, 3), got.TIE.slice(3, 6), 6);
+    // default: ties carry the incoming order, so reversing the input reverses
+    // the result (y = -5 first vs y = +5 first)
+    expectClose(got.TIE_DEFAULT, [5, -5, 10, 5, 5, 10], 6);
+    // tie_break=True: geometry decides, so both orderings agree
+    expectClose(got.TIE_BREAK.slice(0, 3), got.TIE_BREAK.slice(3, 6), 6);
+    // a chained sort keeps the inner (length) order inside the tied Z group
+    expectClose(got.CHAINED, [1, 2, 3], 6);
   });
 
   test('a closed section loop canonicalizes to hand-computed values and is '
@@ -208,7 +223,10 @@ test.describe('Python mode: canonical free-edge parametrization', () => {
       '            Rectangle(10, 10)',
       '        extrude(amount=10, taper=3)',
       '        Cylinder(2.5, 10, rotation=(0, 90, rotation), mode=Mode.SUBTRACT)',
-      '    top = part.part.edges().filter_by(Axis.X, tolerance=30).sort_by(Axis.Z)[-2:]',
+      // selecting the two TIED top edges deterministically is the caller's
+      // half of the fix, hence tie_break=True (exactly as upstream states)
+      '    top = part.part.edges().filter_by(Axis.X, tolerance=30)'
+        + '.sort_by(Axis.Z, tie_break=True)[-2:]',
       '    m = Edge.make_mid_way(top[0], top[1], 0.67)',
       '    p("MIDWAY_" + str(rotation), tuple(m.position_at(0)) + tuple(m.position_at(1)))',
       'show(Box(1, 1, 1))',
