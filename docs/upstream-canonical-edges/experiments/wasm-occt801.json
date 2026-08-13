@@ -1,0 +1,7236 @@
+{
+ "kernel": "OCCT 8.0.1 wasm",
+ "cases": {
+  "sph_cyl_xp6": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      2480
+     ],
+     "closed": false,
+     "length": 32.507884,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      5.247363,
+      4.943029,
+      6.930487
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0.000572,
+      1,
+      -0.000345
+     ],
+     "walk_start": [
+      1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0.000572,
+      1,
+      -0.000345
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1318
+     ],
+     "closed": false,
+     "length": 32.51309,
+     "p_first": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      9.188681,
+      -3.851274,
+      0.857805
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0.017172,
+      -0.999799,
+      0.010356
+     ],
+     "walk_start": [
+      1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      0.017172,
+      -0.999799,
+      0.010356
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      7.753814,
+      7.853982
+     ],
+     "closed": false,
+     "length": 1.001674,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0.500628,
+      0,
+      9.987461
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.994987,
+      0,
+      0.1
+     ],
+     "walk_start": [
+      1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      -0.994987,
+      0,
+      0.1
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      9.249999,
+      -3.799672,
+      0.003477
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      4.812556
+     ],
+     "closed": false,
+     "length": 1.001674,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      0.500628,
+      0,
+      -9.987461
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      -10
+     ],
+     "p_mid": [
+      0,
+      0,
+      -10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      4.812556
+     ],
+     "closed": false,
+     "length": 1.001674,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      0.500628,
+      0,
+      -9.987461
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      9.249745,
+      3.799889,
+      -0.055335
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      7.753814,
+      7.853982
+     ],
+     "closed": false,
+     "length": 1.001674,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0.500628,
+      0,
+      9.987461
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.994987,
+      0,
+      0.1
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0.994987,
+      0,
+      -0.1
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      0,
+      10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      9.249999,
+      -3.799672,
+      0.003477
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      9.249745,
+      3.799889,
+      -0.055335
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    }
+   ]
+  },
+  "sph_cyl_xm6": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1972
+     ],
+     "closed": false,
+     "length": 32.509404,
+     "p_first": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "p_last": [
+      -1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      -9.25,
+      -3.799671,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.001145,
+      -0.999999,
+      0.00069
+     ],
+     "walk_start": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      -0.001145,
+      -0.999999,
+      0.00069
+     ],
+     "seam_u_first": {
+      "sphere0": -180,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 180,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      3964
+     ],
+     "closed": false,
+     "length": 32.513462,
+     "p_first": [
+      -1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      -9.25,
+      3.799671,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.005725,
+      0.999978,
+      -0.003452
+     ],
+     "walk_start": [
+      -1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      -0.005725,
+      0.999978,
+      -0.003452
+     ],
+     "seam_u_first": {
+      "sphere0": 180,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": -180,
+      "cyl1": 0
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      7.853982
+     ],
+     "closed": false,
+     "length": 31.415927,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      10,
+      0,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      -10
+     ],
+     "p_mid": [
+      0,
+      0,
+      -10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      7.853982
+     ],
+     "closed": false,
+     "length": 31.415927,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      10,
+      0,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      0,
+      10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "p_last": [
+      -1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      -9.25,
+      -3.799671,
+      -0.000184
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      -1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": -180,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 180,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      -1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      -9.25,
+      3.799671,
+      0.000411
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 180,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": -180,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      10.050126,
+      29.949874
+     ],
+     "closed": false,
+     "length": 19.899749,
+     "p_first": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "p_last": [
+      -1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      -1,
+      0,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {
+      "sphere0": -180,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 180,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "p_last": [
+      -1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      -9.25,
+      -3.799671,
+      -0.000184
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": -180,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 180,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      -1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      -9.25,
+      3.799671,
+      0.000411
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      -1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 180,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": -180,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      10.050126,
+      29.949874
+     ],
+     "closed": false,
+     "length": 19.899749,
+     "p_first": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "p_last": [
+      -1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      -1,
+      0,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {
+      "sphere0": -180,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 180,
+      "cyl1": 0
+     }
+    }
+   ]
+  },
+  "sph_cyl_yp6": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      3344
+     ],
+     "closed": false,
+     "length": 50.308347,
+     "p_first": [
+      5,
+      6,
+      -6.244998
+     ],
+     "p_last": [
+      5,
+      6,
+      6.244998
+     ],
+     "p_mid": [
+      -3.799671,
+      9.25,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.000816,
+      -0.721411,
+      -0.692507
+     ],
+     "walk_start": [
+      5,
+      6,
+      -6.244998
+     ],
+     "walk_dir": [
+      -0.000816,
+      -0.721411,
+      -0.692507
+     ],
+     "seam_u_first": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      3982
+     ],
+     "closed": false,
+     "length": 14.714565,
+     "p_first": [
+      5,
+      6,
+      6.244998
+     ],
+     "p_last": [
+      5,
+      6,
+      -6.244998
+     ],
+     "p_mid": [
+      3.799671,
+      9.25,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.000128,
+      0.721063,
+      -0.69287
+     ],
+     "walk_start": [
+      5,
+      6,
+      6.244998
+     ],
+     "walk_dir": [
+      -0.000128,
+      0.721063,
+      -0.69287
+     ],
+     "seam_u_first": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      7.853982
+     ],
+     "closed": false,
+     "length": 31.415927,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      10,
+      0,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      -10
+     ],
+     "p_mid": [
+      0,
+      0,
+      -10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      7.853982
+     ],
+     "closed": false,
+     "length": 31.415927,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      10,
+      0,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      0,
+      10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 50.31247,
+     "p_first": [
+      5,
+      6,
+      -6.244998
+     ],
+     "p_last": [
+      5,
+      6,
+      6.244998
+     ],
+     "p_mid": [
+      -3.799671,
+      9.25,
+      -0.00134
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -0.72111,
+      -0.69282
+     ],
+     "walk_start": [
+      5,
+      6,
+      6.244998
+     ],
+     "walk_dir": [
+      0,
+      0.72111,
+      0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 14.714575,
+     "p_first": [
+      5,
+      6,
+      6.244998
+     ],
+     "p_last": [
+      5,
+      6,
+      -6.244998
+     ],
+     "p_mid": [
+      3.799671,
+      9.25,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0.72111,
+      -0.69282
+     ],
+     "walk_start": [
+      5,
+      6,
+      -6.244998
+     ],
+     "walk_dir": [
+      0,
+      -0.72111,
+      0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      13.755002,
+      26.244998
+     ],
+     "closed": false,
+     "length": 12.489996,
+     "p_first": [
+      5,
+      6,
+      -6.244998
+     ],
+     "p_last": [
+      5,
+      6,
+      6.244998
+     ],
+     "p_mid": [
+      5,
+      6,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      6,
+      6.244998
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 50.31247,
+     "p_first": [
+      5,
+      6,
+      -6.244998
+     ],
+     "p_last": [
+      5,
+      6,
+      6.244998
+     ],
+     "p_mid": [
+      -3.799671,
+      9.25,
+      -0.00134
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -0.72111,
+      -0.69282
+     ],
+     "walk_start": [
+      5,
+      6,
+      -6.244998
+     ],
+     "walk_dir": [
+      0,
+      -0.72111,
+      -0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 14.714575,
+     "p_first": [
+      5,
+      6,
+      6.244998
+     ],
+     "p_last": [
+      5,
+      6,
+      -6.244998
+     ],
+     "p_mid": [
+      3.799671,
+      9.25,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0.72111,
+      -0.69282
+     ],
+     "walk_start": [
+      5,
+      6,
+      6.244998
+     ],
+     "walk_dir": [
+      0,
+      0.72111,
+      -0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      13.755002,
+      26.244998
+     ],
+     "closed": false,
+     "length": 12.489996,
+     "p_first": [
+      5,
+      6,
+      -6.244998
+     ],
+     "p_last": [
+      5,
+      6,
+      6.244998
+     ],
+     "p_mid": [
+      5,
+      6,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      6,
+      -6.244998
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 50.194429,
+      "cyl1": 0
+     }
+    }
+   ]
+  },
+  "sph_cyl_xp6_seam90": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1981
+     ],
+     "closed": true,
+     "length": 65.020731,
+     "p_first": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_last": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_mid": [
+      9.171002,
+      -3.865827,
+      0.972108
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      -0.120102,
+      0.098057,
+      -0.987907
+     ],
+     "walk_start": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "walk_dir": [
+      -0.120102,
+      0.098057,
+      -0.987907
+     ],
+     "seam_u_first": {
+      "sphere0": -67.668355,
+      "cyl1": 49.458398
+     },
+     "seam_u_last": {
+      "sphere0": -67.668355,
+      "cyl1": 49.458398
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      7.853982
+     ],
+     "closed": false,
+     "length": 31.415927,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      10,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 180,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      -10
+     ],
+     "p_mid": [
+      0,
+      0,
+      -10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      -1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      7.853982
+     ],
+     "closed": false,
+     "length": 31.415927,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      10,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 180,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      0,
+      10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      -1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 65.027044,
+     "p_first": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_last": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_mid": [
+      9.249996,
+      -3.799674,
+      0.006645
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      0,
+      -1
+     ],
+     "walk_start": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {
+      "sphere0": -67.668355,
+      "cyl1": 49.458398
+     },
+     "seam_u_last": {
+      "sphere0": -67.668355,
+      "cyl1": 49.458398
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 65.027044,
+     "p_first": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_last": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_mid": [
+      9.249996,
+      -3.799674,
+      0.006645
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      0,
+      -1
+     ],
+     "walk_start": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {
+      "sphere0": -67.668355,
+      "cyl1": 49.458398
+     },
+     "seam_u_last": {
+      "sphere0": -67.668355,
+      "cyl1": 49.458398
+     }
+    }
+   ]
+  },
+  "sph_cyl_xp6_seam180": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1981
+     ],
+     "closed": true,
+     "length": 65.020731,
+     "p_first": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_last": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_mid": [
+      9.171002,
+      -3.865827,
+      0.972108
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      -0.120102,
+      0.098057,
+      -0.987907
+     ],
+     "walk_start": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "walk_dir": [
+      -0.120102,
+      0.098057,
+      -0.987907
+     ],
+     "seam_u_first": {
+      "sphere0": -157.668355,
+      "cyl1": 49.458398
+     },
+     "seam_u_last": {
+      "sphere0": -157.668355,
+      "cyl1": 49.458398
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      7.853982
+     ],
+     "closed": false,
+     "length": 31.415927,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      -10,
+      0,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 180,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      -10
+     ],
+     "p_mid": [
+      0,
+      0,
+      -10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      7.853982
+     ],
+     "closed": false,
+     "length": 31.415927,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      -10,
+      0,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 180,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      0,
+      10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 180
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 65.027044,
+     "p_first": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_last": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_mid": [
+      9.249996,
+      -3.799674,
+      0.006645
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      0,
+      -1
+     ],
+     "walk_start": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {
+      "sphere0": -157.668355,
+      "cyl1": 49.458398
+     },
+     "seam_u_last": {
+      "sphere0": -157.668355,
+      "cyl1": 49.458398
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 65.027044,
+     "p_first": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_last": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "p_mid": [
+      9.249996,
+      -3.799674,
+      0.006645
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      0,
+      -1
+     ],
+     "walk_start": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {
+      "sphere0": -157.668355,
+      "cyl1": 49.458398
+     },
+     "seam_u_last": {
+      "sphere0": -157.668355,
+      "cyl1": 49.458398
+     }
+    }
+   ]
+  },
+  "sph_cyl_xp6_cylseam90": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      602
+     ],
+     "closed": false,
+     "length": 14.71046,
+     "p_first": [
+      6,
+      5,
+      -6.244998
+     ],
+     "p_last": [
+      6,
+      5,
+      6.244998
+     ],
+     "p_mid": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0.721107,
+      -1e-05,
+      0.692824
+     ],
+     "walk_start": [
+      6,
+      5,
+      -6.244998
+     ],
+     "walk_dir": [
+      0.721107,
+      -1e-05,
+      0.692824
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      813
+     ],
+     "closed": false,
+     "length": 8.899472,
+     "p_first": [
+      6,
+      5,
+      -6.244998
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      2.461363,
+      3.532425,
+      -9.025721
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.721367,
+      -0.000698,
+      -0.692552
+     ],
+     "walk_start": [
+      6,
+      5,
+      -6.244998
+     ],
+     "walk_dir": [
+      -0.721367,
+      -0.000698,
+      -0.692552
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      813
+     ],
+     "closed": false,
+     "length": 8.899472,
+     "p_first": [
+      6,
+      5,
+      6.244998
+     ],
+     "p_last": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      2.461363,
+      3.532425,
+      9.025721
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.721367,
+      -0.000698,
+      0.692552
+     ],
+     "walk_start": [
+      6,
+      5,
+      6.244998
+     ],
+     "walk_dir": [
+      -0.721367,
+      -0.000698,
+      0.692552
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      3964
+     ],
+     "closed": false,
+     "length": 32.513462,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      9.25,
+      -3.799671,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0.005725,
+      -0.999978,
+      -0.003452
+     ],
+     "walk_start": [
+      1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0.005725,
+      -0.999978,
+      -0.003452
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      7.753814,
+      7.853982
+     ],
+     "closed": false,
+     "length": 1.001674,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0.500628,
+      0,
+      9.987461
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.994987,
+      0,
+      0.1
+     ],
+     "walk_start": [
+      1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      -0.994987,
+      0,
+      0.1
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      9.25,
+      -3.799671,
+      0.000411
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      4.812556
+     ],
+     "closed": false,
+     "length": 1.001674,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      0.500628,
+      0,
+      -9.987461
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      -10
+     ],
+     "p_mid": [
+      0,
+      0,
+      -10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      4.812556
+     ],
+     "closed": false,
+     "length": 1.001674,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      0.500628,
+      0,
+      -9.987461
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 8.899474,
+     "p_first": [
+      6,
+      5,
+      -6.244998
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      2.791068,
+      3.834417,
+      -8.803817
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.72111,
+      0,
+      -0.69282
+     ],
+     "walk_start": [
+      6,
+      5,
+      -6.244998
+     ],
+     "walk_dir": [
+      -0.72111,
+      0,
+      -0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 14.714575,
+     "p_first": [
+      6,
+      5,
+      -6.244998
+     ],
+     "p_last": [
+      6,
+      5,
+      6.244998
+     ],
+     "p_mid": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0.72111,
+      0,
+      0.69282
+     ],
+     "walk_start": [
+      6,
+      5,
+      6.244998
+     ],
+     "walk_dir": [
+      -0.72111,
+      0,
+      -0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 8.899474,
+     "p_first": [
+      6,
+      5,
+      6.244998
+     ],
+     "p_last": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      2.791068,
+      3.834417,
+      8.803817
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.72111,
+      0,
+      0.69282
+     ],
+     "walk_start": [
+      1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0.72111,
+      0,
+      -0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      7.753814,
+      7.853982
+     ],
+     "closed": false,
+     "length": 1.001674,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0.500628,
+      0,
+      9.987461
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.994987,
+      0,
+      0.1
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0.994987,
+      0,
+      -0.1
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      0,
+      10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 8.899474,
+     "p_first": [
+      6,
+      5,
+      6.244998
+     ],
+     "p_last": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_mid": [
+      2.791068,
+      3.834417,
+      8.803817
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.72111,
+      0,
+      0.69282
+     ],
+     "walk_start": [
+      6,
+      5,
+      6.244998
+     ],
+     "walk_dir": [
+      -0.72111,
+      0,
+      0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 32.513522,
+     "p_first": [
+      1,
+      0,
+      9.949874
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      9.25,
+      -3.799671,
+      0.000411
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      1,
+      0,
+      9.949874
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 8.899474,
+     "p_first": [
+      6,
+      5,
+      -6.244998
+     ],
+     "p_last": [
+      1,
+      0,
+      -9.949874
+     ],
+     "p_mid": [
+      2.791068,
+      3.834417,
+      -8.803817
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.72111,
+      0,
+      -0.69282
+     ],
+     "walk_start": [
+      1,
+      0,
+      -9.949874
+     ],
+     "walk_dir": [
+      0.72111,
+      0,
+      0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      13.755002,
+      26.244998
+     ],
+     "closed": false,
+     "length": 12.489996,
+     "p_first": [
+      6,
+      5,
+      -6.244998
+     ],
+     "p_last": [
+      6,
+      5,
+      6.244998
+     ],
+     "p_mid": [
+      6,
+      5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      6,
+      5,
+      -6.244998
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      13.755002,
+      26.244998
+     ],
+     "closed": false,
+     "length": 12.489996,
+     "p_first": [
+      6,
+      5,
+      -6.244998
+     ],
+     "p_last": [
+      6,
+      5,
+      6.244998
+     ],
+     "p_mid": [
+      6,
+      5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      6,
+      5,
+      6.244998
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": false,
+     "length": 14.714575,
+     "p_first": [
+      6,
+      5,
+      -6.244998
+     ],
+     "p_last": [
+      6,
+      5,
+      6.244998
+     ],
+     "p_mid": [
+      9.25,
+      3.799671,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0.72111,
+      0,
+      0.69282
+     ],
+     "walk_start": [
+      6,
+      5,
+      -6.244998
+     ],
+     "walk_dir": [
+      0.72111,
+      0,
+      0.69282
+     ],
+     "seam_u_first": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 39.805571,
+      "cyl1": 0
+     }
+    }
+   ]
+  },
+  "sph_sph": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 24.894025,
+     "p_first": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_last": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_mid": [
+      6.1,
+      -7.924014,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      3.141593,
+      6.283185
+     ],
+     "closed": false,
+     "length": 24.894025,
+     "p_first": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_last": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_mid": [
+      6.1,
+      7.924014,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      7.197921,
+      7.853982
+     ],
+     "closed": false,
+     "length": 6.560606,
+     "p_first": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      3.22179,
+      0,
+      9.466788
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.792401,
+      0,
+      0.61
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "walk_dir": [
+      -0.792401,
+      0,
+      0.61
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 24.894025,
+     "p_first": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_last": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_mid": [
+      6.1,
+      -7.924014,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      5.36845
+     ],
+     "closed": false,
+     "length": 6.560606,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_mid": [
+      3.22179,
+      0,
+      -9.466788
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      0,
+      0,
+      -10
+     ],
+     "p_mid": [
+      0,
+      0,
+      -10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      -10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": -180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      5.36845
+     ],
+     "closed": false,
+     "length": 6.560606,
+     "p_first": [
+      0,
+      0,
+      -10
+     ],
+     "p_last": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_mid": [
+      3.22179,
+      0,
+      -9.466788
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      3.141593,
+      6.283185
+     ],
+     "closed": false,
+     "length": 24.894025,
+     "p_first": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_last": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_mid": [
+      6.1,
+      7.924014,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      7.197921,
+      7.853982
+     ],
+     "closed": false,
+     "length": 6.560606,
+     "p_first": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      3.22179,
+      0,
+      9.466788
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.792401,
+      0,
+      0.61
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0.792401,
+      0,
+      -0.61
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      10
+     ],
+     "p_mid": [
+      0,
+      0,
+      10
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 180
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 180
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      7.716045,
+      7.853982
+     ],
+     "closed": false,
+     "length": 1.103496,
+     "p_first": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_last": [
+      5,
+      0,
+      8
+     ],
+     "p_mid": [
+      5.551311,
+      0,
+      7.980981
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.990502,
+      0,
+      0.1375
+     ],
+     "walk_start": [
+      5,
+      0,
+      8
+     ],
+     "walk_dir": [
+      0.990502,
+      0,
+      -0.1375
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 24.894025,
+     "p_first": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_last": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_mid": [
+      6.1,
+      -7.924014,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      -1,
+      0
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      4.850326
+     ],
+     "closed": false,
+     "length": 1.103496,
+     "p_first": [
+      5,
+      0,
+      -8
+     ],
+     "p_last": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_mid": [
+      5.551311,
+      0,
+      -7.980981
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      5,
+      0,
+      -8
+     ],
+     "p_last": [
+      5,
+      0,
+      -8
+     ],
+     "p_mid": [
+      5,
+      0,
+      -8
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      -8
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      4.712389,
+      4.850326
+     ],
+     "closed": false,
+     "length": 1.103496,
+     "p_first": [
+      5,
+      0,
+      -8
+     ],
+     "p_last": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_mid": [
+      5.551311,
+      0,
+      -7.980981
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      -8
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      3.141593,
+      6.283185
+     ],
+     "closed": false,
+     "length": 24.894025,
+     "p_first": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "p_last": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_mid": [
+      6.1,
+      7.924014,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      -7.924014
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      7.716045,
+      7.853982
+     ],
+     "closed": false,
+     "length": 1.103496,
+     "p_first": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "p_last": [
+      5,
+      0,
+      8
+     ],
+     "p_mid": [
+      5.551311,
+      0,
+      7.980981
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.990502,
+      0,
+      0.1375
+     ],
+     "walk_start": [
+      6.1,
+      0,
+      7.924014
+     ],
+     "walk_dir": [
+      -0.990502,
+      0,
+      0.1375
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      5,
+      0,
+      8
+     ],
+     "p_last": [
+      5,
+      0,
+      8
+     ],
+     "p_mid": [
+      5,
+      0,
+      8
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      8
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "sphere1": 0
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "sphere1": 0
+     }
+    }
+   ]
+  },
+  "cyl_cyl": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      691
+     ],
+     "closed": true,
+     "length": 32.759671,
+     "p_first": [
+      5,
+      0,
+      -7
+     ],
+     "p_last": [
+      5,
+      0,
+      -7
+     ],
+     "p_mid": [
+      -4.993784,
+      -0.246119,
+      -6.995562
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      -0.007854,
+      0.999953,
+      0.00561
+     ],
+     "walk_start": [
+      5,
+      0,
+      -7
+     ],
+     "walk_dir": [
+      -0.007854,
+      0.999953,
+      0.00561
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      691
+     ],
+     "closed": true,
+     "length": 32.759671,
+     "p_first": [
+      5,
+      0,
+      7
+     ],
+     "p_last": [
+      5,
+      0,
+      7
+     ],
+     "p_mid": [
+      -4.993784,
+      -0.246119,
+      6.995562
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      -0.007854,
+      0.999953,
+      -0.00561
+     ],
+     "walk_start": [
+      5,
+      0,
+      7
+     ],
+     "walk_dir": [
+      -0.007854,
+      0.999953,
+      -0.00561
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": 90
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      37,
+      60
+     ],
+     "closed": false,
+     "length": 23,
+     "p_first": [
+      5,
+      0,
+      7
+     ],
+     "p_last": [
+      5,
+      0,
+      30
+     ],
+     "p_mid": [
+      5,
+      0,
+      18.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      0,
+      7
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 32.759887,
+     "p_first": [
+      5,
+      0,
+      7
+     ],
+     "p_last": [
+      5,
+      0,
+      7
+     ],
+     "p_mid": [
+      -4.999883,
+      0.034279,
+      6.999916
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      7
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      37,
+      60
+     ],
+     "closed": false,
+     "length": 23,
+     "p_first": [
+      5,
+      0,
+      7
+     ],
+     "p_last": [
+      5,
+      0,
+      30
+     ],
+     "p_mid": [
+      5,
+      0,
+      18.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      0,
+      30
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 31.415927,
+     "p_first": [
+      5,
+      0,
+      30
+     ],
+     "p_last": [
+      5,
+      0,
+      30
+     ],
+     "p_mid": [
+      -5,
+      0,
+      30
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      30
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 32.759887,
+     "p_first": [
+      5,
+      0,
+      7
+     ],
+     "p_last": [
+      5,
+      0,
+      7
+     ],
+     "p_mid": [
+      -4.999883,
+      0.034279,
+      6.999916
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      7
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 31.415927,
+     "p_first": [
+      5,
+      0,
+      30
+     ],
+     "p_last": [
+      5,
+      0,
+      30
+     ],
+     "p_mid": [
+      -5,
+      0,
+      30
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      30
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 32.759887,
+     "p_first": [
+      5,
+      0,
+      -7
+     ],
+     "p_last": [
+      5,
+      0,
+      -7
+     ],
+     "p_mid": [
+      -4.999883,
+      0.034279,
+      -6.999916
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      -7
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      23
+     ],
+     "closed": false,
+     "length": 23,
+     "p_first": [
+      5,
+      0,
+      -30
+     ],
+     "p_last": [
+      5,
+      0,
+      -7
+     ],
+     "p_mid": [
+      5,
+      0,
+      -18.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      0,
+      -30
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 31.415927,
+     "p_first": [
+      5,
+      0,
+      -30
+     ],
+     "p_last": [
+      5,
+      0,
+      -30
+     ],
+     "p_mid": [
+      -5,
+      0,
+      -30
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      -30
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      23
+     ],
+     "closed": false,
+     "length": 23,
+     "p_first": [
+      5,
+      0,
+      -30
+     ],
+     "p_last": [
+      5,
+      0,
+      -7
+     ],
+     "p_mid": [
+      5,
+      0,
+      -18.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      0,
+      -7
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 32.759887,
+     "p_first": [
+      5,
+      0,
+      -7
+     ],
+     "p_last": [
+      5,
+      0,
+      -7
+     ],
+     "p_mid": [
+      -4.999883,
+      0.034279,
+      -6.999916
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      -7
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": -90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 31.415927,
+     "p_first": [
+      5,
+      0,
+      -30
+     ],
+     "p_last": [
+      5,
+      0,
+      -30
+     ],
+     "p_mid": [
+      -5,
+      0,
+      -30
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      0,
+      -30
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "cyl0": 0,
+      "cyl1": -90
+     },
+     "seam_u_last": {
+      "cyl0": 0,
+      "cyl1": -90
+     }
+    }
+   ]
+  },
+  "plane_cyl": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "Ellipse",
+     "range": [
+      1.570796,
+      7.853982
+     ],
+     "closed": true,
+     "length": 66.59143,
+     "p_first": [
+      10,
+      0,
+      0
+     ],
+     "p_last": [
+      10,
+      0,
+      0
+     ],
+     "p_mid": [
+      -10,
+      0,
+      0
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      0.894427,
+      -0.447214
+     ],
+     "walk_start": [
+      10,
+      0,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0.894427,
+      -0.447214
+     ],
+     "seam_u_first": {
+      "cyl0": 0
+     },
+     "seam_u_last": {
+      "cyl0": 0
+     }
+    }
+   ],
+   "cut": []
+  },
+  "torus_plane": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 161.20677,
+     "p_first": [
+      25.656854,
+      0,
+      2
+     ],
+     "p_last": [
+      25.656854,
+      0,
+      2
+     ],
+     "p_mid": [
+      -25.656854,
+      0,
+      2
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      25.656854,
+      0,
+      2
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "torus0": 0
+     },
+     "seam_u_last": {
+      "torus0": 0
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 90.120643,
+     "p_first": [
+      14.343146,
+      0,
+      2
+     ],
+     "p_last": [
+      14.343146,
+      0,
+      2
+     ],
+     "p_mid": [
+      -14.343146,
+      0,
+      2
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      14.343146,
+      0,
+      2
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "torus0": 0
+     },
+     "seam_u_last": {
+      "torus0": 0
+     }
+    }
+   ],
+   "cut": []
+  },
+  "bspl_sph": {
+   "section": {
+    "error": "bs.get is not a function"
+   },
+   "cut": {
+    "error": "bs.get is not a function"
+   }
+  },
+  "b123d_arch": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      3475
+     ],
+     "closed": true,
+     "length": 320.900709,
+     "p_first": [
+      48.989795,
+      0,
+      10
+     ],
+     "p_last": [
+      48.989795,
+      0,
+      10
+     ],
+     "p_mid": [
+      23.539506,
+      43.997127,
+      -3.184937
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      -0.000239,
+      1,
+      -0.000168
+     ],
+     "walk_start": [
+      48.989795,
+      0,
+      10
+     ],
+     "walk_dir": [
+      -0.000239,
+      1,
+      -0.000168
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      6.484543,
+      7.853982
+     ],
+     "closed": false,
+     "length": 68.47192,
+     "p_first": [
+      48.989795,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      50
+     ],
+     "p_mid": [
+      31.622777,
+      0,
+      38.729833
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.2,
+      0,
+      0.979796
+     ],
+     "walk_start": [
+      48.989795,
+      0,
+      10
+     ],
+     "walk_dir": [
+      -0.2,
+      0,
+      0.979796
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "FORWARD",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 320.922261,
+     "p_first": [
+      48.989795,
+      0,
+      10
+     ],
+     "p_last": [
+      48.989795,
+      0,
+      10
+     ],
+     "p_mid": [
+      -48.989701,
+      -0.102473,
+      9.999934
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      48.989795,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      6.484543,
+      7.853982
+     ],
+     "closed": false,
+     "length": 68.47192,
+     "p_first": [
+      48.989795,
+      0,
+      10
+     ],
+     "p_last": [
+      0,
+      0,
+      50
+     ],
+     "p_mid": [
+      31.622777,
+      0,
+      38.729833
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      -0.2,
+      0,
+      0.979796
+     ],
+     "walk_start": [
+      0,
+      0,
+      50
+     ],
+     "walk_dir": [
+      0.2,
+      0,
+      -0.979796
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "OtherCurve",
+     "range": [
+      0,
+      6.283185
+     ],
+     "closed": true,
+     "length": 0,
+     "p_first": [
+      0,
+      0,
+      50
+     ],
+     "p_last": [
+      0,
+      0,
+      50
+     ],
+     "p_mid": [
+      0,
+      0,
+      50
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      0,
+      0,
+      50
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    },
+    {
+     "ori": "REVERSED",
+     "type": "BSplineCurve",
+     "range": [
+      0,
+      1
+     ],
+     "closed": true,
+     "length": 320.922261,
+     "p_first": [
+      48.989795,
+      0,
+      10
+     ],
+     "p_last": [
+      48.989795,
+      0,
+      10
+     ],
+     "p_mid": [
+      -48.989701,
+      -0.102473,
+      9.999934
+     ],
+     "geom_closed": true,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      48.989795,
+      0,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {
+      "sphere0": 0,
+      "cyl1": 90
+     },
+     "seam_u_last": {
+      "sphere0": 0,
+      "cyl1": 90
+     }
+    }
+   ]
+  },
+  "box_cyl_cut": {
+   "section": [
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 7.853982,
+     "p_first": [
+      -5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      -5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      -5,
+      0,
+      2.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      5,
+      15
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      2.5,
+      0
+     ],
+     "p_mid": [
+      0,
+      2.5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      -5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      5,
+      15
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      0,
+      -2.5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      -5,
+      -2.5,
+      0
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 7.853982,
+     "p_first": [
+      5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      5,
+      0,
+      2.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    }
+   ],
+   "cut": [
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -5,
+      10
+     ],
+     "p_last": [
+      -5,
+      5,
+      10
+     ],
+     "p_mid": [
+      -5,
+      0,
+      10
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      -5,
+      -5,
+      10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      5,
+      0
+     ],
+     "p_last": [
+      -5,
+      5,
+      10
+     ],
+     "p_mid": [
+      -5,
+      5,
+      5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -5,
+      5,
+      10
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      7.5,
+      10
+     ],
+     "closed": false,
+     "length": 2.5,
+     "p_first": [
+      -5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      -5,
+      5,
+      0
+     ],
+     "p_mid": [
+      -5,
+      3.75,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      -5,
+      5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 7.853982,
+     "p_first": [
+      -5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      -5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      -5,
+      0,
+      2.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      2.5
+     ],
+     "closed": false,
+     "length": 2.5,
+     "p_first": [
+      -5,
+      -5,
+      0
+     ],
+     "p_last": [
+      -5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      -5,
+      -3.75,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      -5,
+      -2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -5,
+      0
+     ],
+     "p_last": [
+      -5,
+      -5,
+      10
+     ],
+     "p_mid": [
+      -5,
+      -5,
+      5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -5,
+      -5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -5,
+      10
+     ],
+     "p_last": [
+      -5,
+      5,
+      10
+     ],
+     "p_mid": [
+      -5,
+      0,
+      10
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      -5,
+      5,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      5,
+      10
+     ],
+     "p_last": [
+      5,
+      5,
+      10
+     ],
+     "p_mid": [
+      0,
+      5,
+      10
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      5,
+      5,
+      10
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      5,
+      -5,
+      10
+     ],
+     "p_last": [
+      5,
+      5,
+      10
+     ],
+     "p_mid": [
+      5,
+      0,
+      10
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      -5,
+      10
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -5,
+      10
+     ],
+     "p_last": [
+      5,
+      -5,
+      10
+     ],
+     "p_mid": [
+      0,
+      -5,
+      10
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      -5,
+      -5,
+      10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      5,
+      0
+     ],
+     "p_last": [
+      5,
+      5,
+      0
+     ],
+     "p_mid": [
+      0,
+      5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      5,
+      5,
+      0
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      5,
+      5,
+      0
+     ],
+     "p_last": [
+      5,
+      5,
+      10
+     ],
+     "p_mid": [
+      5,
+      5,
+      5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      5,
+      10
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      5,
+      10
+     ],
+     "p_last": [
+      5,
+      5,
+      10
+     ],
+     "p_mid": [
+      0,
+      5,
+      10
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      -5,
+      5,
+      10
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      5,
+      0
+     ],
+     "p_last": [
+      -5,
+      5,
+      10
+     ],
+     "p_mid": [
+      -5,
+      5,
+      5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -5,
+      5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      7.5,
+      10
+     ],
+     "closed": false,
+     "length": 2.5,
+     "p_first": [
+      -5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      -5,
+      5,
+      0
+     ],
+     "p_mid": [
+      -5,
+      3.75,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      -5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      5,
+      0
+     ],
+     "p_last": [
+      5,
+      5,
+      0
+     ],
+     "p_mid": [
+      0,
+      5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      -5,
+      5,
+      0
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      7.5,
+      10
+     ],
+     "closed": false,
+     "length": 2.5,
+     "p_first": [
+      5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      5,
+      0
+     ],
+     "p_mid": [
+      5,
+      3.75,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      5,
+      15
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      2.5,
+      0
+     ],
+     "p_mid": [
+      0,
+      2.5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 7.853982,
+     "p_first": [
+      5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      5,
+      0,
+      2.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      5,
+      15
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      0,
+      -2.5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      5,
+      -2.5,
+      0
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 7.853982,
+     "p_first": [
+      -5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      -5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      -5,
+      0,
+      2.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -5,
+      -2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      5,
+      15
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      2.5,
+      0
+     ],
+     "p_mid": [
+      0,
+      2.5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      -5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      5,
+      15
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      0,
+      -2.5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      -5,
+      -2.5,
+      0
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      2.5
+     ],
+     "closed": false,
+     "length": 2.5,
+     "p_first": [
+      5,
+      -5,
+      0
+     ],
+     "p_last": [
+      5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      5,
+      -3.75,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      -2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -5,
+      0
+     ],
+     "p_last": [
+      5,
+      -5,
+      0
+     ],
+     "p_mid": [
+      0,
+      -5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      5,
+      -5,
+      0
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      2.5
+     ],
+     "closed": false,
+     "length": 2.5,
+     "p_first": [
+      -5,
+      -5,
+      0
+     ],
+     "p_last": [
+      -5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      -5,
+      -3.75,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      -5,
+      -5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -5,
+      0
+     ],
+     "p_last": [
+      5,
+      -5,
+      0
+     ],
+     "p_mid": [
+      0,
+      -5,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      -5,
+      -5,
+      0
+     ],
+     "walk_dir": [
+      1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      5,
+      -5,
+      0
+     ],
+     "p_last": [
+      5,
+      -5,
+      10
+     ],
+     "p_mid": [
+      5,
+      -5,
+      5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      -5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -5,
+      10
+     ],
+     "p_last": [
+      5,
+      -5,
+      10
+     ],
+     "p_mid": [
+      0,
+      -5,
+      10
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      1,
+      0,
+      0
+     ],
+     "walk_start": [
+      5,
+      -5,
+      10
+     ],
+     "walk_dir": [
+      -1,
+      0,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      -5,
+      -5,
+      0
+     ],
+     "p_last": [
+      -5,
+      -5,
+      10
+     ],
+     "p_mid": [
+      -5,
+      -5,
+      5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      -5,
+      -5,
+      10
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      5,
+      -5,
+      10
+     ],
+     "p_last": [
+      5,
+      5,
+      10
+     ],
+     "p_mid": [
+      5,
+      0,
+      10
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      5,
+      10
+     ],
+     "walk_dir": [
+      0,
+      -1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      5,
+      5,
+      0
+     ],
+     "p_last": [
+      5,
+      5,
+      10
+     ],
+     "p_mid": [
+      5,
+      5,
+      5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      7.5,
+      10
+     ],
+     "closed": false,
+     "length": 2.5,
+     "p_first": [
+      5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      5,
+      0
+     ],
+     "p_mid": [
+      5,
+      3.75,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Circle",
+     "range": [
+      0,
+      3.141593
+     ],
+     "closed": false,
+     "length": 7.853982,
+     "p_first": [
+      5,
+      2.5,
+      0
+     ],
+     "p_last": [
+      5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      5,
+      0,
+      2.5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      -2.5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "FORWARD",
+     "type": "Line",
+     "range": [
+      0,
+      2.5
+     ],
+     "closed": false,
+     "length": 2.5,
+     "p_first": [
+      5,
+      -5,
+      0
+     ],
+     "p_last": [
+      5,
+      -2.5,
+      0
+     ],
+     "p_mid": [
+      5,
+      -3.75,
+      0
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      1,
+      0
+     ],
+     "walk_start": [
+      5,
+      -5,
+      0
+     ],
+     "walk_dir": [
+      0,
+      1,
+      0
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    },
+    {
+     "ori": "REVERSED",
+     "type": "Line",
+     "range": [
+      0,
+      10
+     ],
+     "closed": false,
+     "length": 10,
+     "p_first": [
+      5,
+      -5,
+      0
+     ],
+     "p_last": [
+      5,
+      -5,
+      10
+     ],
+     "p_mid": [
+      5,
+      -5,
+      5
+     ],
+     "geom_closed": false,
+     "tan_first": [
+      0,
+      0,
+      1
+     ],
+     "walk_start": [
+      5,
+      -5,
+      10
+     ],
+     "walk_dir": [
+      0,
+      0,
+      -1
+     ],
+     "seam_u_first": {},
+     "seam_u_last": {}
+    }
+   ]
+  }
+ }
+}

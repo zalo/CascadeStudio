@@ -1,0 +1,426 @@
+{
+ "arch": {
+  "0": {
+   "tag": "sphere rotated 0deg about Z",
+   "is_forward": false,
+   "closed": true,
+   "length": 320.922261434,
+   "pos0": [
+    48.989795,
+    -0.0,
+    10.0
+   ],
+   "pos25": [
+    -0.0,
+    -49.487166,
+    -7.142857
+   ],
+   "tan0": [
+    -0.0,
+    -1.0,
+    -0.0
+   ],
+   "axis_pos": [
+    48.989795,
+    -0.0,
+    10.0
+   ],
+   "axis_dir": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "n_edges_total": 2,
+   "n_bspline_edges": 1
+  },
+  "45": {
+   "tag": "sphere rotated 45deg about Z",
+   "is_forward": false,
+   "closed": true,
+   "length": 320.922261425,
+   "pos0": [
+    35.333067,
+    35.333067,
+    1.774469
+   ],
+   "pos25": [
+    35.061434,
+    -35.609173,
+    1.637887
+   ],
+   "tan0": [
+    0.658505,
+    -0.675197,
+    0.332386
+   ],
+   "axis_pos": [
+    35.333067,
+    35.333067,
+    1.774469
+   ],
+   "axis_dir": [
+    -0.658505,
+    0.675197,
+    -0.332386
+   ],
+   "n_edges_total": 2,
+   "n_bspline_edges": 1
+  },
+  "90": {
+   "tag": "sphere rotated 90deg about Z",
+   "is_forward": false,
+   "closed": true,
+   "length": 320.922261438,
+   "pos0": [
+    0.0,
+    49.487166,
+    -7.142857
+   ],
+   "pos25": [
+    48.989795,
+    -0.0,
+    10.0
+   ],
+   "tan0": [
+    1.0,
+    0.0,
+    -0.0
+   ],
+   "axis_pos": [
+    0.0,
+    49.487166,
+    -7.142857
+   ],
+   "axis_dir": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "n_edges_total": 2,
+   "n_bspline_edges": 1
+  },
+  "180": {
+   "tag": "sphere rotated 180deg about Z",
+   "is_forward": false,
+   "closed": true,
+   "length": 320.922261534,
+   "pos0": [
+    -48.989795,
+    0.0,
+    10.0
+   ],
+   "pos25": [
+    -0.0,
+    49.487166,
+    -7.142857
+   ],
+   "tan0": [
+    -0.0,
+    1.0,
+    0.0
+   ],
+   "axis_pos": [
+    -48.989795,
+    0.0,
+    10.0
+   ],
+   "axis_dir": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "n_edges_total": 2,
+   "n_bspline_edges": 1
+  }
+ },
+ "arch_cutter_frame": {
+  "0": {
+   "tag": "cutter frame rotated 0deg about its own axis",
+   "is_forward": false,
+   "closed": true,
+   "length": 320.922261434,
+   "pos0": [
+    48.989795,
+    -0.0,
+    10.0
+   ],
+   "pos25": [
+    -0.0,
+    -49.487166,
+    -7.142857
+   ],
+   "tan0": [
+    -0.0,
+    -1.0,
+    -0.0
+   ],
+   "axis_pos": [
+    48.989795,
+    -0.0,
+    10.0
+   ],
+   "axis_dir": [
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  "90": {
+   "tag": "cutter frame rotated 90deg about its own axis",
+   "is_forward": false,
+   "closed": false,
+   "length": 26.576270591,
+   "pos0": [
+    25.342444,
+    -0.0,
+    -43.101746
+   ],
+   "pos25": [
+    19.408454,
+    -0.0,
+    -46.079409
+   ],
+   "tan0": [
+    -0.862035,
+    0.0,
+    -0.506849
+   ],
+   "axis_pos": [
+    -0.0,
+    0.0,
+    -50.0
+   ],
+   "axis_dir": [
+    1.0,
+    -0.0,
+    -0.0
+   ]
+  }
+ },
+ "axis_vs_position_at": {
+  "forward": {
+   "tag": "forward line",
+   "is_forward": true,
+   "closed": false,
+   "length": 10.0,
+   "pos0": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "pos25": [
+    2.5,
+    0.0,
+    0.0
+   ],
+   "tan0": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "axis_pos": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "axis_dir": [
+    1.0,
+    0.0,
+    0.0
+   ]
+  },
+  "reversed": {
+   "tag": "same line, REVERSED flag",
+   "is_forward": false,
+   "closed": false,
+   "length": 10.0,
+   "pos0": [
+    10.0,
+    0.0,
+    0.0
+   ],
+   "pos25": [
+    7.5,
+    0.0,
+    0.0
+   ],
+   "tan0": [
+    -1.0,
+    -0.0,
+    -0.0
+   ],
+   "axis_pos": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "axis_dir": [
+    1.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "joints": {
+  "taper0.0_cylrot0": {
+   "top_is_forward": [
+    false,
+    false
+   ],
+   "top_pos0": [
+    [
+     5.0,
+     5.0,
+     10.0
+    ],
+    [
+     5.0,
+     -5.0,
+     10.0
+    ]
+   ],
+   "axis_dirs": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "midway_axis_pos": [
+    5.0,
+    -1.7,
+    10.0
+   ],
+   "midway_axis_dir": [
+    -1.0,
+    0.0,
+    0.0
+   ]
+  },
+  "taper0.0_cylrot90": {
+   "top_is_forward": [
+    false,
+    false
+   ],
+   "top_pos0": [
+    [
+     5.0,
+     5.0,
+     10.0
+    ],
+    [
+     5.0,
+     -5.0,
+     10.0
+    ]
+   ],
+   "axis_dirs": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "midway_axis_pos": [
+    5.0,
+    -1.7,
+    10.0
+   ],
+   "midway_axis_dir": [
+    -1.0,
+    0.0,
+    0.0
+   ]
+  },
+  "taper3.0_cylrot0": {
+   "top_is_forward": [
+    true,
+    false
+   ],
+   "top_pos0": [
+    [
+     -4.475922,
+     -4.475922,
+     10.0
+    ],
+    [
+     -4.475922,
+     4.475922,
+     10.0
+    ]
+   ],
+   "axis_dirs": [
+    [
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     -1.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "midway_axis_pos": [
+    1.521814,
+    1.521814,
+    10.0
+   ],
+   "midway_axis_dir": [
+    -1.0,
+    0.0,
+    0.0
+   ]
+  },
+  "taper3.0_cylrot90": {
+   "top_is_forward": [
+    true,
+    true
+   ],
+   "top_pos0": [
+    [
+     4.475922,
+     4.475922,
+     10.0
+    ],
+    [
+     -4.475922,
+     -4.475922,
+     10.0
+    ]
+   ],
+   "axis_dirs": [
+    [
+     -1.0,
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "midway_axis_pos": [
+    4.475922,
+    -1.521814,
+    10.0
+   ],
+   "midway_axis_dir": [
+    -1.0,
+    0.0,
+    0.0
+   ]
+  }
+ }
+}

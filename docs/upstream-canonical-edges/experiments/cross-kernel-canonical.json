@@ -1,0 +1,821 @@
+{
+ "sph_cyl_xp6": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     1.0,
+     -0.0,
+     9.949874
+    ],
+    "wasm_raw_start": [
+     1,
+     0,
+     9.949874
+    ],
+    "native_canonical": {
+     "length": 65.01391,
+     "closed": true,
+     "seam": [
+      1.000003,
+      0.000893,
+      9.949872
+     ],
+     "sign": -1,
+     "heading": [
+      0.0073,
+      -1.0,
+      -0.0044
+     ],
+     "quarter": [
+      9.228784,
+      -3.817705,
+      0.003035
+     ]
+    },
+    "wasm_canonical": {
+     "length": 65.01391,
+     "closed": true,
+     "seam": [
+      1.000003,
+      0.000893,
+      9.949872
+     ],
+     "sign": -1,
+     "heading": [
+      0.0073,
+      -1.0,
+      -0.0044
+     ],
+     "quarter": [
+      9.228784,
+      -3.817705,
+      0.003035
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "sph_cyl_xm6": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     -1.0,
+     -0.0,
+     -9.949874
+    ],
+    "wasm_raw_start": [
+     -1,
+     0,
+     -9.949874
+    ],
+    "native_canonical": {
+     "length": 65.018524,
+     "closed": true,
+     "seam": [
+      -9.25,
+      3.799671,
+      0.0
+     ],
+     "sign": -1,
+     "heading": [
+      0.0568,
+      0.0481,
+      0.9972
+     ],
+     "quarter": [
+      -1.000014,
+      0.001315,
+      9.949865
+     ]
+    },
+    "wasm_canonical": {
+     "length": 65.018524,
+     "closed": true,
+     "seam": [
+      -9.25,
+      3.799671,
+      0.0
+     ],
+     "sign": -1,
+     "heading": [
+      0.0568,
+      0.0481,
+      0.9972
+     ],
+     "quarter": [
+      -1.000014,
+      0.001315,
+      9.949865
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "sph_cyl_yp6": {
+  "section": [
+   {
+    "hausdorff": "1.99e-05",
+    "native_raw_start": [
+     5.0,
+     6.0,
+     -6.244998
+    ],
+    "wasm_raw_start": [
+     5,
+     6,
+     -6.244998
+    ],
+    "native_canonical": {
+     "length": 65.01675,
+     "closed": true,
+     "seam": [
+      -4.999984,
+      5.989644,
+      -6.254935
+     ],
+     "sign": 1,
+     "heading": [
+      0.0053,
+      0.7191,
+      0.6949
+     ],
+     "quarter": [
+      -4.867954,
+      4.858822,
+      7.25904
+     ]
+    },
+    "wasm_canonical": {
+     "length": 65.016748,
+     "closed": true,
+     "seam": [
+      -4.999984,
+      5.989644,
+      -6.254935
+     ],
+     "sign": 1,
+     "heading": [
+      0.0053,
+      0.7191,
+      0.6949
+     ],
+     "quarter": [
+      -4.867954,
+      4.858822,
+      7.25904
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "sph_cyl_xp6_seam90": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     9.25,
+     3.799671,
+     0.0
+    ],
+    "wasm_raw_start": [
+     9.25,
+     3.799671,
+     0
+    ],
+    "native_canonical": {
+     "length": 65.008409,
+     "closed": true,
+     "seam": [
+      1.000188,
+      -0.03848,
+      -9.949761
+     ],
+     "sign": -1,
+     "heading": [
+      0.0031,
+      1.0,
+      0.0019
+     ],
+     "quarter": [
+      9.245208,
+      3.803512,
+      -0.033248
+     ]
+    },
+    "wasm_canonical": {
+     "length": 65.008409,
+     "closed": true,
+     "seam": [
+      1.000188,
+      -0.03848,
+      -9.949761
+     ],
+     "sign": -1,
+     "heading": [
+      0.0031,
+      1.0,
+      0.0019
+     ],
+     "quarter": [
+      9.245208,
+      3.803512,
+      -0.033248
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "sph_cyl_xp6_seam180": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     9.25,
+     3.799671,
+     0.0
+    ],
+    "wasm_raw_start": [
+     9.25,
+     3.799671,
+     0
+    ],
+    "native_canonical": {
+     "length": 65.008409,
+     "closed": true,
+     "seam": [
+      1.000188,
+      -0.03848,
+      -9.949761
+     ],
+     "sign": -1,
+     "heading": [
+      0.0031,
+      1.0,
+      0.0019
+     ],
+     "quarter": [
+      9.245208,
+      3.803512,
+      -0.033248
+     ]
+    },
+    "wasm_canonical": {
+     "length": 65.008409,
+     "closed": true,
+     "seam": [
+      1.000188,
+      -0.03848,
+      -9.949761
+     ],
+     "sign": -1,
+     "heading": [
+      0.0031,
+      1.0,
+      0.0019
+     ],
+     "quarter": [
+      9.245208,
+      3.803512,
+      -0.033248
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "sph_cyl_xp6_cylseam90": {
+  "section": [
+   {
+    "hausdorff": "9.04e-05",
+    "native_raw_start": [
+     1.0,
+     -0.0,
+     -9.949874
+    ],
+    "wasm_raw_start": [
+     1,
+     0,
+     -9.949874
+    ],
+    "native_canonical": {
+     "length": 65.020944,
+     "closed": true,
+     "seam": [
+      1.000006,
+      0.00549,
+      9.94987
+     ],
+     "sign": 1,
+     "heading": [
+      0.0098,
+      -0.9999,
+      -0.0059
+     ],
+     "quarter": [
+      9.249648,
+      -3.799969,
+      0.006183
+     ]
+    },
+    "wasm_canonical": {
+     "length": 65.020947,
+     "closed": true,
+     "seam": [
+      1.000006,
+      0.005464,
+      9.94987
+     ],
+     "sign": 1,
+     "heading": [
+      0.0098,
+      -0.9999,
+      -0.0059
+     ],
+     "quarter": [
+      9.249649,
+      -3.799968,
+      0.006156
+     ]
+    },
+    "canonical_seam_delta": "2.60e-05",
+    "same_direction": true
+   }
+  ]
+ },
+ "sph_sph": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     6.1,
+     0.0,
+     7.924014
+    ],
+    "wasm_raw_start": [
+     6.1,
+     0,
+     7.924014
+    ],
+    "native_canonical": {
+     "length": 49.787921,
+     "closed": true,
+     "seam": [
+      6.1,
+      -7.924014,
+      0.0
+     ],
+     "sign": 1,
+     "heading": [
+      0.0,
+      0.0039,
+      -1.0
+     ],
+     "quarter": [
+      6.1,
+      -0.0,
+      -7.924014
+     ]
+    },
+    "wasm_canonical": {
+     "length": 49.787921,
+     "closed": true,
+     "seam": [
+      6.1,
+      -7.924014,
+      0.0
+     ],
+     "sign": 1,
+     "heading": [
+      0.0,
+      0.0039,
+      -1.0
+     ],
+     "quarter": [
+      6.1,
+      -0.0,
+      -7.924014
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "cyl_cyl": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     5.0,
+     -0.0,
+     -7.0
+    ],
+    "wasm_raw_start": [
+     5,
+     0,
+     -7
+    ],
+    "native_canonical": {
+     "length": 32.758815,
+     "closed": true,
+     "seam": [
+      -4.999907,
+      0.02484,
+      -6.999934
+     ],
+     "sign": 1,
+     "heading": [
+      0.0091,
+      -0.9999,
+      0.0065
+     ],
+     "quarter": [
+      -0.024779,
+      -4.999934,
+      -4.899046
+     ]
+    },
+    "wasm_canonical": {
+     "length": 32.758815,
+     "closed": true,
+     "seam": [
+      -4.999907,
+      0.02484,
+      -6.999934
+     ],
+     "sign": 1,
+     "heading": [
+      0.0091,
+      -0.9999,
+      0.0065
+     ],
+     "quarter": [
+      -0.024779,
+      -4.999934,
+      -4.899046
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   },
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     5.0,
+     -0.0,
+     7.0
+    ],
+    "wasm_raw_start": [
+     5,
+     0,
+     7
+    ],
+    "native_canonical": {
+     "length": 32.758815,
+     "closed": true,
+     "seam": [
+      -4.999907,
+      0.02484,
+      6.999934
+     ],
+     "sign": 1,
+     "heading": [
+      0.0091,
+      -0.9999,
+      -0.0065
+     ],
+     "quarter": [
+      -0.024779,
+      -4.999934,
+      4.899046
+     ]
+    },
+    "wasm_canonical": {
+     "length": 32.758815,
+     "closed": true,
+     "seam": [
+      -4.999907,
+      0.02484,
+      6.999934
+     ],
+     "sign": 1,
+     "heading": [
+      0.0091,
+      -0.9999,
+      -0.0065
+     ],
+     "quarter": [
+      -0.024779,
+      -4.999934,
+      4.899046
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "plane_cyl": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     10.0,
+     -0.0,
+     0.0
+    ],
+    "wasm_raw_start": [
+     10,
+     0,
+     0
+    ],
+    "native_canonical": {
+     "length": 66.590988,
+     "closed": true,
+     "seam": [
+      -10.0,
+      0.0,
+      0.0
+     ],
+     "sign": 1,
+     "heading": [
+      0.007,
+      -0.8944,
+      0.4472
+     ],
+     "quarter": [
+      -0.0,
+      -10.0,
+      5.0
+     ]
+    },
+    "wasm_canonical": {
+     "length": 66.590988,
+     "closed": true,
+     "seam": [
+      -10.0,
+      0.0,
+      0.0
+     ],
+     "sign": 1,
+     "heading": [
+      0.007,
+      -0.8944,
+      0.4472
+     ],
+     "quarter": [
+      -0.0,
+      -10.0,
+      5.0
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "torus_plane": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     25.656854,
+     0.0,
+     2.0
+    ],
+    "wasm_raw_start": [
+     25.656854,
+     0,
+     2
+    ],
+    "native_canonical": {
+     "length": 161.205112,
+     "closed": true,
+     "seam": [
+      -25.656854,
+      0.0,
+      2.0
+     ],
+     "sign": 1,
+     "heading": [
+      0.0079,
+      -1.0,
+      0.0
+     ],
+     "quarter": [
+      -0.0,
+      -25.656854,
+      2.0
+     ]
+    },
+    "wasm_canonical": {
+     "length": 161.205112,
+     "closed": true,
+     "seam": [
+      -25.656854,
+      0.0,
+      2.0
+     ],
+     "sign": 1,
+     "heading": [
+      0.0079,
+      -1.0,
+      0.0
+     ],
+     "quarter": [
+      -0.0,
+      -25.656854,
+      2.0
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   },
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     14.343146,
+     0.0,
+     2.0
+    ],
+    "wasm_raw_start": [
+     14.343146,
+     0,
+     2
+    ],
+    "native_canonical": {
+     "length": 90.119716,
+     "closed": true,
+     "seam": [
+      -14.343146,
+      0.0,
+      2.0
+     ],
+     "sign": 1,
+     "heading": [
+      0.0079,
+      -1.0,
+      0.0
+     ],
+     "quarter": [
+      0.0,
+      -14.343146,
+      2.0
+     ]
+    },
+    "wasm_canonical": {
+     "length": 90.119716,
+     "closed": true,
+     "seam": [
+      -14.343146,
+      0.0,
+      2.0
+     ],
+     "sign": 1,
+     "heading": [
+      0.0079,
+      -1.0,
+      0.0
+     ],
+     "quarter": [
+      0.0,
+      -14.343146,
+      2.0
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "bspl_sph": {},
+ "b123d_arch": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     48.989795,
+     -0.0,
+     10.0
+    ],
+    "wasm_raw_start": [
+     48.989795,
+     0,
+     10
+    ],
+    "native_canonical": {
+     "length": 320.811741,
+     "closed": true,
+     "seam": [
+      -48.988441,
+      0.352759,
+      9.999052
+     ],
+     "sign": 1,
+     "heading": [
+      0.0015,
+      -1.0,
+      -0.0011
+     ],
+     "quarter": [
+      -0.342209,
+      -49.136735,
+      -6.868762
+     ]
+    },
+    "wasm_canonical": {
+     "length": 320.811741,
+     "closed": true,
+     "seam": [
+      -48.988441,
+      0.352759,
+      9.999052
+     ],
+     "sign": 1,
+     "heading": [
+      0.0015,
+      -1.0,
+      -0.0011
+     ],
+     "quarter": [
+      -0.342209,
+      -49.136735,
+      -6.868762
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ },
+ "box_cyl_cut": {
+  "section": [
+   {
+    "hausdorff": "0.00e+00",
+    "native_raw_start": [
+     5.0,
+     2.5,
+     -0.0
+    ],
+    "wasm_raw_start": [
+     5,
+     2.5,
+     0
+    ],
+    "native_canonical": {
+     "length": 35.707923,
+     "closed": true,
+     "seam": [
+      -5.0,
+      0.0,
+      2.5
+     ],
+     "sign": 1,
+     "heading": [
+      0.0,
+      -1.0,
+      -0.0075
+     ],
+     "quarter": [
+      0.0,
+      -2.5,
+      0.0
+     ]
+    },
+    "wasm_canonical": {
+     "length": 35.707923,
+     "closed": true,
+     "seam": [
+      -5.0,
+      0.0,
+      2.5
+     ],
+     "sign": 1,
+     "heading": [
+      0.0,
+      -1.0,
+      -0.0075
+     ],
+     "quarter": [
+      0.0,
+      -2.5,
+      0.0
+     ]
+    },
+    "canonical_seam_delta": "0.00e+00",
+    "same_direction": true
+   }
+  ]
+ }
+}
