@@ -1135,10 +1135,52 @@
   "code": "from build123d import *\nfrom math import *\n\n# Builder mode\nwith BuildPart() as angle_iron:\n    with BuildSketch() as profile:\n        Rectangle(3 * CM, 4 * MM, align=Align.MIN)\n        Rectangle(4 * MM, 3 * CM, align=Align.MIN)\n    extrude(amount=10 * CM)\n    fillet(angle_iron.edges().filter_by(lambda e: e.is_interior), 5 * MM)\n\n# Algebra mode\nprofile = Rectangle(3 * CM, 4 * MM, align=Align.MIN)\nprofile += Rectangle(4 * MM, 3 * CM, align=Align.MIN)\nangle_iron = extrude(profile, 10 * CM)\nangle_iron = fillet(angle_iron.edges().filter_by(lambda e: e.is_interior), 5 * MM)\n"
  },
  {
+  "id": "docs-rst/advantages/b01",
+  "source": "docs/advantages.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\n# CadQuery Fluent API\npillow_block = (cq.Workplane(\"XY\")\n    .box(height, width, thickness)\n    .edges(\"|Z\")\n    .fillet(fillet)\n    .faces(\">Z\")\n    .workplane()\n    ...\n)\n"
+ },
+ {
+  "id": "docs-rst/advantages/b02",
+  "source": "docs/advantages.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\n# build123d API\nwith BuildPart() as pillow_block:\n    with BuildSketch() as plan:\n        Rectangle(width, height)\n        fillet(plan.vertices(), radius=fillet)\n    extrude(thickness)\n    ...\n"
+ },
+ {
+  "id": "docs-rst/advantages/b03",
+  "source": "docs/advantages.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch() as plan:\n    r = Rectangle(width, height)\n    print(r.area)\n    ...\n"
+ },
+ {
+  "id": "docs-rst/advantages/b04",
+  "source": "docs/advantages.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildLine() as outline:\n    ...\n    l5 = Polyline(...)\n    l6 = Polyline(...)\n    Spline(l5 @ 1, l6 @ 0, tangents=(l5 % 1, l6 % 0))\n"
+ },
+ {
+  "id": "docs-rst/advantages/b05",
+  "source": "docs/advantages.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\ntop = rail.faces().filter_by(Axis.Z)[-1]\n...\noutside_vertices = filter(\n    lambda v: (v.Y == 0.0 or v.Y == height) and -width / 2 < v.X < width / 2,\n    din.vertices(),\n)\n"
+ },
+ {
+  "id": "docs-rst/advantages/all",
+  "source": "docs/advantages.rst (all 5 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\n# CadQuery Fluent API\npillow_block = (cq.Workplane(\"XY\")\n    .box(height, width, thickness)\n    .edges(\"|Z\")\n    .fillet(fillet)\n    .faces(\">Z\")\n    .workplane()\n    ...\n)\n\n# build123d API\nwith BuildPart() as pillow_block:\n    with BuildSketch() as plan:\n        Rectangle(width, height)\n        fillet(plan.vertices(), radius=fillet)\n    extrude(thickness)\n    ...\n\nwith BuildSketch() as plan:\n    r = Rectangle(width, height)\n    print(r.area)\n    ...\n\nwith BuildLine() as outline:\n    ...\n    l5 = Polyline(...)\n    l6 = Polyline(...)\n    Spline(l5 @ 1, l6 @ 0, tangents=(l5 % 1, l6 % 0))\n\ntop = rail.faces().filter_by(Axis.Z)[-1]\n...\noutside_vertices = filter(\n    lambda v: (v.Y == 0.0 or v.Y == height) and -width / 2 < v.X < width / 2,\n    din.vertices(),\n)\n"
+ },
+ {
   "id": "docs-rst/algebra_performance/b01",
   "source": "docs/algebra_performance.rst code-block #1",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\ndiam = 80\nholes = Sketch()\nr = Rectangle(2, 2)\nfor loc in GridLocations(4, 4, 20, 20):\n    if loc.position.X**2 + loc.position.Y**2 < (diam / 2 - 1.8) ** 2:\n        holes += loc * r\n\nc = Circle(diam / 2) - holes\n"
+ },
+ {
+  "id": "docs-rst/algebra_performance/b02",
+  "source": "docs/algebra_performance.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nr = Rectangle(2, 2)\nholes = [\n    loc * r\n    for loc in GridLocations(4, 4, 20, 20).locations\n    if loc.position.X**2 + loc.position.Y**2 < (diam / 2 - 1.8) ** 2\n]\n\nc = Circle(diam / 2) - holes\n"
  },
  {
   "id": "docs-rst/algebra_performance/b03",
@@ -1153,16 +1195,130 @@
   "code": "from build123d import *\nfrom math import *\n\ndiam = 80\nholes = Sketch()\nr = Rectangle(2, 2)\nfor loc in GridLocations(4, 4, 20, 20):\n    if loc.position.X**2 + loc.position.Y**2 < (diam / 2 - 1.8) ** 2:\n        holes += loc * r\n\nc = Circle(diam / 2) - holes\n\nr = Rectangle(2, 2)\nholes = [\n    loc * r\n    for loc in GridLocations(4, 4, 20, 20).locations\n    if loc.position.X**2 + loc.position.Y**2 < (diam / 2 - 1.8) ** 2\n]\n\nc = Circle(diam / 2) - holes\n\npolygons = Sketch() + [\n    loc * RegularPolygon(radius=5, side_count=5)\n    for loc in GridLocations(40, 30, 2, 2)\n]\n"
  },
  {
+  "id": "docs-rst/build_line/b01",
+  "source": "docs/build_line.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildLine(Plane.YZ) as path:\n    Line((0, 0), (1, 0))\n\nshow_object(path.line_local)  # line from (0, 0, 0) to (1, 0, 0)\nshow_object(path.line)        # same line published to Plane.YZ\n"
+ },
+ {
+  "id": "docs-rst/build_sketch/b01",
+  "source": "docs/build_sketch.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshow_object(display.sketch_local, name=\"sketch on Plane.XY\")\n"
+ },
+ {
+  "id": "docs-rst/build_sketch/b02",
+  "source": "docs/build_sketch.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshow_object(display.sketch, name=\"sketch on target placement(s)\")\n"
+ },
+ {
   "id": "docs-rst/build_sketch/b03",
   "source": "docs/build_sketch.rst code-block #3",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\nwith GridLocations(20, 20, 2, 2):\n    with BuildSketch() as repeated:\n        Rectangle(8, 4)\n\nshow_object(repeated.sketch_local, name=\"one local rectangle\")\nshow_object(repeated.sketch, name=\"four placed rectangles\")\n"
  },
  {
+  "id": "docs-rst/build_sketch/b04",
+  "source": "docs/build_sketch.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nreoriented_face = plane.to_local_coords(face)\n"
+ },
+ {
+  "id": "docs-rst/build_sketch/all",
+  "source": "docs/build_sketch.rst (all 4 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nshow_object(display.sketch_local, name=\"sketch on Plane.XY\")\n\nshow_object(display.sketch, name=\"sketch on target placement(s)\")\n\nwith GridLocations(20, 20, 2, 2):\n    with BuildSketch() as repeated:\n        Rectangle(8, 4)\n\nshow_object(repeated.sketch_local, name=\"one local rectangle\")\nshow_object(repeated.sketch, name=\"four placed rectangles\")\n\nreoriented_face = plane.to_local_coords(face)\n"
+ },
+ {
+  "id": "docs-rst/debugging_logging/b01",
+  "source": "docs/debugging_logging.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nlogging.getLogger(\"build123d\").addHandler(logging.NullHandler())\nlogger = logging.getLogger(\"build123d\")\n"
+ },
+ {
+  "id": "docs-rst/debugging_logging/b02",
+  "source": "docs/debugging_logging.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nlogging.basicConfig(\n    filename=\"myapp.log\",\n    level=logging.INFO,\n    format=\"%(name)s-%(levelname)s %(asctime)s - [%(filename)s:%(lineno)s - \\\n    %(funcName)20s() ] - %(message)s\",\n)\n"
+ },
+ {
+  "id": "docs-rst/debugging_logging/b03",
+  "source": "docs/debugging_logging.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nlogger.info(\"Exiting %s\", type(self).__name__)\n"
+ },
+ {
+  "id": "docs-rst/debugging_logging/b04",
+  "source": "docs/debugging_logging.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nplane = Plane.XY.offset(1)\nprint(f\"{plane=}\")\n"
+ },
+ {
+  "id": "docs-rst/debugging_logging/all",
+  "source": "docs/debugging_logging.rst (all 4 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nlogging.getLogger(\"build123d\").addHandler(logging.NullHandler())\nlogger = logging.getLogger(\"build123d\")\n\nlogging.basicConfig(\n    filename=\"myapp.log\",\n    level=logging.INFO,\n    format=\"%(name)s-%(levelname)s %(asctime)s - [%(filename)s:%(lineno)s - \\\n    %(funcName)20s() ] - %(message)s\",\n)\n\nlogger.info(\"Exiting %s\", type(self).__name__)\n\nplane = Plane.XY.offset(1)\nprint(f\"{plane=}\")\n"
+ },
+ {
   "id": "docs-rst/import_export/b01",
   "source": "docs/import_export.rst code-block #1",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as box_builder:\n    Box(1, 1, 1)\nexport_step(box_builder.part, \"box.step\")\n"
+ },
+ {
+  "id": "docs-rst/import_export/b02",
+  "source": "docs/import_export.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nbox = Box(20, 10, 5)\nexport_obj(box, \"box.obj\", atlas_gutter=0.002)\n"
+ },
+ {
+  "id": "docs-rst/import_export/b03",
+  "source": "docs/import_export.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nview_port_origin=(-100, -50, 30)\nvisible, hidden = part.project_to_viewport(view_port_origin)\nmax_dimension = max(*Compound(children=visible + hidden).bounding_box().size)\nexporter = ExportSVG(scale=100 / max_dimension)\nexporter.add_layer(\"Visible\")\nexporter.add_layer(\"Hidden\", line_color=(99, 99, 99), line_type=LineType.ISO_DOT)\nexporter.add_shape(visible, layer=\"Visible\")\nexporter.add_shape(hidden, layer=\"Hidden\")\nexporter.write(\"part_projection.svg\")\n"
+ },
+ {
+  "id": "docs-rst/import_export/b04",
+  "source": "docs/import_export.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\n# Create the shapes and assign attributes\nblue_shape = Solid.make_cone(20, 0, 50)\nblue_shape.color = Color(\"blue\")\nblue_shape.label = \"blue\"\nblue_uuid = uuid.uuid1()\nred_shape = Solid.make_cylinder(5, 50).move(Location((0, -30, 0)))\nred_shape.color = Color(\"red\")\nred_shape.label = \"red\"\n\n# Create a Mesher instance as an exporter, add shapes and write\nexporter = Mesher()\nexporter.add_shape(blue_shape, part_number=\"blue-1234-5\", uuid_value=blue_uuid)\nexporter.add_shape(red_shape)\nexporter.add_meta_data(\n    name_space=\"custom\",\n    name=\"test_meta_data\",\n    value=\"hello world\",\n    metadata_type=\"str\",\n    must_preserve=False,\n)\nexporter.add_code_to_metadata()\nexporter.write(\"example.3mf\")\nexporter.write(\"example.stl\")\n"
+ },
+ {
+  "id": "docs-rst/import_export/b05",
+  "source": "docs/import_export.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nimporter = Mesher()\ncone, cyl = importer.read(\"example.3mf\")\nprint(\n    f\"{importer.mesh_count=}, {importer.vertex_counts=}, {importer.triangle_counts=}\"\n)\nprint(f\"Imported model unit: {importer.model_unit}\")\nprint(f\"{cone.label=}\")\nprint(f\"{cone.color.to_tuple()=}\")\nprint(f\"{cyl.label=}\")\nprint(f\"{cyl.color.to_tuple()=}\")\n"
+ },
+ {
+  "id": "docs-rst/import_export/all",
+  "source": "docs/import_export.rst (all 5 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as box_builder:\n    Box(1, 1, 1)\nexport_step(box_builder.part, \"box.step\")\n\nbox = Box(20, 10, 5)\nexport_obj(box, \"box.obj\", atlas_gutter=0.002)\n\nview_port_origin=(-100, -50, 30)\nvisible, hidden = part.project_to_viewport(view_port_origin)\nmax_dimension = max(*Compound(children=visible + hidden).bounding_box().size)\nexporter = ExportSVG(scale=100 / max_dimension)\nexporter.add_layer(\"Visible\")\nexporter.add_layer(\"Hidden\", line_color=(99, 99, 99), line_type=LineType.ISO_DOT)\nexporter.add_shape(visible, layer=\"Visible\")\nexporter.add_shape(hidden, layer=\"Hidden\")\nexporter.write(\"part_projection.svg\")\n\n# Create the shapes and assign attributes\nblue_shape = Solid.make_cone(20, 0, 50)\nblue_shape.color = Color(\"blue\")\nblue_shape.label = \"blue\"\nblue_uuid = uuid.uuid1()\nred_shape = Solid.make_cylinder(5, 50).move(Location((0, -30, 0)))\nred_shape.color = Color(\"red\")\nred_shape.label = \"red\"\n\n# Create a Mesher instance as an exporter, add shapes and write\nexporter = Mesher()\nexporter.add_shape(blue_shape, part_number=\"blue-1234-5\", uuid_value=blue_uuid)\nexporter.add_shape(red_shape)\nexporter.add_meta_data(\n    name_space=\"custom\",\n    name=\"test_meta_data\",\n    value=\"hello world\",\n    metadata_type=\"str\",\n    must_preserve=False,\n)\nexporter.add_code_to_metadata()\nexporter.write(\"example.3mf\")\nexporter.write(\"example.stl\")\n\nimporter = Mesher()\ncone, cyl = importer.read(\"example.3mf\")\nprint(\n    f\"{importer.mesh_count=}, {importer.vertex_counts=}, {importer.triangle_counts=}\"\n)\nprint(f\"Imported model unit: {importer.model_unit}\")\nprint(f\"{cone.label=}\")\nprint(f\"{cone.color.to_tuple()=}\")\nprint(f\"{cyl.label=}\")\nprint(f\"{cyl.color.to_tuple()=}\")\n"
+ },
+ {
+  "id": "docs-rst/joints/b01",
+  "source": "docs/joints.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nRigidJoint(label=\"outlet\", to_part=pipe, joint_location=path.location_at(1))\n"
+ },
+ {
+  "id": "docs-rst/joints/b02",
+  "source": "docs/joints.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\npipe.joints[\"outlet\"].connect_to(flange_outlet.joints[\"pipe\"])\n"
+ },
+ {
+  "id": "docs-rst/joints/b03",
+  "source": "docs/joints.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nhinge_outer.joints[\"hole2\"].connect_to(m6_joint, position=5 * MM, angle=30)\n"
+ },
+ {
+  "id": "docs-rst/joints/all",
+  "source": "docs/joints.rst (all 3 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nRigidJoint(label=\"outlet\", to_part=pipe, joint_location=path.location_at(1))\n\npipe.joints[\"outlet\"].connect_to(flange_outlet.joints[\"pipe\"])\n\nhinge_outer.joints[\"hole2\"].connect_to(m6_joint, position=5 * MM, angle=30)\n"
  },
  {
   "id": "docs-rst/key_concepts_algebra/b01",
@@ -1189,10 +1345,64 @@
   "code": "from build123d import *\nfrom math import *\n\nr = Box(1, 2, 3) & Cylinder(0.2, 5)\n"
  },
  {
+  "id": "docs-rst/key_concepts_algebra/b05",
+  "source": "docs/key_concepts_algebra.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nplane * alg_compound\nlocation * alg_compound\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_algebra/b06",
+  "source": "docs/key_concepts_algebra.rst code-block #6",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nplane * location * alg_compound\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_algebra/b07",
+  "source": "docs/key_concepts_algebra.rst code-block #7",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nPlane.XY * Box(1, 2, 3)\n\nBox(1, 2, 3)\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_algebra/b08",
+  "source": "docs/key_concepts_algebra.rst code-block #8",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nPlane.XY * Pos(0, 1, 0) * Box(1, 2, 3)\n\nPos(0, 1, 0) * Box(1, 2, 3) \n\nPos(Y=1) * Box(1, 2, 3)\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_algebra/b09",
+  "source": "docs/key_concepts_algebra.rst code-block #9",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nPlane.XZ * Box(1, 2, 3)\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_algebra/b10",
+  "source": "docs/key_concepts_algebra.rst code-block #10",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nPlane.XZ * Pos(1, 2, 3) * Box(1, 2, 3)\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_algebra/b11",
+  "source": "docs/key_concepts_algebra.rst code-block #11",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nPlane.XZ * Pos(1, 2, 3) * Rot(0, 100, 45) * Box(1, 2, 3)\n\nLocation((1, 2, 3), (0, 100, 45)) * Box(1, 2, 3)\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_algebra/b12",
+  "source": "docs/key_concepts_algebra.rst code-block #12",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nPlane.XZ * Rot(0, 100, 45) * Pos(0,1,2) * Box(1, 2, 3)\n"
+ },
+ {
   "id": "docs-rst/key_concepts_algebra/b13",
   "source": "docs/key_concepts_algebra.rst code-block #13",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\nb = Plane.XZ * Rot(X=30) * Box(1, 2, 3) + Plane.YZ * Pos(X=-1) * Cylinder(0.2, 5)\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_algebra/all",
+  "source": "docs/key_concepts_algebra.rst (all 13 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nb = Box(1, 2, 3)\nc = Cylinder(0.2, 5)\n\nr = Box(1, 2, 3) + Cylinder(0.2, 5)\n\nr = Box(1, 2, 3) - Cylinder(0.2, 5)\n\nr = Box(1, 2, 3) & Cylinder(0.2, 5)\n\nplane * alg_compound\nlocation * alg_compound\n\nplane * location * alg_compound\n\nPlane.XY * Box(1, 2, 3)\n\nBox(1, 2, 3)\n\nPlane.XY * Pos(0, 1, 0) * Box(1, 2, 3)\n\nPos(0, 1, 0) * Box(1, 2, 3) \n\nPos(Y=1) * Box(1, 2, 3)\n\nPlane.XZ * Box(1, 2, 3)\n\nPlane.XZ * Pos(1, 2, 3) * Box(1, 2, 3)\n\nPlane.XZ * Pos(1, 2, 3) * Rot(0, 100, 45) * Box(1, 2, 3)\n\nLocation((1, 2, 3), (0, 100, 45)) * Box(1, 2, 3)\n\nPlane.XZ * Rot(0, 100, 45) * Pos(0,1,2) * Box(1, 2, 3)\n\nb = Plane.XZ * Rot(X=30) * Box(1, 2, 3) + Plane.YZ * Pos(X=-1) * Cylinder(0.2, 5)\n"
  },
  {
   "id": "docs-rst/key_concepts_builder/b01",
@@ -1213,6 +1423,36 @@
   "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as valid:\n    with Locations((1, 2, 3)):\n        Cylinder(1, 2)\n"
  },
  {
+  "id": "docs-rst/key_concepts_builder/b04",
+  "source": "docs/key_concepts_builder.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith open(\"test.txt\", \"w\") as f:\n    f.write(\"text\").to_bytes(1, \"big\")\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_builder/b05",
+  "source": "docs/key_concepts_builder.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as my_part:\n    ...\n\nshow(my_part.part)        # placed output\nshow(my_part.part_local)  # local construction result\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_builder/b06",
+  "source": "docs/key_concepts_builder.rst code-block #6",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch() as my_sketch:\n    ...\n\nshow(my_sketch.sketch)        # placed output\nshow(my_sketch.sketch_local)  # local construction result\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_builder/b07",
+  "source": "docs/key_concepts_builder.rst code-block #7",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildLine() as my_line:\n    ...\n\nshow(my_line.line)        # placed output\nshow(my_line.line_local)  # local construction result\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_builder/b08",
+  "source": "docs/key_concepts_builder.rst code-block #8",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as part_builder:\n    Box(part_builder, 10,10,10)\n"
+ },
+ {
   "id": "docs-rst/key_concepts_builder/b09",
   "source": "docs/key_concepts_builder.rst code-block #9",
   "kind": "docs-rst",
@@ -1231,6 +1471,12 @@
   "code": "import build123d as bd\n\nwith bd.BuildPart() as bp:\n    bd.Box(3, 3, 3)\n    with bd.BuildSketch(*bp.faces()):\n        bd.Rectangle(1, 2, rotation=45)\n    bd.extrude(amount=0.1)\n"
  },
  {
+  "id": "docs-rst/key_concepts_builder/b12",
+  "source": "docs/key_concepts_builder.rst code-block #12",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart():\n    with Locations((0,10),(0,-10)):\n        Box(1,1,1)\n        with GridLocations(x_spacing=5, y_spacing=5, x_count=2, y_count=2):\n            Sphere(1)\n        Cylinder(1,1)\n"
+ },
+ {
   "id": "docs-rst/key_concepts_builder/b13",
   "source": "docs/key_concepts_builder.rst code-block #13",
   "kind": "docs-rst",
@@ -1243,10 +1489,28 @@
   "code": "from build123d import *\nfrom math import *\n\nwith Locations((-10, 0), (10, 0)):\n    with BuildPart() as placed_parts:\n        Box(5, 5, 5)\n"
  },
  {
+  "id": "docs-rst/key_concepts_builder/b15",
+  "source": "docs/key_concepts_builder.rst code-block #15",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith Locations(Plane.XY, Plane.XZ):\n    locs = GridLocations(1, 1, 2, 2)\n    for l in locs:\n        print(l)\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_builder/b16",
+  "source": "docs/key_concepts_builder.rst code-block #16",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\ndef fillet(\n    objects: Edge | Vertex | Iterable[Edge | Vertex],\n    radius: float,\n):\n"
+ },
+ {
   "id": "docs-rst/key_concepts_builder/b17",
   "source": "docs/key_concepts_builder.rst code-block #17",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as pipes:\n    Box(10, 10, 10, rotation=(10, 20, 30))\n    ...\n    fillet(pipes.edges(Select.LAST), radius=0.2)\n"
+ },
+ {
+  "id": "docs-rst/key_concepts_builder/b18",
+  "source": "docs/key_concepts_builder.rst code-block #18",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nclass Mode(Enum):\n    ADD = auto()\n    SUBTRACT = auto()\n    INTERSECT = auto()\n    REPLACE = auto()\n    PRIVATE = auto()\n"
  },
  {
   "id": "docs-rst/key_concepts_builder/b19",
@@ -1267,10 +1531,196 @@
   "code": "from build123d import *\nfrom math import *\n\nheight, width, thickness, f_rad = 60, 80, 20, 10\n\nwith BuildPart() as pillow_block:\n    with BuildSketch() as plan:\n        Rectangle(width, height)\n        fillet(plan.vertices(), radius=f_rad)\n    extrude(amount=thickness)\n"
  },
  {
+  "id": "docs-rst/key_concepts_builder/all",
+  "source": "docs/key_concepts_builder.rst (all 21 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\n\n# Using BuildPart to create a 3D model\nwith BuildPart() as example_part:\n    with BuildSketch() as base_sketch:\n        Rectangle(20, 20)\n    extrude(amount=10)  # Create a base block\n    with BuildSketch(Plane(example_part.faces().sort_by(Axis.Z).last)) as cut_sketch:\n        Circle(5)\n    extrude(amount=-5, mode=Mode.SUBTRACT)  # Subtract a cylinder\n\n# Access the final part\nresult_part = example_part.part\n\nwith BuildPart() as invalid:\n    Cylinder(1, 2).moved(Location((1, 2, 3)))\n\nwith BuildPart() as valid:\n    with Locations((1, 2, 3)):\n        Cylinder(1, 2)\n\nwith open(\"test.txt\", \"w\") as f:\n    f.write(\"text\").to_bytes(1, \"big\")\n\nwith BuildPart() as my_part:\n    ...\n\nshow(my_part.part)        # placed output\nshow(my_part.part_local)  # local construction result\n\nwith BuildSketch() as my_sketch:\n    ...\n\nshow(my_sketch.sketch)        # placed output\nshow(my_sketch.sketch_local)  # local construction result\n\nwith BuildLine() as my_line:\n    ...\n\nshow(my_line.line)        # placed output\nshow(my_line.line_local)  # local construction result\n\nwith BuildPart() as part_builder:\n    Box(part_builder, 10,10,10)\n\nwith BuildPart() as part_builder:\n    Box(10,10,10)\n    with BuildSketch() as sketch_builder:\n        Circle(2)\n\nwith BuildSketch(Plane.XZ) as profile:\n    Circle(5)\n\nshow(profile.sketch_local)  # circle on local Plane.XY\nshow(profile.sketch)        # circle placed on Plane.XZ\n\nimport build123d as bd\n\nwith bd.BuildPart() as bp:\n    bd.Box(3, 3, 3)\n    with bd.BuildSketch(*bp.faces()):\n        bd.Rectangle(1, 2, rotation=45)\n    bd.extrude(amount=0.1)\n\nwith BuildPart():\n    with Locations((0,10),(0,-10)):\n        Box(1,1,1)\n        with GridLocations(x_spacing=5, y_spacing=5, x_count=2, y_count=2):\n            Sphere(1)\n        Cylinder(1,1)\n\nwith BuildPart() as model:\n    with Locations((-20, 0), (20, 0)):\n        with BuildSketch() as holes:\n            Circle(3)\n        extrude(amount=5)\n\nwith Locations((-10, 0), (10, 0)):\n    with BuildPart() as placed_parts:\n        Box(5, 5, 5)\n\nwith Locations(Plane.XY, Plane.XZ):\n    locs = GridLocations(1, 1, 2, 2)\n    for l in locs:\n        print(l)\n\ndef fillet(\n    objects: Edge | Vertex | Iterable[Edge | Vertex],\n    radius: float,\n):\n\nwith BuildPart() as pipes:\n    Box(10, 10, 10, rotation=(10, 20, 30))\n    ...\n    fillet(pipes.edges(Select.LAST), radius=0.2)\n\nclass Mode(Enum):\n    ADD = auto()\n    SUBTRACT = auto()\n    INTERSECT = auto()\n    REPLACE = auto()\n    PRIVATE = auto()\n\nwith BuildPart() as pipes:\n    Box(10, 10, 10, rotation=(10, 20, 30))\n\nwith BuildPart() as pipes:\n    with Locations((-10, -10, -10), (10, 10, 10)):\n        Box(10, 10, 10, rotation=(10, 20, 30))\n\nheight, width, thickness, f_rad = 60, 80, 20, 10\n\nwith BuildPart() as pillow_block:\n    with BuildSketch() as plan:\n        Rectangle(width, height)\n        fillet(plan.vertices(), radius=f_rad)\n    extrude(amount=thickness)\n"
+ },
+ {
+  "id": "docs-rst/location_arithmetic/b01",
+  "source": "docs/location_arithmetic.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\ndef location_symbol(location: Location, scale: float = 1) -> Compound:\n    return Compound.make_triad(axes_scale=scale).locate(location)\n\ndef plane_symbol(plane: Plane, scale: float = 1) -> Compound:\n    triad = Compound.make_triad(axes_scale=scale)\n    circle = Circle(scale * .8).edge()\n    return (triad + circle).locate(plane.location)\n"
+ },
+ {
+  "id": "docs-rst/location_arithmetic/b02",
+  "source": "docs/location_arithmetic.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1, 2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\n"
+ },
+ {
+  "id": "docs-rst/location_arithmetic/b03",
+  "source": "docs/location_arithmetic.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nplane = Plane.XZ\n\nface = plane * Rectangle(1, 2)\n\nshow_object(face, name=\"face\")\nshow_object(plane_symbol(plane), name=\"plane\")\n"
+ },
+ {
+  "id": "docs-rst/location_arithmetic/b04",
+  "source": "docs/location_arithmetic.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = Plane(loc) * Pos(0.2, 0.4, 0.1) * Box(0.2, 0.2, 0.2)\n# box = Plane(face.location) * Pos(0.2, 0.4, 0.1) * Box(0.2, 0.2, 0.2)\n# box = loc * Pos(0.2, 0.4, 0.1) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\n"
+ },
+ {
+  "id": "docs-rst/location_arithmetic/b05",
+  "source": "docs/location_arithmetic.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = Plane(loc) * Rot(Z=80) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\n"
+ },
+ {
+  "id": "docs-rst/location_arithmetic/b06",
+  "source": "docs/location_arithmetic.rst code-block #6",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = loc * Rot(20, 40, 80) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\n"
+ },
+ {
+  "id": "docs-rst/location_arithmetic/b07",
+  "source": "docs/location_arithmetic.rst code-block #7",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = loc * Rot(20, 40, 80) * Pos(0.2, 0.4, 0.1) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\nshow_object(location_symbol(loc * Rot(20, 40, 80), 0.5), options={\"color\":(0, 255, 255)}, name=\"local_location\")\n"
+ },
+ {
+  "id": "docs-rst/location_arithmetic/b08",
+  "source": "docs/location_arithmetic.rst code-block #8",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = loc * Pos(0.2, 0.4, 0.1) * Rot(20, 40, 80) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\nshow_object(location_symbol(loc * Pos(0.2, 0.4, 0.1), 0.5), options={\"color\":(0, 255, 255)}, name=\"local_location\")\n"
+ },
+ {
   "id": "docs-rst/location_arithmetic/all",
   "source": "docs/location_arithmetic.rst (all 8 code-blocks)",
   "kind": "docs-rst-page",
   "code": "from build123d import *\nfrom math import *\n\ndef location_symbol(location: Location, scale: float = 1) -> Compound:\n    return Compound.make_triad(axes_scale=scale).locate(location)\n\ndef plane_symbol(plane: Plane, scale: float = 1) -> Compound:\n    triad = Compound.make_triad(axes_scale=scale)\n    circle = Circle(scale * .8).edge()\n    return (triad + circle).locate(plane.location)\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1, 2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\n\nplane = Plane.XZ\n\nface = plane * Rectangle(1, 2)\n\nshow_object(face, name=\"face\")\nshow_object(plane_symbol(plane), name=\"plane\")\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = Plane(loc) * Pos(0.2, 0.4, 0.1) * Box(0.2, 0.2, 0.2)\n# box = Plane(face.location) * Pos(0.2, 0.4, 0.1) * Box(0.2, 0.2, 0.2)\n# box = loc * Pos(0.2, 0.4, 0.1) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = Plane(loc) * Rot(Z=80) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = loc * Rot(20, 40, 80) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = loc * Rot(20, 40, 80) * Pos(0.2, 0.4, 0.1) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\nshow_object(location_symbol(loc * Rot(20, 40, 80), 0.5), options={\"color\":(0, 255, 255)}, name=\"local_location\")\n\nloc = Location((0.1, 0.2, 0.3), (10, 20, 30))\n\nface = loc * Rectangle(1,2)\n\nbox = loc * Pos(0.2, 0.4, 0.1) * Rot(20, 40, 80) * Box(0.2, 0.2, 0.2)\n\nshow_object(face, name=\"face\")\nshow_object(location_symbol(loc), name=\"location\")\nshow_object(box, name=\"box\")\nshow_object(location_symbol(loc * Pos(0.2, 0.4, 0.1), 0.5), options={\"color\":(0, 255, 255)}, name=\"local_location\")\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b01",
+  "source": "docs/moving_objects.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith Locations((10, 20, 30)):\n    Box(5, 5, 5)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b02",
+  "source": "docs/moving_objects.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nrotated_box = Rotation(45, 0, 0) * box\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b03",
+  "source": "docs/moving_objects.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshape.position = (x, y, z)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b04",
+  "source": "docs/moving_objects.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshape.position += (x, y, z)\nshape.position -= (x, y, z)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b05",
+  "source": "docs/moving_objects.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshape.orientation = (X, Y, Z)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b06",
+  "source": "docs/moving_objects.rst code-block #6",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshape.orientation += (X, Y, Z)\nshape.orientation -= (X, Y, Z)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b07",
+  "source": "docs/moving_objects.rst code-block #7",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshape.move(Location)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b08",
+  "source": "docs/moving_objects.rst code-block #8",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nrelocated_shape = shape.moved(Location)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b09",
+  "source": "docs/moving_objects.rst code-block #9",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshape.locate(Location)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b10",
+  "source": "docs/moving_objects.rst code-block #10",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nrelocated_shape = shape.located(Location)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b11",
+  "source": "docs/moving_objects.rst code-block #11",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nrelocated_shape = shape.translate((x, y, z))\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/b12",
+  "source": "docs/moving_objects.rst code-block #12",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nrotated_shape = shape.rotate(Axis, angle_in_degrees)\n"
+ },
+ {
+  "id": "docs-rst/moving_objects/all",
+  "source": "docs/moving_objects.rst (all 12 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nwith Locations((10, 20, 30)):\n    Box(5, 5, 5)\n\nrotated_box = Rotation(45, 0, 0) * box\n\nshape.position = (x, y, z)\n\nshape.position += (x, y, z)\nshape.position -= (x, y, z)\n\nshape.orientation = (X, Y, Z)\n\nshape.orientation += (X, Y, Z)\nshape.orientation -= (X, Y, Z)\n\nshape.move(Location)\n\nrelocated_shape = shape.moved(Location)\n\nshape.locate(Location)\n\nrelocated_shape = shape.located(Location)\n\nrelocated_shape = shape.translate((x, y, z))\n\nrotated_shape = shape.rotate(Axis, angle_in_degrees)\n"
+ },
+ {
+  "id": "docs-rst/objects/b01",
+  "source": "docs/objects.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as disk:\n    with BuildSketch():\n        Circle(a)\n        with Locations((b, 0.0)):\n            Rectangle(c, c, mode=Mode.SUBTRACT)\n        with Locations((0, b)):\n            Circle(d, mode=Mode.SUBTRACT)\n    extrude(amount=c)\n"
+ },
+ {
+  "id": "docs-rst/objects/b02",
+  "source": "docs/objects.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nsketch = Circle(a) - Pos(b, 0.0) * Rectangle(c, c) - Pos(0.0, b) * Circle(d)\ndisk = extrude(sketch, c)\n"
+ },
+ {
+  "id": "docs-rst/objects/b03",
+  "source": "docs/objects.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch():\n    Circle(1, align=(Align.MIN, Align.MIN))\n"
+ },
+ {
+  "id": "docs-rst/objects/b04",
+  "source": "docs/objects.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch():\n    Circle(1, align=Align.MIN)\n"
+ },
+ {
+  "id": "docs-rst/objects/all",
+  "source": "docs/objects.rst (all 4 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as disk:\n    with BuildSketch():\n        Circle(a)\n        with Locations((b, 0.0)):\n            Rectangle(c, c, mode=Mode.SUBTRACT)\n        with Locations((0, b)):\n            Circle(d, mode=Mode.SUBTRACT)\n    extrude(amount=c)\n\nsketch = Circle(a) - Pos(b, 0.0) * Rectangle(c, c) - Pos(0.0, b) * Circle(d)\ndisk = extrude(sketch, c)\n\nwith BuildSketch():\n    Circle(1, align=(Align.MIN, Align.MIN))\n\nwith BuildSketch():\n    Circle(1, align=Align.MIN)\n"
+ },
+ {
+  "id": "docs-rst/operations/b01",
+  "source": "docs/operations.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as cylinder:\n    with BuildSketch():\n        Circle(radius)\n    extrude(amount=height)\n"
+ },
+ {
+  "id": "docs-rst/operations/b02",
+  "source": "docs/operations.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\ncylinder = extrude(Circle(radius), amount=height)\n"
+ },
+ {
+  "id": "docs-rst/operations/all",
+  "source": "docs/operations.rst (all 2 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as cylinder:\n    with BuildSketch():\n        Circle(radius)\n    extrude(amount=height)\n\ncylinder = extrude(Circle(radius), amount=height)\n"
+ },
+ {
+  "id": "docs-rst/selectors/b01",
+  "source": "docs/selectors.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch() as din:\n    ...\n    outside_vertices = filter(\n        lambda v: (v.Y == 0.0 or v.Y == height)\n        and -overall_width / 2 < v.X < overall_width / 2,\n        din.vertices(),\n    )\n"
  },
  {
   "id": "docs-rst/selectors/b02",
@@ -1291,6 +1741,18 @@
   "code": "from build123d import *\n\nsvg_opts = {\"pixel_scale\": 5, \"show_axes\": False, \"show_hidden\": True}\n\nlength, width, thickness = 80.0, 60.0, 10.0\nhole_dia = 6.0\n\nwith BuildPart() as plate:\n    Box(length, width, thickness)\n    with GridLocations(length - 20, width - 20, 2, 2):\n        Hole(radius=hole_dia / 2)\n    top_face: Face = plate.faces().sort_by(Axis.Z)[-1]\n    hole_edges = top_face.edges().filter_by(GeomType.CIRCLE)\n    chamfer(hole_edges, length=1)\n"
  },
  {
+  "id": "docs-rst/tips/b02",
+  "source": "docs/tips.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "import build123d as b3d\nb3d_solid = b3d.Solid.make_box(1,1,1)\n\n... some cadquery stuff ...\n\nb3d_solid.wrapped = cq_solid.wrapped\n"
+ },
+ {
+  "id": "docs-rst/tips/b03",
+  "source": "docs/tips.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "import build123d as b3d\nimport cadquery as cq\n\nwith b3d.BuildPart() as b123d_box:\n    b3d.Box(1,2,3)\n\ncq_solid = cq.Solid.makeBox(1,1,1)\ncq_solid.wrapped = b123d_box.part.solid().wrapped\n"
+ },
+ {
   "id": "docs-rst/tips/b04",
   "source": "docs/tips.rst code-block #4",
   "kind": "docs-rst",
@@ -1303,10 +1765,28 @@
   "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch(Plane.YZ.rotated((123, 45, 6))) as custom_plane:\n    Rectangle(1, 1, align=Align.MIN)\n    with Locations(vertices().group_by(Axis.X)[-1].sort_by(Axis.Y)[-1]):\n        Circle(0.2)\n"
  },
  {
+  "id": "docs-rst/tips/b06",
+  "source": "docs/tips.rst code-block #6",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch() as sketch:\n    with BuildLine(Plane.XZ):\n        Polyline(...)\n    make_face()\n"
+ },
+ {
+  "id": "docs-rst/tips/all",
+  "source": "docs/tips.rst (all 6 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\n\nsvg_opts = {\"pixel_scale\": 5, \"show_axes\": False, \"show_hidden\": True}\n\nlength, width, thickness = 80.0, 60.0, 10.0\nhole_dia = 6.0\n\nwith BuildPart() as plate:\n    Box(length, width, thickness)\n    with GridLocations(length - 20, width - 20, 2, 2):\n        Hole(radius=hole_dia / 2)\n    top_face: Face = plate.faces().sort_by(Axis.Z)[-1]\n    hole_edges = top_face.edges().filter_by(GeomType.CIRCLE)\n    chamfer(hole_edges, length=1)\n\nimport build123d as b3d\nb3d_solid = b3d.Solid.make_box(1,1,1)\n\n... some cadquery stuff ...\n\nb3d_solid.wrapped = cq_solid.wrapped\n\nimport build123d as b3d\nimport cadquery as cq\n\nwith b3d.BuildPart() as b123d_box:\n    b3d.Box(1,2,3)\n\ncq_solid = cq.Solid.makeBox(1,1,1)\ncq_solid.wrapped = b123d_box.part.solid().wrapped\n\nwith BuildSketch(Plane.XZ) as vertical_sketch:\n    Rectangle(1, 1)\n    with Locations(vertices().group_by(Axis.X)[-1].sort_by(Axis.Z)[-1]):\n        Circle(0.2)\n\nwith BuildSketch(Plane.YZ.rotated((123, 45, 6))) as custom_plane:\n    Rectangle(1, 1, align=Align.MIN)\n    with Locations(vertices().group_by(Axis.X)[-1].sort_by(Axis.Y)[-1]):\n        Circle(0.2)\n\nwith BuildSketch() as sketch:\n    with BuildLine(Plane.XZ):\n        Polyline(...)\n    make_face()\n"
+ },
+ {
   "id": "docs-rst/topology_selection/b01",
   "source": "docs/topology_selection.rst code-block #1",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\n# In context\nwith BuildSketch() as context:\n    Rectangle(1, 1)\n    context.edges()\n\n    # Build context implicitly has access to the selector\n    edges()\n\n# Taking the sketch out of context\ncontext.sketch.edges()\n\n# Create sketch out of context\nRectangle(1, 1).edges()\n"
+ },
+ {
+  "id": "docs-rst/topology_selection/b02",
+  "source": "docs/topology_selection.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\n# In context\nwith BuildPart() as context:\n    Box(2, 2, 1)\n    Cylinder(1, 2)\n    context.edges(Select.LAST)\n\n# Does not work out of context!\ncontext.part.edges(Select.LAST)\n(Box(2, 2, 1) + Cylinder(1, 2)).edges(Select.LAST)\n"
  },
  {
   "id": "docs-rst/topology_selection/b03",
@@ -1351,16 +1831,70 @@
   "code": "from build123d import *\nfrom math import *\n\nbox = Box(5, 5, 1)\ncircle = Cylinder(2, 5)\npart_before = box + circle\nedges = part_before.edges().filter_by(lambda a: a.length == 1)\npart = fillet(edges, 1)\nedges = new_edges(part_before, combined=part)\n"
  },
  {
+  "id": "docs-rst/topology_selection/b10",
+  "source": "docs/topology_selection.rst code-block #10",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\npart.vertices().sort_by(Axis.X)[-4:]\n"
+ },
+ {
+  "id": "docs-rst/topology_selection/b11",
+  "source": "docs/topology_selection.rst code-block #11",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\npart.faces().group_by(SortBy.AREA)[0].edges())\n"
+ },
+ {
   "id": "docs-rst/topology_selection/b12",
   "source": "docs/topology_selection.rst code-block #12",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\nbox = Box(1, 1, 1)\nfaces = box.faces()\ntop_face = faces.sort_by(Axis.Z)[-1]\n\nface_rings = faces.group_by(topo_distance_to(top_face))\n\ntop = face_rings[0]\nsides = face_rings[1]\nbottom = face_rings[2]\n"
  },
  {
+  "id": "docs-rst/topology_selection/b13",
+  "source": "docs/topology_selection.rst code-block #13",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\n\n# [removed by collect.py] from ocp_vscode import ColorMap, show\n\nmesher = Mesher()\nmesher.add_shape(Sphere(1), linear_deflection=0.05, angular_deflection=1)\n\nwith TemporaryDirectory() as tmp_dir:\n    mesh_path = Path(tmp_dir) / \"sphere.stl\"\n    mesher.write(mesh_path)\n    mesh_sphere = Mesher().read(mesh_path)[0]\n\nsphere_faces = mesh_sphere.faces()\n\nvertical_groups = sphere_faces.group_by(Axis.Z)\nstarting_ring = vertical_groups[len(vertical_groups) // 2]\nface_rings = sphere_faces.group_by(topo_distance_to(starting_ring))\n\nshow(*face_rings, colors=ColorMap.listed(len(face_rings)))\n"
+ },
+ {
+  "id": "docs-rst/topology_selection/b14",
+  "source": "docs/topology_selection.rst code-block #14",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nsphere_edges = mesh_sphere.edges()\nreference_edge = choice(sphere_edges)\nedge_rings = sphere_edges.group_by(topo_distance_to(reference_edge))\n"
+ },
+ {
+  "id": "docs-rst/topology_selection/b15",
+  "source": "docs/topology_selection.rst code-block #15",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\npart.faces().filter_by(lambda f: f.normal_at() == Vector(0, 0, 1))\n"
+ },
+ {
+  "id": "docs-rst/topology_selection/all",
+  "source": "docs/topology_selection.rst (all 15 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "# In context\nwith BuildSketch() as context:\n    Rectangle(1, 1)\n    context.edges()\n\n    # Build context implicitly has access to the selector\n    edges()\n\n# Taking the sketch out of context\ncontext.sketch.edges()\n\n# Create sketch out of context\nRectangle(1, 1).edges()\n\n# In context\nwith BuildPart() as context:\n    Box(2, 2, 1)\n    Cylinder(1, 2)\n    context.edges(Select.LAST)\n\n# Does not work out of context!\ncontext.part.edges(Select.LAST)\n(Box(2, 2, 1) + Cylinder(1, 2)).edges(Select.LAST)\n\nwith BuildPart() as part:\n    Box(5, 5, 1)\n    Cylinder(1, 5)\n\n    part.vertices()\n    part.edges()\n    part.faces()\n\n    # Is the same as\n    part.vertices(Select.ALL)\n    part.edges(Select.ALL)\n    part.faces(Select.ALL)\n\nwith BuildPart() as part:\n    Box(5, 5, 1)\n    Cylinder(1, 5)\n\n    part.vertices(Select.LAST)\n    part.edges(Select.LAST)\n    part.faces(Select.LAST)\n\nwith BuildPart() as part:\n    Box(5, 5, 1)\n    Cylinder(1, 5)\n\n    part.edges(Select.NEW)\n\nwith BuildPart() as part:\n    Box(5, 5, 1, align=(Align.CENTER, Align.CENTER, Align.MAX))\n    Cylinder(2, 2, align=(Align.CENTER, Align.CENTER, Align.MIN))\n\n    part.edges(Select.NEW)\n\nwith BuildPart() as part:\n    Box(5, 5, 1)\n    Cylinder(1, 5)\n    edges = part.edges().filter_by(lambda a: a.length == 1)\n    fillet(edges, 1)\n\n    part.edges(Select.NEW)\n\nbox = Box(5, 5, 1)\ncircle = Cylinder(2, 5)\npart = box + circle\nedges = new_edges(box, circle, combined=part)\n\nbox = Box(5, 5, 1)\ncircle = Cylinder(2, 5)\npart_before = box + circle\nedges = part_before.edges().filter_by(lambda a: a.length == 1)\npart = fillet(edges, 1)\nedges = new_edges(part_before, combined=part)\n\npart.vertices().sort_by(Axis.X)[-4:]\n\npart.faces().group_by(SortBy.AREA)[0].edges())\n\nbox = Box(1, 1, 1)\nfaces = box.faces()\ntop_face = faces.sort_by(Axis.Z)[-1]\n\nface_rings = faces.group_by(topo_distance_to(top_face))\n\ntop = face_rings[0]\nsides = face_rings[1]\nbottom = face_rings[2]\n\nfrom build123d import *\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\n\n# [removed by collect.py] from ocp_vscode import ColorMap, show\n\nmesher = Mesher()\nmesher.add_shape(Sphere(1), linear_deflection=0.05, angular_deflection=1)\n\nwith TemporaryDirectory() as tmp_dir:\n    mesh_path = Path(tmp_dir) / \"sphere.stl\"\n    mesher.write(mesh_path)\n    mesh_sphere = Mesher().read(mesh_path)[0]\n\nsphere_faces = mesh_sphere.faces()\n\nvertical_groups = sphere_faces.group_by(Axis.Z)\nstarting_ring = vertical_groups[len(vertical_groups) // 2]\nface_rings = sphere_faces.group_by(topo_distance_to(starting_ring))\n\nshow(*face_rings, colors=ColorMap.listed(len(face_rings)))\n\nsphere_edges = mesh_sphere.edges()\nreference_edge = choice(sphere_edges)\nedge_rings = sphere_edges.group_by(topo_distance_to(reference_edge))\n\npart.faces().filter_by(lambda f: f.normal_at() == Vector(0, 0, 1))\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b01",
+  "source": "docs/tutorial_constraints.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\narcs = ConstrainedArcs(..., sagitta=Sagitta.BOTH)\nchosen = arcs.edges().sort_by(Edge.length)[0]\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b02",
+  "source": "docs/tutorial_constraints.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildLine():\n   ConstrainedArcs(\n         ...,\n         selector=lambda edges: edges.sort_by_distance((0, 0))[0],\n   )\n"
+ },
+ {
   "id": "docs-rst/tutorial_constraints/b03",
   "source": "docs/tutorial_constraints.rst code-block #3",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\nisosceles = Triangle(a=30, b=30, C=60)\nisosceles.c\nisosceles.A\nisosceles.B\nisosceles.vertex_A\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b04",
+  "source": "docs/tutorial_constraints.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from math import sin, cos, tan, radians\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import *\nimport sympy\n\n# This problem uses the sympy symbolic math solver\n\n# Define the symbols for the unknowns\n# - the center of the radius 30 arc (x30, y30)\n# - the center of the radius 66 arc (x66, y66)\n# - end of the 8\u00b0 line (l8x, l8y)\n# - the point with the radius 30 and 66 arc meet i30_66\n# - the start of the horizontal line lh\ny30, x66, xl8, yl8 = sympy.symbols(\"y30 x66 xl8 yl8\")\nx30 = 77 - 55 / 2\ny66 = 66 + 32\n\n# There are 4 unknowns so we need 4 equations\nequations = [\n   (x66 - x30) ** 2 + (y66 - y30) ** 2 - (66 + 30) ** 2,  # distance between centers\n   xl8 - (x30 + 30 * sin(radians(8))),  # 8 degree slope\n   yl8 - (y30 + 30 * cos(radians(8))),  # 8 degree slope\n   (yl8 - 50) / (55 / 2 - xl8) - tan(radians(8)),  # 8 degree slope\n]\n# There are two solutions but we want the 2nd one\nsolution = {k: float(v) for k,v in sympy.solve(equations, dict=True)[1].items()}\n\n# Create the critical points\nc30 = Vector(x30, solution[y30])\nc66 = Vector(solution[x66], y66)\nl8 = Vector(solution[xl8], solution[yl8])\n\n...\n"
  },
  {
   "id": "docs-rst/tutorial_constraints/b05",
@@ -1405,16 +1939,268 @@
   "code": "from build123d import *\nfrom math import *\n\ninside = FilletPolyline((1.5, 0), (1.5, 1), (-1.5, 1), (-1.5, 0), radius=0.2)\nperimeter = offset(inside, amount=0.2, side=Side.RIGHT)\n"
  },
  {
+  "id": "docs-rst/tutorial_constraints/b12",
+  "source": "docs/tutorial_constraints.rst code-block #12",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\n# Keep all solutions\nConstrainedArcs(..., selector=lambda arcs: arcs)\n\n# Keep first\nConstrainedArcs(..., selector=lambda arcs: arcs[0])\n\n# Keep shortest\nConstrainedArcs(..., selector=lambda arcs: arcs.sort_by(Edge.length)[0])\n"
+ },
+ {
   "id": "docs-rst/tutorial_constraints/b13",
   "source": "docs/tutorial_constraints.rst code-block #13",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\nwith BuildLine() as egg_plant:\n   # Construction Geometry\n   c1 = CenterArc((-2, 0), 0.75, 80, 240, mode=Mode.PRIVATE)\n   c2 = CenterArc((2, 0), 1, 220, 250, mode=Mode.PRIVATE)\n\n   # egg_plant perimeter\n   l1 = ConstrainedArcs((c2, Tangency.OUTSIDE), (c1, Tangency.OUTSIDE), radius=6)\n   l2 = ConstrainedArcs(\n      (c2, Tangency.ENCLOSING),\n      (c1, Tangency.ENCLOSING),\n      radius=8,\n      selector=lambda a: a.sort_by(Axis.Y)[-1],\n   )\n   l3 = add(c1.trim(l1 @ 1, l2 @ 1))\n   l4 = add(c2.trim(l1 @ 0, l2 @ 0))\n"
  },
  {
+  "id": "docs-rst/tutorial_constraints/b14",
+  "source": "docs/tutorial_constraints.rst code-block #14",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nConstrainedArcs(\n    tangency_one,\n    tangency_two,\n    radius=...,\n    sagitta=Sagitta.SHORT,\n    selector=lambda arcs: arcs,\n)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b15",
+  "source": "docs/tutorial_constraints.rst code-block #15",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nConstrainedArcs(\n    tangency_one,\n    tangency_two,\n    center_on=Axis(...),  # or Edge\n    sagitta=Sagitta.SHORT,\n    selector=lambda arcs: arcs,\n)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b16",
+  "source": "docs/tutorial_constraints.rst code-block #16",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nConstrainedArcs(\n    tangency_one,\n    tangency_two,\n    tangency_three,\n    sagitta=Sagitta.BOTH,\n    selector=lambda arcs: arcs,\n)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b17",
+  "source": "docs/tutorial_constraints.rst code-block #17",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nConstrainedArcs(\n    tangency_one,\n    center=(x, y),\n    selector=lambda arcs: arcs[0],\n)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b18",
+  "source": "docs/tutorial_constraints.rst code-block #18",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nConstrainedArcs(\n    tangency_one,\n    radius=...,\n    center_on=some_edge,\n    selector=lambda arcs: arcs,\n)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b19",
+  "source": "docs/tutorial_constraints.rst code-block #19",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nConstrainedLines(\n    tangency_one,\n    tangency_two,\n    selector=lambda lines: lines,\n)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b20",
+  "source": "docs/tutorial_constraints.rst code-block #20",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nConstrainedLines(\n    tangency_one,\n    (x, y),  # through point\n    selector=lambda lines: lines,\n)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b21",
+  "source": "docs/tutorial_constraints.rst code-block #21",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nConstrainedLines(\n    tangency_one,\n    Axis.Y,\n    angle=30,              # OR direction=(dx, dy)\n    selector=lambda lines: lines,\n)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b22",
+  "source": "docs/tutorial_constraints.rst code-block #22",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\narcs = ConstrainedArcs(..., sagitta=Sagitta.BOTH)\nchosen = arcs.edges().sort_by(Edge.length)[0]\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b23",
+  "source": "docs/tutorial_constraints.rst code-block #23",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildLine() as bl:\n    ConstrainedArcs(\n        ...,\n        sagitta=Sagitta.BOTH,\n        selector=lambda arcs: arcs.sort_by(Edge.length)[0],\n    )\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b24",
+  "source": "docs/tutorial_constraints.rst code-block #24",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\n# Nearest to point\nselector=lambda edges: edges.sort_by_distance((0, 0))[0]\n\n# Longest\nselector=lambda edges: edges.sort_by(Edge.length)[-1]\n\n# Right most\nselector=lambda edges: edges.sort_by(Axis.X)[-1]\n\n# Keep two branches\nselector=lambda edges: edges[:2]\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/b25",
+  "source": "docs/tutorial_constraints.rst code-block #25",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nimage = ImageFace(\n   \"complex_sketch.png\",\n   scale=29 / 264,\n   origin_pixels=(297, 390),\n   location=Location((0, 0, -0.1)),\n)\n\nwith BuildSketch() as sketch:\n   with BuildLine() as perimeter:\n      c_l1 = PolarLine((0, 32 - 14), 50, -10, mode=Mode.PRIVATE)\n      a19 = ConstrainedArcs(c_l1, (-14 + 81 - 29, -14 - 19 + 57), radius=19)\n      l2 = Polyline(a19 @ 1, a19 @ 1 + (29 - 5, 0), a19 @ 1 + (29, -5), (-14 + 81, 0))\n      l3 = Line(l2 @ 1, (-14 + 81 - 29, (-14 - 19)))\n      c_l4 = Line((-14, -14), (-14 + 81, -14), mode=Mode.PRIVATE)\n      c_a29_arc_center = l3.intersect(c_l4)[0]\n      c_a29 = CenterArc(c_a29_arc_center, 29, 180, 50, mode=Mode.PRIVATE)\n      l5 = PolarLine(l3 @ 1, length=c_a29, direction=(-1, 0))\n      a5 = ConstrainedArcs(\n            c_a29, c_l4, radius=5, selector=lambda a: a.sort_by(Axis.X)[0]\n      )\n      a29 = add(c_a29.trim(l5 @ 1, a5 @ 0))\n      l6 = Polyline(\n            a5 @ 1,\n            (-14 + 7, -14),\n            (-14, -14 + 7),\n            (-14, -14 + 32 - 7),\n            (-14 + 7, -14 + 32),\n            (0, -14 + 32),\n            a19 @ 0,\n      )\n   make_face()\n   a14 = Circle(14 / 2, mode=Mode.SUBTRACT)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_constraints/all",
+  "source": "docs/tutorial_constraints.rst (all 25 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "arcs = ConstrainedArcs(..., sagitta=Sagitta.BOTH)\nchosen = arcs.edges().sort_by(Edge.length)[0]\n\nwith BuildLine():\n   ConstrainedArcs(\n         ...,\n         selector=lambda edges: edges.sort_by_distance((0, 0))[0],\n   )\n\nisosceles = Triangle(a=30, b=30, C=60)\nisosceles.c\nisosceles.A\nisosceles.B\nisosceles.vertex_A\n\nfrom math import sin, cos, tan, radians\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import *\nimport sympy\n\n# This problem uses the sympy symbolic math solver\n\n# Define the symbols for the unknowns\n# - the center of the radius 30 arc (x30, y30)\n# - the center of the radius 66 arc (x66, y66)\n# - end of the 8\u00b0 line (l8x, l8y)\n# - the point with the radius 30 and 66 arc meet i30_66\n# - the start of the horizontal line lh\ny30, x66, xl8, yl8 = sympy.symbols(\"y30 x66 xl8 yl8\")\nx30 = 77 - 55 / 2\ny66 = 66 + 32\n\n# There are 4 unknowns so we need 4 equations\nequations = [\n   (x66 - x30) ** 2 + (y66 - y30) ** 2 - (66 + 30) ** 2,  # distance between centers\n   xl8 - (x30 + 30 * sin(radians(8))),  # 8 degree slope\n   yl8 - (y30 + 30 * cos(radians(8))),  # 8 degree slope\n   (yl8 - 50) / (55 / 2 - xl8) - tan(radians(8)),  # 8 degree slope\n]\n# There are two solutions but we want the 2nd one\nsolution = {k: float(v) for k,v in sympy.solve(equations, dict=True)[1].items()}\n\n# Create the critical points\nc30 = Vector(x30, solution[y30])\nc66 = Vector(solution[x66], y66)\nl8 = Vector(solution[xl8], solution[yl8])\n\n...\n\nm1 = CenterArc((-2, 0.6), 1, -10, 200).reversed()\nm2 = Spline((0.4, -0.6), (1, -1.6), (2, 0))\nconnector = BlendCurve(m1, m2, tangent_scalars=(2, 1), continuity=ContinuityLevel.C2)\ncomb = Curve(Wire([m1, connector, m2]).curvature_comb(200))\n\nwith BuildLine() as coincident_ex:\n   l1 = Line((0, 0), (1, 2))\n   l2 = Line(l1 @ 1, l1 @ 1 + (1, 0))\n\nwith BuildLine() as tangent_ex:\n   l1 = Line((0, 0), (1, 1))\n   l2 = JernArc(start=l1 @ 1, tangent=l1 % 1, radius=1, arc_size=70)\n\nwith BuildLine() as perpendicular_ex:\n   l1 = CenterArc((0, 0), 1.5, 0, 45)\n   l2 = PolarLine(\n      start=l1 @ 1, length=1, direction=l1.tangent_at(1).rotate(Axis.Z, -90)\n   )\n\nwith BuildLine() as intersect_ex:\n   c1 = EllipticalCenterArc((0, 0), 1.2, 1.8, 0, arc_size=120, mode=Mode.PRIVATE)\n   l1 = PolarLine(start=(-0.2, 0.1), length=c1, angle=10)\n   l2 = PolarLine(start=(-0.2, 0.1), length=c1, angle=70)\n   l3 = add(c1.trim(l1 @ 1, l2 @ 1))\n\np1 = ParabolicCenterArc((0, 0), 0.5, 0, arc_size=Line((0, 1), (5, 1)))\nh1 = HyperbolicCenterArc((0, 0), 2, 1, 0, arc_size=Axis((0, 1), (1, 0)))\n\ninside = FilletPolyline((1.5, 0), (1.5, 1), (-1.5, 1), (-1.5, 0), radius=0.2)\nperimeter = offset(inside, amount=0.2, side=Side.RIGHT)\n\n# Keep all solutions\nConstrainedArcs(..., selector=lambda arcs: arcs)\n\n# Keep first\nConstrainedArcs(..., selector=lambda arcs: arcs[0])\n\n# Keep shortest\nConstrainedArcs(..., selector=lambda arcs: arcs.sort_by(Edge.length)[0])\n\nwith BuildLine() as egg_plant:\n   # Construction Geometry\n   c1 = CenterArc((-2, 0), 0.75, 80, 240, mode=Mode.PRIVATE)\n   c2 = CenterArc((2, 0), 1, 220, 250, mode=Mode.PRIVATE)\n\n   # egg_plant perimeter\n   l1 = ConstrainedArcs((c2, Tangency.OUTSIDE), (c1, Tangency.OUTSIDE), radius=6)\n   l2 = ConstrainedArcs(\n      (c2, Tangency.ENCLOSING),\n      (c1, Tangency.ENCLOSING),\n      radius=8,\n      selector=lambda a: a.sort_by(Axis.Y)[-1],\n   )\n   l3 = add(c1.trim(l1 @ 1, l2 @ 1))\n   l4 = add(c2.trim(l1 @ 0, l2 @ 0))\n\nConstrainedArcs(\n    tangency_one,\n    tangency_two,\n    radius=...,\n    sagitta=Sagitta.SHORT,\n    selector=lambda arcs: arcs,\n)\n\nConstrainedArcs(\n    tangency_one,\n    tangency_two,\n    center_on=Axis(...),  # or Edge\n    sagitta=Sagitta.SHORT,\n    selector=lambda arcs: arcs,\n)\n\nConstrainedArcs(\n    tangency_one,\n    tangency_two,\n    tangency_three,\n    sagitta=Sagitta.BOTH,\n    selector=lambda arcs: arcs,\n)\n\nConstrainedArcs(\n    tangency_one,\n    center=(x, y),\n    selector=lambda arcs: arcs[0],\n)\n\nConstrainedArcs(\n    tangency_one,\n    radius=...,\n    center_on=some_edge,\n    selector=lambda arcs: arcs,\n)\n\nConstrainedLines(\n    tangency_one,\n    tangency_two,\n    selector=lambda lines: lines,\n)\n\nConstrainedLines(\n    tangency_one,\n    (x, y),  # through point\n    selector=lambda lines: lines,\n)\n\nConstrainedLines(\n    tangency_one,\n    Axis.Y,\n    angle=30,              # OR direction=(dx, dy)\n    selector=lambda lines: lines,\n)\n\narcs = ConstrainedArcs(..., sagitta=Sagitta.BOTH)\nchosen = arcs.edges().sort_by(Edge.length)[0]\n\nwith BuildLine() as bl:\n    ConstrainedArcs(\n        ...,\n        sagitta=Sagitta.BOTH,\n        selector=lambda arcs: arcs.sort_by(Edge.length)[0],\n    )\n\n# Nearest to point\nselector=lambda edges: edges.sort_by_distance((0, 0))[0]\n\n# Longest\nselector=lambda edges: edges.sort_by(Edge.length)[-1]\n\n# Right most\nselector=lambda edges: edges.sort_by(Axis.X)[-1]\n\n# Keep two branches\nselector=lambda edges: edges[:2]\n\nimage = ImageFace(\n   \"complex_sketch.png\",\n   scale=29 / 264,\n   origin_pixels=(297, 390),\n   location=Location((0, 0, -0.1)),\n)\n\nwith BuildSketch() as sketch:\n   with BuildLine() as perimeter:\n      c_l1 = PolarLine((0, 32 - 14), 50, -10, mode=Mode.PRIVATE)\n      a19 = ConstrainedArcs(c_l1, (-14 + 81 - 29, -14 - 19 + 57), radius=19)\n      l2 = Polyline(a19 @ 1, a19 @ 1 + (29 - 5, 0), a19 @ 1 + (29, -5), (-14 + 81, 0))\n      l3 = Line(l2 @ 1, (-14 + 81 - 29, (-14 - 19)))\n      c_l4 = Line((-14, -14), (-14 + 81, -14), mode=Mode.PRIVATE)\n      c_a29_arc_center = l3.intersect(c_l4)[0]\n      c_a29 = CenterArc(c_a29_arc_center, 29, 180, 50, mode=Mode.PRIVATE)\n      l5 = PolarLine(l3 @ 1, length=c_a29, direction=(-1, 0))\n      a5 = ConstrainedArcs(\n            c_a29, c_l4, radius=5, selector=lambda a: a.sort_by(Axis.X)[0]\n      )\n      a29 = add(c_a29.trim(l5 @ 1, a5 @ 0))\n      l6 = Polyline(\n            a5 @ 1,\n            (-14 + 7, -14),\n            (-14, -14 + 7),\n            (-14, -14 + 32 - 7),\n            (-14 + 7, -14 + 32),\n            (0, -14 + 32),\n            a19 @ 0,\n      )\n   make_face()\n   a14 = Circle(14 / 2, mode=Mode.SUBTRACT)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_design/b01",
+  "source": "docs/tutorial_design.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch() as sketch:\n    with BuildLine() as profile:\n        FilletPolyline(\n            (0, 0), (length / 2, 0), (length / 2, height), radius=bend_radius\n        )\n        offset(amount=thickness, side=Side.LEFT)\n    make_face()\n    mirror(about=Plane.YZ)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_design/b02",
+  "source": "docs/tutorial_design.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildPart() as bracket:\n    with BuildSketch() as sketch:\n        with BuildLine() as profile:\n            FilletPolyline(\n                (0, 0), (length / 2, 0), (length / 2, height), radius=bend_radius\n            )\n            offset(amount=thickness, side=Side.LEFT)\n        make_face()\n        mirror(about=Plane.YZ)\n    extrude(amount=width / 2)\n    mirror(about=Plane.XY)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_design/b03",
+  "source": "docs/tutorial_design.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\ncorners = bracket.edges().filter_by(Axis.X).group_by(Axis.Y)[-1]\nfillet(corners, fillet_radius)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_design/b04",
+  "source": "docs/tutorial_design.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith Locations(bracket.faces().sort_by(Axis.X)[-1]):\n    Hole(hole_diameter / 2)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_design/b05",
+  "source": "docs/tutorial_design.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nwith BuildSketch(bracket.faces().sort_by(Axis.Y)[0]):\n    SlotOverall(20 * MM, hole_diameter)\nextrude(amount=-thickness, mode=Mode.SUBTRACT)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_design/b06",
+  "source": "docs/tutorial_design.rst code-block #6",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nthickness = 3 * MM\nwidth = 25 * MM\nlength = 50 * MM\nheight = 25 * MM\nhole_diameter = 5 * MM\nbend_radius = 5 * MM\nfillet_radius = 2 * MM\n"
+ },
+ {
   "id": "docs-rst/tutorial_design/b07",
   "source": "docs/tutorial_design.rst code-block #7",
   "kind": "docs-rst",
   "code": "from build123d import *\n# [removed by collect.py] from ocp_vscode import show_all\n\nthickness = 3 * MM\nwidth = 25 * MM\nlength = 50 * MM\nheight = 25 * MM\nhole_diameter = 5 * MM\nbend_radius = 5 * MM\nfillet_radius = 2 * MM\n\nwith BuildPart() as bracket:\n    with BuildSketch() as sketch:\n        with BuildLine() as profile:\n            FilletPolyline(\n                (0, 0), (length / 2, 0), (length / 2, height), radius=bend_radius\n            )\n            offset(amount=thickness, side=Side.LEFT)\n        make_face()\n        mirror(about=Plane.YZ)\n    extrude(amount=width / 2)\n    mirror(about=Plane.XY)\n    corners = bracket.edges().filter_by(Axis.X).group_by(Axis.Y)[-1]\n    fillet(corners, fillet_radius)\n    with Locations(bracket.faces().sort_by(Axis.X)[-1]):\n        Hole(hole_diameter / 2)\n    with BuildSketch(bracket.faces().sort_by(Axis.Y)[0]):\n        SlotOverall(20 * MM, hole_diameter)\n    extrude(amount=-thickness, mode=Mode.SUBTRACT)\n\nshow_all()\n"
+ },
+ {
+  "id": "docs-rst/tutorial_design/all",
+  "source": "docs/tutorial_design.rst (all 7 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "with BuildSketch() as sketch:\n    with BuildLine() as profile:\n        FilletPolyline(\n            (0, 0), (length / 2, 0), (length / 2, height), radius=bend_radius\n        )\n        offset(amount=thickness, side=Side.LEFT)\n    make_face()\n    mirror(about=Plane.YZ)\n\nwith BuildPart() as bracket:\n    with BuildSketch() as sketch:\n        with BuildLine() as profile:\n            FilletPolyline(\n                (0, 0), (length / 2, 0), (length / 2, height), radius=bend_radius\n            )\n            offset(amount=thickness, side=Side.LEFT)\n        make_face()\n        mirror(about=Plane.YZ)\n    extrude(amount=width / 2)\n    mirror(about=Plane.XY)\n\ncorners = bracket.edges().filter_by(Axis.X).group_by(Axis.Y)[-1]\nfillet(corners, fillet_radius)\n\nwith Locations(bracket.faces().sort_by(Axis.X)[-1]):\n    Hole(hole_diameter / 2)\n\nwith BuildSketch(bracket.faces().sort_by(Axis.Y)[0]):\n    SlotOverall(20 * MM, hole_diameter)\nextrude(amount=-thickness, mode=Mode.SUBTRACT)\n\nthickness = 3 * MM\nwidth = 25 * MM\nlength = 50 * MM\nheight = 25 * MM\nhole_diameter = 5 * MM\nbend_radius = 5 * MM\nfillet_radius = 2 * MM\n\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import show_all\n\nthickness = 3 * MM\nwidth = 25 * MM\nlength = 50 * MM\nheight = 25 * MM\nhole_diameter = 5 * MM\nbend_radius = 5 * MM\nfillet_radius = 2 * MM\n\nwith BuildPart() as bracket:\n    with BuildSketch() as sketch:\n        with BuildLine() as profile:\n            FilletPolyline(\n                (0, 0), (length / 2, 0), (length / 2, height), radius=bend_radius\n            )\n            offset(amount=thickness, side=Side.LEFT)\n        make_face()\n        mirror(about=Plane.YZ)\n    extrude(amount=width / 2)\n    mirror(about=Plane.XY)\n    corners = bracket.edges().filter_by(Axis.X).group_by(Axis.Y)[-1]\n    fillet(corners, fillet_radius)\n    with Locations(bracket.faces().sort_by(Axis.X)[-1]):\n        Hole(hole_diameter / 2)\n    with BuildSketch(bracket.faces().sort_by(Axis.Y)[0]):\n        SlotOverall(20 * MM, hole_diameter)\n    extrude(amount=-thickness, mode=Mode.SUBTRACT)\n\nshow_all()\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b01",
+  "source": "docs/tutorial_materials.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nbox.label = \"box\"\nlid.label = \"lid\"\nhinge_outer.label = \"outer hinge\"\nhinge_inner.label = \"inner hinge\"\nm6_screw.label = \"M6 screw\"\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b02",
+  "source": "docs/tutorial_materials.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nfrom bd_materials import metals, wood, finishes\n\nbox.material = wood.walnut()\nlid.material = wood.walnut()\n\nhinge_inner.material = metals.brass()\nhinge_outer.material = metals.brass()\nm6_screw.material = metals.brass()\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b03",
+  "source": "docs/tutorial_materials.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nhinge_inner.material = metals.brass(finish=finishes.brushed())\nhinge_outer.material = metals.brass(finish=finishes.fine_sanding())\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b04",
+  "source": "docs/tutorial_materials.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nhinge_inner.material.material\n\n# MetalMaterial(\n#     name='Brass_C360_HALF_HARD',\n#     density=8500,\n#     family='brass',\n#     transparent=False,\n#     tensile_strength=Range(min=380, max=450),\n#     modulus_of_elasticity=Range(min=100, max=110),\n#     shear_modulus=Range(min=37, max=40),\n#     poisson_ratio=Range(min=0.32, max=0.35),\n#     specific_heat_capacity=Range(min=380, max=390),\n#     max_service_temp=Range(min=150, max=250),\n#     thermal_expansion=Range(min=1.9e-05, max=2.1e-05),\n#     thermal_conductivity=Range(min=110, max=130),\n#     yield_strength=Range(min=200, max=250),\n#     shear_strength=Range(min=210, max=270),\n#     hardness=Range(min=90, max=120),\n#     hardness_scale='HB',\n#     melting_temperature=Range(min=880, max=950)\n# )  \n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b05",
+  "source": "docs/tutorial_materials.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nfrom pprint import pprint\nfrom bd_materials.core import PROPERTY_UNITS as pu\n\npprint(pu)\n\n# {\n#    'areal_density': 'g/m\u00b2',\n#    'compressive_strength_parallel': 'MPa',\n#    'density': 'kg/m\u00b3',\n#    'elongation_at_break': '%',\n#    'glass_transition_temperature': '\u00b0C',\n#    'hardness': 'per hardness_scale',\n#    'heat_deflection_temperature': '\u00b0C',\n#    'janka_hardness': 'N',\n#    'max_service_temp': '\u00b0C',\n#    'melting_temperature': '\u00b0C',\n#    'modulus_of_elasticity': 'GPa',\n#    'modulus_of_rupture': 'MPa',\n#    'poisson_ratio': '',\n#    'shear_modulus': 'GPa',\n#    'shear_strength': 'MPa',\n#    'specific_heat_capacity': 'J/(kg\u00b7K)',\n#    'tensile_strength': 'MPa',\n#    'thermal_conductivity': 'W/(m\u00b7K)',\n#    'thermal_expansion': '1/K',\n#    'thickness': 'mm',\n#    'yield_strength': 'MPa'\n# }\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b06",
+  "source": "docs/tutorial_materials.rst code-block #6",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nhinge_inner.material.finish\n\n# AppliedFinish(\n#     finish=Finish(name='Brushed', notes=None),\n#     color=None,\n#     sheen=None,\n#     scale=(1.0, 1.0),\n#     rotation=0.0\n# )\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b07",
+  "source": "docs/tutorial_materials.rst code-block #7",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nhinge_inner.material.pbr\n\n# PbrProperties(name='brass_brushed', source='physicallybased', license='CC0 1.0')\n#   values: PbrValues(\n#               color=[0.9593465889662697, 0.8952268365504931, 0.6821586160863968], \n#               metalness=1.0, \n#               roughness=1.0, \n#               specular_intensity=1.0, \n#               specular_color=[0.952, 0.979, 1.021]\n#           )\n#   maps:    PbrMaps(roughness='roughness.png', normal='normal.png')\n#   maps_dir: .venv/lib/python3.13/site-packages/threejs_materials/pbr_properties/_assets/_brush\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b08",
+  "source": "docs/tutorial_materials.rst code-block #8",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nprint(hinge_inner.material.material.density, pu[\"density\"])\n# 8500 kg/m\u00b3\n\nprint(hinge_inner.material.material.tensile_strength, pu[\"tensile_strength\"])\n# Range(min=380, max=450) MPa\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b09",
+  "source": "docs/tutorial_materials.rst code-block #9",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nprint(hinge_inner.material.material.tensile_strength.value_at(0.2), pu[\"tensile_strength\"])\n394.0 MPa\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b10",
+  "source": "docs/tutorial_materials.rst code-block #10",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nprint(f\"{hinge_outer.volume=:9.3f}\")\n# hinge_outer.volume=16116.838\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b11",
+  "source": "docs/tutorial_materials.rst code-block #11",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nprint(f\"{hinge_outer.mass()=:9.3f} g\")\n# hinge_outer.mass()=  136.993 g\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b12",
+  "source": "docs/tutorial_materials.rst code-block #12",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nprint(f\"{hinge_outer.mass(Unit.LB, Unit.IN)=:9.3f} lb\")\n# hinge_outer.mass(Unit.LB, Unit.IN)= 4949.191 lb\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b13",
+  "source": "docs/tutorial_materials.rst code-block #13",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nprint(f\"{box.volume=:9.3f}\")\n# box.volume=1940751.770\n\nprint(f\"{box.mass()=:9.3f} g\")  # volume read as mm\u00b3\n# box.mass()= 1242.081 g\n\nprint(f\"{box.mass(Unit.LB, Unit.IN)=:9.3f} lb\")  # volume read as in\u00b3\n# box.mass(Unit.LB, Unit.IN)=44873.028 lb\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b14",
+  "source": "docs/tutorial_materials.rst code-block #14",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshow(box, lid, hinge_outer, hinge_inner, m6_screw)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b15",
+  "source": "docs/tutorial_materials.rst code-block #15",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nb = Compound(label=\"Box\", children=[box, lid, hinge_outer, hinge_inner, m6_screw])\nexport_gltf(b, \"box.glb\")\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b16",
+  "source": "docs/tutorial_materials.rst code-block #16",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nfrom threejs_materials import PbrProperties\nfrom bd_materials import plastics\n\nmat = plastics.custom_plastic(\n    \"carbon fiber\", \n    density=1500,  # kg/m^3\n    pbr=PbrProperties.from_gpuopen(\"Carbon biColor Coat\")\n)\n\nbox.material = mat\nlid.material = mat\nhinge_inner.material = metals.mild_steel(finish=finishes.black_oxide())\nhinge_outer.material = metals.mild_steel(finish=finishes.black_oxide())\nm6_screw.material = metals.stainless()\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b17",
+  "source": "docs/tutorial_materials.rst code-block #17",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nshow(box, lid, hinge_outer, hinge_inner, m6_screw)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/b18",
+  "source": "docs/tutorial_materials.rst code-block #18",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nprint(f\"{hinge_outer.material.material.density=} {pu['density']}\")\n# hinge_outer.material.material.density=7800 kg/m\u00b3\n\nprint(f\"{box.material.material.density=} {pu['density']}\")\n# box.material.material.density=1500 kg/m\u00b3\n\nprint(f\"{hinge_outer.volume=:9.3f}\")\n# hinge_outer.volume=16116.838\n\nprint(f\"{hinge_outer.mass()=:9.3f} g\")\n# hinge_outer.mass()=  125.711 g\n\nprint(f\"{hinge_outer.mass(Unit.LB, Unit.IN)=:9.3f} lb\")\n# hinge_outer.mass(Unit.LB, Unit.IN)= 4541.610 lb\n\nprint(f\"{box.volume=:9.3f}\")\n# box.volume=1940751.770\n\nprint(f\"{box.mass()=:9.3f} g\")\n# box.mass()= 2911.128 g\n\nprint(f\"{box.mass(Unit.LB, Unit.IN)=:9.3f} lb\")\n# box.mass(Unit.LB, Unit.IN)=105171.159 lb\n"
+ },
+ {
+  "id": "docs-rst/tutorial_materials/all",
+  "source": "docs/tutorial_materials.rst (all 18 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\nbox.label = \"box\"\nlid.label = \"lid\"\nhinge_outer.label = \"outer hinge\"\nhinge_inner.label = \"inner hinge\"\nm6_screw.label = \"M6 screw\"\n\nfrom bd_materials import metals, wood, finishes\n\nbox.material = wood.walnut()\nlid.material = wood.walnut()\n\nhinge_inner.material = metals.brass()\nhinge_outer.material = metals.brass()\nm6_screw.material = metals.brass()\n\nhinge_inner.material = metals.brass(finish=finishes.brushed())\nhinge_outer.material = metals.brass(finish=finishes.fine_sanding())\n\nhinge_inner.material.material\n\n# MetalMaterial(\n#     name='Brass_C360_HALF_HARD',\n#     density=8500,\n#     family='brass',\n#     transparent=False,\n#     tensile_strength=Range(min=380, max=450),\n#     modulus_of_elasticity=Range(min=100, max=110),\n#     shear_modulus=Range(min=37, max=40),\n#     poisson_ratio=Range(min=0.32, max=0.35),\n#     specific_heat_capacity=Range(min=380, max=390),\n#     max_service_temp=Range(min=150, max=250),\n#     thermal_expansion=Range(min=1.9e-05, max=2.1e-05),\n#     thermal_conductivity=Range(min=110, max=130),\n#     yield_strength=Range(min=200, max=250),\n#     shear_strength=Range(min=210, max=270),\n#     hardness=Range(min=90, max=120),\n#     hardness_scale='HB',\n#     melting_temperature=Range(min=880, max=950)\n# )  \n\nfrom pprint import pprint\nfrom bd_materials.core import PROPERTY_UNITS as pu\n\npprint(pu)\n\n# {\n#    'areal_density': 'g/m\u00b2',\n#    'compressive_strength_parallel': 'MPa',\n#    'density': 'kg/m\u00b3',\n#    'elongation_at_break': '%',\n#    'glass_transition_temperature': '\u00b0C',\n#    'hardness': 'per hardness_scale',\n#    'heat_deflection_temperature': '\u00b0C',\n#    'janka_hardness': 'N',\n#    'max_service_temp': '\u00b0C',\n#    'melting_temperature': '\u00b0C',\n#    'modulus_of_elasticity': 'GPa',\n#    'modulus_of_rupture': 'MPa',\n#    'poisson_ratio': '',\n#    'shear_modulus': 'GPa',\n#    'shear_strength': 'MPa',\n#    'specific_heat_capacity': 'J/(kg\u00b7K)',\n#    'tensile_strength': 'MPa',\n#    'thermal_conductivity': 'W/(m\u00b7K)',\n#    'thermal_expansion': '1/K',\n#    'thickness': 'mm',\n#    'yield_strength': 'MPa'\n# }\n\nhinge_inner.material.finish\n\n# AppliedFinish(\n#     finish=Finish(name='Brushed', notes=None),\n#     color=None,\n#     sheen=None,\n#     scale=(1.0, 1.0),\n#     rotation=0.0\n# )\n\nhinge_inner.material.pbr\n\n# PbrProperties(name='brass_brushed', source='physicallybased', license='CC0 1.0')\n#   values: PbrValues(\n#               color=[0.9593465889662697, 0.8952268365504931, 0.6821586160863968], \n#               metalness=1.0, \n#               roughness=1.0, \n#               specular_intensity=1.0, \n#               specular_color=[0.952, 0.979, 1.021]\n#           )\n#   maps:    PbrMaps(roughness='roughness.png', normal='normal.png')\n#   maps_dir: .venv/lib/python3.13/site-packages/threejs_materials/pbr_properties/_assets/_brush\n\nprint(hinge_inner.material.material.density, pu[\"density\"])\n# 8500 kg/m\u00b3\n\nprint(hinge_inner.material.material.tensile_strength, pu[\"tensile_strength\"])\n# Range(min=380, max=450) MPa\n\nprint(hinge_inner.material.material.tensile_strength.value_at(0.2), pu[\"tensile_strength\"])\n394.0 MPa\n\nprint(f\"{hinge_outer.volume=:9.3f}\")\n# hinge_outer.volume=16116.838\n\nprint(f\"{hinge_outer.mass()=:9.3f} g\")\n# hinge_outer.mass()=  136.993 g\n\nprint(f\"{hinge_outer.mass(Unit.LB, Unit.IN)=:9.3f} lb\")\n# hinge_outer.mass(Unit.LB, Unit.IN)= 4949.191 lb\n\nprint(f\"{box.volume=:9.3f}\")\n# box.volume=1940751.770\n\nprint(f\"{box.mass()=:9.3f} g\")  # volume read as mm\u00b3\n# box.mass()= 1242.081 g\n\nprint(f\"{box.mass(Unit.LB, Unit.IN)=:9.3f} lb\")  # volume read as in\u00b3\n# box.mass(Unit.LB, Unit.IN)=44873.028 lb\n\nshow(box, lid, hinge_outer, hinge_inner, m6_screw)\n\nb = Compound(label=\"Box\", children=[box, lid, hinge_outer, hinge_inner, m6_screw])\nexport_gltf(b, \"box.glb\")\n\nfrom threejs_materials import PbrProperties\nfrom bd_materials import plastics\n\nmat = plastics.custom_plastic(\n    \"carbon fiber\", \n    density=1500,  # kg/m^3\n    pbr=PbrProperties.from_gpuopen(\"Carbon biColor Coat\")\n)\n\nbox.material = mat\nlid.material = mat\nhinge_inner.material = metals.mild_steel(finish=finishes.black_oxide())\nhinge_outer.material = metals.mild_steel(finish=finishes.black_oxide())\nm6_screw.material = metals.stainless()\n\nshow(box, lid, hinge_outer, hinge_inner, m6_screw)\n\nprint(f\"{hinge_outer.material.material.density=} {pu['density']}\")\n# hinge_outer.material.material.density=7800 kg/m\u00b3\n\nprint(f\"{box.material.material.density=} {pu['density']}\")\n# box.material.material.density=1500 kg/m\u00b3\n\nprint(f\"{hinge_outer.volume=:9.3f}\")\n# hinge_outer.volume=16116.838\n\nprint(f\"{hinge_outer.mass()=:9.3f} g\")\n# hinge_outer.mass()=  125.711 g\n\nprint(f\"{hinge_outer.mass(Unit.LB, Unit.IN)=:9.3f} lb\")\n# hinge_outer.mass(Unit.LB, Unit.IN)= 4541.610 lb\n\nprint(f\"{box.volume=:9.3f}\")\n# box.volume=1940751.770\n\nprint(f\"{box.mass()=:9.3f} g\")\n# box.mass()= 2911.128 g\n\nprint(f\"{box.mass(Unit.LB, Unit.IN)=:9.3f} lb\")\n# box.mass(Unit.LB, Unit.IN)=105171.159 lb\n"
+ },
+ {
+  "id": "docs-rst/tutorial_stl_reconstruction/b01",
+  "source": "docs/tutorial_stl_reconstruction.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\n\nimporter = Mesher()\nfull_mesh = importer.read(\"target_part.stl\")[0]\n\n# Example: reduce the work to one quarter of a symmetric model\nquarter_mesh = split(full_mesh, Plane.YZ)\nquarter_mesh = split(quarter_mesh, Plane.XZ)\n\nexport_brep(quarter_mesh, \"target_part_quarter.brep\")\n"
+ },
+ {
+  "id": "docs-rst/tutorial_stl_reconstruction/b02",
+  "source": "docs/tutorial_stl_reconstruction.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\n\nworking_mesh = import_brep(\"target_part_quarter.brep\")\n\nprimitives, leftovers, code_lines = detect_primitives(working_mesh)\n\nprint(*code_lines, sep=\"\\n\")\n"
  },
  {
   "id": "docs-rst/tutorial_stl_reconstruction/b03",
@@ -1429,15 +2215,129 @@
   "code": "from build123d import *\nfrom math import *\n\nr00 = Plane.XY.offset(-0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nc01 = Plane.XY.offset(-0.4) * Pos(0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc02 = Plane.XY.offset(-0.4) * Pos(-0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc03 = Plane.XY.offset(-0.4) * Pos(-0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc04 = Plane.XY.offset(-0.4) * Pos(0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nr05 = Plane.XY.offset(0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nr06 = Plane.YZ.offset(-0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nc07 = Plane.YZ.offset(-0.4) * Pos(-0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc08 = Plane.YZ.offset(-0.4) * Pos(-0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc09 = Plane.YZ.offset(-0.4) * Pos(0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc10 = Plane.YZ.offset(-0.4) * Pos(0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nr11 = Plane.YZ.offset(0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nr12 = Plane.ZX.offset(-0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nc13 = Plane.ZX.offset(-0.4) * Pos(-0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc14 = Plane.ZX.offset(-0.4) * Pos(-0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc15 = Plane.ZX.offset(-0.4) * Pos(0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc16 = Plane.ZX.offset(-0.4) * Pos(0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nr17 = Plane.ZX.offset(0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\ns18 = Pos((0.399999, -0.399999, 0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns19 = Pos((-0.399999, 0.399999, -0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns20 = Pos((-0.399999, -0.399999, -0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns21 = Pos((0.399999, 0.399999, -0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns22 = Pos((-0.399999, 0.400026, 0.399999)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns23 = Pos((-0.399999, -0.399999, 0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns24 = Pos((0.399999, 0.400026, 0.399999)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns25 = Pos((0.399999, -0.399999, -0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\n"
  },
  {
+  "id": "docs-rst/tutorial_stl_reconstruction/b05",
+  "source": "docs/tutorial_stl_reconstruction.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nfillet(Box(1, 1, 1).edges(), 0.1)\n"
+ },
+ {
+  "id": "docs-rst/tutorial_stl_reconstruction/all",
+  "source": "docs/tutorial_stl_reconstruction.rst (all 5 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\n\nimporter = Mesher()\nfull_mesh = importer.read(\"target_part.stl\")[0]\n\n# Example: reduce the work to one quarter of a symmetric model\nquarter_mesh = split(full_mesh, Plane.YZ)\nquarter_mesh = split(quarter_mesh, Plane.XZ)\n\nexport_brep(quarter_mesh, \"target_part_quarter.brep\")\n\nfrom build123d import *\n\nworking_mesh = import_brep(\"target_part_quarter.brep\")\n\nprimitives, leftovers, code_lines = detect_primitives(working_mesh)\n\nprint(*code_lines, sep=\"\\n\")\n\nfillet_box = fillet(Box(1, 1, 1).edges(), 0.1)\n\nr00 = Plane.XY.offset(-0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nc01 = Plane.XY.offset(-0.4) * Pos(0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc02 = Plane.XY.offset(-0.4) * Pos(-0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc03 = Plane.XY.offset(-0.4) * Pos(-0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc04 = Plane.XY.offset(-0.4) * Pos(0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nr05 = Plane.XY.offset(0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nr06 = Plane.YZ.offset(-0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nc07 = Plane.YZ.offset(-0.4) * Pos(-0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc08 = Plane.YZ.offset(-0.4) * Pos(-0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc09 = Plane.YZ.offset(-0.4) * Pos(0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc10 = Plane.YZ.offset(-0.4) * Pos(0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nr11 = Plane.YZ.offset(0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nr12 = Plane.ZX.offset(-0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\nc13 = Plane.ZX.offset(-0.4) * Pos(-0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc14 = Plane.ZX.offset(-0.4) * Pos(-0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc15 = Plane.ZX.offset(-0.4) * Pos(0.4, -0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nc16 = Plane.ZX.offset(-0.4) * Pos(0.4, 0.4) * Face.extrude(Circle(0.0999996).edge(), (0, 0, 0.8))\nr17 = Plane.ZX.offset(0.5) * Pos(-0.4, -0.4) * Rectangle(0.8, 0.8, align=Align.MIN)\ns18 = Pos((0.399999, -0.399999, 0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns19 = Pos((-0.399999, 0.399999, -0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns20 = Pos((-0.399999, -0.399999, -0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns21 = Pos((0.399999, 0.399999, -0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns22 = Pos((-0.399999, 0.400026, 0.399999)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns23 = Pos((-0.399999, -0.399999, 0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns24 = Pos((0.399999, 0.400026, 0.399999)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\ns25 = Pos((0.399999, -0.399999, -0.400026)) * Sphere(0.099983).faces().filter_by(GeomType.SPHERE)[0]\n\nfillet(Box(1, 1, 1).edges(), 0.1)\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b01",
+  "source": "docs/objects/text.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\ntext = \"The quick brown fox jumped over the lazy dog.\"\nText(text, 10)\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b02",
+  "source": "docs/objects/text.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nText(text, 10, \"Arial\", font_style=FontStyle.BOLD)\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b03",
+  "source": "docs/objects/text.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nfrom pprint import pprint\npprint(available_fonts())\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b04",
+  "source": "docs/objects/text.rst code-block #4",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nText(text, 10, \"Arial Black\")\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b05",
+  "source": "docs/objects/text.rst code-block #5",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nText(text, 10, font_path=\"DejaVuSans.ttf\")\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b06",
+  "source": "docs/objects/text.rst code-block #6",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nText(text, 10, font_path=\"SourceSans3-VariableFont_wght.ttf\")\npprint([f.name for f in available_fonts() if \"Source Sans\" in f.name])\nText(text, 10, \"Source Sans 3 Medium\")\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b07",
+  "source": "docs/objects/text.rst code-block #7",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nnew_font_faces = FontManager().register_font(\"Roboto-VariableFont_wdth,wght.ttf\")\npprint(new_font_faces)\nText(text, 10, \"Roboto\")\nText(text, 10, \"Roboto Black\")\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b08",
+  "source": "docs/objects/text.rst code-block #8",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nText(text, 10, text_align=(TextAlign.LEFT, TextAlign.TOPFIRSTLINE))\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b09",
+  "source": "docs/objects/text.rst code-block #9",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\ntext = \"The quick brown\\nfox jumped over\\nthe lazy dog.\"\nText(text, 10, align=(Align.MIN, Align.MIN))\n"
+ },
+ {
   "id": "docs-rst/objects-text/b10",
   "source": "docs/objects/text.rst code-block #10",
   "kind": "docs-rst",
   "code": "from build123d import *\nfrom math import *\n\ntext = \"The quick brown fox\"\npath = RadiusArc((-50, 0), (50, 0), 100)\nText(\n    text,\n    10,\n    path=path,\n    position_on_path=.5,\n    text_align=(TextAlign.CENTER, TextAlign.BOTTOM)\n)\n"
  },
  {
+  "id": "docs-rst/objects-text/b11",
+  "source": "docs/objects/text.rst code-block #11",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nText(text, 10, \"singleline\")\nText(text, 10, \"singleline\", single_line_width=1)\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b12",
+  "source": "docs/objects/text.rst code-block #12",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nCompound.make_text(text, 10, \"singleline\")\n"
+ },
+ {
+  "id": "docs-rst/objects-text/b13",
+  "source": "docs/objects/text.rst code-block #13",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nText(\"The\", 10, \"Source Sans 3 Black\")\n"
+ },
+ {
+  "id": "docs-rst/objects-text/all",
+  "source": "docs/objects/text.rst (all 13 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\nfrom math import *\n\ntext = \"The quick brown fox jumped over the lazy dog.\"\nText(text, 10)\n\nText(text, 10, \"Arial\", font_style=FontStyle.BOLD)\n\nfrom pprint import pprint\npprint(available_fonts())\n\nText(text, 10, \"Arial Black\")\n\nText(text, 10, font_path=\"DejaVuSans.ttf\")\n\nText(text, 10, font_path=\"SourceSans3-VariableFont_wght.ttf\")\npprint([f.name for f in available_fonts() if \"Source Sans\" in f.name])\nText(text, 10, \"Source Sans 3 Medium\")\n\nnew_font_faces = FontManager().register_font(\"Roboto-VariableFont_wdth,wght.ttf\")\npprint(new_font_faces)\nText(text, 10, \"Roboto\")\nText(text, 10, \"Roboto Black\")\n\nText(text, 10, text_align=(TextAlign.LEFT, TextAlign.TOPFIRSTLINE))\n\ntext = \"The quick brown\\nfox jumped over\\nthe lazy dog.\"\nText(text, 10, align=(Align.MIN, Align.MIN))\n\ntext = \"The quick brown fox\"\npath = RadiusArc((-50, 0), (50, 0), 100)\nText(\n    text,\n    10,\n    path=path,\n    position_on_path=.5,\n    text_align=(TextAlign.CENTER, TextAlign.BOTTOM)\n)\n\nText(text, 10, \"singleline\")\nText(text, 10, \"singleline\", single_line_width=1)\n\nCompound.make_text(text, 10, \"singleline\")\n\nText(\"The\", 10, \"Source Sans 3 Black\")\n"
+ },
+ {
   "id": "docs-rst/topology_selection-filter_examples/b01",
   "source": "docs/topology_selection/filter_examples.rst code-block #1",
   "kind": "docs-rst",
   "code": "from build123d import *\n\nwith BuildPart() as part:\n    Box(1, 1, 1)\n"
+ },
+ {
+  "id": "docs-rst/topology_selection-filter_examples/b02",
+  "source": "docs/topology_selection/filter_examples.rst code-block #2",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\npart.faces().filter_by(Axis.Z)\npart.faces().filter_by(Plane.XY)\n"
+ },
+ {
+  "id": "docs-rst/topology_selection-filter_examples/b03",
+  "source": "docs/topology_selection/filter_examples.rst code-block #3",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\npart.faces().filter_by(lambda f: abs(f.normal_at().dot(Axis.Z.direction) < 1e-6)\npart.faces().filter_by(lambda f: abs(f.normal_at().dot(Plane.XY.z_dir)) < 1e-6)\n"
+ },
+ {
+  "id": "docs-rst/topology_selection-filter_examples/all",
+  "source": "docs/topology_selection/filter_examples.rst (all 3 code-blocks)",
+  "kind": "docs-rst-page",
+  "code": "from build123d import *\n\nwith BuildPart() as part:\n    Box(1, 1, 1)\n\npart.faces().filter_by(Axis.Z)\npart.faces().filter_by(Plane.XY)\n\npart.faces().filter_by(lambda f: abs(f.normal_at().dot(Axis.Z.direction) < 1e-6)\npart.faces().filter_by(lambda f: abs(f.normal_at().dot(Plane.XY.z_dir)) < 1e-6)\n"
+ },
+ {
+  "id": "docs-rst/topology_selection-group_examples/b01",
+  "source": "docs/topology_selection/group_examples.rst code-block #1",
+  "kind": "docs-rst",
+  "code": "from build123d import *\nfrom math import *\n\nradius_groups = part.edges().filter_by(GeomType.CIRCLE)\nbearing_edges = radius_groups.filter_by(lambda e: e.radius == 8)\npin_edges = radius_groups.filter_by(lambda e: e.radius == 1.5)\n"
  }
 ]

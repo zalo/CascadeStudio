@@ -183,6 +183,13 @@ function _runGuarded(B, source, moduleName) {
   }
 
   if (caught) {
+    // A raw wasm exception (a NUMBER — an OCCT Standard_Failure pointer) that
+    // escaped a direct oc.* call outside CacheOp cannot carry a Python
+    // traceback; decode it into OCCT's own message rather than printing the
+    // bare pointer value.
+    if (typeof caught === 'number' && self.describeOCCTException) {
+      throw new Error('INTERNAL OPENCASCADE ERROR: ' + self.describeOCCTException(caught));
+    }
     throw new Error(_formatPythonError(B, caught, moduleName));
   }
   for (const line of stderrBuffer) { console.error(line); }

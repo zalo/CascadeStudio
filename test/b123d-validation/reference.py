@@ -59,6 +59,11 @@ def main():
 
     ns = {
         "__name__": "main",  # match the lite worker's module name
+        # docs selector examples resolve their STEP assets relative to
+        # os.path.dirname(os.path.abspath(__file__)) - the scratch cwd, where
+        # reference.py has symlinked them (the lite worker defines the same
+        # name in the user module, see PythonRuntime.js)
+        "__file__": sys.argv[1],
         "show": _stub, "show_object": _stub, "show_all": _stub,
         "set_port": _stub, "set_defaults": _stub, "set_colormap": _stub,
     }
@@ -105,10 +110,42 @@ main()
 '''
 
 
+B123D_SRC = os.environ.get("B123D_SRC", "/tmp/b123d")
+
+
+def _prepare_scratch(entry, sdir):
+    """Give the script the filesystem neighbourhood it expects.
+
+    docs scripts write SVGs into `assets/` and open STEP assets next to
+    themselves (`os.path.dirname(__file__)`), so create the output directories
+    and symlink every non-.py sibling from the script's own source directory.
+    """
+    for sub in ("assets", os.path.join("assets", "topology_selection"),
+                os.path.join("assets", "ttt")):
+        os.makedirs(os.path.join(sdir, sub), exist_ok=True)
+    reldir = entry.get("data_dir")
+    if not reldir:
+        return
+    absdir = os.path.join(B123D_SRC, reldir)
+    if not os.path.isdir(absdir):
+        return
+    for fname in os.listdir(absdir):
+        if fname.endswith(".py"):
+            continue
+        src = os.path.join(absdir, fname)
+        dst = os.path.join(sdir, fname)
+        if os.path.isfile(src) and not os.path.exists(dst):
+            try:
+                os.symlink(src, dst)
+            except OSError:
+                pass
+
+
 def run_one(entry, scratch):
     sid = entry["id"]
     sdir = os.path.join(scratch, sid.replace("/", "_"))
     os.makedirs(sdir, exist_ok=True)
+    _prepare_scratch(entry, sdir)
     spath = os.path.join(sdir, "script.py")
     with open(spath, "w") as f:
         f.write(entry["code"])

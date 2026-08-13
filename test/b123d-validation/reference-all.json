@@ -102,6 +102,30 @@
   },
   "status": "ok"
  },
+ "docs-rst/advantages/all": {
+  "error": "SyntaxError: invalid syntax. Perhaps you forgot a comma?",
+  "status": "error"
+ },
+ "docs-rst/advantages/b01": {
+  "error": "SyntaxError: invalid syntax. Perhaps you forgot a comma?",
+  "status": "error"
+ },
+ "docs-rst/advantages/b02": {
+  "error": "NameError: name 'width' is not defined",
+  "status": "error"
+ },
+ "docs-rst/advantages/b03": {
+  "error": "NameError: name 'width' is not defined",
+  "status": "error"
+ },
+ "docs-rst/advantages/b04": {
+  "error": "ValueError: Polyline requires two or more pts",
+  "status": "error"
+ },
+ "docs-rst/advantages/b05": {
+  "error": "NameError: name 'rail' is not defined",
+  "status": "error"
+ },
  "docs-rst/algebra_performance/all": {
   "shapes": {
    "c": {
@@ -1092,6 +1116,10 @@
   },
   "status": "ok"
  },
+ "docs-rst/algebra_performance/b02": {
+  "error": "NameError: name 'diam' is not defined",
+  "status": "error"
+ },
  "docs-rst/algebra_performance/b03": {
   "shapes": {
    "polygons": {
@@ -1110,6 +1138,22 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/build_line/b01": {
+  "error": "AttributeError: 'BuildLine' has no attribute 'line_local'. Did you intend '<BuildLine>.line.line_local'?",
+  "status": "error"
+ },
+ "docs-rst/build_sketch/all": {
+  "error": "NameError: name 'display' is not defined",
+  "status": "error"
+ },
+ "docs-rst/build_sketch/b01": {
+  "error": "NameError: name 'display' is not defined",
+  "status": "error"
+ },
+ "docs-rst/build_sketch/b02": {
+  "error": "NameError: name 'display' is not defined",
+  "status": "error"
  },
  "docs-rst/build_sketch/b03": {
   "shapes": {
@@ -1130,6 +1174,33 @@
   },
   "status": "ok"
  },
+ "docs-rst/build_sketch/b04": {
+  "error": "NameError: name 'plane' is not defined. Did you mean: 'Plane'?",
+  "status": "error"
+ },
+ "docs-rst/debugging_logging/all": {
+  "error": "NameError: name 'logging' is not defined. Did you forget to import 'logging'?",
+  "status": "error"
+ },
+ "docs-rst/debugging_logging/b01": {
+  "error": "NameError: name 'logging' is not defined. Did you forget to import 'logging'?",
+  "status": "error"
+ },
+ "docs-rst/debugging_logging/b02": {
+  "error": "NameError: name 'logging' is not defined. Did you forget to import 'logging'?",
+  "status": "error"
+ },
+ "docs-rst/debugging_logging/b03": {
+  "error": "NameError: name 'logger' is not defined",
+  "status": "error"
+ },
+ "docs-rst/debugging_logging/b04": {
+  "status": "no-shapes"
+ },
+ "docs-rst/import_export/all": {
+  "error": "NameError: name 'export_obj' is not defined. Did you mean: 'export_stl'?",
+  "status": "error"
+ },
  "docs-rst/import_export/b01": {
   "shapes": {
    "box_builder": {
@@ -1148,6 +1219,42 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/import_export/b02": {
+  "error": "NameError: name 'export_obj' is not defined. Did you mean: 'export_stl'?",
+  "status": "error"
+ },
+ "docs-rst/import_export/b03": {
+  "error": "NameError: name 'part' is not defined. Did you mean: 'Part'?",
+  "status": "error"
+ },
+ "docs-rst/import_export/b04": {
+  "error": "NameError: name 'uuid' is not defined. Did you forget to import 'uuid'?",
+  "status": "error"
+ },
+ "docs-rst/import_export/b05": {
+  "error": "lib3mf.Lib3MF.ELib3MFException: Lib3MFException 5: The specified file could not be opened",
+  "status": "error"
+ },
+ "docs-rst/joints/all": {
+  "error": "NameError: name 'pipe' is not defined",
+  "status": "error"
+ },
+ "docs-rst/joints/b01": {
+  "error": "NameError: name 'pipe' is not defined",
+  "status": "error"
+ },
+ "docs-rst/joints/b02": {
+  "error": "NameError: name 'pipe' is not defined",
+  "status": "error"
+ },
+ "docs-rst/joints/b03": {
+  "error": "NameError: name 'hinge_outer' is not defined",
+  "status": "error"
+ },
+ "docs-rst/key_concepts_algebra/all": {
+  "error": "NameError: name 'plane' is not defined. Did you mean: 'Plane'?",
+  "status": "error"
  },
  "docs-rst/key_concepts_algebra/b01": {
   "shapes": {
@@ -1239,6 +1346,32 @@
   },
   "status": "ok"
  },
+ "docs-rst/key_concepts_algebra/b05": {
+  "error": "NameError: name 'plane' is not defined. Did you mean: 'Plane'?",
+  "status": "error"
+ },
+ "docs-rst/key_concepts_algebra/b06": {
+  "error": "NameError: name 'plane' is not defined. Did you mean: 'Plane'?",
+  "status": "error"
+ },
+ "docs-rst/key_concepts_algebra/b07": {
+  "status": "no-shapes"
+ },
+ "docs-rst/key_concepts_algebra/b08": {
+  "status": "no-shapes"
+ },
+ "docs-rst/key_concepts_algebra/b09": {
+  "status": "no-shapes"
+ },
+ "docs-rst/key_concepts_algebra/b10": {
+  "status": "no-shapes"
+ },
+ "docs-rst/key_concepts_algebra/b11": {
+  "status": "no-shapes"
+ },
+ "docs-rst/key_concepts_algebra/b12": {
+  "status": "no-shapes"
+ },
  "docs-rst/key_concepts_algebra/b13": {
   "shapes": {
    "b": {
@@ -1257,6 +1390,10 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/key_concepts_builder/all": {
+  "error": "IndentationError: expected an indented block after function definition on line 87",
+  "status": "error"
  },
  "docs-rst/key_concepts_builder/b01": {
   "shapes": {
@@ -1357,6 +1494,25 @@
   },
   "status": "ok"
  },
+ "docs-rst/key_concepts_builder/b04": {
+  "status": "no-shapes"
+ },
+ "docs-rst/key_concepts_builder/b05": {
+  "error": "AttributeError: 'BuildPart' has no attribute 'part_local'. Did you intend '<BuildPart>.part.part_local'?",
+  "status": "error"
+ },
+ "docs-rst/key_concepts_builder/b06": {
+  "error": "ValueError: Unable to repositioned type <class 'NoneType'> with respect to local coordinates",
+  "status": "error"
+ },
+ "docs-rst/key_concepts_builder/b07": {
+  "error": "AttributeError: 'BuildLine' has no attribute 'line_local'. Did you intend '<BuildLine>.line.line_local'?",
+  "status": "error"
+ },
+ "docs-rst/key_concepts_builder/b08": {
+  "error": "Invoked with: <OCP.OCP.gp.gp_Ax2 object at 0x74959253adb0>, <build123d.build_part.BuildPart object at 0x74959344b800>, 10, 10",
+  "status": "error"
+ },
  "docs-rst/key_concepts_builder/b09": {
   "shapes": {
    "part_builder": {
@@ -1428,6 +1584,9 @@
   },
   "status": "ok"
  },
+ "docs-rst/key_concepts_builder/b12": {
+  "status": "no-shapes"
+ },
  "docs-rst/key_concepts_builder/b13": {
   "shapes": {
    "holes": {
@@ -1480,6 +1639,13 @@
   },
   "status": "ok"
  },
+ "docs-rst/key_concepts_builder/b15": {
+  "status": "no-shapes"
+ },
+ "docs-rst/key_concepts_builder/b16": {
+  "error": "IndentationError: expected an indented block after function definition on line 4",
+  "status": "error"
+ },
  "docs-rst/key_concepts_builder/b17": {
   "shapes": {
    "pipes": {
@@ -1498,6 +1664,10 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/key_concepts_builder/b18": {
+  "error": "NameError: name 'Enum' is not defined",
+  "status": "error"
  },
  "docs-rst/key_concepts_builder/b19": {
   "shapes": {
@@ -1603,6 +1773,125 @@
   },
   "status": "ok"
  },
+ "docs-rst/location_arithmetic/b01": {
+  "status": "no-shapes"
+ },
+ "docs-rst/location_arithmetic/b02": {
+  "error": "NameError: name 'location_symbol' is not defined",
+  "status": "error"
+ },
+ "docs-rst/location_arithmetic/b03": {
+  "error": "NameError: name 'plane_symbol' is not defined",
+  "status": "error"
+ },
+ "docs-rst/location_arithmetic/b04": {
+  "error": "NameError: name 'location_symbol' is not defined",
+  "status": "error"
+ },
+ "docs-rst/location_arithmetic/b05": {
+  "error": "NameError: name 'location_symbol' is not defined",
+  "status": "error"
+ },
+ "docs-rst/location_arithmetic/b06": {
+  "error": "NameError: name 'location_symbol' is not defined",
+  "status": "error"
+ },
+ "docs-rst/location_arithmetic/b07": {
+  "error": "NameError: name 'location_symbol' is not defined",
+  "status": "error"
+ },
+ "docs-rst/location_arithmetic/b08": {
+  "error": "NameError: name 'location_symbol' is not defined",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/all": {
+  "error": "NameError: name 'box' is not defined. Did you mean: 'Box'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b01": {
+  "status": "no-shapes"
+ },
+ "docs-rst/moving_objects/b02": {
+  "error": "NameError: name 'box' is not defined. Did you mean: 'Box'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b03": {
+  "error": "NameError: name 'x' is not defined",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b04": {
+  "error": "NameError: name 'shape' is not defined. Did you mean: 'scale'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b05": {
+  "error": "NameError: name 'X' is not defined",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b06": {
+  "error": "NameError: name 'shape' is not defined. Did you mean: 'scale'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b07": {
+  "error": "NameError: name 'shape' is not defined. Did you mean: 'scale'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b08": {
+  "error": "NameError: name 'shape' is not defined. Did you mean: 'scale'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b09": {
+  "error": "NameError: name 'shape' is not defined. Did you mean: 'scale'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b10": {
+  "error": "NameError: name 'shape' is not defined. Did you mean: 'scale'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b11": {
+  "error": "NameError: name 'shape' is not defined. Did you mean: 'scale'?",
+  "status": "error"
+ },
+ "docs-rst/moving_objects/b12": {
+  "error": "NameError: name 'shape' is not defined. Did you mean: 'scale'?",
+  "status": "error"
+ },
+ "docs-rst/objects-text/all": {
+  "error": "FileNotFoundError: [Errno 2] No such file or directory: 'Roboto-VariableFont_wdth,wght.ttf'",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b01": {
+  "status": "no-shapes"
+ },
+ "docs-rst/objects-text/b02": {
+  "error": "NameError: name 'text' is not defined. Did you mean: 'Text'?",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b03": {
+  "status": "no-shapes"
+ },
+ "docs-rst/objects-text/b04": {
+  "error": "NameError: name 'text' is not defined. Did you mean: 'Text'?",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b05": {
+  "error": "NameError: name 'text' is not defined. Did you mean: 'Text'?",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b06": {
+  "error": "NameError: name 'text' is not defined. Did you mean: 'Text'?",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b07": {
+  "error": "FileNotFoundError: [Errno 2] No such file or directory: 'Roboto-VariableFont_wdth,wght.ttf'",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b08": {
+  "error": "NameError: name 'text' is not defined. Did you mean: 'Text'?",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b09": {
+  "status": "no-shapes"
+ },
  "docs-rst/objects-text/b10": {
   "shapes": {
    "path": {
@@ -1621,6 +1910,47 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/objects-text/b11": {
+  "error": "NameError: name 'text' is not defined. Did you mean: 'Text'?",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b12": {
+  "error": "NameError: name 'text' is not defined. Did you mean: 'Text'?",
+  "status": "error"
+ },
+ "docs-rst/objects-text/b13": {
+  "status": "no-shapes"
+ },
+ "docs-rst/objects/all": {
+  "error": "NameError: name 'a' is not defined",
+  "status": "error"
+ },
+ "docs-rst/objects/b01": {
+  "error": "NameError: name 'a' is not defined",
+  "status": "error"
+ },
+ "docs-rst/objects/b02": {
+  "error": "NameError: name 'a' is not defined",
+  "status": "error"
+ },
+ "docs-rst/objects/b03": {
+  "status": "no-shapes"
+ },
+ "docs-rst/objects/b04": {
+  "status": "no-shapes"
+ },
+ "docs-rst/operations/all": {
+  "error": "NameError: name 'radius' is not defined. Did you mean: 'radians'?",
+  "status": "error"
+ },
+ "docs-rst/operations/b01": {
+  "error": "NameError: name 'radius' is not defined. Did you mean: 'radians'?",
+  "status": "error"
+ },
+ "docs-rst/operations/b02": {
+  "error": "NameError: name 'radius' is not defined. Did you mean: 'radians'?",
+  "status": "error"
  },
  "docs-rst/selectors/all": {
   "shapes": {
@@ -1669,6 +1999,9 @@
   },
   "status": "ok"
  },
+ "docs-rst/selectors/b01": {
+  "status": "no-shapes"
+ },
  "docs-rst/selectors/b02": {
   "shapes": {
    "faces_with_holes[0]": {
@@ -1716,6 +2049,10 @@
   },
   "status": "ok"
  },
+ "docs-rst/tips/all": {
+  "error": "SyntaxError: invalid syntax",
+  "status": "error"
+ },
  "docs-rst/tips/b01": {
   "shapes": {
    "plate": {
@@ -1748,6 +2085,14 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/tips/b02": {
+  "error": "SyntaxError: invalid syntax",
+  "status": "error"
+ },
+ "docs-rst/tips/b03": {
+  "error": "ModuleNotFoundError: No module named 'cadquery'",
+  "status": "error"
  },
  "docs-rst/tips/b04": {
   "shapes": {
@@ -1787,6 +2132,14 @@
   },
   "status": "ok"
  },
+ "docs-rst/tips/b06": {
+  "error": "ValueError: Polyline requires two or more pts",
+  "status": "error"
+ },
+ "docs-rst/topology_selection-filter_examples/all": {
+  "error": "SyntaxError: '(' was never closed",
+  "status": "error"
+ },
  "docs-rst/topology_selection-filter_examples/b01": {
   "shapes": {
    "part": {
@@ -1806,6 +2159,22 @@
   },
   "status": "ok"
  },
+ "docs-rst/topology_selection-filter_examples/b02": {
+  "error": "NameError: name 'part' is not defined. Did you mean: 'Part'?",
+  "status": "error"
+ },
+ "docs-rst/topology_selection-filter_examples/b03": {
+  "error": "SyntaxError: '(' was never closed",
+  "status": "error"
+ },
+ "docs-rst/topology_selection-group_examples/b01": {
+  "error": "NameError: name 'part' is not defined. Did you mean: 'Part'?",
+  "status": "error"
+ },
+ "docs-rst/topology_selection/all": {
+  "error": "SyntaxError: unmatched ')'",
+  "status": "error"
+ },
  "docs-rst/topology_selection/b01": {
   "shapes": {
    "context": {
@@ -1824,6 +2193,10 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/topology_selection/b02": {
+  "error": "TypeError: Shape.edges() takes 1 positional argument but 2 were given",
+  "status": "error"
  },
  "docs-rst/topology_selection/b03": {
   "shapes": {
@@ -2028,6 +2401,14 @@
   },
   "status": "ok"
  },
+ "docs-rst/topology_selection/b10": {
+  "error": "NameError: name 'part' is not defined. Did you mean: 'Part'?",
+  "status": "error"
+ },
+ "docs-rst/topology_selection/b11": {
+  "error": "SyntaxError: unmatched ')'",
+  "status": "error"
+ },
  "docs-rst/topology_selection/b12": {
   "shapes": {
    "bottom[0]": {
@@ -2229,6 +2610,30 @@
   },
   "status": "ok"
  },
+ "docs-rst/topology_selection/b13": {
+  "error": "NameError: name 'ColorMap' is not defined",
+  "status": "error"
+ },
+ "docs-rst/topology_selection/b14": {
+  "error": "NameError: name 'mesh_sphere' is not defined",
+  "status": "error"
+ },
+ "docs-rst/topology_selection/b15": {
+  "error": "NameError: name 'part' is not defined. Did you mean: 'Part'?",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/all": {
+  "error": "NameError: name 'ConstrainedArcs' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b01": {
+  "error": "TypeError: Invalid tangency: Ellipsis",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b02": {
+  "error": "TypeError: Invalid tangency: Ellipsis",
+  "status": "error"
+ },
  "docs-rst/tutorial_constraints/b03": {
   "shapes": {
    "isosceles": {
@@ -2247,6 +2652,9 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/tutorial_constraints/b04": {
+  "status": "no-shapes"
  },
  "docs-rst/tutorial_constraints/b05": {
   "shapes": {
@@ -2591,6 +2999,10 @@
   },
   "status": "ok"
  },
+ "docs-rst/tutorial_constraints/b12": {
+  "error": "TypeError: Invalid tangency: Ellipsis",
+  "status": "error"
+ },
  "docs-rst/tutorial_constraints/b13": {
   "shapes": {
    "c1": {
@@ -2694,6 +3106,80 @@
   },
   "status": "ok"
  },
+ "docs-rst/tutorial_constraints/b14": {
+  "error": "NameError: name 'tangency_one' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b15": {
+  "error": "NameError: name 'tangency_one' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b16": {
+  "error": "NameError: name 'tangency_one' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b17": {
+  "error": "NameError: name 'tangency_one' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b18": {
+  "error": "NameError: name 'tangency_one' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b19": {
+  "error": "NameError: name 'tangency_one' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b20": {
+  "error": "NameError: name 'tangency_one' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b21": {
+  "error": "NameError: name 'tangency_one' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b22": {
+  "error": "TypeError: Invalid tangency: Ellipsis",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b23": {
+  "error": "TypeError: Invalid tangency: Ellipsis",
+  "status": "error"
+ },
+ "docs-rst/tutorial_constraints/b24": {
+  "status": "no-shapes"
+ },
+ "docs-rst/tutorial_constraints/b25": {
+  "error": "NameError: name 'ImageFace' is not defined. Did you mean: 'make_face'?",
+  "status": "error"
+ },
+ "docs-rst/tutorial_design/all": {
+  "error": "NameError: name 'BuildSketch' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_design/b01": {
+  "error": "NameError: name 'length' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_design/b02": {
+  "error": "NameError: name 'length' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_design/b03": {
+  "error": "NameError: name 'bracket' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_design/b04": {
+  "error": "NameError: name 'bracket' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_design/b05": {
+  "error": "NameError: name 'bracket' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_design/b06": {
+  "status": "no-shapes"
+ },
  "docs-rst/tutorial_design/b07": {
   "shapes": {
    "bracket": {
@@ -2740,6 +3226,93 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/tutorial_materials/all": {
+  "error": "SyntaxError: invalid syntax",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b01": {
+  "error": "NameError: name 'box' is not defined. Did you mean: 'Box'?",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b02": {
+  "error": "NameError: name 'box' is not defined. Did you mean: 'Box'?",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b03": {
+  "error": "NameError: name 'metals' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b04": {
+  "error": "NameError: name 'hinge_inner' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b05": {
+  "status": "no-shapes"
+ },
+ "docs-rst/tutorial_materials/b06": {
+  "error": "NameError: name 'hinge_inner' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b07": {
+  "error": "NameError: name 'hinge_inner' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b08": {
+  "error": "NameError: name 'hinge_inner' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b09": {
+  "error": "SyntaxError: invalid syntax",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b10": {
+  "error": "NameError: name 'hinge_outer' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b11": {
+  "error": "NameError: name 'hinge_outer' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b12": {
+  "error": "NameError: name 'hinge_outer' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b13": {
+  "error": "NameError: name 'box' is not defined. Did you mean: 'Box'?",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b14": {
+  "error": "NameError: name 'box' is not defined. Did you mean: 'Box'?",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b15": {
+  "error": "NameError: name 'box' is not defined. Did you mean: 'Box'?",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b16": {
+  "error": "ImportError: MaterialX is required to convert materials from a source, but it is not installed. Install it with:  pip install threejs-materials[materialx]",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b17": {
+  "error": "NameError: name 'box' is not defined. Did you mean: 'Box'?",
+  "status": "error"
+ },
+ "docs-rst/tutorial_materials/b18": {
+  "error": "NameError: name 'hinge_outer' is not defined",
+  "status": "error"
+ },
+ "docs-rst/tutorial_stl_reconstruction/all": {
+  "error": "lib3mf.Lib3MF.ELib3MFException: Lib3MFException 5: The specified file could not be opened",
+  "status": "error"
+ },
+ "docs-rst/tutorial_stl_reconstruction/b01": {
+  "error": "lib3mf.Lib3MF.ELib3MFException: Lib3MFException 5: The specified file could not be opened",
+  "status": "error"
+ },
+ "docs-rst/tutorial_stl_reconstruction/b02": {
+  "error": "ValueError: Could not import target_part_quarter.brep",
+  "status": "error"
  },
  "docs-rst/tutorial_stl_reconstruction/b03": {
   "shapes": {
@@ -3128,6 +3701,9 @@
    }
   },
   "status": "ok"
+ },
+ "docs-rst/tutorial_stl_reconstruction/b05": {
+  "status": "no-shapes"
  },
  "docs-selectors/filter_all_edges_circle": {
   "shapes": {

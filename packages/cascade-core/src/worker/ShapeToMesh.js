@@ -289,6 +289,13 @@ class CascadeStudioMesher {
 
     } catch (err) {
       setTimeout(() => {
+        // A raw wasm exception is a NUMBER: assigning .message to it throws a
+        // TypeError in strict mode, which used to hide the real fault. Decode
+        // the pointer into OCCT's own message instead.
+        if (typeof err !== 'object' || err === null) {
+          throw new Error("INTERNAL OPENCASCADE ERROR DURING GENERATE: " +
+            self.describeOCCTException(err));
+        }
         err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
         throw err;
       }, 0);

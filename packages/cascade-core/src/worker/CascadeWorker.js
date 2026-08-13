@@ -61,7 +61,11 @@ class CascadeStudioWorker {
           err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
           throw err;
         } else {
-          throw new Error("INTERNAL OPENCASCADE ERROR: " + err);
+          // Raw wasm exceptions arrive as pointer numbers — decode them into
+          // OCCT's own diagnostic where possible (self.describeOCCTException
+          // is installed by CascadeStudioUtils).
+          throw new Error("INTERNAL OPENCASCADE ERROR: " + (self.describeOCCTException
+            ? self.describeOCCTException(err) : err));
         }
       }, 0);
       realError.apply(console, arguments);
@@ -108,14 +112,46 @@ class CascadeStudioWorker {
     await this._loadFonts(opentype);
 
     // Load the OpenCascade WebAssembly Module (v2 Embind)
+    const wasmPath = (path) => {
+      if (path.endsWith('.wasm')) {
+        // In build mode, WASM is copied to the build output directory
+        return typeof ESBUILD !== 'undefined' ? './cascadestudio.wasm' : '../../node_modules/opencascade.js/dist/cascadestudio.wasm';
+      }
+      return path;
+    };
     try {
       const openCascade = await initOpenCascade({
-        locateFile(path) {
-          if (path.endsWith('.wasm')) {
-            // In build mode, WASM is copied to the build output directory
-            return typeof ESBUILD !== 'undefined' ? './cascadestudio.wasm' : '../../node_modules/opencascade.js/dist/cascadestudio.wasm';
-          }
-          return path;
+        locateFile: wasmPath,
+        // Emscripten's documented instantiation hook, used ONLY to keep a
+        // reference to the wasm linear memory.
+        //
+        // Why: OCCT throws C++ exceptions, which arrive in JS as raw pointer
+        // NUMBERS. The fork binds `OCJS::getStandard_FailureData(ptr)` to turn
+        // one back into a `Standard_Failure`, but that binding is UNCALLABLE in
+        // this build — embind refuses with "unbound types: St9exception",
+        // because Standard_Failure derives from std::exception, which is not a
+        // registered type. This build also exports no runtime helpers (no
+        // HEAPU8/getValue/UTF8ToString), so there is no other way in.
+        // Capturing the Memory here lets StandardUtils.decodeOCCTException read
+        // Standard_Failure's message directly (see its layout notes), turning
+        // "the kernel threw '6454200'" into OCCT's own diagnostic.
+        instantiateWasm(imports, receiveInstance) {
+          const url = wasmPath('cascadestudio.wasm');
+          (async () => {
+            let result;
+            try {
+              result = await WebAssembly.instantiateStreaming(fetch(url), imports);
+            } catch (streamError) {
+              // wrong MIME type / no streaming support: fall back exactly like
+              // Emscripten's own instantiateAsync does
+              const bytes = await (await fetch(url)).arrayBuffer();
+              result = await WebAssembly.instantiate(bytes, imports);
+            }
+            for (const value of Object.values(result.instance.exports)) {
+              if (value instanceof WebAssembly.Memory) { self.ocMemory = value; break; }
+            }
+            receiveInstance(result.instance, result.module);
+          })();
         }
       });
 
