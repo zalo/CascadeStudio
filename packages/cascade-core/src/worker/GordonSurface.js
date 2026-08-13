@@ -1225,6 +1225,49 @@ function makeEngine(oc) {
     return out;
   }
 
+  /** Evaluate the surface on a whole parameter GRID: same values as
+   *  surfEval(s, u, v) per point, but the flat knot vectors and basis
+   *  functions are computed once and the u direction is collapsed to a
+   *  control curve per u row (surfEval rebuilds the flat knots on every
+   *  call, which dominates dense sampling). Returns out[i][j]. */
+  function surfEvalGrid(s, us, vs) {
+    const uflat = flatKnots(s.uknots, s.umults);
+    const vflat = flatKnots(s.vknots, s.vmults);
+    const nU = surfNbUPoles(s), nV = surfNbVPoles(s);
+    const bvs = vs.map((v) => dersBasis(vflat, s.vdeg, v, 0));
+    const out = [];
+    for (let a = 0; a < us.length; a++) {
+      const bu = dersBasis(uflat, s.udeg, us[a], 0);
+      const tmp = new Array(nV);
+      for (let jv = 0; jv < nV; jv++) tmp[jv] = [0, 0, 0];
+      for (let i = 0; i <= s.udeg; i++) {
+        const iu = bu.span - s.udeg + i;
+        if (iu < 0 || iu >= nU) continue;
+        const f = bu.ders[0][i];
+        if (f === 0) continue;
+        const row = s.poles[iu];
+        for (let jv = 0; jv < nV; jv++) {
+          const P = row[jv];
+          tmp[jv][0] += f * P[0]; tmp[jv][1] += f * P[1]; tmp[jv][2] += f * P[2];
+        }
+      }
+      const rowOut = [];
+      for (let b = 0; b < vs.length; b++) {
+        const bv = bvs[b];
+        let x = 0, y = 0, z = 0;
+        for (let j = 0; j <= s.vdeg; j++) {
+          const jv = bv.span - s.vdeg + j;
+          if (jv < 0 || jv >= nV) continue;
+          const f = bv.ders[0][j];
+          x += f * tmp[jv][0]; y += f * tmp[jv][1]; z += f * tmp[jv][2];
+        }
+        rowOut.push([x, y, z]);
+      }
+      out.push(rowOut);
+    }
+    return out;
+  }
+
   function isUDirClosed(grid, tol) {
     // grid[u][v]; first row vs last row
     const uhi = grid.length - 1;
@@ -2091,21 +2134,128 @@ function makeEngine(oc) {
     const v0 = surf.vknots[0], v1 = surf.vknots[surf.vknots.length - 1];
     const nu = Math.min(181, Math.max(41, 2 * surfNbUPoles(surf) + 1));
     const nv = Math.min(181, Math.max(41, 2 * surfNbVPoles(surf) + 1));
-    const uParams = linspaceWithBreaks(u0, u1, nu, surf.uknots.slice(1, -1));
-    const vParams = linspaceWithBreaks(v0, v1, nv, surf.vknots.slice(1, -1));
+    let uParams = linspaceWithBreaks(u0, u1, nu, surf.uknots.slice(1, -1));
+    let vParams = linspaceWithBreaks(v0, v1, nv, surf.vknots.slice(1, -1));
+    // Drop sample lines that are (nearly) COINCIDENT in 3D with the one before
+    // them. GeomAPI_PointsToBSplineSurface parametrizes by chord length, so
+    // near-coincident lines get near-equal parameters and the interpolant
+    // oscillates wildly between them. That happens on every surface with a
+    // degenerate boundary (a Gordon network whose first/last guide is a POINT,
+    // like bracelet's tip): all the sample rows crowd into the pole.
+    const rowScale = (() => {
+      let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      const probe = surfEvalGrid(surf, [u0, 0.5 * (u0 + u1), u1],
+                                       [v0, 0.5 * (v0 + v1), v1]);
+      for (const row of probe) {
+        for (const p of row) {
+          for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]); }
+        }
+      }
+      return Math.sqrt((hi[0] - lo[0]) ** 2 + (hi[1] - lo[1]) ** 2 + (hi[2] - lo[2]) ** 2);
+    })();
+    const minStep = Math.max(1e-9, 1e-3 * rowScale);
+    const pruneParams = (params, lines) => {
+      if (params.length < 3) return params;
+      const lineDist = (a, b) => {
+        let mx = 0;
+        for (let k = 0; k < a.length; k++) mx = Math.max(mx, dist3(a[k], b[k]));
+        return mx;
+      };
+      const keep = [0];
+      for (let i = 1; i < params.length - 1; i++) {
+        if (lineDist(lines[keep[keep.length - 1]], lines[i]) >= minStep) keep.push(i);
+      }
+      const last = params.length - 1;
+      while (keep.length > 1 && lineDist(lines[keep[keep.length - 1]], lines[last]) < minStep) keep.pop();
+      keep.push(last);
+      return keep.map((i) => params[i]);
+    };
+    const probeV = [0, 0.25, 0.5, 0.75, 1].map((t) => v0 + t * (v1 - v0));
+    const probeU = [0, 0.25, 0.5, 0.75, 1].map((t) => u0 + t * (u1 - u0));
+    uParams = pruneParams(uParams, surfEvalGrid(surf, uParams, probeV));
+    const vProbeRows = surfEvalGrid(surf, probeU, vParams);
+    vParams = pruneParams(vParams,
+      vParams.map((v, j) => vProbeRows.map((row) => row[j])));
+    const grid = surfEvalGrid(surf, uParams, vParams);
     const arr = new oc.TColgp_Array2OfPnt_2(1, uParams.length, 1, vParams.length);
     for (let i = 0; i < uParams.length; i++) {
       for (let j = 0; j < vParams.length; j++) {
-        const p = surfEval(surf, uParams[i], vParams[j]);
+        const p = grid[i][j];
         arr.SetValue(i + 1, j + 1, new oc.gp_Pnt_3(p[0], p[1], p[2]));
       }
     }
-    const alg = new oc.GeomAPI_PointsToBSplineSurface_1();
-    alg.Interpolate_1(arr, false);
-    if (!alg.IsDone()) throw new Error('Gordon: final surface interpolation failed');
-    const hs = alg.Surface().AsGeomSurface();
-    const face = new oc.BRepBuilderAPI_MakeFace_8(hs, PCONFUSION).Face();
-    return face;
+    // Fit the sampled grid with GeomAPI_PointsToBSplineSurface's C2
+    // least-squares APPROXIMATION rather than its Interpolate: interpolating
+    // 200+ sample lines through a surface with a DEGENERATE boundary (a Gordon
+    // network whose first/last guide is a point, like bracelet's tip) gives a
+    // wildly oscillating pole row at the pole — the boundary stays inside a
+    // ~1e-2 mm ball but wiggles into a 0.5 mm long edge, so the face is no
+    // longer degenerate there and capping it with a planar face fails. The
+    // approximation reproduces the exact surface's boundaries, degenerate poles
+    // included, to well under a micron.
+    //
+    // Tolerances are tried tightest-first, and each candidate is CHECKED
+    // against the exact surface by comparing the arc length of all four
+    // boundary curves: too tight a tolerance makes the approximator
+    // over-segment and oscillate again (arc length inflates), too loose and it
+    // cuts corners (arc length shrinks). Interpolation is the last resort.
+    // The candidates are SCORED by surface area against the exact surface's
+    // area (the sample grid's triangulated area, which for this grid density is
+    // within ~1e-5 relative of the true one). Area is parametrization-
+    // independent and catches both failure modes: an over-segmented fit
+    // oscillates (area grows), a loose fit cuts corners (area shrinks).
+    let exactArea = 0;
+    {
+      const triArea = (a, b, c) => {
+        const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+        const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+        const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+        return 0.5 * Math.sqrt(cx * cx + cy * cy + cz * cz);
+      };
+      for (let i = 0; i + 1 < grid.length; i++) {
+        for (let j = 0; j + 1 < vParams.length; j++) {
+          exactArea += triArea(grid[i][j], grid[i + 1][j], grid[i + 1][j + 1]) +
+                       triArea(grid[i][j], grid[i + 1][j + 1], grid[i][j + 1]);
+        }
+      }
+    }
+    const faceArea = (face) => {
+      const props = new oc.GProp_GProps_1();
+      oc.BRepGProp.SurfaceProperties_1(face, props, false, false);
+      return props.Mass();
+    };
+    const makeFace = (fitter) => {
+      const hs = fitter.Surface().AsGeomSurface();
+      return new oc.BRepBuilderAPI_MakeFace_8(hs, PCONFUSION).Face();
+    };
+    let best = null, bestErr = Infinity;
+    const consider = (fitter) => {
+      let face, err;
+      try {
+        face = makeFace(fitter);
+        err = Math.abs(faceArea(face) - exactArea) / Math.max(1e-12, exactArea);
+      } catch (e) { return false; }
+      if (err < bestErr) { bestErr = err; best = face; }
+      return bestErr <= 1e-4;  // good enough, stop fitting
+    };
+    // The ladder starts at 1e-7 relative: below that OCCT's approximator still
+    // reports IsDone but over-segments the fit and starts oscillating again
+    // (the area check does not catch it — the oscillation is tangential —
+    // but the resulting face no longer sews into a solid).
+    let settled = false;
+    for (const relTol of [1e-7, 1e-6, 1e-5, 1e-4]) {
+      const cand = new oc.GeomAPI_PointsToBSplineSurface_2(
+        arr, 3, 8, oc.GeomAbs_Shape.GeomAbs_C2, Math.max(1e-9, relTol * rowScale));
+      if (!cand.IsDone()) continue;
+      if (consider(cand)) { settled = true; break; }
+    }
+    if (!settled) {
+      const interp = new oc.GeomAPI_PointsToBSplineSurface_1();
+      interp.Interpolate_1(arr, false);
+      if (interp.IsDone()) consider(interp);
+    }
+    if (best === null) throw new Error('Gordon: final surface fit failed');
+    return best;
   }
 
   // ============================ public API ==================================
@@ -2141,7 +2291,7 @@ function makeEngine(oc) {
     pointToCurveData,
     conicArcData,
     realizeSurfaceAsFace,
-    curveEval, curvePoint, surfEval, surfClone, flatKnots, basisMat,
+    curveEval, curvePoint, surfEval, surfEvalGrid, surfClone, flatKnots, basisMat,
     dataToOCCT, occtToData, isZeroLength, curveScale, linspaceWithBreaks,
     knotsFromCurveParameters,
   };

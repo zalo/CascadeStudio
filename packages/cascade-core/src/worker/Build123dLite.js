@@ -975,9 +975,9 @@ class Shape:
         ws = self.wires()
         return ws[0] if len(ws) > 0 else None
 
-    def wire(self):
-        ws = self.wires()
-        return ws[0] if len(ws) > 0 else None
+    def solid(self):
+        ss = self.solids()
+        return ss[0] if len(ss) > 0 else None
 
     # --- measurement ---
     @property
@@ -1341,6 +1341,14 @@ class Curve(Shape):
         return self._walk(u, False)
 
     def __mod__(self, u):  # curve % u -> tangent
+        return self._walk(u, True)
+
+    def position_at(self, u):
+        """Point at length-fraction u along the wire (build123d
+        Mixin1D.position_at; Edge overrides it to be orientation-aware)."""
+        return self._walk(u, False)
+
+    def tangent_at(self, u=0.5):
         return self._walk(u, True)
 
     def location_at(self, u, x_dir=None):
