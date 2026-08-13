@@ -71,7 +71,21 @@ class CascadeStudioUtils {
       toReturn.hash = check.hash;
       this.cacheHits = (this.cacheHits || 0) + 1;
     } else {
-      toReturn = cacheMiss();
+      try {
+        toReturn = cacheMiss();
+      } catch (e) {
+        // Emscripten-compiled OCCT throws raw NUMBERS (C++ exception
+        // pointers) on kernel aborts. Brython cannot attach a traceback to
+        // a primitive ("Cannot create property '__traceback__' on number"),
+        // which masks the real failure — normalize to a proper Error here.
+        if (typeof e === 'number' || typeof e === 'string') {
+          throw new Error("INTERNAL OPENCASCADE ERROR in " + fnName +
+            ": the OCCT kernel threw '" + e + "' (a raw wasm exception). " +
+            "The inputs likely hit an unsupported/degenerate case in this " +
+            "OCCT 8.0.1 wasm build.");
+        }
+        throw e;
+      }
       toReturn.hash = curHash;
       if (self.GUIState["Cache?"]) { this.AddToCache(curHash, toReturn); }
       this.cacheMisses = (this.cacheMisses || 0) + 1;

@@ -1184,16 +1184,30 @@ function _faceNormal(face) {
   return [flip * normal.X() / mag, flip * normal.Y() / mag, flip * normal.Z() / mag];
 }
 
-/** Normalized direction of the face's u-isoline at the surface midpoint.
- *  (build123d derives Plane(face).x_dir from the face's UV axes.) */
+/** The x direction build123d's Plane(face) derives: for elementary surfaces
+ *  the underlying gp_Ax3's XDirection (surface.Position().XDirection()); for
+ *  bounded surfaces (BSpline/Bezier/trimmed) the U derivative at RAW surface
+ *  parameters (0.5, 0.5) — exactly geometry.py's Plane.__init__ Face branch. */
 function _faceUDir(face) {
-  let surf = new self.oc.BRepAdaptor_Surface_2(face, true);
-  let uMid = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
-  let vMid = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
+  let f = face.ShapeType && face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+  let surf = new self.oc.BRepAdaptor_Surface_2(f, false);
+  let ST = self.oc.GeomAbs_SurfaceType;
+  let type = surf.GetType();
+  if (type === ST.GeomAbs_Plane) {
+    let xd = surf.Plane().Position().XDirection();
+    return [xd.X(), xd.Y(), xd.Z()];
+  }
   let pnt = new self.oc.gp_Pnt_1();
   let du = new self.oc.gp_Vec_1();
   let dv = new self.oc.gp_Vec_1();
-  surf.D1(uMid, vMid, pnt, du, dv);
+  if (type === ST.GeomAbs_BSplineSurface || type === ST.GeomAbs_BezierSurface) {
+    // Geom_BoundedSurface: build123d evaluates D1 at raw (0.5, 0.5)
+    surf.D1(0.5, 0.5, pnt, du, dv);
+  } else {
+    let uMid = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
+    let vMid = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
+    surf.D1(uMid, vMid, pnt, du, dv);
+  }
   let mag = du.Magnitude();
   if (mag < 1e-10) return null;
   return [du.X() / mag, du.Y() / mag, du.Z() / mag];
@@ -1211,6 +1225,25 @@ function _faceSurfaceType(face) {
   if (type === ST.GeomAbs_BezierSurface)  return "BezierSurface";
   if (type === ST.GeomAbs_BSplineSurface) return "BSplineSurface";
   return "Other";
+}
+
+/** The face's outer boundary wire (BRepTools::OuterWire). */
+function _faceOuterWire(face) {
+  let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+  let wire = self.oc.BRepTools.OuterWire(f);
+  if (wire.hash === undefined) { wire.hash = self.oc.OCJS.HashCode(wire, 100000000); }
+  return wire;
+}
+
+/** Whether an edge's topological orientation is FORWARD (build123d's
+ *  Edge.is_forward — position_at/tangent_at flip on REVERSED edges). */
+function _edgeIsForward(edge) {
+  return edge.Orientation_1() !== self.oc.TopAbs_Orientation.TopAbs_REVERSED;
+}
+
+/** TopoDS_Shape::IsSame across the Brython boundary. */
+function _sameShape(a, b) {
+  return a.IsSame(b);
 }
 
 function _vertexPoint(vertex) {
@@ -1283,6 +1316,26 @@ function ReverseFace(face, keepFace) {
   return reversed;
 }
 
+/** Uniform scale about a center point, BAKED into the geometry
+ *  (BRepBuilderAPI_Transform + gp_Trsf::SetScale — what build123d's
+ *  Shape.scale does). The legacy Scale() encodes the factor in a
+ *  TopLoc_Location, which downstream OCCT algorithms handle
+ *  inconsistently (TopLoc is only specified for isometries). */
+function ScaleUniform(shape, factor, center, keepShape) {
+  if (!shape || shape.IsNull()) { console.error("ScaleUniform: input shape is null!"); return shape; }
+  if (!center) { center = [0, 0, 0]; }
+  let scaled = self.CacheOp(arguments, "ScaleUniform", () => {
+    let trsf = new self.oc.gp_Trsf_1();
+    trsf.SetScale(new self.oc.gp_Pnt_3(center[0], center[1], center[2]), factor);
+    let op = new self.oc.BRepBuilderAPI_Transform_2(shape, trsf, true, false);
+    op.Build(new self.oc.Message_ProgressRange_1());
+    return op.Shape();
+  });
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(scaled);
+  return scaled;
+}
+
 /** Non-uniform scale via gp_GTrsf + BRepBuilderAPI_GTransform (converts
  *  analytic surfaces to BSplines where needed — same as build123d). */
 function ScaleXYZ(factors, shape, keepShape) {
@@ -1336,6 +1389,176 @@ function HLRProject(shape, viewDir, keepShape) {
     return [mk(visible), mk(hidden)];
   });
   return result;
+}
+
+/** Surface through a 2D grid of points, returned as a face. build123d uses
+ *  GeomAPI_PointsToBSplineSurface, whose Surface() accessor returns
+ *  Handle_Geom_BSplineSurface — a type this WASM build does not bind — so
+ *  instead each row (fixed V, varying U) is interpolated exactly
+ *  (GeomAPI_Interpolate, 1e-6) and the rows are skinned with
+ *  BRepOffsetAPI_ThruSections (non-solid, 1e-6). Both constructions
+ *  approximate the same grid to well below harness tolerance.
+ *  `points` outer index = V, inner = U, like build123d. */
+function SurfaceFromPoints(points, tol, degMin, degMax) {
+  let curFace = self.CacheOp(arguments, "SurfaceFromPoints", () => {
+    let loft = new self.oc.BRepOffsetAPI_ThruSections(false, false, 1.0e-6);
+    for (let i = 0; i < points.length; i++) {
+      let row = points[i];
+      let ptList = new self.oc.TColgp_HArray1OfPnt_2(1, row.length);
+      for (let j = 0; j < row.length; j++) {
+        let p = row[j];
+        ptList.SetValue(j + 1, new self.oc.gp_Pnt_3(p[0], p[1], p.length > 2 ? p[2] : 0));
+      }
+      // COMPROMISE(surface-from-points): each row is interpolated EXACTLY
+      // and the rows are skinned; build123d's 2-D least-squares fit (tol
+      // 1e-2) smooths peaks slightly differently, so surfaces agree to
+      // ~5e-3 rather than exactly (per-row least squares was tried and is
+      // no closer — the residual pattern of the 2-D fit is OCCT-internal).
+      let interp = new self.oc.GeomAPI_Interpolate_1(
+        new self.oc.Handle_TColgp_HArray1OfPnt_2(ptList), false, 1.0e-6);
+      interp.Perform();
+      if (!interp.IsDone()) {
+        console.error("SurfaceFromPoints: row interpolation failed");
+        return null;
+      }
+      let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(
+        new self.oc.Handle_Geom_Curve_2(interp.Curve().get())).Edge();
+      loft.AddWire(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+    }
+    loft.Build(new self.oc.Message_ProgressRange_1());
+    let shell = loft.Shape();
+    // single-face shell -> return the face itself (build123d returns a Face)
+    let face = null;
+    let exp = new self.oc.TopExp_Explorer_2(shell, self.oc.TopAbs_ShapeEnum.TopAbs_FACE,
+      self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    if (exp.More()) { face = self.oc.TopoDS_Cast.Face_1(exp.Current()); exp.Next(); }
+    if (face === null || exp.More()) { return shell; }
+    face.hash = self.oc.OCJS.HashCode(face, 100000000);
+    return face;
+  });
+  self.sceneShapes.push(curFace);
+  return curFace;
+}
+
+/** Sweep profile wires along a spine wire with BRepOffsetAPI_MakePipeShell —
+ *  the exact calls build123d's Solid.sweep/sweep_multi make:
+ *    - trihedron: SetMode(isFrenet) (false = corrected Frenet), unless a
+ *      constant `binormal` vector ([x,y,z], build123d normal=) or an
+ *      auxiliary spine wire (`auxSpine`, build123d binormal=) is given
+ *    - transition: 'transformed' | 'round' | 'right' (ignored when null,
+ *      matching sweep_multi which never sets a transition mode)
+ *    - every profile is added with Add(profile, WithContact=false,
+ *      WithCorrection=rotate) where rotate is true only for a binormal vector
+ *  Multiple profiles = multisection sweep (profile correspondence is OCCT's).
+ *  Profiles must be TopoDS_Wire; returns a solid (MakeSolid), or the raw
+ *  shell when makeShell is true. */
+function PipeShellSweep(profileWires, spineWire, isFrenet, transition, binormal, auxSpine, auxCurvilinear, makeShell) {
+  let result = self.CacheOp(arguments, "PipeShellSweep", () => {
+    let toWire = (w) => {
+      // rebuild for exact Embind TopoDS_Wire typing (see Loft)
+      let mw = new self.oc.BRepBuilderAPI_MakeWire_1();
+      let exp = new self.oc.TopExp_Explorer_2(w, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+        self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+      while (exp.More()) { mw.Add_1(self.oc.TopoDS_Cast.Edge_1(exp.Current())); exp.Next(); }
+      return mw.Wire();
+    };
+    let builder = new self.oc.BRepOffsetAPI_MakePipeShell(toWire(spineWire));
+    let rotate = false;
+    if (binormal && binormal.length) {
+      let ax = new self.oc.gp_Ax2_1();
+      let start = _edgePointAt(
+        new self.oc.TopExp_Explorer_2(spineWire, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+          self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE).Current(), 0.0);
+      ax.SetLocation(new self.oc.gp_Pnt_3(start[0], start[1], start[2]));
+      ax.SetDirection(new self.oc.gp_Dir_5(binormal[0], binormal[1], binormal[2]));
+      builder.SetMode_2(ax);
+      rotate = true;
+    } else if (auxSpine) {
+      // binormal wire -> CurvilinearEquivalence true (Solid._set_sweep_mode);
+      // extrude_linear_with_rotation's helix aux spine passes false
+      let curv = (auxCurvilinear === undefined || auxCurvilinear === null || auxCurvilinear === '') ? true : !!auxCurvilinear;
+      builder.SetMode_5(toWire(auxSpine), curv, self.oc.BRepFill_TypeOfContact.BRepFill_NoContact);
+    } else {
+      builder.SetMode_1(!!isFrenet);
+    }
+    if (transition) {
+      let TM = self.oc.BRepBuilderAPI_TransitionMode;
+      let mode = transition === 'round' ? TM.BRepBuilderAPI_RoundCorner :
+                 transition === 'right' ? TM.BRepBuilderAPI_RightCorner :
+                 TM.BRepBuilderAPI_Transformed;
+      builder.SetTransitionMode(mode);
+    }
+    for (let i = 0; i < profileWires.length; i++) {
+      builder.Add_1(toWire(profileWires[i]), false, rotate);
+    }
+    builder.Build(new self.oc.Message_ProgressRange_1());
+    if (!makeShell) { builder.MakeSolid(); }
+    return builder.Shape();
+  });
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Planar face from an outer wire plus hole wires (build123d's
+ *  Face(outer_wire, inner_wires)) — no booleans: MakeFace + Add(wire) with a
+ *  ShapeFix_Face orientation pass so the holes subtract regardless of the
+ *  input wires' winding. */
+function FaceWithHoles(outerWire, holeWires) {
+  let curFace = self.CacheOp(arguments, "FaceWithHoles", () => {
+    let toWire = (shape) => shape.ShapeType().value === 5
+      ? self.oc.TopoDS_Cast.Wire_1(shape) : self.oc.TopoDS_Cast.Wire_1(
+        new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_WIRE,
+          self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE).Current());
+    let mk = new self.oc.BRepBuilderAPI_MakeFace_15(toWire(outerWire), true);
+    for (let i = 0; i < holeWires.length; i++) { mk.Add(toWire(holeWires[i])); }
+    let fixer = new self.oc.ShapeFix_Face_2(mk.Face());
+    fixer.FixOrientation_1();
+    return fixer.Face();
+  });
+  self.sceneShapes.push(curFace);
+  return curFace;
+}
+
+/** Apply a draft angle to the given faces of a solid — BRepOffsetAPI_DraftAngle
+ *  with build123d's Solid.draft conventions (pull direction and neutral plane
+ *  from the neutral Plane's z_dir/origin, Flag=true). */
+function DraftAngleFaces(shape, faces, angleDeg, planeOrigin, planeNormal, keepShape) {
+  let result = self.CacheOp(arguments, "DraftAngleFaces", () => {
+    let builder = new self.oc.BRepOffsetAPI_DraftAngle_2(shape);
+    let dir = new self.oc.gp_Dir_5(planeNormal[0], planeNormal[1], planeNormal[2]);
+    let pln = new self.oc.gp_Pln_3(
+      new self.oc.gp_Pnt_3(planeOrigin[0], planeOrigin[1], planeOrigin[2]), dir);
+    for (let i = 0; i < faces.length; i++) {
+      let f = faces[i].ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(faces[i]) : faces[i];
+      builder.Add(f, dir, angleDeg * (Math.PI / 180), pln, true);
+      if (!builder.AddDone()) {
+        console.error("DraftAngleFaces: draft could not be added to face " + i);
+        return shape;
+      }
+    }
+    builder.Build(new self.oc.Message_ProgressRange_1());
+    return builder.Shape();
+  });
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Write the shape as an STL file into the worker's Emscripten MEMFS and
+ *  return the file's text content (ASCII) or byte length (binary) — the
+ *  engine behind build123d-lite's Mesher/export_stl. */
+function ExportSTL(shape, filename, linearDeflection, angularDeflection, asciiFormat) {
+  if (!shape || shape.IsNull()) { console.error("ExportSTL: input shape is null!"); return null; }
+  if (!linearDeflection) { linearDeflection = 1e-3; }
+  if (!angularDeflection) { angularDeflection = 0.1; }
+  new self.oc.BRepMesh_IncrementalMesh_2(shape, linearDeflection, true, angularDeflection, true);
+  let writer = new self.oc.StlAPI_Writer();
+  // StlAPI_Writer defaults to ASCII in OCCT; the binding exposes ASCIIMode()
+  // as a getter only, so we always write ASCII (fine for MEMFS round-trips)
+  let done = writer.Write_1(shape, "/" + filename, new self.oc.Message_ProgressRange_1());
+  if (!done) { console.error("ExportSTL: STL write failed"); return null; }
+  let text = self.oc.FS.readFile("/" + filename, { encoding: "utf8" });
+  return text;
 }
 
 /** Group shapes into a single TopoDS_Compound (no boolean fusion). */
@@ -1722,6 +1945,15 @@ function Volume(shape) {
   return props.Mass();
 }
 
+/** Sum of |volume| over the shape's SOLIDS only — immune to the spurious
+ *  open-face contributions VolumeProperties picks up on mixed compounds
+ *  in this OCCT build (build123d-lite's Shape.volume semantics). */
+function SolidsVolume(shape) {
+  let total = 0;
+  ForEachSolid(shape, (i, solid) => { total += Math.abs(Volume(solid)); });
+  return total;
+}
+
 function SurfaceArea(shape) {
   let props = new self.oc.GProp_GProps_1();
   self.oc.BRepGProp.SurfaceProperties_1(shape, props, false, false);
@@ -1747,14 +1979,34 @@ function EdgeLength(shape) {
  *    'arc3'   [start, pointOnArc, end]        (circular arc through 3 points)
  *    'bezier' [ctrl0, ctrl1, ..., ctrlN]      (Bezier control points)
  *    'spline' [p0, p1, ..., pN]               (fit through points, C2, 1e-3)
+ *    'interp' [p0, p1, ..., pN] + params [tangents|null, periodic, scale]
+ *             (exact GeomAPI_Interpolate — build123d's Edge.make_spline;
+ *             tangents is null, [t0, t1] end tangents, or one per point)
  *  Used by build123d-lite's BuildLine/make_face (the segment MATH lives in
  *  Python; this helper only assembles edges with the same OCCT calls the
  *  Sketch class already uses). Returns the wire (scene-registered). */
 function WireFromSegments(segments, keepInputs) {
   let curWire = self.CacheOp(arguments, "WireFromSegments", () => {
     let toPnt = (p) => new self.oc.gp_Pnt_3(p[0], p[1], p.length > 2 ? p[2] : 0);
+    // Disjoint segment runs (e.g. build123d dimension lines with arrows)
+    // become SEPARATE wires collected into a compound — feeding a
+    // disconnected edge to one MakeWire aborts inside the kernel.
+    let wires = [];
     let wireBuilder = new self.oc.BRepBuilderAPI_MakeWire_1();
+    let started = false;
+    let lastEnd = null;
+    let closeRun = () => {
+      if (started) { wires.push(wireBuilder.Wire()); }
+      wireBuilder = new self.oc.BRepBuilderAPI_MakeWire_1();
+      started = false;
+    };
+    let near = (a, b) => a && b &&
+      Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6 &&
+      Math.abs((a[2] || 0) - (b[2] || 0)) < 1e-6;
     for (let s = 0; s < segments.length; s++) {
+      let segPts = segments[s][1];
+      if (started && !near(lastEnd, segPts[0])) { closeRun(); }
+      lastEnd = segPts[segPts.length - 1];
       let kind = segments[s][0], pts = segments[s][1];
       let curveHandle = null;
       if (kind === 'line') {
@@ -1767,6 +2019,7 @@ function WireFromSegments(segments, keepInputs) {
         let bezier = new self.oc.Geom_BezierCurve_1(ptList);
         let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(bezier)).Edge();
         wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
         continue;
       } else if (kind === 'spline') {
         let ptList = new self.oc.TColgp_Array1OfPnt_2(1, pts.length);
@@ -1775,6 +2028,53 @@ function WireFromSegments(segments, keepInputs) {
         // sampled clamped splines build123d-lite feeds through here
         curveHandle = new self.oc.GeomAPI_PointsToBSpline_2(ptList, 3, 3,
           (self.oc.GeomAbs_Shape ? self.oc.GeomAbs_Shape.GeomAbs_C2 : 2), 1.0e-4).Curve();
+      } else if (kind === 'interp') {
+        // exact interpolation through the points — GeomAPI_Interpolate, the
+        // same calls as build123d's Edge.make_spline (tol 1e-6):
+        //   params = [tangents, periodic, scale]
+        //   tangents: null | [[t0],[t1]] end tangents | one (or null) per point
+        //   scale: true = only tangent DIRECTION matters (OCCT rescales)
+        let p = segments[s][2] || [];
+        let tangents = (p[0] && p[0].length) ? p[0] : null;
+        let periodic = !!p[1];
+        let scaleFlag = (p[2] === undefined || p[2] === null) ? true : !!p[2];
+        let ptList = new self.oc.TColgp_HArray1OfPnt_2(1, pts.length);
+        for (let i = 0; i < pts.length; i++) { ptList.SetValue(i + 1, toPnt(pts[i])); }
+        let interp = new self.oc.GeomAPI_Interpolate_1(
+          new self.oc.Handle_TColgp_HArray1OfPnt_2(ptList), periodic, 1.0e-6);
+        if (tangents && tangents.length === 2 && pts.length !== 2) {
+          // start/end tangents only (build123d passes them via Load this way)
+          interp.Load_1(new self.oc.gp_Vec_4(tangents[0][0], tangents[0][1], tangents[0][2]),
+                        new self.oc.gp_Vec_4(tangents[1][0], tangents[1][1], tangents[1][2]),
+                        scaleFlag);
+        } else if (tangents && tangents.length > 0) {
+          if (tangents.length !== pts.length) {
+            console.error("WireFromSegments: interp needs 2 or per-point tangents");
+            continue;
+          }
+          let tanArr = new self.oc.TColgp_Array1OfVec_2(1, tangents.length);
+          let flagArr = new self.oc.TColStd_HArray1OfBoolean_2(1, tangents.length);
+          for (let i = 0; i < tangents.length; i++) {
+            let t = tangents[i];
+            let has = !!(t && t.length === 3);
+            flagArr.SetValue(i + 1, has);
+            tanArr.SetValue(i + 1, new self.oc.gp_Vec_4(has ? t[0] : 0, has ? t[1] : 0, has ? t[2] : 0));
+          }
+          interp.Load_2(tanArr, new self.oc.Handle_TColStd_HArray1OfBoolean_2(flagArr), scaleFlag);
+        }
+        interp.Perform();
+        if (!interp.IsDone()) {
+          console.error("WireFromSegments: B-spline interpolation failed");
+          continue;
+        }
+        curveHandle = interp.Curve();
+      } else if (kind === 'raw') {
+        // pre-existing TopoDS_Edge passed through untouched (exact geometry
+        // for edges that cannot be reconstructed as an analytic segment)
+        let edge = self.oc.TopoDS_Cast.Edge_1(segments[s][2][0]);
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
       } else if (kind === 'earc') {
         // elliptical arc: pts = [start, end] (chaining bookkeeping only),
         // params = [center, xdir, normal, major, minor, a1deg, a2deg]
@@ -1787,6 +2087,7 @@ function WireFromSegments(segments, keepInputs) {
         let arc = new self.oc.GC_MakeArcOfEllipse_1(elips, p[5] * deg, p[6] * deg, true).Value();
         let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(arc.get())).Edge();
         wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
         continue;
       } else {
         console.error("WireFromSegments: unknown segment kind '" + kind + "'");
@@ -1794,8 +2095,15 @@ function WireFromSegments(segments, keepInputs) {
       }
       let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(curveHandle.get())).Edge();
       wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+      started = true;
     }
-    return wireBuilder.Wire();
+    closeRun();
+    if (wires.length === 1) { return wires[0]; }
+    let builder = new self.oc.BRep_Builder();
+    let compound = new self.oc.TopoDS_Compound();
+    builder.MakeCompound(compound);
+    for (let i = 0; i < wires.length; i++) { builder.Add(compound, wires[i]); }
+    return compound;
   });
   self.sceneShapes.push(curWire);
   return curWire;
@@ -1882,6 +2190,11 @@ function Text2D(text, size, fontName, halign, valign) {
     // reverse the face so its oriented normal is +Z like build123d text
     // (mirroring flips the surface handedness; extrusions and fuses follow
     // the ORIENTED normal)
+    // The freshly built face MUST carry a stable hash before entering the
+    // CacheOp'd Mirror below: un-hashed shapes hash as "{}" (ptr stripped),
+    // which made every Text2D after the first REUSE the first text's
+    // mirrored geometry (fresh alignment, stale glyphs).
+    face.hash = self.oc.OCJS.HashCode(face, 100000000);
     let mirrored = Mirror([0, 1, 0], face);
     let moved = self.oc.TopoDS_Cast.Face_1(Translate([dx, dy, 0], mirrored).Reversed());
     self.sceneShapes = self.Remove(self.sceneShapes, moved);
@@ -1912,11 +2225,15 @@ function MeasureShape(shape, deflection) {
   if (!shape || shape.IsNull()) { console.error("MeasureShape: input shape is null!"); return null; }
   let nFaces = 0; ForEachFace(shape, () => { nFaces++; });
   let nEdges = 0; ForEachEdge(shape, () => { nEdges++; });
-  // VolumeProperties on OPEN faces yields meaningless partial integrals —
-  // report 0 for shapes with no solid (matches build123d's Sketch.volume)
+  // COMPROMISE(volume-measure): VolumeProperties on OPEN faces yields
+  // meaningless partial integrals — report 0 for shapes with no solid
+  // (matches build123d's Sketch.volume). For compounds MIXING solids and
+  // stray faces, this OCCT 8.0.1 build's VolumeProperties also picks up
+  // spurious face contributions (7.x reported the solids' volume alone),
+  // so volume is summed per-solid instead of one whole-shape integral.
   let nSolids = 0; ForEachSolid(shape, () => { nSolids++; });
   return {
-    volume: nSolids > 0 ? Math.abs(Volume(shape)) : 0,
+    volume: nSolids > 0 ? SolidsVolume(shape) : 0,
     area: SurfaceArea(shape),
     faces: nFaces,
     edges: nEdges,
@@ -2015,6 +2332,7 @@ class CascadeStudioStandardLibrary {
 
     // Measurement
     self.Volume = Volume;
+    self.SolidsVolume = SolidsVolume;
     self.SurfaceArea = SurfaceArea;
     self.CenterOfMass = CenterOfMass;
     self.EdgeLength = EdgeLength;
@@ -2025,8 +2343,14 @@ class CascadeStudioStandardLibrary {
     self.TaperExtrude = TaperExtrude;
     self.Text2D = Text2D;
     self.ScaleXYZ = ScaleXYZ;
+    self.ScaleUniform = ScaleUniform;
     self.ReverseFace = ReverseFace;
     self.HLRProject = HLRProject;
+    self.SurfaceFromPoints = SurfaceFromPoints;
+    self.PipeShellSweep = PipeShellSweep;
+    self.ExportSTL = ExportSTL;
+    self.DraftAngleFaces = DraftAngleFaces;
+    self.FaceWithHoles = FaceWithHoles;
 
     // Per-entity introspection helpers (used by build123d-lite's Python
     // selectors: filter_by/group_by/sort_by need positions, directions,
@@ -2040,6 +2364,9 @@ class CascadeStudioStandardLibrary {
     self._faceNormal = _faceNormal;
     self._faceUDir = _faceUDir;
     self._faceSurfaceType = _faceSurfaceType;
+    self._faceOuterWire = _faceOuterWire;
+    self._sameShape = _sameShape;
+    self._edgeIsForward = _edgeIsForward;
     self._vertexPoint = _vertexPoint;
     self._edgePointAt = _edgePointAt;
     self._edgeTangentAt = _edgeTangentAt;
