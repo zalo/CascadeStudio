@@ -117,50 +117,61 @@ operation order or kernel build can change the answer.
    incidental by construction - the method already tries to compensate with
    `Axis(first).is_opposite(Axis(second))` - so this replaces a heuristic with a rule.
 
-5. `ShapeList.sort_by` breaks **ties** with a geometric key
-   (rounded centre + bounding box) instead of the kernel's traversal order. The sort is
-   refactored into one keyed pass, and the tie-break key is only computed when the
-   primary keys actually contain duplicates, so there is no cost in the common case.
+5. `ShapeList.sort_by(..., tie_break=True)` - **opt-in** - resolves ties by geometry
+   instead of by the order the objects arrived in. The key is the shape's vertex
+   positions, sorted and rounded to `TOL_DIGITS` (no bounding box, no curve
+   evaluation), with a `center()` based second stage reached only when two shapes have
+   coincident vertices, and it is computed only for the objects inside a tie group.
+   The default `False` keeps the current stable sort exactly, because ties carrying the
+   incoming order is itself a useful contract - `examples/heat_exchanger.py` relies on
+   `sort_by(SortBy.RADIUS).sort_by(Axis.Z)` chaining.
 
 ## Results
 
 * `arch_path.canonical()` agrees across all five sphere frames above to **4e-5 mm**
   (4e-7 relative) with identical tangents.
-* The `joints.py` slider axis becomes bit-identical across cutter frames.
+* The `joints.py` slider axis becomes bit-identical across cutter frames once the two
+  tied top edges are selected with `sort_by(Axis.Z, tie_break=True)`: the edge-level
+  half of the fix (`make_mid_way` canonicalising its references) is automatic, the
+  selection half is one keyword at the call site.
 * Running the canonical rule on the polylines of both kernels' section edges: 13 of 14
   loops give **exactly** the same seam and direction, the 14th differs by 2.6e-5 mm
   (that case is where the two kernels' walk-line point counts differ).
-* 14 new tests in `tests/test_direct_api/test_canonical.py`, including the frame
-  independence regressions and a kernel-free polyline test of the rule itself.
+* 15 new tests in `tests/test_direct_api/test_canonical.py`, including the frame
+  independence regressions, a kernel-free polyline test of the rule itself, and one
+  that pins `sort_by`'s default stability.
 
 Test suite on `dev`, before and after:
 
 | suite | pristine `dev` | with this PR |
 |---|---|---|
-| `tests/test_direct_api` | 1169 passed, 2 skipped | **1183 passed, 2 skipped** (+14 new) |
+| `tests/test_direct_api` | 1169 passed, 2 skipped | **1184 passed, 2 skipped** (+15 new) |
 | rest of `tests/` | 1037 passed, 1 skipped | 1037 passed, 1 skipped |
 
-No failures either side.
+No failures either side, and no upstream test needed changing.
 
 ## Compatibility
 
-The additions (`canonical`, `canonical_form`, `Axis(..., canonical=True)`) are opt-in
-and cannot change existing behaviour. Two changes can:
+The additions (`canonical`, `canonical_form`, `Axis(..., canonical=True)`,
+`sort_by(..., tie_break=True)`) are opt-in and cannot change existing behaviour. One
+change can:
 
 * **`Edge.make_mid_way`** now pairs the ends of its reference edges canonically. Where
   the two edges previously came in with consistent directions, nothing changes; where
   they did not, the old result was the truncated/crossed mid-way line the docstring
   already warns about.
-* **`ShapeList.sort_by` tie order.** Any code that (perhaps unknowingly) relies on the
-  kernel's order for shapes with equal sort keys can see a different pick. In this
-  repository's own suite exactly one test was affected -
-  `test_algebra.test_sketch_plus` took
-  `result.edges().sort_by().filter_by(GeomType.CIRCLE).first` where *every* edge has
-  the same `Axis.Z` key - so this PR sorts those two circle arcs by `Axis.X`, which is
-  what the assertion means; it then passes with or without the tie-break change. That
-  is the whole measured cost across 2200+ tests. I am happy to split the `sort_by`
-  change into its own PR, or to gate it behind a keyword
-  (`sort_by(..., stable=True)`), if you would rather stage it.
+`ShapeList.sort_by` only gains a keyword; with the default the sort is byte for byte
+the old one. I did start with the tie-break on by default, and the suite showed why
+that is wrong: `examples/heat_exchanger.py` uses
+
+```python
+.sort_by(SortBy.RADIUS).sort_by(Axis.Z, reverse=True)[2 * tube_count : 3 * tube_count]
+```
+
+a chained sort that *depends* on ties keeping the radius order. A default tie-break
+made it fillet different edges and the example's `fillet_volume` assertion failed.
+Ties carrying the incoming order is a real contract, so the geometric order is now
+something the caller asks for when it knows the incoming order is meaningless.
 
 The argument for deterministic over incidental: today the answer depends on the
 primitives' local frames, the operation order, the tolerance and the kernel build, and
@@ -210,13 +221,24 @@ distinction expressible.
   `build123d.geometry` - no OCP - so the rule can be unit tested with a polyline
   sampler (`test_polyline_sampler` does exactly that, and the same code path was used
   to check the rule against a second CAD kernel).
-* `_canonical_sort_key` avoids swallowing `AttributeError`: it handles the `Vector`
-  members a `ShapeList` can hold explicitly and checks `hasattr(center)` /
-  `hasattr(bounding_box)`, so an API change surfaces as a failure rather than as a
-  silently disabled tie-break.
+* `_canonical_sort_key` deliberately does not swallow `AttributeError`: it handles the
+  `Vector` members a `ShapeList` can hold explicitly, so an API change surfaces as a
+  failure rather than as a silently disabled tie-break. (That is not hypothetical -
+  while forward-porting this from 0.11.1 the removal of `Vector.to_tuple()` did exactly
+  that.)
 * Seam search cost: `O(1)` for open shapes (two end points); for a closed shape, 512
   arc-length samples plus a bounded golden-section and two bisections - only paid when
   `canonical()`/`canonical_form()` is actually called.
+* Sort tie-break cost, 200 sorts of 297 text glyph edges (OCP 7.9.3):
+
+  | | pristine `dev` | default (`tie_break=False`) | `tie_break=True` |
+  |---|---|---|---|
+  | `sort_by(Axis.Z)` - every element ties | 1.26 s | 1.17 s | 1.98 s |
+  | `sort_by(Axis.X)` - few ties | 1.21 s | 1.17 s | 1.46 s |
+  | `sort_by(SortBy.LENGTH)` | 0.079 s | 0.071 s | 0.245 s |
+
+  An earlier draft keyed on `center()` + `bounding_box()` and cost 3.42 s / 3.34 s /
+  2.04 s in the last column, which is why the key is vertex positions.
 
 ## Notes / adjacent bugs noticed
 

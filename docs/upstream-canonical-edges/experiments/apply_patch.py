@@ -307,6 +307,49 @@ print("patched make_mid_way")
 shape_core = tree / "topology" / "shape_core.py"
 c = shape_core.read_text()
 
+OLD_SORT_SIGNATURE = '''    def sort_by(
+        self,
+        sort_by: Callable[[T], K] | Axis | Edge | Wire | SortBy | property = Axis.Z,
+        reverse: bool = False,
+    ) -> ShapeList[T]:
+        """sort by
+
+        Sort objects by provided criteria. Note that not all sort_by criteria apply to all
+        objects.
+
+        Args:
+            sort_by (Callable[[T], K] | Axis | Edge | Wire | SortBy | property,
+                optional): sort criteria. Defaults to Axis.Z.
+            reverse (bool, optional): flip order of sort. Defaults to False.
+'''
+
+NEW_SORT_SIGNATURE = '''    def sort_by(
+        self,
+        sort_by: Callable[[T], K] | Axis | Edge | Wire | SortBy | property = Axis.Z,
+        reverse: bool = False,
+        tie_break: bool = False,
+    ) -> ShapeList[T]:
+        """sort by
+
+        Sort objects by provided criteria. Note that not all sort_by criteria apply to all
+        objects.
+
+        Objects that tie on the criteria keep their current relative order, which is
+        what makes chained sorts such as ``sort_by(SortBy.RADIUS).sort_by(Axis.Z)``
+        work. That incoming order, however, is the CAD kernel's traversal order for
+        shapes that came out of a boolean operation, so it depends on construction
+        history (see ``Mixin1D.canonical``). Pass ``tie_break=True`` to resolve ties
+        by geometry instead - vertex positions, then centre - so that identical
+        geometry always sorts identically.
+
+        Args:
+            sort_by (Callable[[T], K] | Axis | Edge | Wire | SortBy | property,
+                optional): sort criteria. Defaults to Axis.Z.
+            reverse (bool, optional): flip order of sort. Defaults to False.
+            tie_break (bool, optional): resolve ties geometrically instead of
+                keeping the incoming order. Defaults to False.
+'''
+
 OLD_SORT_BODY = '''        if callable(sort_by):
             # If a callable is provided, use it directly as the key
             objects = sorted(self, key=sort_by, reverse=reverse)
@@ -431,19 +474,32 @@ NEW_SORT_BODY = '''        candidates: list = list(self)
         else:
             raise ValueError("Invalid sort_by criteria provided")
 
-        # Objects that tie on the sort criterion would otherwise be ordered by
-        # the kernel's traversal order, which depends on the construction
-        # history of the shape (see Mixin1D.canonical).  Break those ties with a
-        # geometric key so that identical geometry always sorts identically.
+        # With tie_break, objects that tie on the sort criterion are ordered by
+        # geometry instead of by the kernel's traversal order (which depends on
+        # construction history - see Mixin1D.canonical).  The keys are computed
+        # only for the objects that actually tie, and the cheap one (vertex
+        # positions) almost always settles it.  Without tie_break the sort stays
+        # stable, so chained sorts keep working.
         # pylint: disable=possibly-used-before-assignment
         decorated = [(key_function(obj), obj) for obj in candidates]
-        if len({key for key, _ in decorated}) != len(decorated):
-            decorated = [
-                ((key, _canonical_sort_key(obj)), obj) for key, obj in decorated
-            ]
+        if tie_break:
+            for tie_break_key in (_canonical_sort_key, _canonical_center_key):
+                try:
+                    tied = Counter(key for key, _ in decorated)
+                except TypeError:  # unhashable keys from a custom callable
+                    break
+                if all(count == 1 for count in tied.values()):
+                    break
+                decorated = [
+                    ((key, tie_break_key(obj) if tied[key] > 1 else ()), obj)
+                    for key, obj in decorated
+                ]
         decorated.sort(key=lambda pair: pair[0], reverse=reverse)
 
         return ShapeList([obj for _, obj in decorated])'''
+
+assert OLD_SORT_SIGNATURE in c
+c = c.replace(OLD_SORT_SIGNATURE, NEW_SORT_SIGNATURE, 1)
 
 assert OLD_SORT_BODY in c
 c = c.replace(OLD_SORT_BODY, NEW_SORT_BODY, 1)
@@ -451,34 +507,60 @@ c = c.replace(OLD_SORT_BODY, NEW_SORT_BODY, 1)
 SORT_KEY_HELPER = '''def _canonical_sort_key(shape: Shape | Vector) -> tuple[float, ...]:
     """Deterministic, purely geometric ordering key.
 
-    Used to break ties in :meth:`ShapeList.sort_by`, where the alternative is
-    the CAD kernel's traversal order.  Coordinates are rounded to ``TOL_DIGITS``
-    so that geometry that agrees to within tolerance always sorts the same way.
+    Used to break ties in :meth:`ShapeList.sort_by`, where the only alternative
+    is the CAD kernel's traversal order.  It is the shape's vertex positions,
+    sorted and rounded to ``TOL_DIGITS``: purely geometric, stable for geometry
+    that agrees to within tolerance, and cheap enough to compute inside a sort
+    (no bounding box, no curve evaluation).
     """
     if isinstance(shape, Vector):  # ShapeList also holds plain Vectors
-        coordinates: tuple[float, ...] = (shape.X, shape.Y, shape.Z)
-    elif not (hasattr(shape, "center") and hasattr(shape, "bounding_box")):
-        return ()  # pragma: no cover
-    else:
-        try:
-            center, box = shape.center(), shape.bounding_box()
-            coordinates = (
-                center.X,
-                center.Y,
-                center.Z,
-                box.min.X,
-                box.min.Y,
-                box.min.Z,
-                box.max.X,
-                box.max.Y,
-                box.max.Z,
+        return tuple(
+            round(coordinate, TOL_DIGITS) for coordinate in (shape.X, shape.Y, shape.Z)
+        )
+    topods_shape = getattr(shape, "wrapped", None)
+    if topods_shape is None:
+        return ()
+    points: list[tuple[float, ...]] = []
+    explorer = TopExp_Explorer(topods_shape, ta.TopAbs_VERTEX)
+    while explorer.More():
+        point = BRep_Tool.Pnt_s(TopoDS.Vertex_s(explorer.Current()))
+        points.append(
+            (
+                round(point.X(), TOL_DIGITS),
+                round(point.Y(), TOL_DIGITS),
+                round(point.Z(), TOL_DIGITS),
             )
-        except (ValueError, TypeError, AssertionError):  # pragma: no cover
-            return ()
-    return tuple(round(coordinate, TOL_DIGITS) for coordinate in coordinates)
+        )
+        explorer.Next()
+    return tuple(coordinate for point in sorted(points) for coordinate in point)
+
+
+def _canonical_center_key(shape: Shape | Vector) -> tuple[float, ...]:
+    """Second stage tie break, for shapes whose vertices coincide (two arcs
+    spanning the same end points, say).  Only reached when the vertex key above
+    leaves a tie."""
+    if isinstance(shape, Vector):
+        return ()
+    try:
+        center = shape.center()
+    except (ValueError, TypeError, AssertionError, AttributeError):
+        return ()
+    return tuple(
+        round(coordinate, TOL_DIGITS) for coordinate in (center.X, center.Y, center.Z)
+    )
 
 
 '''
+assert "from collections import deque" in c
+c = c.replace(
+    "from collections import deque",
+    "from collections import Counter, deque",
+    1,
+)
+
+assert """from build123d.geometry import (
+    DEG2RAD,
+    TOLERANCE,""" in c
 c = c.replace(
     """from build123d.geometry import (
     DEG2RAD,
@@ -495,40 +577,3 @@ assert anchor3 in c
 c = c.replace(anchor3, SORT_KEY_HELPER + anchor3, 1)
 shape_core.write_text(c)
 print("patched sort_by")
-
-# ---------------------------------------------- tests/test_algebra.py tie order
-# This assertion sorted edges that all tie on Axis.Z and then took .first /
-# .last, so it depended on the kernel's traversal order.  Sort by a defined key.
-algebra = tree.parent.parent / "tests" / "test_algebra.py"
-if algebra.exists():
-    a = algebra.read_text()
-    old_algebra = '''        self.assertTupleAlmostEquals(
-            result.edges()
-            .sort_by()
-            .filter_by(GeomType.CIRCLE)
-            .first.center(CenterOf.BOUNDING_BOX),
-            (0.55, 0, 0),
-            6,
-        )
-        self.assertTupleAlmostEquals(
-            result.edges()
-            .sort_by()
-            .filter_by(GeomType.CIRCLE)
-            .last.center(CenterOf.BOUNDING_BOX),
-            (-0.55, 0, 0),
-            6,
-        )'''
-    new_algebra = '''        circle_edges = result.edges().filter_by(GeomType.CIRCLE).sort_by(Axis.X)
-        self.assertTupleAlmostEquals(
-            circle_edges.first.center(CenterOf.BOUNDING_BOX),
-            (-0.55, 0, 0),
-            6,
-        )
-        self.assertTupleAlmostEquals(
-            circle_edges.last.center(CenterOf.BOUNDING_BOX),
-            (0.55, 0, 0),
-            6,
-        )'''
-    assert old_algebra in a
-    algebra.write_text(a.replace(old_algebra, new_algebra, 1))
-    print("patched tests/test_algebra.py tie order")

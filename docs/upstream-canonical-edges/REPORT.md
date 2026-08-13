@@ -363,17 +363,16 @@ closes it.
 
 ## 3. The patch
 
-`patch/canonical-free-edges.diff` (against build123d **dev** @ `ef48b98`; +794/-71
-lines, regenerable with `experiments/apply_patch.py`):
+`patch/canonical-free-edges.diff` (against build123d **dev** @ `ef48b98`; +845/-61 lines,
+regenerable with `experiments/apply_patch.py`):
 
 | file | change |
 |---|---|
 | `src/build123d/topology/canonical.py` | **new** - the rule: `canonical_form(sampler, length, closed)`, `lexicographic_key`, `loop_area_vector`, `CanonicalForm`. Pure geometry, no OCP import. |
 | `src/build123d/topology/one_d.py` | `Mixin1D.canonical()` and `Mixin1D.canonical_form()`; helpers `_reverse_1d`, `_split_1d_at_point`, `_walk_loop`, `_concatenate_edges`; `Edge.make_mid_way` canonicalises its two reference edges. |
 | `src/build123d/geometry.py` | `Axis(edge, canonical=True)` opt-in: origin/direction from the canonical traversal (also fixes `Axis(edge)` disagreeing with `edge.position_at(0)` for REVERSED edges). Default stays `False`. |
-| `src/build123d/topology/shape_core.py` | `ShapeList.sort_by` refactored to a single keyed sort; **ties** are broken by `_canonical_sort_key` (rounded centre + bounding box) instead of by the kernel's traversal order. Zero extra cost when there are no ties. |
-| `tests/test_direct_api/test_canonical.py` | **new** - 14 tests, build123d unittest style. |
-| `tests/test_algebra.py` | `test_sketch_plus` sorts the two circle arcs by `Axis.X` instead of relying on an `Axis.Z` tie. |
+| `src/build123d/topology/shape_core.py` | `ShapeList.sort_by(..., tie_break=True)` - **opt-in**: ties are resolved by `_canonical_sort_key` (the shape's vertex positions, sorted and rounded to `TOL_DIGITS`) with `_canonical_center_key` as a second stage for shapes whose vertices coincide, instead of by the incoming (kernel traversal) order. Default `False` keeps the sort stable, so chained sorts are untouched and the cost is zero. |
+| `tests/test_direct_api/test_canonical.py` | **new** - 15 tests, build123d unittest style. |
 
 The PR targets **gumyr/build123d `dev`**; the diff is generated from that branch.
 The research above was done against 0.11.1 (the version the validation harness
@@ -384,16 +383,12 @@ Test results on `dev` (OCP 7.9.3):
 
 | suite | pristine dev | with the patch |
 |---|---|---|
-| `tests/test_direct_api` | 1169 passed, 2 skipped, 0 failed | **1183 passed, 2 skipped, 0 failed** (+14 new) |
+| `tests/test_direct_api` | 1169 passed, 2 skipped, 0 failed | **1184 passed, 2 skipped, 0 failed** (+15 new) |
 | rest of `tests/` | 1037 passed, 1 skipped, 0 failed | 1037 passed, 1 skipped, 0 failed |
-| `tests/test_algebra.py` + `test_build_generic` + `test_build_part` + `test_joints` | 283 passed | 283 passed |
+| `tests/test_examples.py` (builds every example) | 115 passed, 1 skipped | 115 passed, 1 skipped |
 
-One upstream test needed a one-line change and it is included in the patch:
-`test_algebra.test_sketch_plus` sorted edges that **all** tie on `Axis.Z` and then
-took `.first`/`.last`, so it depended on the kernel's traversal order. It now sorts
-the two circle arcs by `Axis.X` - which is what it meant to assert - and passes both
-before and after the tie-break change. That single test is the entire measured
-compatibility cost of the deterministic tie order, and it is also the point.
+No upstream test needed changing: the sort tie-break is opt-in (see section 3.2), so
+default behaviour - including chained sorts - is unchanged.
 
 ### 3.1 What drifted between 0.11.1 and dev
 
@@ -407,17 +402,54 @@ Only one thing, and it was fatal in a quiet way: **`Vector.to_tuple()` was remov
   which the original `except (ValueError, TypeError, AttributeError, AssertionError)`
   **swallowed**, so the function silently returned `()` for every shape: all keys
   became equal, the tie-break degraded back to the kernel's order and the two
-  determinism tests failed while everything else looked fine. Fixed by reading
-  `.X/.Y/.Z` directly, testing `hasattr(center)/hasattr(bounding_box)` explicitly
-  instead of catching `AttributeError`, and keeping only
-  `except (ValueError, TypeError, AssertionError)` - so a future API rename fails
-  loudly instead of degrading.
+  determinism tests failed while everything else looked fine. The tie-break key no
+  longer catches `AttributeError` at all - a future API rename fails loudly instead
+  of degrading into non-determinism.
 
 Nothing else drifted: every anchor the patch generator edits
 (`Mixin1D.common_plane`, `edges_to_wires`, `Edge.make_mid_way`, `Axis.__init__`,
 `ShapeList.sort_by`, the `OCP.GeomConvert` and `build123d.geometry` import lists)
 still matches `dev` byte for byte, and the rule's semantics are unchanged from
 section 2.2.
+
+### 3.2 Two things `dev` taught us about the sort tie-break
+
+Adapting to `dev` also ran the patch against a much larger suite (2200+ tests vs the
+529 available for 0.11.1), and that changed the design of the tie-break twice.
+
+**a) Cost.** The first key used `shape.center()` **and** `shape.bounding_box()`.
+Measured over 297 text glyph edges (OCP 7.9.3): `center()` 2.44 ms per pass,
+`bounding_box()` 7.94 ms, raw vertex coordinates 1.18 ms. Because
+`sort_by(Axis.Z)` on planar geometry ties on *every* element, that key was paid for
+every shape:
+
+| 200 sorts of 297 edges | pristine dev | centre+bbox key | vertex key | vertex key, opt-in (final) |
+|---|---|---|---|---|
+| `sort_by(Axis.Z)` (everything ties) | 1.26 s | 3.42 s | 1.98 s | 1.17 s |
+| `sort_by(Axis.X)` (few ties) | 1.21 s | 3.34 s | 1.46 s | 1.17 s |
+| `sort_by(SortBy.LENGTH)` | 0.079 s | 2.04 s | 0.245 s | 0.071 s |
+
+**b) Default-on breaks a legitimate idiom.** `examples/heat_exchanger.py` does
+
+```python
+heat_exchanger.edges().filter_by(GeomType.CIRCLE)
+    .sort_by(SortBy.RADIUS).sort_by(Axis.Z, reverse=True)[2 * tube_count : 3 * tube_count]
+```
+
+- a **chained** sort that relies on Python's stable sort to keep the radius order
+inside each equal-Z group. A default tie-break destroys that ordering, the slice
+selects different edges, and the example's `assert abs(fillet_volume - 469.883...)`
+fails. That is a real, reasonable pattern, so the tie-break became **opt-in**
+(`sort_by(..., tie_break=True)`): with the default the sort is byte-for-byte the old
+stable sort (benchmark column 4 above), and the geometric order is available where
+the caller knows the incoming order is meaningless.
+
+The consequence for `examples/joints.py` is stated honestly in the PR: the edge-level
+half of the fix (`Edge.make_mid_way` canonicalising its references) is automatic, but
+selecting the two tied top edges deterministically needs the caller to ask -
+`sort_by(Axis.Z, tie_break=True)` - which is a one-line change in the example. This
+is also why the earlier `test_algebra.test_sketch_plus` edit is **no longer part of
+the patch**: with the default unchanged, that test passes as written.
 
 ---
 
@@ -443,6 +475,39 @@ PYTHONPATH=/tmp/b123d-0111 $V test_canon.py               # unification tables
 PYTHONPATH=/tmp/b123d-0111 $V -m unittest discover \
   -s ../patch/tests/test_direct_api -p test_canonical.py   # the 14 new upstream tests
 ```
+
+## 5. Follow-up found while porting the rule to a second kernel
+
+The rule was subsequently ported into CascadeStudio's build123d-lite (OCCT 8.0.1
+wasm) with the same names and defaults, and cross-checked against the patched
+upstream on OCP 7.9.3 over the arch, a reassembled sphere/cylinder locus and the
+joints construction: **185 canonical measurements, worst delta 0.00e+0 mm**
+(`test/b123d-validation/canonical-cross-kernel.mjs`; reference generated by
+`experiments/lite_cross_kernel.py`). Two things worth fixing before the PR
+lands, both reproducible in the patched upstream alone:
+
+1. **`canonical()`'s "already canonical" early return needs `form.start` modulo
+   1.** The test is `form.sign > 0 and form.start <= TOLERANCE / length`, so a
+   seam that lands on the incoming shape's *own* start point (measured
+   `form.start = 1 - 3.8e-11`) is not recognised and the shape is re-seamed
+   unnecessarily.
+2. **`_walk_loop`'s first choice is not tolerant.** Its score is
+   `((edge.position_at(0) - position).length, -edge.tangent_at(0).dot(heading))`,
+   and the two edges meeting at a seam-on-a-vertex are both ~1e-16 away, so the
+   distance term decides by floating point noise and the tangent term - which is
+   what actually knows the intended direction - never gets a look in. Observed:
+   the piece heading *along* `direction` was 8.9e-16 away while the piece heading
+   *against* it was 0.0 away, so the loop was walked backwards. Snapping the
+   distance to a tolerance (e.g. comparing `round(distance / gap_tolerance)`)
+   fixes it.
+
+Symptom of the pair: for `sphere(R10)` cut by a `cylinder(r5)` along X at z = 3,
+reassembled with `edges_to_wires`, the unrotated frame canonicalises to the
+*opposite* winding from the 90°/180° frames - i.e. exactly the frame dependence
+the patch removes elsewhere. Rotating the same wire reproduces it inside 7.9.3.
+
+Not fixed in the port, which mirrors the patch byte-for-byte; the harness
+records it instead.
 
 `repatch.sh` copies the installed build123d 0.11.1 into `/tmp/b123d-0111` and applies
 `patch/src/build123d/topology/canonical.py` plus the source edits via

@@ -160,15 +160,30 @@ class TestKernelIndependence(DirectApiTestCase):
                 self.assertTupleAlmostEquals(tuple(canonical.position_at(position)), tuple(reference.position_at(position)), 3, )
 
     def test_sort_by_ties_are_deterministic(self):
-        """Ties in the sort criterion used to be resolved by the kernel's
-        traversal order."""
+        """With tie_break, objects that tie on the criterion are ordered by
+        geometry instead of by the order they arrived in - which for shapes out
+        of a boolean is the kernel's traversal order."""
         edges = [
             Edge.make_line((0, -5, 10), (10, -5, 10)),
             Edge.make_line((0, 5, 10), (10, 5, 10)),
         ]
-        first = ShapeList(edges).sort_by(Axis.Z)
-        second = ShapeList(edges[::-1]).sort_by(Axis.Z)
+        first = ShapeList(edges).sort_by(Axis.Z, tie_break=True)
+        second = ShapeList(edges[::-1]).sort_by(Axis.Z, tie_break=True)
         self.assertTupleAlmostEquals(tuple(first[0].center()), tuple(second[0].center()), 6)
+        self.assertTupleAlmostEquals(tuple(first[0].center()), (5, -5, 10), 6)
+
+    def test_sort_by_is_stable_without_tie_break(self):
+        """The default must keep ties in their incoming order, so that chained
+        sorts (sort_by(SortBy.RADIUS).sort_by(Axis.Z)) still work."""
+        edges = [
+            Edge.make_line((0, -5, 10), (10, -5, 10)),
+            Edge.make_line((0, 5, 10), (10, 5, 10)),
+        ]
+        for order in (edges, edges[::-1]):
+            sorted_edges = ShapeList(order).sort_by(Axis.Z)
+            self.assertTupleAlmostEquals(
+                tuple(sorted_edges[0].center()), tuple(order[0].center()), 6
+            )
 
     def test_make_mid_way_is_frame_independent(self):
         """examples/joints.py's slider axis."""
@@ -180,7 +195,11 @@ class TestKernelIndependence(DirectApiTestCase):
                 extrude(amount=10, taper=3)
                 Cylinder(2.5, 10, rotation=(0, 90, rotation), mode=Mode.SUBTRACT)
             solid = Solid(part.part.wrapped)
-            top = solid.edges().filter_by(Axis.X, tolerance=30).sort_by(Axis.Z)[-2:]
+            top = (
+                solid.edges()
+                .filter_by(Axis.X, tolerance=30)
+                .sort_by(Axis.Z, tie_break=True)[-2:]
+            )
             results.append(Edge.make_mid_way(*top, 0.67).position_at(0))
         for result in results[1:]:
             self.assertTupleAlmostEquals(tuple(result), tuple(results[0]), 5)

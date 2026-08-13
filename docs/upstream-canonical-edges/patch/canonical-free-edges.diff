@@ -597,9 +597,18 @@ index 23cf821..7a3c4f3 100644
      """Convert edges to a list of wires.
  
 diff --git a/src/build123d/topology/shape_core.py b/src/build123d/topology/shape_core.py
-index 3bb2f53..2ca20cd 100644
+index 3bb2f53..3f04eb9 100644
 --- a/src/build123d/topology/shape_core.py
 +++ b/src/build123d/topology/shape_core.py
+@@ -50,7 +50,7 @@ import copy
+ import itertools
+ import warnings
+ from abc import ABC, abstractmethod
+-from collections import deque
++from collections import Counter, deque
+ from collections.abc import Callable, Iterable, Iterator
+ from functools import reduce
+ from math import inf
 @@ -146,6 +146,7 @@ from build123d.build_enums import CenterOf, GeomType, Keep, SortBy, Transition,
  from build123d.geometry import (
      DEG2RAD,
@@ -608,7 +617,35 @@ index 3bb2f53..2ca20cd 100644
      Axis,
      BoundBox,
      Color,
-@@ -3564,80 +3565,68 @@ class ShapeList(list[T]):
+@@ -3544,16 +3545,27 @@ class ShapeList(list[T]):
+         self,
+         sort_by: Callable[[T], K] | Axis | Edge | Wire | SortBy | property = Axis.Z,
+         reverse: bool = False,
++        tie_break: bool = False,
+     ) -> ShapeList[T]:
+         """sort by
+ 
+         Sort objects by provided criteria. Note that not all sort_by criteria apply to all
+         objects.
+ 
++        Objects that tie on the criteria keep their current relative order, which is
++        what makes chained sorts such as ``sort_by(SortBy.RADIUS).sort_by(Axis.Z)``
++        work. That incoming order, however, is the CAD kernel's traversal order for
++        shapes that came out of a boolean operation, so it depends on construction
++        history (see ``Mixin1D.canonical``). Pass ``tie_break=True`` to resolve ties
++        by geometry instead - vertex positions, then centre - so that identical
++        geometry always sorts identically.
++
+         Args:
+             sort_by (Callable[[T], K] | Axis | Edge | Wire | SortBy | property,
+                 optional): sort criteria. Defaults to Axis.Z.
+             reverse (bool, optional): flip order of sort. Defaults to False.
++            tie_break (bool, optional): resolve ties geometrically instead of
++                keeping the incoming order. Defaults to False.
+ 
+         Raises:
+             ValueError: Cannot sort by an empty axis
+@@ -3564,80 +3576,78 @@ class ShapeList(list[T]):
              ShapeList: sorted list of objects
          """
  
@@ -704,95 +741,91 @@ index 3bb2f53..2ca20cd 100644
              raise ValueError("Invalid sort_by criteria provided")
  
 -        return ShapeList(objects)  # pylint: disable=possibly-used-before-assignment
-+        # Objects that tie on the sort criterion would otherwise be ordered by
-+        # the kernel's traversal order, which depends on the construction
-+        # history of the shape (see Mixin1D.canonical).  Break those ties with a
-+        # geometric key so that identical geometry always sorts identically.
++        # With tie_break, objects that tie on the sort criterion are ordered by
++        # geometry instead of by the kernel's traversal order (which depends on
++        # construction history - see Mixin1D.canonical).  The keys are computed
++        # only for the objects that actually tie, and the cheap one (vertex
++        # positions) almost always settles it.  Without tie_break the sort stays
++        # stable, so chained sorts keep working.
 +        # pylint: disable=possibly-used-before-assignment
 +        decorated = [(key_function(obj), obj) for obj in candidates]
-+        if len({key for key, _ in decorated}) != len(decorated):
-+            decorated = [
-+                ((key, _canonical_sort_key(obj)), obj) for key, obj in decorated
-+            ]
++        if tie_break:
++            for tie_break_key in (_canonical_sort_key, _canonical_center_key):
++                try:
++                    tied = Counter(key for key, _ in decorated)
++                except TypeError:  # unhashable keys from a custom callable
++                    break
++                if all(count == 1 for count in tied.values()):
++                    break
++                decorated = [
++                    ((key, tie_break_key(obj) if tied[key] > 1 else ()), obj)
++                    for key, obj in decorated
++                ]
 +        decorated.sort(key=lambda pair: pair[0], reverse=reverse)
 +
 +        return ShapeList([obj for _, obj in decorated])
  
      def sort_by_distance(
          self, other: Shape | VectorLike, reverse: bool = False
-@@ -3802,6 +3791,36 @@ def _topods_bool_op(
+@@ -3802,6 +3812,52 @@ def _topods_bool_op(
      return result
  
  
 +def _canonical_sort_key(shape: Shape | Vector) -> tuple[float, ...]:
 +    """Deterministic, purely geometric ordering key.
 +
-+    Used to break ties in :meth:`ShapeList.sort_by`, where the alternative is
-+    the CAD kernel's traversal order.  Coordinates are rounded to ``TOL_DIGITS``
-+    so that geometry that agrees to within tolerance always sorts the same way.
++    Used to break ties in :meth:`ShapeList.sort_by`, where the only alternative
++    is the CAD kernel's traversal order.  It is the shape's vertex positions,
++    sorted and rounded to ``TOL_DIGITS``: purely geometric, stable for geometry
++    that agrees to within tolerance, and cheap enough to compute inside a sort
++    (no bounding box, no curve evaluation).
 +    """
 +    if isinstance(shape, Vector):  # ShapeList also holds plain Vectors
-+        coordinates: tuple[float, ...] = (shape.X, shape.Y, shape.Z)
-+    elif not (hasattr(shape, "center") and hasattr(shape, "bounding_box")):
-+        return ()  # pragma: no cover
-+    else:
-+        try:
-+            center, box = shape.center(), shape.bounding_box()
-+            coordinates = (
-+                center.X,
-+                center.Y,
-+                center.Z,
-+                box.min.X,
-+                box.min.Y,
-+                box.min.Z,
-+                box.max.X,
-+                box.max.Y,
-+                box.max.Z,
++        return tuple(
++            round(coordinate, TOL_DIGITS) for coordinate in (shape.X, shape.Y, shape.Z)
++        )
++    topods_shape = getattr(shape, "wrapped", None)
++    if topods_shape is None:
++        return ()
++    points: list[tuple[float, ...]] = []
++    explorer = TopExp_Explorer(topods_shape, ta.TopAbs_VERTEX)
++    while explorer.More():
++        point = BRep_Tool.Pnt_s(TopoDS.Vertex_s(explorer.Current()))
++        points.append(
++            (
++                round(point.X(), TOL_DIGITS),
++                round(point.Y(), TOL_DIGITS),
++                round(point.Z(), TOL_DIGITS),
 +            )
-+        except (ValueError, TypeError, AssertionError):  # pragma: no cover
-+            return ()
-+    return tuple(round(coordinate, TOL_DIGITS) for coordinate in coordinates)
++        )
++        explorer.Next()
++    return tuple(coordinate for point in sorted(points) for coordinate in point)
++
++
++def _canonical_center_key(shape: Shape | Vector) -> tuple[float, ...]:
++    """Second stage tie break, for shapes whose vertices coincide (two arcs
++    spanning the same end points, say).  Only reached when the vertex key above
++    leaves a tie."""
++    if isinstance(shape, Vector):
++        return ()
++    try:
++        center = shape.center()
++    except (ValueError, TypeError, AssertionError, AttributeError):
++        return ()
++    return tuple(
++        round(coordinate, TOL_DIGITS) for coordinate in (center.X, center.Y, center.Z)
++    )
 +
 +
  def _topods_entities(shape: TopoDS_Shape, topo_type: Shapes) -> list[TopoDS_Shape]:
      """Return the TopoDS_Shapes of topo_type from this TopoDS_Shape"""
      out = {}  # using dict to prevent duplicates
-diff --git a/tests/test_algebra.py b/tests/test_algebra.py
-index 3d23d8b..a6c239f 100644
---- a/tests/test_algebra.py
-+++ b/tests/test_algebra.py
-@@ -458,20 +458,15 @@ class AlgebraTests(unittest.TestCase):
-         result = rect + circle
-         self.assertEqual(len(result.edges()), 8)
-         self.assertEqual(len(result.edges() - last_edges), 6)
-+        circle_edges = result.edges().filter_by(GeomType.CIRCLE).sort_by(Axis.X)
-         self.assertTupleAlmostEquals(
--            result.edges()
--            .sort_by()
--            .filter_by(GeomType.CIRCLE)
--            .first.center(CenterOf.BOUNDING_BOX),
--            (0.55, 0, 0),
-+            circle_edges.first.center(CenterOf.BOUNDING_BOX),
-+            (-0.55, 0, 0),
-             6,
-         )
-         self.assertTupleAlmostEquals(
--            result.edges()
--            .sort_by()
--            .filter_by(GeomType.CIRCLE)
--            .last.center(CenterOf.BOUNDING_BOX),
--            (-0.55, 0, 0),
-+            circle_edges.last.center(CenterOf.BOUNDING_BOX),
-+            (0.55, 0, 0),
-             6,
-         )
-         self.assertTupleAlmostEquals(result.bounding_box().min, (-0.6, -1.0, 0.0), 6)
 diff --git a/tests/test_direct_api/test_canonical.py b/tests/test_direct_api/test_canonical.py
 new file mode 100644
-index 0000000..98e564a
+index 0000000..5e75ea4
 --- /dev/null
 +++ b/tests/test_direct_api/test_canonical.py
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,231 @@
 +"""
 +build123d canonical free-edge tests
 +
@@ -955,15 +988,30 @@ index 0000000..98e564a
 +                self.assertTupleAlmostEquals(tuple(canonical.position_at(position)), tuple(reference.position_at(position)), 3, )
 +
 +    def test_sort_by_ties_are_deterministic(self):
-+        """Ties in the sort criterion used to be resolved by the kernel's
-+        traversal order."""
++        """With tie_break, objects that tie on the criterion are ordered by
++        geometry instead of by the order they arrived in - which for shapes out
++        of a boolean is the kernel's traversal order."""
 +        edges = [
 +            Edge.make_line((0, -5, 10), (10, -5, 10)),
 +            Edge.make_line((0, 5, 10), (10, 5, 10)),
 +        ]
-+        first = ShapeList(edges).sort_by(Axis.Z)
-+        second = ShapeList(edges[::-1]).sort_by(Axis.Z)
++        first = ShapeList(edges).sort_by(Axis.Z, tie_break=True)
++        second = ShapeList(edges[::-1]).sort_by(Axis.Z, tie_break=True)
 +        self.assertTupleAlmostEquals(tuple(first[0].center()), tuple(second[0].center()), 6)
++        self.assertTupleAlmostEquals(tuple(first[0].center()), (5, -5, 10), 6)
++
++    def test_sort_by_is_stable_without_tie_break(self):
++        """The default must keep ties in their incoming order, so that chained
++        sorts (sort_by(SortBy.RADIUS).sort_by(Axis.Z)) still work."""
++        edges = [
++            Edge.make_line((0, -5, 10), (10, -5, 10)),
++            Edge.make_line((0, 5, 10), (10, 5, 10)),
++        ]
++        for order in (edges, edges[::-1]):
++            sorted_edges = ShapeList(order).sort_by(Axis.Z)
++            self.assertTupleAlmostEquals(
++                tuple(sorted_edges[0].center()), tuple(order[0].center()), 6
++            )
 +
 +    def test_make_mid_way_is_frame_independent(self):
 +        """examples/joints.py's slider axis."""
@@ -975,7 +1023,11 @@ index 0000000..98e564a
 +                extrude(amount=10, taper=3)
 +                Cylinder(2.5, 10, rotation=(0, 90, rotation), mode=Mode.SUBTRACT)
 +            solid = Solid(part.part.wrapped)
-+            top = solid.edges().filter_by(Axis.X, tolerance=30).sort_by(Axis.Z)[-2:]
++            top = (
++                solid.edges()
++                .filter_by(Axis.X, tolerance=30)
++                .sort_by(Axis.Z, tie_break=True)[-2:]
++            )
 +            results.append(Edge.make_mid_way(*top, 0.67).position_at(0))
 +        for result in results[1:]:
 +            self.assertTupleAlmostEquals(tuple(result), tuple(results[0]), 5)
