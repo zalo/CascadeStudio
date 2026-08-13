@@ -1,12 +1,12 @@
 # build123d-lite validation report
 
-Generated 2026-08-13T08:07:33.127Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
+Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
-| PASS | 117 |
+| PASS | 119 |
 | MISMATCH | 4 |
-| ERROR | 5 |
+| ERROR | 3 |
 | TIMEOUT | 0 |
 | SKIP | 3 |
 
@@ -14,21 +14,19 @@ Generated 2026-08-13T08:07:33.127Z - 129 scripts (126 scored, 3 excluded because
 
 | Gap | Scripts |
 |---|---|
-| `AttributeError: __neg__` | 1 |
 | `RuntimeError: INTERNAL OPENCASCADE ERROR DURING GENERATE: memory access out of bounds` | 1 |
-| `AttributeError: wrap_faces` | 1 |
 | `NotImplemented: one-sided line offsets (side=) are not supported in build123d-lite` | 1 |
-| `other: Line 5336: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
+| `other: Line 5812: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
 
 ## Mismatches (runs, but geometry differs)
 
 - **examples/joints**
   - 'pin_arm' bbox[0] -0.0729 vs 8.0835 (d=8.1564)
-  - 'screw_arm' bbox[0] 2.6849 vs 3.6800 (d=0.9951)
+  - 'screw_arm' bbox[0] 1.0688 vs 3.6800 (d=2.6113)
   - 'slider_arm' bbox[0] 8.0158 vs -3.7834 (d=11.7992)
 - **examples/joints_algebra**
   - 'pin_arm' bbox[0] -0.0729 vs 8.0835 (d=8.1564)
-  - 'screw_arm' bbox[0] 2.6849 vs 3.6800 (d=0.9951)
+  - 'screw_arm' bbox[0] 1.0688 vs 3.6800 (d=2.6113)
   - 'slider_arm' bbox[0] 8.0158 vs -3.7834 (d=11.7992)
 - **examples/projection**
   - 'projected_text' bbox[0] -49.7713 vs -49.6470 (d=0.1243)
@@ -40,78 +38,80 @@ Generated 2026-08-13T08:07:33.127Z - 129 scripts (126 scored, 3 excluded because
 - examples/boxes_on_faces (1 shapes)
 - examples/boxes_on_faces_algebra (2 shapes)
 - examples/build123d_customizable_logo_algebra (13 shapes)
-- examples/build123d_logo (13 shapes)
 - examples/build123d_customizable_logo (14 shapes)
+- examples/build123d_logo (13 shapes)
 - examples/build123d_logo_algebra (12 shapes)
-- examples/circuit_board (1 shapes)
-- examples/circuit_board_algebra (1 shapes)
 - examples/canadian_flag (20 shapes)
 - examples/canadian_flag_algebra (25 shapes)
+- examples/circuit_board (1 shapes)
+- examples/circuit_board_algebra (1 shapes)
 - examples/clock_algebra (6 shapes)
+- examples/clock (5 shapes)
 - examples/custom_sketch_objects (9 shapes)
 - examples/custom_sketch_objects_algebra (9 shapes)
-- examples/clock (5 shapes)
 - examples/din_rail (3 shapes)
 - examples/din_rail_algebra (41 shapes)
+- examples/extrude (10 shapes)
+- examples/extrude_algebra (35 shapes)
 - examples/handle (10 shapes)
 - examples/handle_algebra (4 shapes)
+- examples/bicycle_tire (102 shapes)
 - examples/fast_grid_holes (4 shapes)
-- examples/extrude (10 shapes)
 - examples/holes (4 shapes)
 - examples/holes_algebra (4 shapes)
 - examples/intersecting_chamfers (1 shapes)
 - examples/intersecting_chamfers_algebra (2 shapes)
-- examples/extrude_algebra (35 shapes)
 - examples/intersecting_pipes (3 shapes)
 - examples/key_cap (5 shapes)
 - examples/key_cap_algebra (5 shapes)
 - examples/lego (3 shapes)
 - examples/lego_algebra (3 shapes)
 - examples/loft (4 shapes)
+- examples/bracelet (16 shapes)
 - examples/loft_algebra (3 shapes)
 - examples/mixed_algebra_context (9 shapes)
 - examples/multiple_workplanes (1 shapes)
 - examples/multiple_workplanes_algebra (1 shapes)
+- examples/heat_exchanger (3 shapes)
 - examples/packed_boxes (100 shapes)
 - examples/pegboard_j_hook (10 shapes)
-- examples/pegboard_j_hook_algebra (11 shapes)
 - examples/pillow_block (2 shapes)
+- examples/pegboard_j_hook_algebra (11 shapes)
 - examples/pillow_block_algebra (2 shapes)
 - examples/platonic_solids (5 shapes)
+- examples/heat_exchanger_algebra (4 shapes)
 - examples/playing_cards (14 shapes)
-- examples/maker_coin (8 shapes)
-- examples/heat_exchanger (3 shapes)
 - examples/roller_coaster (4 shapes)
 - examples/roller_coaster_algebra (4 shapes)
 - examples/shamrock (1 shapes)
+- examples/maker_coin (8 shapes)
 - examples/stud_wall (2 shapes)
-- examples/heat_exchanger_algebra (4 shapes)
-- examples/tea_cup_algebra (5 shapes)
 - examples/twist_extrude (2 shapes)
 - examples/vase (8 shapes)
+- examples/tea_cup_algebra (5 shapes)
 - general_examples/ex01 (1 shapes)
 - general_examples/ex02 (1 shapes)
+- examples/vase_algebra (8 shapes)
 - general_examples/ex03 (2 shapes)
 - general_examples/ex08 (3 shapes)
 - general_examples/ex09 (1 shapes)
 - general_examples/ex10 (1 shapes)
-- examples/vase_algebra (8 shapes)
 - general_examples/ex12 (7 shapes)
 - general_examples/ex11 (2 shapes)
 - general_examples/ex14 (6 shapes)
-- general_examples/ex15 (8 shapes)
 - general_examples/ex13 (1 shapes)
+- general_examples/ex15 (8 shapes)
 - general_examples/ex17 (2 shapes)
 - general_examples/ex18 (1 shapes)
-- general_examples/ex16 (3 shapes)
 - general_examples/ex19 (6 shapes)
 - general_examples/ex20 (1 shapes)
+- general_examples/ex16 (3 shapes)
 - general_examples/ex21 (2 shapes)
 - general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
 - general_examples/ex25 (4 shapes)
-- general_examples/ex26 (2 shapes)
 - general_examples/ex24 (3 shapes)
+- general_examples/ex26 (2 shapes)
 - general_examples/ex27 (2 shapes)
 - general_examples/ex29 (7 shapes)
 - general_examples/ex28 (7 shapes)
@@ -130,8 +130,8 @@ Generated 2026-08-13T08:07:33.127Z - 129 scripts (126 scored, 3 excluded because
 - general_examples_algebra/ex09 (1 shapes)
 - general_examples_algebra/ex12 (6 shapes)
 - general_examples_algebra/ex11 (2 shapes)
-- general_examples_algebra/ex13 (1 shapes)
 - general_examples_algebra/ex14 (6 shapes)
+- general_examples_algebra/ex13 (1 shapes)
 - general_examples_algebra/ex15 (8 shapes)
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
@@ -157,11 +157,9 @@ Generated 2026-08-13T08:07:33.127Z - 129 scripts (126 scored, 3 excluded because
 
 ## Errors by script
 
-- examples/bracelet: `AttributeError: __neg__`
 - examples/cast_bearing_unit: `RuntimeError: INTERNAL OPENCASCADE ERROR DURING GENERATE: memory access out of bounds`
-- examples/bicycle_tire: `AttributeError: wrap_faces`
 - examples/dual_color_3mf: `NotImplemented: one-sided line offsets (side=) are not supported in build123d-lite`
-- examples/toy_truck: `other: Line 5336: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
+- examples/toy_truck: `other: Line 5812: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
 
 ## Timeouts
 

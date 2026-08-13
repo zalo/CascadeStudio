@@ -4269,6 +4269,13 @@ def make_face(edges=None, mode=Mode.ADD):
     chained = _chain_segments(specs)
     wire = w.WireFromSegments(chained)
     face = w.MakeFace(wire)
+    # build123d's make_face goes through _add_to_context, which CLEANS the
+    # result (ShapeUpgrade_UnifySameDomain): tangent-continuous Bezier/spline
+    # edges merge into one B-spline. That changes the geometry slightly (the
+    # merged spline approximates the chain), so skipping it makes downstream
+    # results diverge — bicycle_tire's revolved tire was 0.84% off with 40
+    # profile edges instead of upstream's 37.
+    face = w.UnifyWire(face, True)
     # normalize XY-planar faces to a +Z normal (build123d faces from wires
     # come out +Z regardless of the chained winding; ours follow the wire)
     n = w._faceNormal(face)

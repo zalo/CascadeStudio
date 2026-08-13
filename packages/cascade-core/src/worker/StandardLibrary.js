@@ -755,10 +755,16 @@ function Extrude(face, direction, keepFace) {
   return curExtrusion;
 }
 
+/** ShapeUpgrade_UnifySameDomain — build123d's Shape.clean(). `concat` also
+ *  concatenates tangent-continuous B-spline/Bezier edges into one curve.
+ *  The result is re-typed as a face/wire when it is one, so face/wire APIs
+ *  keep working on it. */
 function UnifyWire(shape, concat) {
   let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(shape, true, true, !!concat);
   fusor.Build();
   let out = fusor.Shape();
+  if (out.ShapeType().value === 4) { out = self.oc.TopoDS_Cast.Face_1(out); }
+  else if (out.ShapeType().value === 5) { out = self.oc.TopoDS_Cast.Wire_1(out); }
   out.hash = self.oc.OCJS.HashCode(out, 100000000);
   return out;
 }
