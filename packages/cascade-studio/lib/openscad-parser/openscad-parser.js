@@ -1,6 +1,10 @@
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 
 // node_modules/openscad-parser/dist/CodeSpan.js
@@ -1588,8 +1592,8 @@ var require_ASTPinpointer = __commonJS({
     var ASTNode_1 = require_ASTNode();
     var ASTAssembler_1 = require_ASTAssembler();
     var Token_1 = require_Token();
-    exports.BinAfter = Symbol("BinAfter");
-    exports.BinBefore = Symbol("BinBefore");
+    exports.BinAfter = /* @__PURE__ */ Symbol("BinAfter");
+    exports.BinBefore = /* @__PURE__ */ Symbol("BinBefore");
     var ASTPinpointer = class extends ASTAssembler_1.default {
       pinpointLocation;
       /**
@@ -5400,7 +5404,7 @@ var require_ScadFileProvider = __commonJS({
 // node_modules/openscad-parser/dist/index.js
 var require_index = __commonJS({
   "node_modules/openscad-parser/dist/index.js"(exports) {
-    var __createBinding = exports && exports.__createBinding || (Object.create ? function(o, m, k, k2) {
+    var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       var desc = Object.getOwnPropertyDescriptor(m, k);
       if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -5409,10 +5413,10 @@ var require_index = __commonJS({
         } };
       }
       Object.defineProperty(o, k2, desc);
-    } : function(o, m, k, k2) {
+    }) : (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       o[k2] = m[k];
-    });
+    }));
     var __exportStar = exports && exports.__exportStar || function(m, exports2) {
       for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports2, p)) __createBinding(exports2, m, p);
     };
