@@ -363,8 +363,8 @@ closes it.
 
 ## 3. The patch
 
-`patch/canonical-free-edges.diff` (against build123d 0.11.1; +777/-60 lines,
-regenerable with `experiments/apply_patch.py`):
+`patch/canonical-free-edges.diff` (against build123d **dev** @ `ef48b98`; +794/-71
+lines, regenerable with `experiments/apply_patch.py`):
 
 | file | change |
 |---|---|
@@ -373,26 +373,65 @@ regenerable with `experiments/apply_patch.py`):
 | `src/build123d/geometry.py` | `Axis(edge, canonical=True)` opt-in: origin/direction from the canonical traversal (also fixes `Axis(edge)` disagreeing with `edge.position_at(0)` for REVERSED edges). Default stays `False`. |
 | `src/build123d/topology/shape_core.py` | `ShapeList.sort_by` refactored to a single keyed sort; **ties** are broken by `_canonical_sort_key` (rounded centre + bounding box) instead of by the kernel's traversal order. Zero extra cost when there are no ties. |
 | `tests/test_direct_api/test_canonical.py` | **new** - 14 tests, build123d unittest style. |
+| `tests/test_algebra.py` | `test_sketch_plus` sorts the two circle arcs by `Axis.X` instead of relying on an `Axis.Z` tie. |
 
-Test results (OCP 7.9.3, build123d 0.11.1):
+The PR targets **gumyr/build123d `dev`**; the diff is generated from that branch.
+The research above was done against 0.11.1 (the version the validation harness
+compares against) and the adaptation to `dev` needed exactly one change - see
+section 3.1.
 
-* the 14 new tests pass;
-* `tests/test_direct_api` (529 tests) has **identical** failure counts before and
-  after the patch (9 failures / 18 errors, all pre-existing: the checked-out test
-  suite is from the dev branch while the library under test is 0.11.1);
-* one behaviour change in the wider suite: `test_algebra.test_sketch_plus` takes
-  `result.edges().sort_by().filter_by(GeomType.CIRCLE).first` where *every* edge has
-  the same `Axis.Z` key; the deterministic tie order now yields the arc at
-  `x = -0.55` instead of `x = +0.55`. The test froze an arbitrary order. That is the
-  compatibility cost, and it is also the point.
+Test results on `dev` (OCP 7.9.3):
+
+| suite | pristine dev | with the patch |
+|---|---|---|
+| `tests/test_direct_api` | 1169 passed, 2 skipped, 0 failed | **1183 passed, 2 skipped, 0 failed** (+14 new) |
+| rest of `tests/` | 1037 passed, 1 skipped, 0 failed | 1037 passed, 1 skipped, 0 failed |
+| `tests/test_algebra.py` + `test_build_generic` + `test_build_part` + `test_joints` | 283 passed | 283 passed |
+
+One upstream test needed a one-line change and it is included in the patch:
+`test_algebra.test_sketch_plus` sorted edges that **all** tie on `Axis.Z` and then
+took `.first`/`.last`, so it depended on the kernel's traversal order. It now sorts
+the two circle arcs by `Axis.X` - which is what it meant to assert - and passes both
+before and after the tie-break change. That single test is the entire measured
+compatibility cost of the deterministic tie order, and it is also the point.
+
+### 3.1 What drifted between 0.11.1 and dev
+
+Only one thing, and it was fatal in a quiet way: **`Vector.to_tuple()` was removed**
+(it is `@deprecated` in 0.11.1). Consequences and fixes:
+
+* `canonical.py` used `vector.to_tuple()[index]` in five places -> now a tiny
+  `_coordinate(vector, index)` helper reading `.X/.Y/.Z`.
+* `_canonical_sort_key` in `shape_core.py` built its key from
+  `center().to_tuple()` and `box.min/max.to_tuple()`. It raised `AttributeError`,
+  which the original `except (ValueError, TypeError, AttributeError, AssertionError)`
+  **swallowed**, so the function silently returned `()` for every shape: all keys
+  became equal, the tie-break degraded back to the kernel's order and the two
+  determinism tests failed while everything else looked fine. Fixed by reading
+  `.X/.Y/.Z` directly, testing `hasattr(center)/hasattr(bounding_box)` explicitly
+  instead of catching `AttributeError`, and keeping only
+  `except (ValueError, TypeError, AssertionError)` - so a future API rename fails
+  loudly instead of degrading.
+
+Nothing else drifted: every anchor the patch generator edits
+(`Mixin1D.common_plane`, `edges_to_wires`, `Edge.make_mid_way`, `Axis.__init__`,
+`ShapeList.sort_by`, the `OCP.GeomConvert` and `build123d.geometry` import lists)
+still matches `dev` byte for byte, and the rule's semantics are unchanged from
+section 2.2.
 
 ---
 
 ## 4. Reproducing
 
 ```bash
-V=~/Desktop/ocjs-deps/b123d-ref-venv/bin/python          # OCP 7.9.3 + build123d 0.11.1
+V=~/Desktop/ocjs-deps/b123d-ref-venv/bin/python          # OCP 7.9.3
 cd docs/upstream-canonical-edges/experiments
+
+# PR-ready tree (what the diff was generated from):
+#   git clone --depth 1 -b dev https://github.com/gumyr/build123d /tmp/b123d-pr
+#   ./repatch.sh /tmp/b123d-pr/src/build123d
+#   cp ../patch/tests/test_direct_api/test_canonical.py /tmp/b123d-pr/tests/test_direct_api/
+#   cd /tmp/b123d-pr && PYTHONPATH=$PWD/src $V -m pytest tests/test_direct_api -q
 
 $V probe_native.py > native.json                          # battery on OCP 7.9.3
 node probe_wasm.mjs                                       # same battery on OCCT 8.0.1 wasm (~10 s boot)

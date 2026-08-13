@@ -219,12 +219,15 @@ g = g.replace(
     def __init__(self, edge: Edge, *, canonical: bool = False) -> None:
         """Axis: start of Edge
 
-        The origin and direction come from the Edge's *canonical* traversal
-        (see ``Mixin1D.canonical``) so that geometrically identical Edges give
-        identical Axes.  Pass ``canonical=False`` for the pre-0.12 behaviour,
-        which read the underlying curve at its first parameter and therefore
-        depended on the Edge's construction history (and disagreed with
-        ``edge.position_at(0)`` whenever the Edge was REVERSED).
+        With ``canonical=False`` (the default, and the historical behaviour) the
+        origin and direction are read from the underlying curve at its first
+        parameter.  That depends on the Edge's construction history and
+        disagrees with ``edge.position_at(0)``/``edge.tangent_at(0)`` whenever
+        the Edge is REVERSED.
+
+        With ``canonical=True`` they come from the Edge's *canonical* traversal
+        (see ``Mixin1D.canonical``), so geometrically identical Edges always
+        give identical Axes.
         """
 ''',
     1,
@@ -453,21 +456,24 @@ SORT_KEY_HELPER = '''def _canonical_sort_key(shape: Shape | Vector) -> tuple[flo
     so that geometry that agrees to within tolerance always sorts the same way.
     """
     if isinstance(shape, Vector):  # ShapeList also holds plain Vectors
-        coordinates: tuple[float, ...] = shape.to_tuple()
+        coordinates: tuple[float, ...] = (shape.X, shape.Y, shape.Z)
+    elif not (hasattr(shape, "center") and hasattr(shape, "bounding_box")):
+        return ()  # pragma: no cover
     else:
         try:
-            box = shape.bounding_box()
+            center, box = shape.center(), shape.bounding_box()
             coordinates = (
-                *shape.center().to_tuple(),
-                *box.min.to_tuple(),
-                *box.max.to_tuple(),
+                center.X,
+                center.Y,
+                center.Z,
+                box.min.X,
+                box.min.Y,
+                box.min.Z,
+                box.max.X,
+                box.max.Y,
+                box.max.Z,
             )
-        except (
-            ValueError,
-            TypeError,
-            AttributeError,
-            AssertionError,
-        ):  # pragma: no cover
+        except (ValueError, TypeError, AssertionError):  # pragma: no cover
             return ()
     return tuple(round(coordinate, TOL_DIGITS) for coordinate in coordinates)
 
@@ -489,3 +495,40 @@ assert anchor3 in c
 c = c.replace(anchor3, SORT_KEY_HELPER + anchor3, 1)
 shape_core.write_text(c)
 print("patched sort_by")
+
+# ---------------------------------------------- tests/test_algebra.py tie order
+# This assertion sorted edges that all tie on Axis.Z and then took .first /
+# .last, so it depended on the kernel's traversal order.  Sort by a defined key.
+algebra = tree.parent.parent / "tests" / "test_algebra.py"
+if algebra.exists():
+    a = algebra.read_text()
+    old_algebra = '''        self.assertTupleAlmostEquals(
+            result.edges()
+            .sort_by()
+            .filter_by(GeomType.CIRCLE)
+            .first.center(CenterOf.BOUNDING_BOX),
+            (0.55, 0, 0),
+            6,
+        )
+        self.assertTupleAlmostEquals(
+            result.edges()
+            .sort_by()
+            .filter_by(GeomType.CIRCLE)
+            .last.center(CenterOf.BOUNDING_BOX),
+            (-0.55, 0, 0),
+            6,
+        )'''
+    new_algebra = '''        circle_edges = result.edges().filter_by(GeomType.CIRCLE).sort_by(Axis.X)
+        self.assertTupleAlmostEquals(
+            circle_edges.first.center(CenterOf.BOUNDING_BOX),
+            (-0.55, 0, 0),
+            6,
+        )
+        self.assertTupleAlmostEquals(
+            circle_edges.last.center(CenterOf.BOUNDING_BOX),
+            (0.55, 0, 0),
+            6,
+        )'''
+    assert old_algebra in a
+    algebra.write_text(a.replace(old_algebra, new_algebra, 1))
+    print("patched tests/test_algebra.py tie order")

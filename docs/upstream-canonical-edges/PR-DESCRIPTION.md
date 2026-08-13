@@ -1,5 +1,7 @@
 # Canonical parametrisation for free edges (`Mixin1D.canonical`)
 
+*Target branch: `dev` (based on `ef48b98`). Verified with OCP 7.9.3 on Python 3.12.*
+
 ## Problem
 
 The seam, the traversal direction and the parameter range of an edge that build123d
@@ -130,7 +132,15 @@ operation order or kernel build can change the answer.
   (that case is where the two kernels' walk-line point counts differ).
 * 14 new tests in `tests/test_direct_api/test_canonical.py`, including the frame
   independence regressions and a kernel-free polyline test of the rule itself.
-* `tests/test_direct_api` (529 tests): no change in results.
+
+Test suite on `dev`, before and after:
+
+| suite | pristine `dev` | with this PR |
+|---|---|---|
+| `tests/test_direct_api` | 1169 passed, 2 skipped | **1183 passed, 2 skipped** (+14 new) |
+| rest of `tests/` | 1037 passed, 1 skipped | 1037 passed, 1 skipped |
+
+No failures either side.
 
 ## Compatibility
 
@@ -143,13 +153,14 @@ and cannot change existing behaviour. Two changes can:
   already warns about.
 * **`ShapeList.sort_by` tie order.** Any code that (perhaps unknowingly) relies on the
   kernel's order for shapes with equal sort keys can see a different pick. In this
-  repository's own suite exactly one test changes: `test_algebra.test_sketch_plus`
-  takes `result.edges().sort_by().filter_by(GeomType.CIRCLE).first` where *every* edge
-  has the same `Axis.Z` key, and now gets the arc at `x = -0.55` instead of
-  `x = +0.55`. The test had frozen an arbitrary order; the assertion is equally valid
-  either way once the order is defined. I am happy to split this change out into its
-  own PR, or to gate it behind a keyword (`sort_by(..., stable=True)`) if you would
-  rather stage it.
+  repository's own suite exactly one test was affected -
+  `test_algebra.test_sketch_plus` took
+  `result.edges().sort_by().filter_by(GeomType.CIRCLE).first` where *every* edge has
+  the same `Axis.Z` key - so this PR sorts those two circle arcs by `Axis.X`, which is
+  what the assertion means; it then passes with or without the tie-break change. That
+  is the whole measured cost across 2200+ tests. I am happy to split the `sort_by`
+  change into its own PR, or to gate it behind a keyword
+  (`sort_by(..., stable=True)`), if you would rather stage it.
 
 The argument for deterministic over incidental: today the answer depends on the
 primitives' local frames, the operation order, the tolerance and the kernel build, and
@@ -160,7 +171,7 @@ is computable by hand, and when it does not match intent the user can flip it in
 call (`.canonical()`, `reversed()`, `sort_by(Axis.X)`), which is impossible for a rule
 that lives inside the intersector.
 
-If a policy change is preferred over opt-in, the natural next step for 0.12 would be
+If a policy change is preferred over opt-in, the natural next step would be
 `Axis(edge)` defaulting to `canonical=True` and free edges returned by
 `project_to_shape`/`section` being canonicalised at the boundary of build123d, where
 they are known to be kernel-produced. That is deliberately *not* done here: build123d
@@ -192,6 +203,20 @@ distinction expressible.
   change; for now the workaround is `Wire`-ing the loop back together
   (`edges_to_wires(...)`) before calling `.canonical()`, which the rule supports
   unchanged.
+
+## Implementation notes
+
+* `topology/canonical.py` imports only `TOLERANCE` and `Vector` from
+  `build123d.geometry` - no OCP - so the rule can be unit tested with a polyline
+  sampler (`test_polyline_sampler` does exactly that, and the same code path was used
+  to check the rule against a second CAD kernel).
+* `_canonical_sort_key` avoids swallowing `AttributeError`: it handles the `Vector`
+  members a `ShapeList` can hold explicitly and checks `hasattr(center)` /
+  `hasattr(bounding_box)`, so an API change surfaces as a failure rather than as a
+  silently disabled tie-break.
+* Seam search cost: `O(1)` for open shapes (two end points); for a closed shape, 512
+  arc-length samples plus a bounded golden-section and two bisections - only paid when
+  `canonical()`/`canonical_form()` is actually called.
 
 ## Notes / adjacent bugs noticed
 

@@ -99,6 +99,11 @@ class CanonicalForm(NamedTuple):
 # pure geometry helpers - these take a sampler so that they can be used with
 # anything that can be evaluated by arc length (and unit tested with polylines)
 # ---------------------------------------------------------------------------
+def _coordinate(point: Vector, index: int) -> float:
+    """The ``index``-th coordinate of a Vector."""
+    return (point.X, point.Y, point.Z)[index]
+
+
 def lexicographic_key(point: Vector | Iterable[float]) -> tuple[float, float, float]:
     """The (x, y, z) sort key used by every canonical comparison."""
     if isinstance(point, Vector):
@@ -232,12 +237,12 @@ def canonical_form(
     area = loop_area_vector(points)
     axis = _dominant_axis(area)
     sign = 1
-    if abs(area.to_tuple()[axis]) > TOLERANCE**2:
-        sign = 1 if area.to_tuple()[axis] > 0 else -1
+    if abs(_coordinate(area, axis)) > TOLERANCE**2:
+        sign = 1 if _coordinate(area, axis) > 0 else -1
 
     # ---- seam: midpoint of the lexicographically extremal band
     diagonal = max(
-        max(p.to_tuple()[i] for p in points) - min(p.to_tuple()[i] for p in points)
+        max(_coordinate(p, i) for p in points) - min(_coordinate(p, i) for p in points)
         for i in range(3)
     )
     tolerance_band = max(band * max(diagonal, TOLERANCE), TOLERANCE * 1e-3)
@@ -246,9 +251,9 @@ def canonical_form(
     for coordinate in (0, 1, 2):
 
         def value(distance: float, coordinate: int = coordinate) -> float:
-            return sampler(distance % length).to_tuple()[coordinate]
+            return _coordinate(sampler(distance % length), coordinate)
 
-        values = [p.to_tuple()[coordinate] for p in points]
+        values = [_coordinate(p, coordinate) for p in points]
         index = min(range(samples), key=lambda i: values[i])
         # the value of the minimum, refined so that the band below does not
         # depend on the (kernel supplied) phase of the sampling
@@ -268,12 +273,12 @@ def canonical_form(
         for start, count in _cyclic_runs(inside):
             members = [points[(start + offset) % samples] for offset in range(count)]
             key = tuple(
-                min(member.to_tuple()[other] for member in members) for other in others
+                min(_coordinate(member, other) for member in members) for other in others
             )
             candidates.append((key, start * step))
         seed_point = sampler(seed % length)
         candidates.append(
-            (tuple(seed_point.to_tuple()[other] for other in others), seed)
+            (tuple(_coordinate(seed_point, other) for other in others), seed)
         )
 
         # A surviving tie means the loop is exactly symmetric, where no

@@ -1,6 +1,8 @@
+diff --git a/src/build123d/geometry.py b/src/build123d/geometry.py
+index 1122b40..d2998ed 100644
 --- a/src/build123d/geometry.py
 +++ b/src/build123d/geometry.py
-@@ -635,6 +635,9 @@
+@@ -638,6 +638,9 @@ class Axis(metaclass=AxisMeta):
          direction (VectorLike): direction
          end_point (VectorLike): point used with origin to define direction
          edge (Edge): origin & direction defined by start of edge
@@ -10,7 +12,7 @@
          location (Location): location to convert to axis
  
      Attributes:
-@@ -662,8 +665,16 @@
+@@ -667,8 +670,19 @@ class Axis(metaclass=AxisMeta):
          """Axis: point and end point"""
  
      @overload
@@ -19,17 +21,20 @@
 +    def __init__(self, edge: Edge, *, canonical: bool = False) -> None:
 +        """Axis: start of Edge
 +
-+        The origin and direction come from the Edge's *canonical* traversal
-+        (see ``Mixin1D.canonical``) so that geometrically identical Edges give
-+        identical Axes.  Pass ``canonical=False`` for the pre-0.12 behaviour,
-+        which read the underlying curve at its first parameter and therefore
-+        depended on the Edge's construction history (and disagreed with
-+        ``edge.position_at(0)`` whenever the Edge was REVERSED).
++        With ``canonical=False`` (the default, and the historical behaviour) the
++        origin and direction are read from the underlying curve at its first
++        parameter.  That depends on the Edge's construction history and
++        disagrees with ``edge.position_at(0)``/``edge.tangent_at(0)`` whenever
++        the Edge is REVERSED.
++
++        With ``canonical=True`` they come from the Edge's *canonical* traversal
++        (see ``Mixin1D.canonical``), so geometrically identical Edges always
++        give identical Axes.
 +        """
  
      def __init__(self, *args: Any, **kwargs: Any) -> None:
          # pylint: disable=too-many-branches, too-many-locals
-@@ -674,6 +685,7 @@
+@@ -679,6 +693,7 @@ class Axis(metaclass=AxisMeta):
          end_point = kwargs.pop("end_point", None)
          edge = kwargs.pop("edge", None)
          location = kwargs.pop("location", None)
@@ -37,7 +42,7 @@
  
          # Handle unexpected kwargs
          if kwargs:
-@@ -706,14 +718,21 @@
+@@ -711,14 +726,21 @@ class Axis(metaclass=AxisMeta):
              if not (hasattr(edge, "wrapped") and isinstance(edge.wrapped, TopoDS_Edge)):
                  raise ValueError(f"Invalid edge argument: {edge}")
  
@@ -67,371 +72,12 @@
  
          # Convert location to axis
          if location is not None:
---- a/src/build123d/topology/one_d.py
-+++ b/src/build123d/topology/one_d.py
-@@ -137,7 +137,7 @@
-     GeomAPI_PointsToBSpline,
-     GeomAPI_ProjectPointOnCurve,
- )
--from OCP.GeomConvert import GeomConvert_CompCurveToBSplineCurve
-+from OCP.GeomConvert import GeomConvert, GeomConvert_CompCurveToBSplineCurve
- from OCP.GeomFill import (
-     GeomFill_CorrectedFrenet,
-     GeomFill_Frenet,
-@@ -219,6 +219,11 @@
-     logger,
- )
- 
-+from .canonical import (
-+    CANONICAL_SAMPLES,
-+    CanonicalForm,
-+    canonical_form as _canonical_form,
-+)
- from .constrained_lines import (
-     _make_2tan_lines,
-     _make_2tan_on_arcs,
-@@ -696,6 +701,82 @@
-             middle = self.bounding_box().center()
-         return middle
- 
-+    def canonical(self) -> Edge | Wire:
-+        """canonical
-+
-+        Return this shape with a *canonical* parametrisation: the same geometry,
-+        but with a start point and a traversal direction that are determined by
-+        the geometry alone instead of by the CAD kernel's construction history.
-+
-+        Free edges - the ones produced by :meth:`~topology.Shape.cut`,
-+        :meth:`~topology.Shape.intersect`, ``section`` or ``project_to_shape``
-+        rather than drawn by the user - inherit the seam, direction and
-+        parameter range that the kernel found convenient. Those depend on the
-+        parametric frames of the surfaces involved (which meridian of a sphere
-+        is ``u = 0``), on the seed point of the surface/surface intersector and
-+        on the order the boolean assembler visited the faces of the result, so
-+        two geometrically identical solids can yield section edges that start in
-+        different places and run in opposite directions. Anything measured from
-+        ``position_at(0)``, ``tangent_at`` or ``Axis(edge)`` then moves with
-+        them.
-+
-+        The canonical form is defined as:
-+
-+        * open shapes start at the lexicographically smaller end point,
-+        * closed shapes start at the lexicographically smallest point of the
-+          loop (the midpoint of its extremal band, see
-+          :mod:`~topology.canonical`) and wind counter-clockwise about the
-+          dominant axis of their area vector,
-+        * positions are normalised arc length, as ``position_at`` already does.
-+
-+        Returns:
-+            Edge | Wire: same geometry, canonical parametrisation. Open shapes
-+            keep their type; a closed shape that has to be re-seamed is returned
-+            as a single Edge, because a closed ``Wire`` has no distinguished
-+            start point for ``position_at`` to key off.
-+
-+        Example:
-+            >>> # a text path on a sphere that does not depend on how the
-+            >>> # sphere happens to be parametrised
-+            >>> arch = sphere.cut(cylinder).edges().sort_by(Axis.Z)[0].canonical()
-+        """
-+        form = self.canonical_form()
-+
-+        if not form.closed:
-+            return self if form.sign > 0 else _reverse_1d(self)
-+
-+        if form.sign > 0 and form.start <= TOLERANCE / max(self.length, TOLERANCE):
-+            return self  # already canonical: keep the original curve type
-+
-+        seam = self.position_at(form.start)
-+        direction = self.tangent_at(form.start) * form.sign
-+        ordered = _walk_loop(_split_1d_at_point(self, seam), seam, direction)
-+        return _concatenate_edges(ordered)
-+
-+    def canonical_form(self, samples: int = CANONICAL_SAMPLES) -> CanonicalForm:
-+        """canonical_form
-+
-+        The canonical start position and direction of this shape, without
-+        rebuilding it - see :meth:`canonical`.
-+
-+        Args:
-+            samples (int, optional): arc length samples used by the seam search.
-+                Defaults to ``CANONICAL_SAMPLES``.
-+
-+        Returns:
-+            CanonicalForm: canonical start (normalised) and direction sign
-+        """
-+        length = self.length
-+        if length <= TOLERANCE:
-+            return CanonicalForm(0.0, 1, False)
-+        closed = (self.position_at(0) - self.position_at(1)).length <= TOLERANCE
-+        return _canonical_form(
-+            lambda distance: self.position_at(min(max(distance / length, 0.0), 1.0)),
-+            length,
-+            closed,
-+            samples=samples,
-+        )
-+
-     def common_plane(
-         self, *lines: Edge | Wire | None, tolerance: float = TOLERANCE
-     ) -> None | Plane:
-@@ -2363,7 +2444,13 @@
-         Returns:
-             Edge: linear Edge between two Edges
-         """
--        flip = Axis(first).is_opposite(Axis(second))
-+        # The direction and start point of the two reference Edges are
-+        # incidental - a section Edge starts wherever the kernel's intersector
-+        # happened to seam it - so pair the ends up canonically instead of
-+        # relying on the construction history (the is_opposite() flip below is
-+        # kept for reference Edges that are not parallel).
-+        first, second = first.canonical(), second.canonical()
-+        flip = Axis(first, canonical=True).is_opposite(Axis(second, canonical=True))
-         pnts = [
-             Edge.make_line(
-                 first.position_at(i), second.position_at(1 - i if flip else i)
-@@ -4646,6 +4733,84 @@
-         return Wire(trimmed_edges)
- 
- 
-+def _reverse_1d(shape: Edge | Wire) -> Edge | Wire:
-+    """A copy of an Edge or Wire that is traversed in the opposite direction."""
-+    if isinstance(shape, Wire):
-+        reversed_wire = Wire(TopoDS.Wire_s(shape.wrapped.Reversed()))
-+        reversed_wire.label = shape.label
-+        return reversed_wire
-+    return shape.reversed()
-+
-+
-+def _split_1d_at_point(shape: Edge | Wire, point: Vector) -> list[Edge]:
-+    """The Edges of ``shape``, with the one that contains ``point`` split there."""
-+    pieces: list[Edge] = []
-+    for edge in shape.edges():
-+        ends_at_point = min(
-+            (edge.position_at(0) - point).length, (edge.position_at(1) - point).length
-+        )
-+        if ends_at_point > TOLERANCE and edge.distance_to(point) <= TOLERANCE:
-+            parameter = edge.param_at_point(point)
-+            if TOLERANCE < parameter * edge.length < edge.length - TOLERANCE:
-+                pieces.extend([edge.trim(0.0, parameter), edge.trim(parameter, 1.0)])
-+                continue
-+        pieces.append(edge)
-+    return pieces
-+
-+
-+def _walk_loop(pieces: list[Edge], start: Vector, direction: Vector) -> list[Edge]:
-+    """Order and orient ``pieces`` into a chain that leaves ``start`` heading
-+    along ``direction``, purely by matching end points."""
-+    remaining = list(pieces)
-+    # the requested start comes from a sampled parameter, so allow a gap that
-+    # scales with the size of the loop
-+    gap_tolerance = max(TOLERANCE, 1e-6 * sum(piece.length for piece in pieces))
-+    ordered: list[Edge] = []
-+    position, heading = start, direction
-+    while remaining:
-+        best, best_score, flip = None, None, False
-+        for candidate in remaining:
-+            for reverse in (False, True):
-+                edge = candidate.reversed() if reverse else candidate
-+                score = (
-+                    (edge.position_at(0) - position).length,
-+                    -edge.tangent_at(0).dot(heading),
-+                )
-+                if best_score is None or score < best_score:
-+                    best, best_score, flip = candidate, score, reverse
-+        if best is None or best_score[0] > gap_tolerance:
-+            return pieces  # not a connected chain - keep the input order
-+        edge = best.reversed() if flip else best
-+        ordered.append(edge)
-+        remaining.remove(best)
-+        position, heading = edge.position_at(1), edge.tangent_at(1)
-+    return ordered
-+
-+
-+def _concatenate_edges(edges: list[Edge]) -> Edge:
-+    """A single Edge whose curve is the concatenation of ``edges``, in order.
-+
-+    Used to give a re-seamed closed loop an unambiguous start point: a closed
-+    ``TopoDS_Wire`` carries no distinguished first edge, while an Edge's curve
-+    parametrisation does.
-+    """
-+
-+    def bspline_of(edge: Edge) -> Geom_BSplineCurve:
-+        first, last = BRep_Tool.Range_s(edge.wrapped)
-+        curve = BRep_Tool.Curve_s(edge.wrapped, first, last)
-+        bspline = GeomConvert.CurveToBSplineCurve_s(Geom_TrimmedCurve(curve, first, last))
-+        if edge.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED:
-+            bspline.Reverse()
-+        return bspline
-+
-+    if len(edges) == 1:
-+        return Edge(BRepBuilderAPI_MakeEdge(bspline_of(edges[0])).Edge())
-+    builder = GeomConvert_CompCurveToBSplineCurve(bspline_of(edges[0]))
-+    for edge in edges[1:]:
-+        builder.Add(bspline_of(edge), TOLERANCE, True)
-+    return Edge(BRepBuilderAPI_MakeEdge(builder.BSplineCurve()).Edge())
-+
-+
- def edges_to_wires(edges: Iterable[Edge], tol: float = 1e-6) -> ShapeList[Wire]:
-     """Convert edges to a list of wires.
- 
---- a/src/build123d/topology/shape_core.py
-+++ b/src/build123d/topology/shape_core.py
-@@ -141,6 +141,7 @@
- from build123d.geometry import (
-     DEG2RAD,
-     TOLERANCE,
-+    TOL_DIGITS,
-     Axis,
-     BoundBox,
-     Color,
-@@ -3431,80 +3432,68 @@
-             ShapeList: sorted list of objects
-         """
- 
-+        candidates: list = list(self)
-+
-         if callable(sort_by):
-             # If a callable is provided, use it directly as the key
--            objects = sorted(self, key=sort_by, reverse=reverse)
-+            key_function = sort_by
- 
-         elif isinstance(sort_by, property):
--            objects = sorted(self, key=sort_by.__get__, reverse=reverse)
-+            key_function = sort_by.__get__
- 
-         elif isinstance(sort_by, Axis):
-             if sort_by.wrapped is None:
-                 raise ValueError("Cannot sort by an empty axis")
-             assert sort_by.location is not None
-             axis_as_location = sort_by.location.inverse()
--            objects = sorted(
--                self,
--                key=lambda o: tcast(
-+
-+            def key_function(o):  # type: ignore[misc]
-+                return tcast(
-                     Location, (axis_as_location * Location(o.center()))
--                ).position.Z,
--                reverse=reverse,
--            )
-+                ).position.Z
-+
-         elif not sort_by:
-             raise ValueError("Cannot sort by an empty object")
-         elif hasattr(sort_by, "wrapped") and isinstance(
-             sort_by.wrapped, (TopoDS_Edge, TopoDS_Wire)
-         ):
- 
--            def u_of_closest_center(obj) -> float:
-+            def key_function(obj) -> float:  # type: ignore[misc]
-                 """u-value of closest point between object center and sort_by"""
-                 assert not isinstance(sort_by, SortBy)
-                 pnt1, _pnt2 = sort_by.closest_points(obj.center())
-                 return sort_by.param_at_point(pnt1)
- 
--            # pylint: disable=unnecessary-lambda
--            objects = sorted(
--                self, key=lambda o: u_of_closest_center(o), reverse=reverse
--            )
--
-         elif isinstance(sort_by, SortBy):
-             if sort_by == SortBy.LENGTH:
--                objects = sorted(
--                    self,
--                    key=lambda obj: obj.length,
--                    reverse=reverse,
--                )
-+                key_function = lambda obj: obj.length  # noqa: E731
-             elif sort_by == SortBy.RADIUS:
--                with_radius = [obj for obj in self if hasattr(obj, "radius")]
--                objects = sorted(
--                    with_radius,
--                    key=lambda obj: obj.radius,  # type: ignore
--                    reverse=reverse,
--                )
-+                candidates = [obj for obj in candidates if hasattr(obj, "radius")]
-+                key_function = lambda obj: obj.radius  # type: ignore # noqa: E731
-             elif sort_by == SortBy.DISTANCE:
--                objects = sorted(
--                    self,
--                    key=lambda obj: obj.center().length,
--                    reverse=reverse,
--                )
-+                key_function = lambda obj: obj.center().length  # noqa: E731
-             elif sort_by == SortBy.AREA:
--                with_area = [obj for obj in self if hasattr(obj, "area")]
--                objects = sorted(
--                    with_area,
--                    key=lambda obj: obj.area,  # type: ignore
--                    reverse=reverse,
--                )
-+                candidates = [obj for obj in candidates if hasattr(obj, "area")]
-+                key_function = lambda obj: obj.area  # type: ignore # noqa: E731
-             elif sort_by == SortBy.VOLUME:
--                with_volume = [obj for obj in self if hasattr(obj, "volume")]
--                objects = sorted(
--                    with_volume,
--                    key=lambda obj: obj.volume,  # type: ignore
--                    reverse=reverse,
--                )
-+                candidates = [obj for obj in candidates if hasattr(obj, "volume")]
-+                key_function = lambda obj: obj.volume  # type: ignore # noqa: E731
-         else:
-             raise ValueError("Invalid sort_by criteria provided")
- 
--        return ShapeList(objects)  # pylint: disable=possibly-used-before-assignment
-+        # Objects that tie on the sort criterion would otherwise be ordered by
-+        # the kernel's traversal order, which depends on the construction
-+        # history of the shape (see Mixin1D.canonical).  Break those ties with a
-+        # geometric key so that identical geometry always sorts identically.
-+        # pylint: disable=possibly-used-before-assignment
-+        decorated = [(key_function(obj), obj) for obj in candidates]
-+        if len({key for key, _ in decorated}) != len(decorated):
-+            decorated = [
-+                ((key, _canonical_sort_key(obj)), obj) for key, obj in decorated
-+            ]
-+        decorated.sort(key=lambda pair: pair[0], reverse=reverse)
-+
-+        return ShapeList([obj for _, obj in decorated])
- 
-     def sort_by_distance(
-         self, other: Shape | VectorLike, reverse: bool = False
-@@ -3669,6 +3658,33 @@
-     return result
- 
- 
-+def _canonical_sort_key(shape: Shape | Vector) -> tuple[float, ...]:
-+    """Deterministic, purely geometric ordering key.
-+
-+    Used to break ties in :meth:`ShapeList.sort_by`, where the alternative is
-+    the CAD kernel's traversal order.  Coordinates are rounded to ``TOL_DIGITS``
-+    so that geometry that agrees to within tolerance always sorts the same way.
-+    """
-+    if isinstance(shape, Vector):  # ShapeList also holds plain Vectors
-+        coordinates: tuple[float, ...] = shape.to_tuple()
-+    else:
-+        try:
-+            box = shape.bounding_box()
-+            coordinates = (
-+                *shape.center().to_tuple(),
-+                *box.min.to_tuple(),
-+                *box.max.to_tuple(),
-+            )
-+        except (
-+            ValueError,
-+            TypeError,
-+            AttributeError,
-+            AssertionError,
-+        ):  # pragma: no cover
-+            return ()
-+    return tuple(round(coordinate, TOL_DIGITS) for coordinate in coordinates)
-+
-+
- def _topods_entities(shape: TopoDS_Shape, topo_type: Shapes) -> list[TopoDS_Shape]:
-     """Return the TopoDS_Shapes of topo_type from this TopoDS_Shape"""
-     out = {}  # using dict to prevent duplicates
+diff --git a/src/build123d/topology/canonical.py b/src/build123d/topology/canonical.py
+new file mode 100644
+index 0000000..5b40d19
 --- /dev/null
 +++ b/src/build123d/topology/canonical.py
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,310 @@
 +"""
 +build123d canonical free-edge parametrisation
 +
@@ -533,6 +179,11 @@
 +# pure geometry helpers - these take a sampler so that they can be used with
 +# anything that can be evaluated by arc length (and unit tested with polylines)
 +# ---------------------------------------------------------------------------
++def _coordinate(point: Vector, index: int) -> float:
++    """The ``index``-th coordinate of a Vector."""
++    return (point.X, point.Y, point.Z)[index]
++
++
 +def lexicographic_key(point: Vector | Iterable[float]) -> tuple[float, float, float]:
 +    """The (x, y, z) sort key used by every canonical comparison."""
 +    if isinstance(point, Vector):
@@ -666,12 +317,12 @@
 +    area = loop_area_vector(points)
 +    axis = _dominant_axis(area)
 +    sign = 1
-+    if abs(area.to_tuple()[axis]) > TOLERANCE**2:
-+        sign = 1 if area.to_tuple()[axis] > 0 else -1
++    if abs(_coordinate(area, axis)) > TOLERANCE**2:
++        sign = 1 if _coordinate(area, axis) > 0 else -1
 +
 +    # ---- seam: midpoint of the lexicographically extremal band
 +    diagonal = max(
-+        max(p.to_tuple()[i] for p in points) - min(p.to_tuple()[i] for p in points)
++        max(_coordinate(p, i) for p in points) - min(_coordinate(p, i) for p in points)
 +        for i in range(3)
 +    )
 +    tolerance_band = max(band * max(diagonal, TOLERANCE), TOLERANCE * 1e-3)
@@ -680,9 +331,9 @@
 +    for coordinate in (0, 1, 2):
 +
 +        def value(distance: float, coordinate: int = coordinate) -> float:
-+            return sampler(distance % length).to_tuple()[coordinate]
++            return _coordinate(sampler(distance % length), coordinate)
 +
-+        values = [p.to_tuple()[coordinate] for p in points]
++        values = [_coordinate(p, coordinate) for p in points]
 +        index = min(range(samples), key=lambda i: values[i])
 +        # the value of the minimum, refined so that the band below does not
 +        # depend on the (kernel supplied) phase of the sampling
@@ -702,12 +353,12 @@
 +        for start, count in _cyclic_runs(inside):
 +            members = [points[(start + offset) % samples] for offset in range(count)]
 +            key = tuple(
-+                min(member.to_tuple()[other] for member in members) for other in others
++                min(_coordinate(member, other) for member in members) for other in others
 +            )
 +            candidates.append((key, start * step))
 +        seed_point = sampler(seed % length)
 +        candidates.append(
-+            (tuple(seed_point.to_tuple()[other] for other in others), seed)
++            (tuple(_coordinate(seed_point, other) for other in others), seed)
 +        )
 +
 +        # A surviving tie means the loop is exactly symmetric, where no
@@ -737,6 +388,408 @@
 +        break
 +
 +    return CanonicalForm(seam / length, sign, True)
+diff --git a/src/build123d/topology/one_d.py b/src/build123d/topology/one_d.py
+index 23cf821..7a3c4f3 100644
+--- a/src/build123d/topology/one_d.py
++++ b/src/build123d/topology/one_d.py
+@@ -136,7 +136,7 @@ from OCP.GeomAPI import (
+     GeomAPI_PointsToBSpline,
+     GeomAPI_ProjectPointOnCurve,
+ )
+-from OCP.GeomConvert import GeomConvert_CompCurveToBSplineCurve
++from OCP.GeomConvert import GeomConvert, GeomConvert_CompCurveToBSplineCurve
+ from OCP.GeomFill import (
+     GeomFill_CorrectedFrenet,
+     GeomFill_Frenet,
+@@ -219,6 +219,11 @@ from build123d.geometry import (
+     logger,
+ )
+ 
++from .canonical import (
++    CANONICAL_SAMPLES,
++    CanonicalForm,
++    canonical_form as _canonical_form,
++)
+ from .constrained_lines import (
+     _make_2tan_lines,
+     _make_2tan_on_arcs,
+@@ -684,6 +689,82 @@ class Mixin1D(Shape[TOPODS]):
+             middle = self.bounding_box().center()
+         return middle
+ 
++    def canonical(self) -> Edge | Wire:
++        """canonical
++
++        Return this shape with a *canonical* parametrisation: the same geometry,
++        but with a start point and a traversal direction that are determined by
++        the geometry alone instead of by the CAD kernel's construction history.
++
++        Free edges - the ones produced by :meth:`~topology.Shape.cut`,
++        :meth:`~topology.Shape.intersect`, ``section`` or ``project_to_shape``
++        rather than drawn by the user - inherit the seam, direction and
++        parameter range that the kernel found convenient. Those depend on the
++        parametric frames of the surfaces involved (which meridian of a sphere
++        is ``u = 0``), on the seed point of the surface/surface intersector and
++        on the order the boolean assembler visited the faces of the result, so
++        two geometrically identical solids can yield section edges that start in
++        different places and run in opposite directions. Anything measured from
++        ``position_at(0)``, ``tangent_at`` or ``Axis(edge)`` then moves with
++        them.
++
++        The canonical form is defined as:
++
++        * open shapes start at the lexicographically smaller end point,
++        * closed shapes start at the lexicographically smallest point of the
++          loop (the midpoint of its extremal band, see
++          :mod:`~topology.canonical`) and wind counter-clockwise about the
++          dominant axis of their area vector,
++        * positions are normalised arc length, as ``position_at`` already does.
++
++        Returns:
++            Edge | Wire: same geometry, canonical parametrisation. Open shapes
++            keep their type; a closed shape that has to be re-seamed is returned
++            as a single Edge, because a closed ``Wire`` has no distinguished
++            start point for ``position_at`` to key off.
++
++        Example:
++            >>> # a text path on a sphere that does not depend on how the
++            >>> # sphere happens to be parametrised
++            >>> arch = sphere.cut(cylinder).edges().sort_by(Axis.Z)[0].canonical()
++        """
++        form = self.canonical_form()
++
++        if not form.closed:
++            return self if form.sign > 0 else _reverse_1d(self)
++
++        if form.sign > 0 and form.start <= TOLERANCE / max(self.length, TOLERANCE):
++            return self  # already canonical: keep the original curve type
++
++        seam = self.position_at(form.start)
++        direction = self.tangent_at(form.start) * form.sign
++        ordered = _walk_loop(_split_1d_at_point(self, seam), seam, direction)
++        return _concatenate_edges(ordered)
++
++    def canonical_form(self, samples: int = CANONICAL_SAMPLES) -> CanonicalForm:
++        """canonical_form
++
++        The canonical start position and direction of this shape, without
++        rebuilding it - see :meth:`canonical`.
++
++        Args:
++            samples (int, optional): arc length samples used by the seam search.
++                Defaults to ``CANONICAL_SAMPLES``.
++
++        Returns:
++            CanonicalForm: canonical start (normalised) and direction sign
++        """
++        length = self.length
++        if length <= TOLERANCE:
++            return CanonicalForm(0.0, 1, False)
++        closed = (self.position_at(0) - self.position_at(1)).length <= TOLERANCE
++        return _canonical_form(
++            lambda distance: self.position_at(min(max(distance / length, 0.0), 1.0)),
++            length,
++            closed,
++            samples=samples,
++        )
++
+     def common_plane(
+         self, *lines: Edge | Wire | None, tolerance: float = TOLERANCE
+     ) -> None | Plane:
+@@ -2352,7 +2433,13 @@ class Edge(Mixin1D[TopoDS_Edge]):
+         Returns:
+             Edge: linear Edge between two Edges
+         """
+-        flip = Axis(first).is_opposite(Axis(second))
++        # The direction and start point of the two reference Edges are
++        # incidental - a section Edge starts wherever the kernel's intersector
++        # happened to seam it - so pair the ends up canonically instead of
++        # relying on the construction history (the is_opposite() flip below is
++        # kept for reference Edges that are not parallel).
++        first, second = first.canonical(), second.canonical()
++        flip = Axis(first, canonical=True).is_opposite(Axis(second, canonical=True))
+         pnts = [
+             Edge.make_line(
+                 first.position_at(i), second.position_at(1 - i if flip else i)
+@@ -4608,6 +4695,84 @@ class Wire(Mixin1D[TopoDS_Wire]):
+         return Wire(trimmed_edges)
+ 
+ 
++def _reverse_1d(shape: Edge | Wire) -> Edge | Wire:
++    """A copy of an Edge or Wire that is traversed in the opposite direction."""
++    if isinstance(shape, Wire):
++        reversed_wire = Wire(TopoDS.Wire_s(shape.wrapped.Reversed()))
++        reversed_wire.label = shape.label
++        return reversed_wire
++    return shape.reversed()
++
++
++def _split_1d_at_point(shape: Edge | Wire, point: Vector) -> list[Edge]:
++    """The Edges of ``shape``, with the one that contains ``point`` split there."""
++    pieces: list[Edge] = []
++    for edge in shape.edges():
++        ends_at_point = min(
++            (edge.position_at(0) - point).length, (edge.position_at(1) - point).length
++        )
++        if ends_at_point > TOLERANCE and edge.distance_to(point) <= TOLERANCE:
++            parameter = edge.param_at_point(point)
++            if TOLERANCE < parameter * edge.length < edge.length - TOLERANCE:
++                pieces.extend([edge.trim(0.0, parameter), edge.trim(parameter, 1.0)])
++                continue
++        pieces.append(edge)
++    return pieces
++
++
++def _walk_loop(pieces: list[Edge], start: Vector, direction: Vector) -> list[Edge]:
++    """Order and orient ``pieces`` into a chain that leaves ``start`` heading
++    along ``direction``, purely by matching end points."""
++    remaining = list(pieces)
++    # the requested start comes from a sampled parameter, so allow a gap that
++    # scales with the size of the loop
++    gap_tolerance = max(TOLERANCE, 1e-6 * sum(piece.length for piece in pieces))
++    ordered: list[Edge] = []
++    position, heading = start, direction
++    while remaining:
++        best, best_score, flip = None, None, False
++        for candidate in remaining:
++            for reverse in (False, True):
++                edge = candidate.reversed() if reverse else candidate
++                score = (
++                    (edge.position_at(0) - position).length,
++                    -edge.tangent_at(0).dot(heading),
++                )
++                if best_score is None or score < best_score:
++                    best, best_score, flip = candidate, score, reverse
++        if best is None or best_score[0] > gap_tolerance:
++            return pieces  # not a connected chain - keep the input order
++        edge = best.reversed() if flip else best
++        ordered.append(edge)
++        remaining.remove(best)
++        position, heading = edge.position_at(1), edge.tangent_at(1)
++    return ordered
++
++
++def _concatenate_edges(edges: list[Edge]) -> Edge:
++    """A single Edge whose curve is the concatenation of ``edges``, in order.
++
++    Used to give a re-seamed closed loop an unambiguous start point: a closed
++    ``TopoDS_Wire`` carries no distinguished first edge, while an Edge's curve
++    parametrisation does.
++    """
++
++    def bspline_of(edge: Edge) -> Geom_BSplineCurve:
++        first, last = BRep_Tool.Range_s(edge.wrapped)
++        curve = BRep_Tool.Curve_s(edge.wrapped, first, last)
++        bspline = GeomConvert.CurveToBSplineCurve_s(Geom_TrimmedCurve(curve, first, last))
++        if edge.wrapped.Orientation() == TopAbs_Orientation.TopAbs_REVERSED:
++            bspline.Reverse()
++        return bspline
++
++    if len(edges) == 1:
++        return Edge(BRepBuilderAPI_MakeEdge(bspline_of(edges[0])).Edge())
++    builder = GeomConvert_CompCurveToBSplineCurve(bspline_of(edges[0]))
++    for edge in edges[1:]:
++        builder.Add(bspline_of(edge), TOLERANCE, True)
++    return Edge(BRepBuilderAPI_MakeEdge(builder.BSplineCurve()).Edge())
++
++
+ def edges_to_wires(edges: Iterable[Edge], tol: float = 1e-6) -> ShapeList[Wire]:
+     """Convert edges to a list of wires.
+ 
+diff --git a/src/build123d/topology/shape_core.py b/src/build123d/topology/shape_core.py
+index 3bb2f53..2ca20cd 100644
+--- a/src/build123d/topology/shape_core.py
++++ b/src/build123d/topology/shape_core.py
+@@ -146,6 +146,7 @@ from build123d.build_enums import CenterOf, GeomType, Keep, SortBy, Transition,
+ from build123d.geometry import (
+     DEG2RAD,
+     TOLERANCE,
++    TOL_DIGITS,
+     Axis,
+     BoundBox,
+     Color,
+@@ -3564,80 +3565,68 @@ class ShapeList(list[T]):
+             ShapeList: sorted list of objects
+         """
+ 
++        candidates: list = list(self)
++
+         if callable(sort_by):
+             # If a callable is provided, use it directly as the key
+-            objects = sorted(self, key=sort_by, reverse=reverse)
++            key_function = sort_by
+ 
+         elif isinstance(sort_by, property):
+-            objects = sorted(self, key=sort_by.__get__, reverse=reverse)
++            key_function = sort_by.__get__
+ 
+         elif isinstance(sort_by, Axis):
+             if sort_by.wrapped is None:
+                 raise ValueError("Cannot sort by an empty axis")
+             assert sort_by.location is not None
+             axis_as_location = sort_by.location.inverse()
+-            objects = sorted(
+-                self,
+-                key=lambda o: tcast(
++
++            def key_function(o):  # type: ignore[misc]
++                return tcast(
+                     Location, (axis_as_location * Location(o.center()))
+-                ).position.Z,
+-                reverse=reverse,
+-            )
++                ).position.Z
++
+         elif not sort_by:
+             raise ValueError("Cannot sort by an empty object")
+         elif hasattr(sort_by, "wrapped") and isinstance(
+             sort_by.wrapped, (TopoDS_Edge, TopoDS_Wire)
+         ):
+ 
+-            def u_of_closest_center(obj) -> float:
++            def key_function(obj) -> float:  # type: ignore[misc]
+                 """u-value of closest point between object center and sort_by"""
+                 assert not isinstance(sort_by, SortBy)
+                 pnt1, _pnt2 = sort_by.closest_points(obj.center())
+                 return sort_by.param_at_point(pnt1)
+ 
+-            # pylint: disable=unnecessary-lambda
+-            objects = sorted(
+-                self, key=lambda o: u_of_closest_center(o), reverse=reverse
+-            )
+-
+         elif isinstance(sort_by, SortBy):
+             if sort_by == SortBy.LENGTH:
+-                objects = sorted(
+-                    self,
+-                    key=lambda obj: obj.length,
+-                    reverse=reverse,
+-                )
++                key_function = lambda obj: obj.length  # noqa: E731
+             elif sort_by == SortBy.RADIUS:
+-                with_radius = [obj for obj in self if hasattr(obj, "radius")]
+-                objects = sorted(
+-                    with_radius,
+-                    key=lambda obj: obj.radius,  # type: ignore
+-                    reverse=reverse,
+-                )
++                candidates = [obj for obj in candidates if hasattr(obj, "radius")]
++                key_function = lambda obj: obj.radius  # type: ignore # noqa: E731
+             elif sort_by == SortBy.DISTANCE:
+-                objects = sorted(
+-                    self,
+-                    key=lambda obj: obj.center().length,
+-                    reverse=reverse,
+-                )
++                key_function = lambda obj: obj.center().length  # noqa: E731
+             elif sort_by == SortBy.AREA:
+-                with_area = [obj for obj in self if hasattr(obj, "area")]
+-                objects = sorted(
+-                    with_area,
+-                    key=lambda obj: obj.area,  # type: ignore
+-                    reverse=reverse,
+-                )
++                candidates = [obj for obj in candidates if hasattr(obj, "area")]
++                key_function = lambda obj: obj.area  # type: ignore # noqa: E731
+             elif sort_by == SortBy.VOLUME:
+-                with_volume = [obj for obj in self if hasattr(obj, "volume")]
+-                objects = sorted(
+-                    with_volume,
+-                    key=lambda obj: obj.volume,  # type: ignore
+-                    reverse=reverse,
+-                )
++                candidates = [obj for obj in candidates if hasattr(obj, "volume")]
++                key_function = lambda obj: obj.volume  # type: ignore # noqa: E731
+         else:
+             raise ValueError("Invalid sort_by criteria provided")
+ 
+-        return ShapeList(objects)  # pylint: disable=possibly-used-before-assignment
++        # Objects that tie on the sort criterion would otherwise be ordered by
++        # the kernel's traversal order, which depends on the construction
++        # history of the shape (see Mixin1D.canonical).  Break those ties with a
++        # geometric key so that identical geometry always sorts identically.
++        # pylint: disable=possibly-used-before-assignment
++        decorated = [(key_function(obj), obj) for obj in candidates]
++        if len({key for key, _ in decorated}) != len(decorated):
++            decorated = [
++                ((key, _canonical_sort_key(obj)), obj) for key, obj in decorated
++            ]
++        decorated.sort(key=lambda pair: pair[0], reverse=reverse)
++
++        return ShapeList([obj for _, obj in decorated])
+ 
+     def sort_by_distance(
+         self, other: Shape | VectorLike, reverse: bool = False
+@@ -3802,6 +3791,36 @@ def _topods_bool_op(
+     return result
+ 
+ 
++def _canonical_sort_key(shape: Shape | Vector) -> tuple[float, ...]:
++    """Deterministic, purely geometric ordering key.
++
++    Used to break ties in :meth:`ShapeList.sort_by`, where the alternative is
++    the CAD kernel's traversal order.  Coordinates are rounded to ``TOL_DIGITS``
++    so that geometry that agrees to within tolerance always sorts the same way.
++    """
++    if isinstance(shape, Vector):  # ShapeList also holds plain Vectors
++        coordinates: tuple[float, ...] = (shape.X, shape.Y, shape.Z)
++    elif not (hasattr(shape, "center") and hasattr(shape, "bounding_box")):
++        return ()  # pragma: no cover
++    else:
++        try:
++            center, box = shape.center(), shape.bounding_box()
++            coordinates = (
++                center.X,
++                center.Y,
++                center.Z,
++                box.min.X,
++                box.min.Y,
++                box.min.Z,
++                box.max.X,
++                box.max.Y,
++                box.max.Z,
++            )
++        except (ValueError, TypeError, AssertionError):  # pragma: no cover
++            return ()
++    return tuple(round(coordinate, TOL_DIGITS) for coordinate in coordinates)
++
++
+ def _topods_entities(shape: TopoDS_Shape, topo_type: Shapes) -> list[TopoDS_Shape]:
+     """Return the TopoDS_Shapes of topo_type from this TopoDS_Shape"""
+     out = {}  # using dict to prevent duplicates
+diff --git a/tests/test_algebra.py b/tests/test_algebra.py
+index 3d23d8b..a6c239f 100644
+--- a/tests/test_algebra.py
++++ b/tests/test_algebra.py
+@@ -458,20 +458,15 @@ class AlgebraTests(unittest.TestCase):
+         result = rect + circle
+         self.assertEqual(len(result.edges()), 8)
+         self.assertEqual(len(result.edges() - last_edges), 6)
++        circle_edges = result.edges().filter_by(GeomType.CIRCLE).sort_by(Axis.X)
+         self.assertTupleAlmostEquals(
+-            result.edges()
+-            .sort_by()
+-            .filter_by(GeomType.CIRCLE)
+-            .first.center(CenterOf.BOUNDING_BOX),
+-            (0.55, 0, 0),
++            circle_edges.first.center(CenterOf.BOUNDING_BOX),
++            (-0.55, 0, 0),
+             6,
+         )
+         self.assertTupleAlmostEquals(
+-            result.edges()
+-            .sort_by()
+-            .filter_by(GeomType.CIRCLE)
+-            .last.center(CenterOf.BOUNDING_BOX),
+-            (-0.55, 0, 0),
++            circle_edges.last.center(CenterOf.BOUNDING_BOX),
++            (0.55, 0, 0),
+             6,
+         )
+         self.assertTupleAlmostEquals(result.bounding_box().min, (-0.6, -1.0, 0.0), 6)
+diff --git a/tests/test_direct_api/test_canonical.py b/tests/test_direct_api/test_canonical.py
+new file mode 100644
+index 0000000..98e564a
 --- /dev/null
 +++ b/tests/test_direct_api/test_canonical.py
 @@ -0,0 +1,212 @@

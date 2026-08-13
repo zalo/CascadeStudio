@@ -42,11 +42,20 @@ import logging
 import warnings
 from collections.abc import Callable, Iterable, Sequence
 from math import degrees, log10, pi, prod, radians
-from typing import TYPE_CHECKING, Any, Type, TypeAlias, TypeVar, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Type,
+    TypeAlias,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import numpy as np
-from typing_extensions import deprecated
 import webcolors  # type: ignore
+from typing_extensions import deprecated
 from OCP.Bnd import Bnd_Box, Bnd_OBB
 from OCP.BRep import BRep_Tool
 from OCP.BRepBndLib import BRepBndLib
@@ -168,6 +177,8 @@ class Vector:
 
     """
 
+    build123d_type: ClassVar[str] = "Vector"
+
     # Note: Vector can't be made into a Sequence as NumPy attempts to be "helpful" by
     # auto-converting array-like objects (objects with __len__() and indexing) into NumPy
     # arrays during certain arithmetic operations.
@@ -280,14 +291,6 @@ class Vector:
     def wrapped(self) -> gp_Vec:
         """OCCT object"""
         return self._wrapped
-
-    @deprecated(
-        "to_tuple is deprecated and will be removed in a future version. "
-        " Use 'tuple(Vector)' instead."
-    )
-    def to_tuple(self) -> tuple[float, float, float]:
-        """Return tuple equivalent"""
-        return (self.X, self.Y, self.Z)
 
     @property
     def length(self) -> float:
@@ -646,6 +649,8 @@ class Axis(metaclass=AxisMeta):
         wrapped (gp_Ax1): the OCP axis object
     """
 
+    build123d_type: ClassVar[str] = "Axis"
+
     _dim = 1
 
     @overload
@@ -668,12 +673,15 @@ class Axis(metaclass=AxisMeta):
     def __init__(self, edge: Edge, *, canonical: bool = False) -> None:
         """Axis: start of Edge
 
-        The origin and direction come from the Edge's *canonical* traversal
-        (see ``Mixin1D.canonical``) so that geometrically identical Edges give
-        identical Axes.  Pass ``canonical=False`` for the pre-0.12 behaviour,
-        which read the underlying curve at its first parameter and therefore
-        depended on the Edge's construction history (and disagreed with
-        ``edge.position_at(0)`` whenever the Edge was REVERSED).
+        With ``canonical=False`` (the default, and the historical behaviour) the
+        origin and direction are read from the underlying curve at its first
+        parameter.  That depends on the Edge's construction history and
+        disagrees with ``edge.position_at(0)``/``edge.tangent_at(0)`` whenever
+        the Edge is REVERSED.
+
+        With ``canonical=True`` they come from the Edge's *canonical* traversal
+        (see ``Mixin1D.canonical``), so geometrically identical Edges always
+        give identical Axes.
         """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -830,14 +838,6 @@ class Axis(metaclass=AxisMeta):
         self_gp_ax1: gp_Ax1 = self.wrapped
         new_gp_ax1: gp_Ax1 = self_gp_ax1.Transformed(top_location.Transformation())
         return Axis(new_gp_ax1)
-
-    @deprecated(
-        "to_tuple is deprecated and will be removed in a future version. "
-        " Use 'Plane(Axis)' instead."
-    )
-    def to_plane(self) -> Plane:
-        """Return self as Plane"""
-        return Plane(origin=self.position, z_dir=self.direction)
 
     def is_coaxial(
         self,
@@ -1055,7 +1055,26 @@ class Axis(metaclass=AxisMeta):
 
 
 class BoundBox:
-    """A BoundingBox for a Shape"""
+    """An axis-aligned bounding box for a shape.
+
+    In addition to its extents, a :class:`BoundBox` provides spatial
+    predicates. :meth:`covers` and :meth:`covered_by` test inclusive
+    enclosure; :meth:`contains` and :meth:`within` require enclosure with
+    relevant-dimensional interior; and :meth:`contains_properly` additionally
+    excludes boundary contact. :meth:`intersects` and :meth:`disjoint`
+    test whether the distance between boxes is within the given tolerance.
+    :meth:`touches` identifies contact without shared interior, while
+    :meth:`overlaps` identifies shared interior where neither box contains
+    the other.
+
+    Predicate comparisons account for degenerate bounding boxes. An axis that
+    is degenerate and coincident in both boxes is excluded from interior
+    comparisons, so coplanar bounding rectangles compare in two dimensions and
+    collinear bounding lines compare in one. Degenerate axes at different
+    coordinates remain distinct: for example, rectangles on parallel planes
+    do not have a shared interior. This behavior concerns bounding-box extents
+    only; it does not infer the topological dimension of the underlying shape.
+    """
 
     @overload
     def __init__(self, bounding_box: Bnd_Box) -> None:
@@ -1063,9 +1082,12 @@ class BoundBox:
 
     @overload
     def __init__(
-        self, shape: TopoDS_Shape, tolerance: float | None = None, optimal: bool = True
+        self,
+        shape: Shape | TopoDS_Shape,
+        tolerance: float | None = None,
+        optimal: bool = True,
     ) -> None:
-        """Construct a bounding box from a TopoDS_Shape"""
+        """Construct a bounding box from a Shape or TopoDS_Shape"""
 
     def __init__(self, *args, **kwargs):
         bounding_box = kwargs.pop("bounding_box", None)
@@ -1079,10 +1101,14 @@ class BoundBox:
 
         # Fill from positional args if not given via kwargs
         if args:
+            first_arg = args[0]
+            topo_arg = getattr(first_arg, "_wrapped", first_arg)
             if bounding_box is None and isinstance(args[0], Bnd_Box):
                 bounding_box = args[0]
-            elif isinstance(args[0], TopoDS_Shape):
-                shape = args[0]
+            elif isinstance(topo_arg, TopoDS_Shape) or (
+                hasattr(first_arg, "_wrapped") and topo_arg is None
+            ):
+                shape = first_arg
                 if len(args) > 1:
                     if isinstance(args[1], float):
                         tolerance = args[1]
@@ -1097,18 +1123,23 @@ class BoundBox:
             else:
                 raise TypeError(f"Invalid positional arguments: {', '.join(args)}")
 
-        if shape:
-            BRepTools.Clean_s(shape)  # Remove mesh which may impact bbox
+        if shape is not None:
+            topo_shape = getattr(shape, "_wrapped", shape)
+            if topo_shape is not None and not isinstance(topo_shape, TopoDS_Shape):
+                raise TypeError(f"Invalid argument for shape: {topo_shape}")
 
-            tolerance = (
-                TOL if tolerance is None else tolerance
-            )  # tol = TOL (by default)
             bounding_box = Bnd_Box()
+            if topo_shape is not None:
+                BRepTools.Clean_s(topo_shape)  # Remove mesh which may impact bbox
 
-            if optimal:
-                BRepBndLib.AddOptimal_s(shape, bounding_box)
-            else:
-                BRepBndLib.Add_s(shape, bounding_box, True)
+                tolerance = (
+                    TOLERANCE if tolerance is None else tolerance
+                )  # tol = TOLERANCE (by default)
+
+                if optimal:
+                    BRepBndLib.AddOptimal_s(topo_shape, bounding_box)
+                else:
+                    BRepBndLib.Add_s(topo_shape, bounding_box, True)
 
         if bounding_box.IsVoid():
             x_min, y_min, z_min, x_max, y_max, z_max = (0.0,) * 6
@@ -1187,15 +1218,17 @@ class BoundBox:
         return BoundBox(tmp)
 
     @staticmethod
+    @deprecated(
+        "Use BoundBox.contains() to identify the bounding box that encloses the other."
+    )
     def find_outside_box_2d(bb1: BoundBox, bb2: BoundBox) -> BoundBox | None:
         """Compares bounding boxes
 
         Compares bounding boxes. Returns none if neither is inside the other.
         Returns the outer one if either is outside the other.
 
-        BoundBox.is_inside works in 3d, but this is a 2d bounding box, so it
-        doesn't work correctly plus, there was all kinds of rounding error in
-        the built-in implementation i do not understand.
+        .. deprecated::
+            Use :meth:`contains` to identify the enclosing bounding box.
 
         Args:
           bb1: BoundBox:
@@ -1242,37 +1275,118 @@ class BoundBox:
         """
         return cls(shape, tolerance, optimal)
 
-    def is_inside(self, second_box: BoundBox) -> bool:
-        """Is the provided bounding box inside this one?
+    def _interior_axes(
+        self, other: BoundBox, tolerance: float
+    ) -> tuple[tuple[float, float, float, float], ...] | None:
+        """Return axes relevant to an interior comparison.
 
-        Args:
-          b2: BoundBox:
-
-        Returns:
-
+        An axis that is degenerate and coincident in both boxes does not
+        contribute to their interior. For example, coplanar XY rectangles are
+        compared in X and Y only. A degenerate axis at different coordinates
+        means the boxes cannot have an interior intersection.
         """
-        return not (
-            second_box.min.X > self.min.X
-            and second_box.min.Y > self.min.Y
-            and second_box.min.Z > self.min.Z
-            and second_box.max.X < self.max.X
-            and second_box.max.Y < self.max.Y
-            and second_box.max.Z < self.max.Z
+        axes = []
+        for self_min, self_max, other_min, other_max in zip(
+            self.min, self.max, other.min, other.max
+        ):
+            self_degenerate = self_max - self_min <= tolerance
+            other_degenerate = other_max - other_min <= tolerance
+            if self_degenerate and other_degenerate:
+                self_center = (self_min + self_max) / 2
+                other_center = (other_min + other_max) / 2
+                if abs(self_center - other_center) > tolerance:
+                    return None
+            else:
+                axes.append((self_min, self_max, other_min, other_max))
+        return tuple(axes)
+
+    def _has_interior_overlap(self, other: BoundBox, tolerance: float) -> bool:
+        """Check whether two bounding boxes share relevant-dimensional interior."""
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        axes = self._interior_axes(other, tolerance)
+        return axes is not None and all(
+            max(self_min, other_min) < min(self_max, other_max) - tolerance
+            for self_min, self_max, other_min, other_max in axes
         )
 
-    def overlaps(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
-        """Check if this bounding box overlaps with another.
+    def covers(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether this bounding box includes every point of *other*.
 
-        Args:
-            other: BoundBox to check overlap with
-            tolerance: Distance tolerance for overlap detection
-
-        Returns:
-            True if bounding boxes overlap (share any volume), False otherwise
+        Boundary contact is included, so this predicate also applies to
+        degenerate bounding boxes such as those of vertices, edges, and faces.
         """
         if self.wrapped is None or other.wrapped is None:
             return False
+        return all(
+            self_min <= other_min + tolerance and other_max <= self_max + tolerance
+            for self_min, self_max, other_min, other_max in zip(
+                self.min, self.max, other.min, other.max
+            )
+        )
+
+    def covered_by(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether every point of this bounding box is in *other*."""
+        return other.covers(self, tolerance)
+
+    def contains(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether this bounding box contains *other*.
+
+        Boundary contact is permitted, but *other* must have an interior point
+        in this bounding box. Use :meth:`covers` for degenerate bounding boxes.
+        """
+        return self.covers(other, tolerance) and self._has_interior_overlap(
+            other, tolerance
+        )
+
+    def contains_properly(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether *other* is contained without touching this box's boundary."""
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        axes = self._interior_axes(other, tolerance)
+        if not axes:
+            return False
+        return all(
+            self_min + tolerance < other_min and other_max < self_max - tolerance
+            for self_min, self_max, other_min, other_max in axes
+        )
+
+    def within(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether this bounding box is contained in *other*."""
+        return other.contains(self, tolerance)
+
+    def intersects(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether the distance between bounding boxes is within *tolerance*."""
+        if self.wrapped is None or other.wrapped is None:
+            return False
         return self.wrapped.Distance(other.wrapped) <= tolerance
+
+    def disjoint(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether these bounding boxes do not intersect."""
+        return not self.intersects(other, tolerance)
+
+    def touches(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether these bounding boxes meet without sharing positive volume."""
+        return self.intersects(other, tolerance) and not self._has_interior_overlap(
+            other, tolerance
+        )
+
+    def overlaps(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether these boxes overlap without either one containing the other."""
+        return (
+            self._has_interior_overlap(other, tolerance)
+            and not self.contains(other, tolerance)
+            and not other.contains(self, tolerance)
+        )
+
+    @deprecated("Use BoundBox.within() instead.")
+    def is_inside(self, other: BoundBox, tolerance: float = TOLERANCE) -> bool:
+        """Return whether this bounding box is inside *other*.
+
+        .. deprecated::
+            Use :meth:`within` instead.
+        """
+        return self.within(other, tolerance)
 
     def to_align_offset(self, align: Align2D | Align3D) -> Vector:
         """Amount to move object to achieve the desired alignment"""
@@ -1650,6 +1764,8 @@ class Location:
 
     """
 
+    build123d_type: ClassVar[str] = "Location"
+
     _rot_order_dict = {
         Intrinsic.XYZ: gp_EulerSequence.gp_Intrinsic_XYZ,
         Intrinsic.XZY: gp_EulerSequence.gp_Intrinsic_XZY,
@@ -1918,23 +2034,53 @@ class Location:
     def __mul__(self, other: Location) -> Location: ...
 
     @overload
+    def __mul__(self, other: Plane) -> Plane: ...
+
+    @overload
     def __mul__(self, other: Iterable[Location]) -> list[Location]: ...
 
-    def __mul__(
-        self, other: Location | Iterable[Location]
-    ) -> Location | list[Location]:
-        """Combine locations"""
+    @overload
+    def __mul__(self, other: Iterable[Plane]) -> list[Plane]: ...
 
+    @overload
+    def __mul__(self, other: Iterable[_ShapeT]) -> list[_ShapeT]: ...
+
+    def __mul__(self, other: Any) -> Any:
+        """Apply this location to a location, movable object, or iterable.
+
+        Locations are composed with other locations. Objects that provide a
+        ``moved`` method, such as Shapes and Planes, are moved as a whole.
+        Other iterables are converted to a list once and processed element
+        by element, either as locations or as movable objects. Unsupported
+        operands return ``NotImplemented`` so Python can try reflected
+        operator dispatch.
+        """
+
+        # Compose locations directly.
         if isinstance(other, Location):
             return Location(self.wrapped * other.wrapped)
 
+        # Shapes such as Sketch and Compound may also be iterable. Check for
+        # a movable object before creating a list, so it is moved as a whole.
+        if callable(getattr(other, "moved", None)):
+            return other.moved(self)
+
+        # Convert arbitrary iterables to a list once. This also supports one-shot
+        # iterators and LocationList without consuming them more than once.
         try:
             others = list(other)
-            if all(isinstance(o, Location) for o in others):
-                return [Location(self.wrapped * loc.wrapped) for loc in others]
-        except TypeError:  # not iterable
-            pass
-        return NotImplemented  # will try Shape.__rmul__ for shapes
+        except TypeError:
+            return NotImplemented
+
+        # Apply locations element-wise by composing each one with self.
+        if all(isinstance(item, Location) for item in others):
+            return [Location(self.wrapped * loc.wrapped) for loc in others]
+
+        # Apply self element-wise to movable objects such as Shapes and Planes.
+        if all(callable(getattr(o, "moved", None)) for o in others):
+            return [o.moved(self) for o in others]
+
+        return NotImplemented
 
     def __pow__(self, exponent: int) -> Location:
         return Location(self.wrapped.Powered(exponent))
@@ -2018,31 +2164,6 @@ class Location:
 
         return Location(Plane(origin=pos, x_dir=mx_dir, z_dir=mz_dir))
 
-    @deprecated(
-        "to_axis is deprecated and will be removed in a future version. "
-        " Use 'Axis(Location)' instead."
-    )
-    def to_axis(self) -> Axis:
-        """Convert the location into an Axis"""
-        return Axis.Z.located(self)
-
-    @deprecated(
-        "to_tuple is deprecated and will be removed in a future version. "
-        " Use 'tuple(Location)' instead."
-    )
-    def to_tuple(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-        """Convert the location to a translation, rotation tuple."""
-        transformation = self.wrapped.Transformation()
-        trans = transformation.TranslationPart()
-        rot = transformation.GetRotation()
-
-        rv_trans: tuple[float, float, float] = (trans.X(), trans.Y(), trans.Z())
-        rv_rot: tuple[float, float, float] = tuple(
-            degrees(a) for a in rot.GetEulerAngles(gp_EulerSequence.gp_Intrinsic_XYZ)
-        )  # type: ignore[assignment]
-
-        return rv_trans, rv_rot
-
     def __format__(self, spec) -> str:
         """Format Location"""
         last_char = spec[-1] if spec else None
@@ -2104,51 +2225,6 @@ class Location:
             )
 
         return shape.intersect(self) if shape is not None else None
-
-
-class LocationEncoder(json.JSONEncoder):
-    """Custom JSON Encoder for Location values
-
-    Example:
-
-    .. code::
-
-        data_dict = {
-            "part1": {
-                "joint_one": Location((1, 2, 3), (4, 5, 6)),
-                "joint_two": Location((7, 8, 9), (10, 11, 12)),
-            },
-            "part2": {
-                "joint_one": Location((13, 14, 15), (16, 17, 18)),
-                "joint_two": Location((19, 20, 21), (22, 23, 24)),
-            },
-        }
-        json_object = json.dumps(data_dict, indent=4, cls=LocationEncoder)
-        with open("sample.json", "w") as outfile:
-            outfile.write(json_object)
-        with open("sample.json", "r") as infile:
-            copy_data_dict = json.load(infile, object_hook=LocationEncoder.location_hook)
-
-    """
-
-    def default(self, o: Location) -> dict:
-        """Return a serializable object"""
-        warnings.warn("Use GeomEncoder instead", DeprecationWarning, stacklevel=2)
-        if not isinstance(o, Location):
-            raise TypeError("Only applies to Location objects")
-        return {"Location": o.to_tuple()}
-
-    @staticmethod
-    def location_hook(obj) -> dict:
-        """Convert Locations loaded from json to Location objects
-
-        Example:
-            read_json = json.load(infile, object_hook=LocationEncoder.location_hook)
-        """
-        warnings.warn("Use GeomEncoder instead", DeprecationWarning, stacklevel=2)
-        if "Location" in obj:
-            obj = Location(*[[float(f) for f in v] for v in obj["Location"]])
-        return obj
 
 
 class OrientedBoundBox:
@@ -2378,10 +2454,9 @@ class Rotation(Location):
     def __init__(
         self,
         rotation: RotationLike,
-        ordering: Extrinsic | Intrinsic == Intrinsic.XYZ,  # type: ignore[valid-type]
+        ordering: Extrinsic | Intrinsic = Intrinsic.XYZ,
     ):
-        """Subclass of Location used only for object rotation
-        ordering is for order of rotations in Intrinsic or Extrinsic enums"""
+        """Rotation from other RotationLike object."""
 
     @overload
     def __init__(
@@ -2391,37 +2466,115 @@ class Rotation(Location):
         Z: float = 0,
         ordering: Extrinsic | Intrinsic = Intrinsic.XYZ,
     ):
-        """Subclass of Location used only for object rotation
-        ordering is for order of rotations in Intrinsic or Extrinsic enums"""
+        """Rotation from Euler angles and ordering (default: Intrinsic.XYZ)."""
+
+    @overload
+    def __init__(
+        self,
+        axis: Axis,
+        angle: float,
+    ):
+        """Rotation about an Axis by an angle in degrees."""
 
     def __init__(self, *args, **kwargs):
-        if not all(key in ("X", "Y", "Z", "rotation", "ordering") for key in kwargs):
-            raise TypeError("Invalid key for Rotation")
-        angles, rotations, orderings = [0, 0, 0], [], []
+        rotation_like = kwargs.pop("rotation", None)
+        x_angle = kwargs.pop("X", None)
+        y_angle = kwargs.pop("Y", None)
+        z_angle = kwargs.pop("Z", None)
+        ordering = kwargs.pop("ordering", None)
+        axis = kwargs.pop("axis", None)
+        axis_angle = kwargs.pop("angle", None)
+
+        # Handle unexpected kwargs
+        if kwargs:
+            raise TypeError(f"Unexpected keyword arguments: {', '.join(kwargs)}")
+
+        # Fill from positional args if not given via kwargs
         if args:
-            angles = list(filter(lambda item: isinstance(item, (int, float)), args))
-            vectors = list(filter(lambda item: isinstance(item, Vector), args))
-            tuples = list(filter(lambda item: isinstance(item, tuple), args))
-            if tuples:
-                angles = list(*tuples)
-            if vectors:
-                angles = tuple(vectors[0])
-            if len(angles) < 3:
-                angles.extend([0.0] * (3 - len(angles)))
-            rotations = list(filter(lambda item: isinstance(item, Rotation), args))
-            orderings = list(
-                filter(lambda item: isinstance(item, (Extrinsic, Intrinsic)), args)
-            )
-        kwargs.setdefault("X", angles[0])
-        kwargs.setdefault("Y", angles[1])
-        kwargs.setdefault("Z", angles[2])
-        kwargs.setdefault("ordering", orderings[0] if orderings else Intrinsic.XYZ)
-        if rotations:
-            super().__init__(rotations[0])
+            if isinstance(args[0], Axis):
+                axis = args[0] if axis is None else axis
+                axis_angle = (
+                    args[1] if len(args) > 1 and axis_angle is None else axis_angle
+                )
+                if len(args) > 2:
+                    raise TypeError("Too many arguments for axis-angle Rotation")
+            elif isinstance(args[0], (Rotation, Vector, tuple)):
+                rotation_like = args[0] if rotation_like is None else rotation_like
+                ordering = args[1] if len(args) > 1 and ordering is None else ordering
+                if len(args) > 2:
+                    raise TypeError("Too many arguments for RotationLike Rotation")
+            elif isinstance(args[0], (int, float)):
+                x_angle = args[0] if x_angle is None else x_angle
+                y_angle = args[1] if len(args) > 1 and y_angle is None else y_angle
+                z_angle = args[2] if len(args) > 2 and z_angle is None else z_angle
+                ordering = args[3] if len(args) > 3 and ordering is None else ordering
+                if len(args) > 4:
+                    raise TypeError("Too many arguments for Euler-angle Rotation")
+            else:
+                raise TypeError(f"Invalid positional arguments: {args}")
+
+        has_axis_angle = axis is not None or axis_angle is not None
+        has_euler_angles = any(
+            angle is not None for angle in (x_angle, y_angle, z_angle)
+        )
+
+        # Construct Rotation from one unambiguous overload
+        if has_axis_angle:
+            if axis is None or axis_angle is None:
+                raise TypeError("Both an Axis and angle must be provided")
+            if rotation_like is not None or has_euler_angles or ordering is not None:
+                raise TypeError("Unsupported or ambiguous Rotation arguments")
+            if not isinstance(axis, Axis):
+                raise TypeError(f"Axis must be an Axis, not {type(axis).__name__}")
+            if not isinstance(axis_angle, (int, float)):
+                raise TypeError(
+                    f"Angle must be an int or float, not {type(axis_angle).__name__}"
+                )
+
+            trsf = gp_Trsf()
+            if axis_angle != 0.0:
+                trsf.SetRotation(axis.wrapped, radians(axis_angle))
+            super().__init__(trsf)
+
+        elif rotation_like is not None:
+            if has_euler_angles:
+                raise TypeError("Unsupported or ambiguous Rotation arguments")
+            if ordering is not None and not isinstance(
+                ordering, (Extrinsic, Intrinsic)
+            ):
+                raise TypeError("ordering must be an Extrinsic or Intrinsic value")
+            if isinstance(rotation_like, Rotation):
+                super().__init__(rotation_like)
+            elif isinstance(rotation_like, (Vector, tuple)):
+                rotation_angles = list(rotation_like)[:3]
+                rotation_angles.extend([0.0] * (3 - len(rotation_angles)))
+                if not all(
+                    isinstance(angle, (int, float)) for angle in rotation_angles
+                ):
+                    raise TypeError("Euler angles must be int or float values")
+                super().__init__(
+                    (0, 0, 0),
+                    tuple(rotation_angles),
+                    ordering or Intrinsic.XYZ,
+                )
+            else:
+                raise TypeError(
+                    "rotation must be a Rotation, Vector, or tuple of Euler angles"
+                )
+
         else:
-            super().__init__(
-                (0, 0, 0), (kwargs["X"], kwargs["Y"], kwargs["Z"]), kwargs["ordering"]
+            euler_angles = (
+                x_angle if x_angle is not None else 0.0,
+                y_angle if y_angle is not None else 0.0,
+                z_angle if z_angle is not None else 0.0,
             )
+            if not all(isinstance(angle, (int, float)) for angle in euler_angles):
+                raise TypeError("Euler angles must be int or float values")
+            if ordering is not None and not isinstance(
+                ordering, (Extrinsic, Intrinsic)
+            ):
+                raise TypeError("ordering must be an Extrinsic or Intrinsic value")
+            super().__init__((0, 0, 0), euler_angles, ordering or Intrinsic.XYZ)
 
 
 Rot = Rotation  # Short form for Algebra users who like compact notation
@@ -2763,6 +2916,8 @@ class Plane(metaclass=PlaneMeta):
 
     """
 
+    build123d_type: ClassVar[str] = "Plane"
+
     # pylint: disable=too-many-instance-attributes
     @staticmethod
     def get_topods_face_normal(face: TopoDS_Face) -> Vector:
@@ -2912,6 +3067,11 @@ class Plane(metaclass=PlaneMeta):
             surface = BRep_Tool.Surface_s(arg_face.wrapped)
             if not arg_face.is_planar:
                 raise ValueError("Planes can only be created from planar faces")
+            if arg_origin is not None:
+                warnings.warn(
+                    "The origin parameter is ignored when creating a Plane from a Face",
+                    stacklevel=2,
+                )
             properties = GProp_GProps()
             BRepGProp.SurfaceProperties_s(arg_face.wrapped, properties)
             origin = Vector(properties.CentreOfMass())
