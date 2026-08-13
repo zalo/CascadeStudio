@@ -362,11 +362,16 @@ function ForEachWire(shape, callback) {
     callback(wire_index++, self.oc.TopoDS_Cast.Wire_1(anExplorer.Current()));
   }
 }
-function MakeFace(wire, keepWire) {
+/** A face bounded by a wire. `onlyPlanar` forces BRepBuilderAPI's OnlyPlane
+ *  mode, which build123d's Face(wire) always uses — without it the builder
+ *  recovers whatever surface the wire's edges carry pcurves for, so the
+ *  boundary of a freeform face rebuilds that same freeform face instead of
+ *  capping it flat. */
+function MakeFace(wire, keepWire, onlyPlanar) {
   if (!wire || wire.IsNull()) { console.error("MakeFace: input wire is null!"); return wire; }
   let face = self.CacheOp(arguments, "MakeFace", () => {
     let w = wire.ShapeType().value === 5 ? wire : self.oc.TopoDS_Cast.Wire_1(wire);
-    return new self.oc.BRepBuilderAPI_MakeFace_15(w, false).Face();
+    return new self.oc.BRepBuilderAPI_MakeFace_15(w, !!onlyPlanar).Face();
   });
 
   if (!keepWire) { self.sceneShapes = self.Remove(self.sceneShapes, wire); }
@@ -748,6 +753,14 @@ function Extrude(face, direction, keepFace) {
   if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
   self.sceneShapes.push(curExtrusion);
   return curExtrusion;
+}
+
+function UnifyWire(shape, concat) {
+  let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(shape, true, true, !!concat);
+  fusor.Build();
+  let out = fusor.Shape();
+  out.hash = self.oc.OCJS.HashCode(out, 100000000);
+  return out;
 }
 
 function RemoveInternalEdges(shape, keepShape) {
@@ -1319,6 +1332,141 @@ function _faceUDir(face) {
   return [du.X() / mag, du.Y() / mag, du.Z() / mag];
 }
 
+/** TopoDS_Face view of a shape that IS a face but may still be typed as a
+ *  generic TopoDS_Shape (everything that comes back from a transform or a
+ *  boolean is). Single-face shells/compounds resolve to their one face: the
+ *  extrusion of a wire is a SHELL even when build123d calls the result a
+ *  Face, and build123d's face APIs work on it all the same. */
+function _asFace(face) {
+  if (face.ShapeType().value === 4) { return self.oc.TopoDS_Cast.Face_1(face); }
+  let found = [];
+  ForEachFace(face, (i, f) => { found.push(f); });
+  if (found.length === 1) { return found[0]; }
+  throw new Error("expected a single face, got a shape with " + found.length + " faces");
+}
+
+/** The face's UV parameter bounds, [uMin, uMax, vMin, vMax] (BRepTools::
+ *  UVBounds) — build123d's Face._uv_bounds, the domain its normalized u/v
+ *  arguments are mapped into. */
+function _faceUVBounds(face) {
+  let u1 = { current: 0 }, u2 = { current: 0 }, v1 = { current: 0 }, v2 = { current: 0 };
+  self.oc.BRepTools.UVBounds_1(_asFace(face), u1, u2, v1, v2);
+  return [u1.current, u2.current, v1.current, v2.current];
+}
+
+/** Point and U/V partial derivatives of the face's underlying surface at RAW
+ *  surface parameters: [[x,y,z], [dU], [dV]] — the D1 evaluation
+ *  build123d's Face.location_at performs (Restriction=false, so the RAW
+ *  surface parameterization, exactly like BRep_Tool::Surface). */
+function _faceD1(face, u, v) {
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), false);
+  let pnt = new self.oc.gp_Pnt_1();
+  let du = new self.oc.gp_Vec_1();
+  let dv = new self.oc.gp_Vec_1();
+  surf.D1(u, v, pnt, du, dv);
+  return [[pnt.X(), pnt.Y(), pnt.Z()],
+          [du.X(), du.Y(), du.Z()],
+          [dv.X(), dv.Y(), dv.Z()]];
+}
+
+/** RAW (u, v) surface parameters of the point of the face's surface closest to
+ *  `point` — what build123d reads out of GeomAPI_ProjectPointOnSurf for the
+ *  surface_point overloads of normal_at/location_at. `hint` ([u, v]) seeds the
+ *  search when the caller already knows roughly where the point lands.
+ *
+ *  COMPROMISE(point-projection): GeomAPI_ProjectPointOnSurf cannot be
+ *  instantiated in this wasm build — every one of its constructors/Init
+ *  overloads takes an Extrema_ExtAlgo, and that enum is unbound
+ *  ("unbound types: 15Extrema_ExtAlgo"). This is a coarse UV grid search
+ *  refined by Newton iterations on grad|S(u,v) - P|^2 = 0, which reaches the
+ *  same parameters to machine precision for points on or near the surface.
+ *  Unlike OCCT it searches only the face's own UV box (clamped), not the
+ *  infinite underlying surface. */
+function _faceParamsAtPoint(face, point, hint) {
+  let f = _asFace(face);
+  let surf = new self.oc.BRepAdaptor_Surface_2(f, false);
+  let bounds = _faceUVBounds(f);
+  let uMin = bounds[0], uMax = bounds[1], vMin = bounds[2], vMax = bounds[3];
+  let px = point[0], py = point[1], pz = point[2];
+  let pnt = new self.oc.gp_Pnt_1();
+  let d1u = new self.oc.gp_Vec_1(), d1v = new self.oc.gp_Vec_1();
+  let d2u = new self.oc.gp_Vec_1(), d2v = new self.oc.gp_Vec_1(), d2uv = new self.oc.gp_Vec_1();
+  let dist2 = (u, v) => {
+    surf.D0(u, v, pnt);
+    let dx = pnt.X() - px, dy = pnt.Y() - py, dz = pnt.Z() - pz;
+    return dx * dx + dy * dy + dz * dz;
+  };
+  let bu, bv;
+  if (hint) {
+    bu = Math.min(uMax, Math.max(uMin, hint[0]));
+    bv = Math.min(vMax, Math.max(vMin, hint[1]));
+  } else {
+    const N = 24;
+    let best = Infinity;
+    for (let i = 0; i <= N; i++) {
+      let u = uMin + (uMax - uMin) * (i / N);
+      for (let j = 0; j <= N; j++) {
+        let v = vMin + (vMax - vMin) * (j / N);
+        let d = dist2(u, v);
+        if (d < best) { best = d; bu = u; bv = v; }
+      }
+    }
+    if (best === Infinity) { return null; }
+  }
+  let dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  for (let iter = 0; iter < 40; iter++) {
+    surf.D2(bu, bv, pnt, d1u, d1v, d2u, d2v, d2uv);
+    let fv = [pnt.X() - px, pnt.Y() - py, pnt.Z() - pz];
+    let su = [d1u.X(), d1u.Y(), d1u.Z()], sv = [d1v.X(), d1v.Y(), d1v.Z()];
+    let suu = [d2u.X(), d2u.Y(), d2u.Z()], svv = [d2v.X(), d2v.Y(), d2v.Z()];
+    let suv = [d2uv.X(), d2uv.Y(), d2uv.Z()];
+    let g0 = dot(fv, su), g1 = dot(fv, sv);
+    let a = dot(su, su) + dot(fv, suu);
+    let b = dot(su, sv) + dot(fv, suv);
+    let c = dot(sv, sv) + dot(fv, svv);
+    let det = a * c - b * b;
+    let du, dv;
+    if (Math.abs(det) < 1e-30) {
+      // singular Hessian (degenerate/ruled directions): plain gradient step
+      // scaled by the first fundamental form
+      du = dot(su, su) > 1e-30 ? -g0 / dot(su, su) : 0;
+      dv = dot(sv, sv) > 1e-30 ? -g1 / dot(sv, sv) : 0;
+    } else {
+      du = (b * g1 - c * g0) / det;
+      dv = (b * g0 - a * g1) / det;
+    }
+    // backtracking so the residual never grows, clamped into the UV box
+    let cur = dot(fv, fv);
+    let t = 1.0, stepped = false;
+    for (let k = 0; k < 24; k++) {
+      let nu = Math.min(uMax, Math.max(uMin, bu + t * du));
+      let nv = Math.min(vMax, Math.max(vMin, bv + t * dv));
+      if (dist2(nu, nv) <= cur + 1e-18) {
+        stepped = Math.abs(nu - bu) > 1e-14 * (1 + Math.abs(bu)) ||
+                  Math.abs(nv - bv) > 1e-14 * (1 + Math.abs(bv));
+        bu = nu; bv = nv;
+        break;
+      }
+      t *= 0.5;
+    }
+    if (!stepped) { break; }
+  }
+  return [bu, bv];
+}
+
+/** Unit surface normal at RAW (u, v) parameters, respecting the face's
+ *  topological orientation (BRepGProp_Face::Normal) — build123d's
+ *  Face.normal_at. */
+function _faceNormalAt(face, u, v) {
+  let props = new self.oc.BRepGProp_Face_2(_asFace(face), false);
+  let pnt = new self.oc.gp_Pnt_1();
+  let nrm = new self.oc.gp_Vec_1();
+  props.Normal(u, v, pnt, nrm);
+  let mag = nrm.Magnitude();
+  if (mag < 1e-12) { return [0, 0, 1]; }
+  return [nrm.X() / mag, nrm.Y() / mag, nrm.Z() / mag];
+}
+
 function _faceSurfaceType(face) {
   let surf = new self.oc.BRepAdaptor_Surface_2(face, true);
   let type = surf.GetType();
@@ -1435,6 +1583,104 @@ function ReverseFace(face, keepFace) {
   let reversed = self.oc.TopoDS_Cast.Face_1(face.Reversed());
   reversed.hash = self.oc.OCJS.HashCode(reversed, 100000000);
   if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
+  self.sceneShapes.push(reversed);
+  return reversed;
+}
+
+/** The single TopoDS_Face of a one-face shape (shell/compound), or the shape
+ *  unchanged when it holds none or several. Extruding a one-edge wire yields a
+ *  SHELL here where build123d's Face.extrude casts straight to TopoDS_Face,
+ *  and downstream OCCT algorithms (BRepProj_Projection above all) treat a
+ *  shell differently from the face inside it. */
+function AsSingleFace(shape, keepShape) {
+  if (shape.ShapeType().value === 4) { return shape; }
+  let found = [];
+  ForEachFace(shape, (i, f) => { found.push(f); });
+  if (found.length !== 1) { return shape; }
+  let face = found[0];
+  if (face.hash === undefined) { face.hash = self.oc.OCJS.HashCode(face, 100000000); }
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(face);
+  return face;
+}
+
+/** TopoDS_Wire view of a wire, or a wire built from a shape's edges. */
+function _asWire(shape) {
+  if (shape.ShapeType().value === 5) { return self.oc.TopoDS_Cast.Wire_1(shape); }
+  let mkWire = new self.oc.BRepBuilderAPI_MakeWire_1();
+  ForEachEdge(shape, (i, e) => { mkWire.Add_1(e); });
+  return mkWire.Wire();
+}
+
+/** Project a wire (or a shape's edges) onto a target shape, either along a
+ *  direction or from a conical `center` point (pass one, null the other) —
+ *  BRepProj_Projection, exactly build123d's Wire/Edge.project_to_shape.
+ *  Results keep the input's orientation and, when the projection lands on
+ *  more than one surface, are sorted nearest-first along the projection
+ *  (wires BEHIND the profile are dropped for directional projection, like
+ *  build123d).
+ *  COMPROMISE(projection-sort): build123d sorts by Wire.center() (the
+ *  position at half arc length); this sorts by center of mass, which orders
+ *  front/back hits identically but can differ for exotic wires. */
+function ProjectWireOnShape(profile, target, direction, center) {
+  let wire = _asWire(profile);
+  let proj = direction
+    ? new self.oc.BRepProj_Projection_1(wire, target,
+        new self.oc.gp_Dir_5(direction[0], direction[1], direction[2]))
+    : new self.oc.BRepProj_Projection_2(wire, target,
+        new self.oc.gp_Pnt_3(center[0], center[1], center[2]));
+  let wanted = wire.Orientation_1();
+  let found = [];
+  for (; proj.More(); proj.Next()) {
+    let pw = proj.Current();
+    if (pw.Orientation_1() !== wanted) { pw = self.oc.TopoDS_Cast.Wire_1(pw.Reversed()); }
+    // build123d cleans the projected wires "to remove cases where projection
+    // artificially split edges". This kernel splits more eagerly than OCP
+    // 7.x's — a single projected arc comes back as two BSpline edges meeting
+    // where the curve grazes the surface boundary — so unification has to
+    // CONCATENATE B-splines (build123d's clean() leaves that flag off) to get
+    // back to build123d's one-edge result. Same curve, same length.
+    pw = UnifyWire(pw, true);
+    pw.hash = self.oc.OCJS.HashCode(pw, 100000000);
+    found.push(pw);
+  }
+  if (found.length > 1) {
+    let c0 = _shapeLinearCenter(wire);
+    let keyed = [];
+    for (let i = 0; i < found.length; i++) {
+      let c = _shapeLinearCenter(found[i]);
+      let d = [c[0] - c0[0], c[1] - c0[1], c[2] - c0[2]];
+      let len = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+      if (direction) {
+        let dot = d[0] * direction[0] + d[1] * direction[1] + d[2] * direction[2];
+        if (dot < 0) { continue; }  // behind the profile: not a projection hit
+      }
+      keyed.push([len, found[i]]);
+    }
+    keyed.sort((a, b) => a[0] - b[0]);
+    found = keyed.map((k) => k[1]);
+  }
+  for (let i = 0; i < found.length; i++) { self.sceneShapes.push(found[i]); }
+  return found;
+}
+
+function _shapeLinearCenter(shape) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.LinearProperties(shape, props, false, false);
+  let c = props.CentreOfMass();
+  return [c.X(), c.Y(), c.Z()];
+}
+
+/** Reverse ANY shape's topological orientation (TopoDS_Shape::Complemented —
+ *  what build123d's Mixin2D.__neg__ does), re-typing the result when it is a
+ *  face so downstream face APIs keep working. */
+function ReverseShape(shape, keepShape) {
+  let reversed = shape.Complemented();
+  if (reversed.ShapeType().value === 4) {
+    reversed = self.oc.TopoDS_Cast.Face_1(reversed);
+  }
+  reversed.hash = self.oc.OCJS.HashCode(reversed, 100000000);
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
   self.sceneShapes.push(reversed);
   return reversed;
 }
@@ -2655,6 +2901,7 @@ class CascadeStudioStandardLibrary {
     self.Intersection = Intersection;
     self.Extrude = Extrude;
     self.RemoveInternalEdges = RemoveInternalEdges;
+    self.UnifyWire = UnifyWire;
     self.Offset = Offset;
     self.OffsetWire = OffsetWire;
     self.Revolve = Revolve;
@@ -2691,6 +2938,9 @@ class CascadeStudioStandardLibrary {
     self.ScaleXYZ = ScaleXYZ;
     self.ScaleUniform = ScaleUniform;
     self.ReverseFace = ReverseFace;
+    self.ReverseShape = ReverseShape;
+    self.ProjectWireOnShape = ProjectWireOnShape;
+    self.AsSingleFace = AsSingleFace;
     self.HLRProject = HLRProject;
     self.SurfaceFromPoints = SurfaceFromPoints;
     self.PipeShellSweep = PipeShellSweep;
@@ -2709,6 +2959,10 @@ class CascadeStudioStandardLibrary {
     self._faceArea = _faceArea;
     self._faceNormal = _faceNormal;
     self._faceUDir = _faceUDir;
+    self._faceUVBounds = _faceUVBounds;
+    self._faceD1 = _faceD1;
+    self._faceParamsAtPoint = _faceParamsAtPoint;
+    self._faceNormalAt = _faceNormalAt;
     self._faceSurfaceType = _faceSurfaceType;
     self._faceOuterWire = _faceOuterWire;
     self._sameShape = _sameShape;

@@ -493,6 +493,11 @@ class Location:
             return ShapeList([self * s for s in other])
         return NotImplemented
 
+    def __neg__(self):
+        """Flip the orientation without moving the origin (build123d -loc:
+        Location(-Plane(self)), i.e. z and y reversed, x kept)."""
+        return Location(-Plane(self))
+
     def __repr__(self):
         return ('Location(t=' + repr(self._t) + ', R=' + repr(self._R) + ')')
 
@@ -618,6 +623,21 @@ def _default_x_dir(z):
     return (x[0] / ln, x[1] / ln, x[2] / ln)
 
 
+def _ortho_x_dir(z_dir, x_dir):
+    """The x direction gp_Ax3(origin, z, x) actually adopts: x projected into
+    the plane normal to z, normalized. build123d hands a possibly
+    NON-perpendicular x_dir straight to gp_Ax3 (Plane.__init__), which
+    orthogonalizes it — e.g. Face.location_at(point, x_dir=(1, 0, 0)) on a
+    curved surface."""
+    z = Vector(z_dir).normalized()
+    x = Vector(x_dir)
+    x = x - z * x.dot(z)
+    ln = x.length
+    if ln < 1e-12:
+        raise ValueError('x_dir must not be parallel to z_dir')
+    return x / ln
+
+
 class Plane:
     def __init__(self, origin=(0, 0, 0), x_dir=None, z_dir=(0, 0, 1)):
         if isinstance(origin, Plane):
@@ -642,7 +662,7 @@ class Plane:
             # build123d derives x_dir from the face's UV axes
             u = w._faceUDir(face.topo)
             if u is not None:
-                self.x_dir = Vector(tuple(u)).normalized()
+                self.x_dir = _ortho_x_dir(self.z_dir, tuple(u))
             else:
                 self.x_dir = Vector(_default_x_dir(tuple(self.z_dir)))
             self.y_dir = self.z_dir.cross(self.x_dir)
@@ -652,7 +672,7 @@ class Plane:
         if x_dir is None:
             self.x_dir = Vector(_default_x_dir(tuple(self.z_dir)))
         else:
-            self.x_dir = Vector(x_dir).normalized()
+            self.x_dir = _ortho_x_dir(self.z_dir, x_dir)
         self.y_dir = self.z_dir.cross(self.x_dir)
 
     @classmethod
@@ -860,6 +880,15 @@ class Shape:
         topos = [self.topo] + [_topo(o) for o in others]
         return _wrap_like(self, w.Intersection(topos))
 
+    def __neg__(self):
+        """Reversed-orientation copy (build123d's Mixin2D.__neg__:
+        TopoDS_Shape::Complemented). Defined on the base class because lite
+        re-wraps transformed faces as Sketch (see _wrap_like), so -face and
+        -sketch must both work; Face overrides it to stay a Face."""
+        if self.topo is None:
+            raise ValueError('Invalid Shape')
+        return _wrap_like(self, w.ReverseShape(self.topo, True))
+
     def __rmul__(self, other):
         # [Plane(f) for f in ...] * shape  -> copies placed at each plane
         if isinstance(other, (list, tuple)) and all(
@@ -1000,12 +1029,18 @@ class Shape:
         moved = loc * self
         self.topo = moved.topo
         self._loc = moved._loc
+        # the segment specs travel with the geometry: mirror()/make_face()
+        # rebuild from them, so stale specs would silently un-place the shape
+        if isinstance(self, Curve):
+            self._specs = moved._specs
         return self
 
     def locate(self, loc):
         placed = self.located(loc)
         self.topo = placed.topo
         self._loc = placed._loc
+        if isinstance(self, Curve):
+            self._specs = placed._specs
         return self
 
     def rotate(self, axis, angle):
@@ -1322,6 +1357,19 @@ class Curve(Shape):
     def __xor__(self, u):  # curve ^ u -> location
         return self.location_at(u)
 
+    def project_to_shape(self, target_object, direction=None, center=None):
+        """Project this wire onto the surfaces of a shape, either along a
+        direction or conically from a center point (pass exactly one) —
+        BRepProj_Projection, like build123d's Wire.project_to_shape. One or
+        more wires come back, nearest projection first."""
+        if (direction is None) == (center is None):
+            raise ValueError('Provide exactly one of direction or center')
+        d = list(Vector(direction).normalized()) if direction is not None \
+            else None
+        c = list(Vector(center)) if center is not None else None
+        out = w.ProjectWireOnShape(_topo(self), _topo(target_object), d, c)
+        return ShapeList([Curve(t) for t in out])
+
     @property
     def start_point(self):
         return self @ 0
@@ -1424,6 +1472,12 @@ class Edge(Curve):
     def __mod__(self, u):
         return self.tangent_at(u)
 
+    def project_to_shape(self, target_object, direction=None, center=None):
+        """The projected EDGES of this edge on a shape (build123d
+        Edge.project_to_shape flattens the projected wires to edges)."""
+        wires = Curve.project_to_shape(self, target_object, direction, center)
+        return wires.edges()
+
     @classmethod
     def make_line(cls, p1, p2):
         """Linear edge between two points (build123d Edge.make_line)."""
@@ -1464,7 +1518,8 @@ class Face(Shape):
                         else w.GetWire(tw, 0, True)
                 topo = w.FaceWithHoles(outer, [_wire_of(x) for x in inner])
             else:
-                topo = w.MakeFace(outer, True)
+                # build123d's Face(wire) is always PLANAR (OnlyPlane=True)
+                topo = w.MakeFace(outer, True, True)
         Shape.__init__(self, topo)
         self.parent = parent
         self.index = index
@@ -1501,8 +1556,67 @@ class Face(Shape):
     def center(self, center_of=CenterOf.GEOMETRY):
         return Vector(tuple(w._faceCentroid(self.topo)))
 
-    def normal_at(self, *args):
-        return Vector(tuple(w._faceNormal(self.topo)))
+    def _surface_params(self, surface_point, u, v):
+        """RAW (u, v) surface parameters for build123d's two overloads: a
+        3D point projected onto the surface, or NORMALIZED u/v mapped into
+        the face's UV bounds."""
+        if surface_point is None:
+            b = tuple(w._faceUVBounds(self.topo))
+            return (b[0] + u * (b[1] - b[0]), b[2] + v * (b[3] - b[2]))
+        uv = w._faceParamsAtPoint(self.topo, list(Vector(surface_point)))
+        if uv is None:
+            raise ValueError('could not project the point onto this surface')
+        return (uv[0], uv[1])
+
+    def _surface_args(self, args, kwargs, extra=()):
+        """Shared argument parsing for normal_at/location_at: either
+        (surface_point) or (u, v), defaulting to the face center."""
+        surface_point, u, v = None, -1.0, -1.0
+        if args:
+            if isinstance(args[0], (Vector, tuple, list)):
+                surface_point = args[0]
+            elif isinstance(args[0], (int, float)):
+                u = args[0]
+            if len(args) == 2 and isinstance(args[1], (int, float)):
+                v = args[1]
+        allowed = ('surface_point', 'u', 'v') + tuple(extra)
+        unknown = [k for k in kwargs if k not in allowed]
+        if unknown:
+            raise ValueError('Unexpected argument(s) ' + ', '.join(unknown))
+        surface_point = kwargs.get('surface_point', surface_point)
+        u = kwargs.get('u', u)
+        v = kwargs.get('v', v)
+        if surface_point is None and u < 0 and v < 0:
+            u, v = 0.5, 0.5
+        elif surface_point is None and (u < 0 or v < 0):
+            raise ValueError('Both u & v values must be specified')
+        return (surface_point, u, v)
+
+    def normal_at(self, *args, **kwargs):
+        """Unit surface normal, at the face center by default, or at a 3D
+        surface_point / normalized (u, v) — build123d Face.normal_at."""
+        if not args and not kwargs:
+            # the whole-face mid-parameter normal (identical evaluation, but
+            # this path is what every other lite call site already uses)
+            return Vector(tuple(w._faceNormal(self.topo)))
+        surface_point, u, v = self._surface_args(args, kwargs)
+        u_val, v_val = self._surface_params(surface_point, u, v)
+        return Vector(tuple(w._faceNormalAt(self.topo, u_val, v_val)))
+
+    def location_at(self, *args, **kwargs):
+        """location_at(u, v, *, x_dir=None) | location_at(surface_point, *,
+        x_dir=None): the placement (origin + orientation) on this surface.
+        z is the surface normal (dU x dV), x defaults to the U tangent —
+        build123d Face.location_at. Defaults to the face center (0.5, 0.5)."""
+        surface_point, u, v = self._surface_args(args, kwargs, ('x_dir',))
+        user_x_dir = kwargs.get('x_dir', None)
+        u_val, v_val = self._surface_params(surface_point, u, v)
+        d = w._faceD1(self.topo, u_val, v_val)
+        origin = Vector(tuple(d[0]))
+        du, dv = Vector(tuple(d[1])), Vector(tuple(d[2]))
+        z_dir = du.cross(dv).normalized()
+        x_dir = Vector(user_x_dir) if user_x_dir is not None else du
+        return Location(Plane(origin=origin, x_dir=x_dir, z_dir=z_dir))
 
     def offset(self, amount):
         """The face's plane offset by amount (build123d Face.offset)."""
@@ -1579,9 +1693,12 @@ class Face(Shape):
 
     @classmethod
     def extrude(cls, obj, direction):
-        """Extrude an Edge into a Face (build123d Face.extrude)."""
+        """Extrude an Edge into a Face (build123d Face.extrude). Extruding a
+        one-edge WIRE gives a shell here, so unwrap it to the single face
+        build123d would have produced."""
         d = Vector(direction)
-        return cls(w.Extrude(_topo(obj), [d.X, d.Y, d.Z], True))
+        topo = w.Extrude(_topo(obj), [d.X, d.Y, d.Z], True)
+        return cls(w.AsSingleFace(topo, True))
 
     @classmethod
     def revolve(cls, profile, angle=360, axis=None):
@@ -1611,6 +1728,17 @@ class Face(Shape):
         if plane is not None:
             face = cls((plane.location * face).topo)
         return face
+
+
+# lite re-wraps a TRANSFORMED Face as a Sketch (the algebra-mode 2D
+# convention, see _wrap_like), so a Sketch very often really is one face:
+# share Face's surface-geometry methods with it. Explicit assignment rather
+# than making Sketch a Face subclass, because several call sites dispatch on
+# isinstance(x, Face) (Face(wire) promotion, revolve, thicken, ...).
+Sketch._surface_args = Face._surface_args
+Sketch._surface_params = Face._surface_params
+Sketch.normal_at = Face.normal_at
+Sketch.location_at = Face.location_at
 
 
 class Shell(Shape):
