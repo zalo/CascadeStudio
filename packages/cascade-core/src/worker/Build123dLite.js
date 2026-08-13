@@ -314,6 +314,274 @@ def _v3(a):
     return (_num(t[0]), _num(t[1]), _num(t[2]))
 
 
+# ---------------------------------------- canonical free-edge parametrization
+# Free edges and wires - the ones that come out of intersections, sections,
+# projections and boolean operations rather than being drawn by the user -
+# carry a start point ("seam"), a traversal direction and a parameter range
+# that the CAD kernel picked for its own convenience. Those choices are
+# IMPLEMENTATION DEFINED: they depend on the parametric frames of the surfaces
+# that produced the curve (which meridian is u = 0), on the seed point of the
+# surface/surface walking algorithm and on the order in which the boolean
+# assembler happened to visit the faces of the result. Two geometrically
+# identical solids therefore produce section edges with different seams and
+# different directions, and anything measured from position_at(0) or
+# Axis(edge) silently moves with them.
+#
+# This is a port of build123d's proposed topology/canonical.py - same names,
+# same defaults, same tie-break conventions; see
+# docs/upstream-canonical-edges/ for the research record and the upstream
+# patch. Pure geometry: the only primitive needed is "give me the point at arc
+# length d", which is why it can be driven by a polyline and checked against a
+# second CAD kernel.
+
+# Number of arc length samples used to search for the canonical seam. The
+# search resolves near-extremal arcs down to length / (SAMPLES / 2).
+CANONICAL_SAMPLES = 512
+
+# Relative size of the "lexicographically extremal" band, as a fraction of the
+# bounding box diagonal of the loop. Making the band a finite width (instead of
+# hunting for the extremum itself) is what makes the seam well conditioned: the
+# band edges are transversal crossings, so they are located to full precision,
+# and the midpoint of the band cancels the leading curvature term.
+CANONICAL_BAND = 1e-6
+
+
+class CanonicalForm:
+    """Canonical traversal of a 1D shape.
+
+    start: arc length distance, measured along the shape's current
+    (orientation aware) parametrization, of the canonical start point. Always
+    0.0 for open shapes.
+    sign: +1 if the shape's current direction is canonical, -1 if it must be
+    traversed backwards.
+    closed: whether the shape was treated as a closed loop.
+
+    (build123d's is a NamedTuple; this one is iterable and compares equal to
+    the equivalent tuple so the two behave alike.)"""
+
+    def __init__(self, start, sign, closed):
+        self.start = start
+        self.sign = sign
+        self.closed = closed
+
+    def position(self, position):
+        """Map a canonical normalized position to the shape's own normalized
+        position, so that shape.position_at(form.position(u)) walks the shape
+        canonically."""
+        if self.closed:
+            return (self.start + self.sign * position) % 1.0
+        return position if self.sign > 0 else 1.0 - position
+
+    def __iter__(self):
+        return iter((self.start, self.sign, self.closed))
+
+    def __len__(self):
+        return 3
+
+    def __getitem__(self, i):
+        return (self.start, self.sign, self.closed)[i]
+
+    def __eq__(self, other):
+        try:
+            return tuple(self) == tuple(other)
+        except TypeError:
+            return NotImplemented
+
+    def __repr__(self):
+        return ('CanonicalForm(start=' + repr(self.start) + ', sign=' +
+                repr(self.sign) + ', closed=' + repr(self.closed) + ')')
+
+
+def lexicographic_key(point):
+    """The (x, y, z) sort key used by every canonical comparison."""
+    if isinstance(point, Vector):
+        return (point.X, point.Y, point.Z)
+    x, y, z = point
+    return (x, y, z)
+
+
+def loop_area_vector(points):
+    """Vector area (Newell) of a closed polyline: 1/2 sum (p_i - c) x (p_i+1 - c).
+
+    Its direction is the loop's winding axis (exact for planar loops, the
+    least-squares normal for non planar ones) and its length is the enclosed
+    area, so it doubles as a degeneracy measure."""
+    count = len(points)
+    center = Vector(sum(p.X for p in points) / count,
+                    sum(p.Y for p in points) / count,
+                    sum(p.Z for p in points) / count)
+    area = Vector(0, 0, 0)
+    for i in range(count):
+        first = points[i] - center
+        second = points[(i + 1) % count] - center
+        area = area + first.cross(second)
+    return area * 0.5
+
+
+def _dominant_axis(area):
+    """Index of the axis the loop winds about, preferring X, then Y, then Z on
+    exact ties (a tie means the loop's plane bisects two axes, where no
+    geometric rule can do better than a documented convention)."""
+    magnitudes = (abs(area.X), abs(area.Y), abs(area.Z))
+    best = 0
+    for index in (1, 2):
+        if magnitudes[index] > magnitudes[best]:
+            best = index
+    return best
+
+
+def _cyclic_runs(flags):
+    """Maximal cyclic runs of True as (start_index, count) pairs."""
+    count = len(flags)
+    if all(flags):
+        return [(0, count)]
+    runs = []
+    for index in range(count):
+        if flags[index] and not flags[index - 1]:
+            length = 1
+            while flags[(index + length) % count]:
+                length = length + 1
+            runs.append((index, length))
+    return runs
+
+
+def _golden_min(function, low, high, iterations=40):
+    """(location, value) of the minimum of a unimodal function on [low, high].
+
+    The VALUE of a smooth minimum is well conditioned; its location is not (an
+    error d in the location only changes the value by O(d^2)), so the location
+    is used as nothing more than a seed for the band search below."""
+    inv_phi = 0.6180339887498949
+    b_low, b_high = low, high
+    x_1 = b_high - inv_phi * (b_high - b_low)
+    x_2 = b_low + inv_phi * (b_high - b_low)
+    f_1, f_2 = function(x_1), function(x_2)
+    for _ in range(iterations):
+        if f_1 <= f_2:
+            b_high, x_2, f_2 = x_2, x_1, f_1
+            x_1 = b_high - inv_phi * (b_high - b_low)
+            f_1 = function(x_1)
+        else:
+            b_low, x_1, f_1 = x_1, x_2, f_2
+            x_2 = b_low + inv_phi * (b_high - b_low)
+            f_2 = function(x_2)
+    return (x_1, f_1) if f_1 <= f_2 else (x_2, f_2)
+
+
+def _bisect_level(function, inside, outside, level):
+    """Distance where function crosses level, bracketed by a point below the
+    level and a point above it. A transversal crossing, hence full
+    precision."""
+    low, high = inside, outside
+    for _ in range(60):
+        mid = 0.5 * (low + high)
+        if function(mid) <= level:
+            low = mid
+        else:
+            high = mid
+    return 0.5 * (low + high)
+
+
+def canonical_form(sampler, length, closed, samples=CANONICAL_SAMPLES,
+                   band=CANONICAL_BAND):
+    """Canonical traversal of a curve given an arc length sampler.
+
+    sampler(distance) -> Vector, distance in [0, length]; length is the total
+    arc length; closed says whether sampler(0) == sampler(length).
+
+    Open shapes are traversed from the lexicographically smaller of their two
+    end points. Closed shapes start at the midpoint of the lexicographically
+    extremal band and wind counter-clockwise about the dominant axis of their
+    area vector."""
+    if length <= _TOL_1E6:
+        return CanonicalForm(0.0, 1, closed)
+
+    if not closed:
+        start, end = sampler(0.0), sampler(length)
+        sign = 1 if lexicographic_key(start) <= lexicographic_key(end) else -1
+        return CanonicalForm(0.0, sign, False)
+
+    step = length / samples
+    points = [sampler(index * step) for index in range(samples)]
+
+    # ---- direction: wind counter-clockwise about the dominant winding axis
+    area = loop_area_vector(points)
+    axis = _dominant_axis(area)
+    sign = 1
+    if abs(area.to_tuple()[axis]) > _TOL_1E6 * _TOL_1E6:
+        sign = 1 if area.to_tuple()[axis] > 0 else -1
+
+    # ---- seam: midpoint of the lexicographically extremal band
+    diagonal = max(max(p.to_tuple()[i] for p in points) -
+                   min(p.to_tuple()[i] for p in points) for i in range(3))
+    tolerance_band = max(band * max(diagonal, _TOL_1E6), _TOL_1E6 * 1e-3)
+
+    seam = 0.0
+    for coordinate in (0, 1, 2):
+
+        def value(distance, coordinate=coordinate):
+            return sampler(distance % length).to_tuple()[coordinate]
+
+        values = [p.to_tuple()[coordinate] for p in points]
+        index = min(range(samples), key=lambda i: values[i])
+        # the value of the minimum, refined so that the band below does not
+        # depend on the (kernel supplied) phase of the sampling
+        seed, minimum = _golden_min(value, (index - 1) * step, (index + 1) * step)
+        if values[index] < minimum:
+            seed, minimum = index * step, values[index]
+        level = minimum + tolerance_band
+
+        inside = [sample_value <= level for sample_value in values]
+        if all(inside):
+            continue  # loop is flat in this coordinate: fall through to the next
+
+        # Candidate bands: the sampled runs, plus the refined minimum itself in
+        # case the band is narrower than the sampling step.
+        others = [other for other in (0, 1, 2) if other != coordinate]
+        candidates = []
+        for start, count in _cyclic_runs(inside):
+            members = [points[(start + offset) % samples] for offset in range(count)]
+            key = tuple(min(member.to_tuple()[other] for member in members)
+                        for other in others)
+            candidates.append((key, start * step))
+        seed_point = sampler(seed % length)
+        candidates.append((tuple(seed_point.to_tuple()[other] for other in others),
+                           seed))
+
+        # A surviving tie means the loop is exactly symmetric, where no
+        # geometric rule can choose - the first candidate in traversal order
+        # wins, which is stable for a given input.
+        inside_distance = min(candidates, key=lambda candidate: candidate[0])[1]
+        if value(inside_distance) > level:  # sampled run start just outside
+            inside_distance = seed
+
+        # Walk out to the first sample outside the band, then bisect: the band
+        # edges are transversal crossings, so they are found to full precision,
+        # and their midpoint cancels the leading curvature term of the extremum.
+        backward = inside_distance
+        for _ in range(samples):
+            if value(backward - step) > level:
+                break
+            backward = backward - step
+        forward = inside_distance
+        for _ in range(samples):
+            if value(forward + step) > level:
+                break
+            forward = forward + step
+        band_start = _bisect_level(value, backward, backward - step, level)
+        band_end = _bisect_level(value, forward, forward + step, level)
+        span = (band_end - band_start) % length
+        seam = (band_start + 0.5 * span) % length
+        break
+
+    return CanonicalForm(seam / length, sign, True)
+
+
+# build123d's one_d.py imports the rule under this alias so the Mixin1D method
+# of the same name can shadow it
+_canonical_form = canonical_form
+
+
 # 3x3 matrices as tuples of row-tuples
 _MAT_I = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 
@@ -554,17 +822,26 @@ Rot = Rotation
 # ----------------------------------------------------------------- Axis ---
 
 class Axis:
-    def __init__(self, origin=(0, 0, 0), direction=(0, 0, 1)):
+    def __init__(self, origin=(0, 0, 0), direction=(0, 0, 1), canonical=False):
         # Axis(edge): origin at the start, direction along the tangent.
         # (duck-typed on .topo — the Shape class is defined later in this
         # module, and Axis.X/Y/Z are created at module load)
+        # Axis(edge, canonical=True): origin & direction from the edge's
+        # CANONICAL traversal instead of from the underlying curve's first
+        # parameter (build123d's opt-in; default False keeps the pre-0.12
+        # behaviour, which also disagrees with edge.position_at(0) whenever the
+        # edge is REVERSED).
         if hasattr(origin, 'topo') and origin.topo is not None:
-            topo = origin.topo
-            if topo.ShapeType().value != 6:
-                es = origin.edges()
-                topo = es[0].topo
-            p = w._edgePointAt(topo, 0.0)
-            t = w._edgeTangentAt(topo, 0.0)
+            edge = origin
+            if origin.topo.ShapeType().value != 6:
+                edge = origin.edges()[0]
+            if canonical:
+                canonical_edge = edge.canonical()
+                self.position = canonical_edge.position_at(0)
+                self.direction = canonical_edge.tangent_at(0).normalized()
+                return
+            p = w._edgePointAt(edge.topo, 0.0)
+            t = w._edgeTangentAt(edge.topo, 0.0)
             self.position = Vector(tuple(p))
             self.direction = Vector(tuple(t)).normalized()
             return
@@ -1417,6 +1694,53 @@ class Curve(Shape):
     def __xor__(self, u):  # curve ^ u -> location
         return self.location_at(u)
 
+    def reversed(self):
+        """A copy of this Edge/Wire with the opposite orientation
+        (build123d Edge.reversed - the OCCT orientation flag, not a rebuild)."""
+        return _reverse_1d(self)
+
+    def canonical(self):
+        """This shape with a CANONICAL parametrization: the same geometry, but
+        with a start point and a traversal direction determined by the geometry
+        alone instead of by the CAD kernel's construction history
+        (build123d Mixin1D.canonical - see the canonical_form() rule above).
+
+        Free edges - the ones produced by cut/intersect/section/project_to_shape
+        rather than drawn by the user - inherit the seam, direction and
+        parameter range the kernel found convenient, so two geometrically
+        identical solids can yield section edges that start in different places
+        and run in opposite directions. Anything measured from position_at(0),
+        tangent_at or Axis(edge) then moves with them.
+
+        Open shapes keep their type; a closed shape that has to be re-seamed
+        comes back as a single Edge, because a closed Wire has no distinguished
+        start point for position_at to key off."""
+        form = self.canonical_form()
+
+        if not form.closed:
+            return self if form.sign > 0 else _reverse_1d(self)
+
+        if form.sign > 0 and form.start <= _TOL_1E6 / max(self.length, _TOL_1E6):
+            return self  # already canonical: keep the original curve type
+
+        seam = self.position_at(form.start)
+        direction = self.tangent_at(form.start) * form.sign
+        ordered = _walk_loop(_split_1d_at_point(self, seam), seam, direction)
+        return _concatenate_edges(ordered)
+
+    def canonical_form(self, samples=CANONICAL_SAMPLES):
+        """The canonical start position (normalized) and direction sign of this
+        shape, without rebuilding it (build123d Mixin1D.canonical_form)."""
+        length = self.length
+        if length <= _TOL_1E6:
+            return CanonicalForm(0.0, 1, False)
+        closed = (self.position_at(0) - self.position_at(1)).length <= _TOL_1E6
+
+        def sampler(distance):
+            return self.position_at(min(max(distance / length, 0.0), 1.0))
+
+        return _canonical_form(sampler, length, closed, samples=samples)
+
     def project_to_shape(self, target_object, direction=None, center=None):
         """Project this wire onto the surfaces of a shape, either along a
         direction or conically from a center point (pass exactly one) —
@@ -1672,14 +1996,95 @@ class Edge(Curve):
     @classmethod
     def make_mid_way(cls, first, second, middle=0.5):
         """Linear edge a fractional distance between two edges
-        (build123d Edge.make_mid_way, flip-aware)."""
-        flip = Axis(first).is_opposite(Axis(second))
+        (build123d Edge.make_mid_way, flip-aware).
+
+        The direction and start point of the two reference edges are incidental
+        - a section edge starts wherever the kernel's intersector happened to
+        seam it - so the ends are paired up CANONICALLY instead of from the
+        construction history (the is_opposite() flip below is kept for
+        reference edges that are not parallel)."""
+        first, second = first.canonical(), second.canonical()
+        flip = Axis(first, canonical=True).is_opposite(
+            Axis(second, canonical=True))
         pnts = []
         for i in (0.0, 1.0):
             a = first.position_at(i)
             b = second.position_at(1.0 - i if flip else i)
             pnts.append(a + (b - a) * middle)
         return cls.make_line(pnts[0], pnts[1])
+
+
+# --------------------------------- canonical 1D shape rebuilding helpers ---
+# build123d's one_d.py module-level helpers behind Mixin1D.canonical().
+
+def _reverse_1d(shape):
+    """A copy of an Edge or Wire that is traversed in the opposite
+    direction."""
+    reversed_topo = w.ReverseEdgeOrWire(_topo(shape))
+    if isinstance(shape, Edge):
+        return Edge(reversed_topo)
+    return Curve(reversed_topo)
+
+
+def _split_1d_at_point(shape, point):
+    """The Edges of shape, with the one that contains point split there."""
+    pieces = []
+    pt = list(point)
+    for edge in shape.edges():
+        ends_at_point = min((edge.position_at(0) - point).length,
+                            (edge.position_at(1) - point).length)
+        if ends_at_point > _TOL_1E6 and \
+                w._edgeDistanceToPoint(edge.topo, pt) <= _TOL_1E6:
+            parameter = w._edgeParamAtPoint(edge.topo, pt)
+            if parameter >= 0.0 and \
+                    _TOL_1E6 < parameter * edge.length < edge.length - _TOL_1E6:
+                pieces.append(edge.trim(0.0, parameter))
+                pieces.append(edge.trim(parameter, 1.0))
+                continue
+        pieces.append(edge)
+    return pieces
+
+
+def _walk_loop(pieces, start, direction):
+    """Order and orient pieces into a chain that leaves start heading along
+    direction, purely by matching end points."""
+    remaining = list(pieces)
+    # the requested start comes from a sampled parameter, so allow a gap that
+    # scales with the size of the loop
+    gap_tolerance = max(_TOL_1E6, 1e-6 * sum(piece.length for piece in pieces))
+    ordered = []
+    position, heading = start, direction
+    while len(remaining) > 0:
+        best, best_score, flip = None, None, False
+        for candidate in remaining:
+            for reverse in (False, True):
+                # scoring a reversed candidate without building it: its
+                # position_at(0) is the candidate's position_at(1) and its
+                # tangent_at(0) is the negated tangent_at(1)
+                if reverse:
+                    score = ((candidate.position_at(1) - position).length,
+                             candidate.tangent_at(1).dot(heading))
+                else:
+                    score = ((candidate.position_at(0) - position).length,
+                             -candidate.tangent_at(0).dot(heading))
+                if best_score is None or score < best_score:
+                    best, best_score, flip = candidate, score, reverse
+        if best is None or best_score[0] > gap_tolerance:
+            return pieces  # not a connected chain - keep the input order
+        edge = _reverse_1d(best) if flip else best
+        ordered.append(edge)
+        remaining = [p for p in remaining if p is not best]
+        position, heading = edge.position_at(1), edge.tangent_at(1)
+    return ordered
+
+
+def _concatenate_edges(edges):
+    """A single Edge whose curve is the concatenation of edges, in order.
+
+    Used to give a re-seamed closed loop an unambiguous start point: a closed
+    TopoDS_Wire carries no distinguished first edge, while an Edge's curve
+    parametrization does."""
+    return Edge(w.ConcatEdgesToEdge([_topo(e) for e in edges]))
 
 
 class Face(Shape):
@@ -2296,6 +2701,26 @@ def _entity_radius(s):
     return a * b * c / (2.0 * area2)
 
 
+_TOL_DIGITS = 6      # abs(log10(build123d's TOLERANCE))
+
+
+def _canonical_sort_key(shape):
+    """Deterministic, purely geometric ordering key (build123d's
+    _canonical_sort_key). Used to break ties in ShapeList.sort_by, where the
+    alternative is the CAD kernel's traversal order. Coordinates are rounded to
+    TOL_DIGITS so that geometry which agrees to within tolerance always sorts
+    the same way."""
+    if isinstance(shape, Vector):  # ShapeList also holds plain Vectors
+        coordinates = tuple(shape)
+    else:
+        try:
+            box = shape.bounding_box()
+            coordinates = tuple(shape.center()) + tuple(box.min) + tuple(box.max)
+        except Exception:
+            return ()
+    return tuple(round(coordinate, _TOL_DIGITS) for coordinate in coordinates)
+
+
 def _sort_key_fn(key):
     if isinstance(key, Axis):
         return lambda s: _axis_value(s, key)
@@ -2377,7 +2802,17 @@ class ShapeList(list):
 
     def sort_by(self, key=Axis.Z, reverse=False):
         fn = _sort_key_fn(key)
-        return ShapeList(sorted(self, key=fn, reverse=reverse))
+        # Objects that tie on the sort criterion would otherwise be ordered by
+        # the kernel's traversal order, which depends on the construction
+        # history of the shape (see Curve.canonical). Break those ties with a
+        # geometric key so that identical geometry always sorts identically.
+        # Zero extra cost when there are no ties. (build123d's tie break is
+        # default-on; mirrored here.)
+        decorated = [(fn(s), s) for s in self]
+        if len(set([k for k, _ in decorated])) != len(decorated):
+            decorated = [((k, _canonical_sort_key(s)), s) for k, s in decorated]
+        decorated = sorted(decorated, key=lambda pair: pair[0], reverse=reverse)
+        return ShapeList([s for _, s in decorated])
 
     def sort_by_distance(self, other, reverse=False):
         o = _v3(other) if not isinstance(other, Shape) else _entity_center(other)
