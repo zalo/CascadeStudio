@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 57 tests (incl. 32 frozen build123d example scripts)
+npx playwright test    # 66 tests (incl. 32 frozen build123d example scripts)
 ```
 
 ## Architecture (Monorepo)
@@ -79,10 +79,19 @@ action appends a snippet (via `executeEdits`, so Monaco undo works) and re-evalu
 time; Escape cancels the current interaction, then returns to Select. OrbitControls
 are disabled while a creation drag is in progress (like HandleManager's gizmo drags).
 
-- **Box**: pointerdown on the ground plane (snapped to integer mm) → drag footprint →
-  release → move to set height → click commits `let box1 = Translate([x,y,0], Box(w,d,h));`
-- **Cylinder**: click center → drag radius → drag height → click commits
-- **Sphere**: click center → drag radius → release commits
+**Gestures — every numeric stage accepts BOTH** (`Tool.stageDown`/`stageUp`):
+press-drag-release, and click-move-click. A release with the stage's dimension still
+zero is **non-destructive** (the stage stays armed; Escape is the only way to throw
+away an in-progress solid). This was a real bug: the height stage used to `cancel()`
+on any pointerdown while the height was 0, so pressing to drag the height destroyed
+the whole box/cylinder — the second drag always failed with a real mouse, while the
+synthetic-PointerEvent tests only exercised move-then-click and passed. Regression
+tests drive Playwright's `page.mouse` (real CDP input), not `dispatchEvent`.
+
+- **Box**: pointerdown on the ground plane (snapped to integer mm) → size the footprint
+  → lock it → size the height → commits `let box1 = Translate([x,y,0], Box(w,d,h));`
+- **Cylinder**: from the center → size the radius → lock it → size the height → commits
+- **Sphere**: from the center → size the radius → commits
 - **Sketch**: stateful multi-click profile drawing (Fusion-style sketch → extrude).
   Clicks place grid-snapped vertices with a rubber-band preview (length/angle label);
   the Line/Arc toggle (or `L`/`A` keys) picks the segment type — Arc segments take two
@@ -123,13 +132,20 @@ resolve a click to an editor line.
 **Coordinates**: three.js scene is Y-up, CAD is Z-up. CAD `[x,y,z]` ↔ three `(x, z, -y)`
 (see `ToolManager.cadToThree/threeToCad`, same mapping as CascadeViewHandles.js).
 
-**Testing hooks**: `CascadeAPI._tools` exposes the ToolManager; tests drive tools with
-synthetic PointerEvents on the canvas (see `test/gui-tools.spec.js`).
+**Testing hooks**: `CascadeAPI._tools` exposes the ToolManager. `test/gui-tools.spec.js`
+drives tools two ways: synthetic PointerEvents on the canvas (fast, but they cannot
+reproduce gesture bugs) and `page.mouse.down/move/up`, which is real CDP input — use the
+latter for anything gesture-shaped. Fresh loads are Python mode now, so the JS-emission
+specs call `CascadeAPI.setMode('cascadestudio')` in their `gotoAndReady` helper.
 
 ## Python (build123d) Mode
 
-A third editor language mode `'python'` (alongside `'cascadestudio'` and `'openscad'`):
+The **default** editor language mode (alongside `'cascadestudio'` and `'openscad'`):
 users write **build123d algebra-mode** Python that evaluates in the existing CAD worker.
+A parameter-less load opens `PYTHON_STARTER_CODE` (a parametric flanged bearing mount:
+`Box` + `filter_by(Axis.Z)` fillet, fused boss, bore, `GridLocations` bolt holes, a
+`Rot`'d set screw, `group_by(Axis.Z)[-1]` rim fillet) — see "URL Encoding & Mode
+Defaults" for how each entry point picks its mode.
 
 **Architecture — Brython in the worker (NOT Pyodide, deliberate to stay lean)**:
 - `packages/cascade-core/src/worker/PythonRuntime.js` lazily bootstraps Brython on the
@@ -297,7 +313,11 @@ upstream build123d on OCP 7.9.3: 185 canonical measurements agree to
 **GUI tools in Python mode**: Box/Cylinder/Sphere emit `name = Pos(cx, cy, cz) *
 Primitive(...)` — since build123d primitives are centered, the emission converts the
 dragged corner/base placement into the shape's center. Fillet emits
-`var = fillet(var.edges(indices=[...]), r)`. See `test/python-mode.spec.js`.
+`var = fillet(var.edges(indices=[...]), r)`. The **Sketch tool stays JS-only** (it emits
+a `new Sketch(...)` builder chain): in Python mode its toolbar button is grayed
+(`cs-tool-disabled`) and its tooltip says "not available in Python mode yet (switch to
+CascadeStudio JS mode)"; `ToolManager.activate('sketch')` refuses with a console error.
+See `test/python-mode.spec.js`.
 
 **Validation against real build123d**: `test/b123d-validation/` (see its README)
 runs the upstream build123d examples through BOTH real build123d 0.11.1 (native
@@ -533,12 +553,29 @@ await page.evaluate(() => CascadeAPI.showFinalResult());
   - Generates `dist/index.html`
 - **Output**: `packages/cascade-studio/dist/`
 
-## URL Encoding
+## URL Encoding & Mode Defaults
 
-Projects can be shared via URL: `?code=<encoded>&gui=<encoded>`
+Projects can be shared via URL: `?code=<encoded>&gui=<encoded>&mode=python`
 
-Encoding: `encodeURIComponent(btoa(deflateSync(text)))` (using fflate)
-Decoding: `inflateSync(atob(decodeURIComponent(encoded)))` (compatible with master's RawDeflate)
+- `code` / `gui`: `encodeURIComponent(btoa(deflateSync(text)))` (using fflate).
+  Decoding: `inflateSync(atob(decodeURIComponent(encoded)))` (compatible with master's
+  RawDeflate). A missing/malformed `gui` is tolerated.
+- `mode`: **plain, human-readable** — one of `CascadeStudioApp.MODES`
+  (`cascadestudio` | `openscad` | `python`). Written by the save-to-URL path
+  (F5 / Ctrl+S → `EditorManager.evaluateCode(true)`).
+
+Mode resolution (`CascadeStudioApp.initialize`, tested in `test/modes-and-urls.spec.js`):
+
+| Load                              | Mode                                        |
+|-----------------------------------|---------------------------------------------|
+| no params, no project             | `python` (`CascadeStudioApp.DEFAULT_MODE`)  |
+| `?code=…` **without** `&mode=`    | `cascadestudio` — legacy links predate mode serialization and must not be captured by the Python default |
+| `?mode=…` (with or without code)  | that mode (unknown value → default)         |
+| saved project `_cascadeState.mode`| that mode (legacy project files → `cascadestudio`) |
+
+Starters live on the app class (`STARTER_CODE`, `OPENSCAD_STARTER_CODE`,
+`PYTHON_STARTER_CODE`, dispatched by `CascadeStudioApp.starterCode(mode)`); all three
+must evaluate with zero errors. `saveProject()` serializes `mode` alongside the code.
 
 ## Key Dependencies
 

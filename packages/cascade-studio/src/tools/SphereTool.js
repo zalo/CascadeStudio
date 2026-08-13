@@ -6,11 +6,8 @@ const IDLE = 0, DRAG_RADIUS = 1;
 
 /** Sphere creation tool:
  *  1. pointerdown on the ground plane sets the center (snapped to mm)
- *  2. drag (or move) sizes the radius (live preview)
- *  3. release/click commits: emits `let sphereN = Translate(..., Sphere(r));`
- *
- *  Both press-drag-release and click-move-click work (Tool.stageDown/stageUp);
- *  a zero-radius release keeps the tool armed instead of cancelling. */
+ *  2. drag sizes the radius (live preview)
+ *  3. release commits: emits `let sphereN = Translate(..., Sphere(r));` */
 class SphereTool extends Tool {
   constructor(manager) {
     super(manager, 'sphere');
@@ -23,27 +20,15 @@ class SphereTool extends Tool {
   isInteracting() { return this.state !== IDLE; }
 
   onPointerDown(event) {
-    if (event.button !== 0) return false;
-
-    if (this.state === IDLE) {
-      const hit = this.manager.raycastGround(event);
-      if (!hit) return false;
-      this.centerCAD = this.manager.snapGroundToCad(hit);
-      this.radius = 0;
-      this._createPreview();
-      this.manager.beginInteraction();
-      this.stagePressed = true;
-      this.state = DRAG_RADIUS;
-      return true;
-    }
-
-    // Click-move-click: commit on a click once the radius is set; a press
-    // with no radius yet starts a drag instead of cancelling.
-    if (this.state === DRAG_RADIUS) {
-      if (this.stageDown(this.radius > 0)) { this._commit(); }
-      return true;
-    }
-    return false;
+    if (event.button !== 0 || this.state !== IDLE) return false;
+    const hit = this.manager.raycastGround(event);
+    if (!hit) return false;
+    this.centerCAD = this.manager.snapGroundToCad(hit);
+    this.radius = 0;
+    this._createPreview();
+    this.manager.beginInteraction();
+    this.state = DRAG_RADIUS;
+    return true;
   }
 
   onPointerMove(event) {
@@ -62,7 +47,14 @@ class SphereTool extends Tool {
 
   onPointerUp(event) {
     if (this.state !== DRAG_RADIUS) return false;
-    if (this.stageUp(this.radius > 0)) { this._commit(); }
+    if (this.radius > 0) {
+      const center = this.centerCAD;
+      const r = this.radius;
+      this.cancel();
+      this.emitSphere(center, r);
+    } else {
+      this.cancel();
+    }
     return true;
   }
 
@@ -71,15 +63,7 @@ class SphereTool extends Tool {
     this.preview = null;
     if (this.state !== IDLE) { this.manager.endInteraction(); }
     this.state = IDLE;
-    this.stagePressed = false;
     this.manager.hideLabel();
-  }
-
-  _commit() {
-    const center = this.centerCAD;
-    const r = this.radius;
-    this.cancel(); // removes preview, re-enables controls, resets state
-    this.emitSphere(center, r);
   }
 
   _createPreview() {
