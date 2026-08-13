@@ -52,6 +52,7 @@ license:
 
 from __future__ import annotations
 
+import math
 from typing import Callable, Iterable, NamedTuple
 
 from build123d.geometry import TOLERANCE, Vector
@@ -99,6 +100,16 @@ class CanonicalForm(NamedTuple):
 # pure geometry helpers - these take a sampler so that they can be used with
 # anything that can be evaluated by arc length (and unit tested with polylines)
 # ---------------------------------------------------------------------------
+def _quantise(value: float, resolution: float) -> int:
+    """``value`` snapped to a multiple of ``resolution``.
+
+    Comparisons of "is this coordinate smaller?" are only meaningful above the
+    geometric tolerance; quantising makes near-equal values tie *exactly* so the
+    next coordinate can decide.
+    """
+    return int(math.floor(value / resolution + 0.5))
+
+
 def _coordinate(point: Vector, index: int) -> float:
     """The ``index``-th coordinate of a Vector."""
     return (point.X, point.Y, point.Z)[index]
@@ -145,21 +156,6 @@ def _dominant_axis(area: Vector) -> int:
     return best
 
 
-def _cyclic_runs(flags: list[bool]) -> list[tuple[int, int]]:
-    """Maximal cyclic runs of ``True`` as (start_index, count) pairs."""
-    count = len(flags)
-    if all(flags):
-        return [(0, count)]
-    runs: list[tuple[int, int]] = []
-    for index in range(count):
-        if flags[index] and not flags[index - 1]:
-            length = 1
-            while flags[(index + length) % count]:
-                length += 1
-            runs.append((index, length))
-    return runs
-
-
 def _golden_min(
     function: Callable[[float], float], low: float, high: float, iterations: int = 40
 ) -> tuple[float, float]:
@@ -201,6 +197,61 @@ def _bisect_level(
         else:
             high = mid
     return 0.5 * (low + high)
+
+
+def _local_minima(values: list[float]) -> list[int]:
+    """One representative index per local minimum of a cyclic sample list.
+
+    Plateaus (a straight extremal side, say) collapse to their middle sample, so
+    the number of candidates stays proportional to the number of *features*, not
+    to the number of samples.
+    """
+    count = len(values)
+    if count == 0:
+        return []
+    if all(value == values[0] for value in values):
+        return [0]
+    minima: list[int] = []
+    for index in range(count):
+        if not values[index] < values[index - 1]:
+            continue  # not a strict descent into index
+        end = index
+        while values[(end + 1) % count] == values[index] and end - index < count:
+            end += 1
+        if values[(end + 1) % count] > values[index]:
+            minima.append(((index + end) // 2) % count)
+    return minima
+
+
+def _band_midpoint(
+    value: Callable[[float], float],
+    inside: float,
+    level: float,
+    step: float,
+    samples: int,
+    length: float,
+) -> float:
+    """Arc-length midpoint of the ``value <= level`` band that contains
+    ``inside``.
+
+    The band edges are transversal crossings of ``level``, so bisection finds
+    them to full precision, and their midpoint cancels the leading curvature
+    term of the extremum inside the band.  Neither the midpoint nor the width
+    depends on where the samples happened to fall.
+    """
+    backward = inside
+    for _ in range(samples):
+        if value(backward - step) > level:
+            break
+        backward -= step
+    forward = inside
+    for _ in range(samples):
+        if value(forward + step) > level:
+            break
+        forward += step
+    band_start = _bisect_level(value, backward, backward - step, level)
+    band_end = _bisect_level(value, forward, forward + step, level)
+    return (band_start + 0.5 * ((band_end - band_start) % length)) % length
 
 
 def canonical_form(
@@ -254,57 +305,55 @@ def canonical_form(
             return _coordinate(sampler(distance % length), coordinate)
 
         values = [_coordinate(p, coordinate) for p in points]
-        index = min(range(samples), key=lambda i: values[i])
-        # the value of the minimum, refined so that the band below does not
-        # depend on the (kernel supplied) phase of the sampling
-        seed, minimum = _golden_min(value, (index - 1) * step, (index + 1) * step)
-        if values[index] < minimum:
-            seed, minimum = index * step, values[index]
-        level = minimum + tolerance_band
 
-        inside = [sample_value <= level for sample_value in values]
-        if all(inside):
+        # Every local minimum of the sampled coordinate is a candidate feature;
+        # refining each one's *value* (its location is ill conditioned, its value
+        # is not) says which of them are extremal to within the band.  Looking
+        # only at samples below a threshold would miss a band whose samples all
+        # sit just above it.
+        refined: list[tuple[float, float]] = []
+        for index in _local_minima(values):
+            location, minimum = _golden_min(value, (index - 1) * step, (index + 1) * step)
+            if values[index] < minimum:
+                location, minimum = index * step, values[index]
+            refined.append((minimum, location))
+        if not refined:
+            continue
+
+        level = min(minimum for minimum, _ in refined) + tolerance_band
+        if all(sample_value <= level for sample_value in values):
             continue  # loop is flat in this coordinate: fall through to the next
 
-        # Candidate bands: the sampled runs, plus the refined minimum itself in
-        # case the band is narrower than the sampling step.
+        # Each extremal band is reduced to its own midpoint, and the bands are
+        # then ranked by *those points* in the remaining coordinates.  Comparing
+        # the minima of whichever samples fell inside a band would make the
+        # choice depend on the sampling phase.  Coordinates are quantised to the
+        # band width so that two candidates whose y agree to within tolerance tie
+        # on y and let z decide, instead of the last bits of a mirror-symmetric
+        # pair of minima picking the winner.
         others = [other for other in (0, 1, 2) if other != coordinate]
-        candidates: list[tuple[tuple[float, ...], float]] = []
-        for start, count in _cyclic_runs(inside):
-            members = [points[(start + offset) % samples] for offset in range(count)]
-            key = tuple(
-                min(_coordinate(member, other) for member in members) for other in others
+        candidates: list[tuple[tuple[int, ...], float]] = []
+        for minimum, location in refined:
+            if minimum > level:
+                continue
+            midpoint = _band_midpoint(value, location, level, step, samples, length)
+            point = sampler(midpoint)
+            candidates.append(
+                (
+                    tuple(
+                        _quantise(_coordinate(point, other), tolerance_band)
+                        for other in others
+                    ),
+                    midpoint,
+                )
             )
-            candidates.append((key, start * step))
-        seed_point = sampler(seed % length)
-        candidates.append(
-            (tuple(_coordinate(seed_point, other) for other in others), seed)
-        )
+        if not candidates:
+            continue
 
-        # A surviving tie means the loop is exactly symmetric, where no
-        # geometric rule can choose - the first candidate in traversal order
-        # wins, which is stable for a given input.
-        _, inside_distance = min(candidates, key=lambda candidate: candidate[0])
-        if value(inside_distance) > level:  # sampled run start just outside
-            inside_distance = seed
-
-        # Walk out to the first sample outside the band, then bisect: the band
-        # edges are transversal crossings, so they are found to full precision,
-        # and their midpoint cancels the leading curvature term of the extremum.
-        backward = inside_distance
-        for _ in range(samples):
-            if value(backward - step) > level:
-                break
-            backward -= step
-        forward = inside_distance
-        for _ in range(samples):
-            if value(forward + step) > level:
-                break
-            forward += step
-        band_start = _bisect_level(value, backward, backward - step, level)
-        band_end = _bisect_level(value, forward, forward + step, level)
-        span = (band_end - band_start) % length
-        seam = (band_start + 0.5 * span) % length
+        # A surviving tie means the loop is symmetric about this band to within
+        # tolerance, where no geometric rule can choose - the smallest midpoint
+        # distance wins, which is stable for a given input.
+        seam = min(candidates)[1]
         break
 
     return CanonicalForm(seam / length, sign, True)

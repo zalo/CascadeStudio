@@ -85,7 +85,9 @@ operation order or kernel build can change the answer.
 
    The "lexicographically smallest point" is defined as the arc-length **midpoint of
    the extremal band** `{d : x(d) <= x_min + delta}` with `delta = 1e-6 * bbox_extent`,
-   with the band's ends located by bisection. That is deliberate:
+   with the band's ends located by bisection. Where several bands are extremal, each is
+   reduced to its own midpoint first and the *midpoints* are ranked by the remaining
+   coordinates, quantised to `delta`. That is deliberate:
 
    * the *location* of a smooth minimum can only be found to `O(sqrt(eps))` along the
      curve (1e-4 mm at a 50 mm radius) and depends on the sampling phase, while the
@@ -95,7 +97,14 @@ operation order or kernel build can change the answer.
    * a *straight* extremal side (a rectangle) then yields the middle of that side,
      which has a well-defined tangent, instead of an arbitrary corner;
    * a loop that is flat in `x` (a circle in a plane `x = const`) falls through to `y`,
-     then `z`, so the rule terminates on every non-degenerate loop.
+     then `z`, so the rule terminates on every non-degenerate loop;
+   * bands are found as the local minima of the sampled coordinate and compared through
+     their midpoints, never through the samples that happen to fall inside them: a band
+     is usually narrower than the sampling step, so "the smallest `y` among a band's
+     samples" would be a function of the sampling phase - i.e. of the incoming
+     parametrisation, the very thing being canonicalised. With mirror-symmetric bands
+     (a sphere/cylinder intersection loop has two) that is the difference between a
+     stable answer and a coin flip.
 
    Residual freedom is documented rather than hidden: for a loop with an exact
    symmetry mapping one candidate band onto another (a circle centred on an axis, a
@@ -137,15 +146,18 @@ operation order or kernel build can change the answer.
 * Running the canonical rule on the polylines of both kernels' section edges: 13 of 14
   loops give **exactly** the same seam and direction, the 14th differs by 2.6e-5 mm
   (that case is where the two kernels' walk-line point counts differ).
-* 15 new tests in `tests/test_direct_api/test_canonical.py`, including the frame
-  independence regressions, a kernel-free polyline test of the rule itself, and one
-  that pins `sort_by`'s default stability.
+* 18 new tests in `tests/test_direct_api/test_canonical.py`, including the frame
+  independence regressions, a kernel-free polyline test of the rule itself, one that
+  pins `sort_by`'s default stability, and three that pin the seam against sampling
+  phase and traversal direction (a closed section loop reassembled into a `Wire`, and
+  the same `Wire` reversed, must canonicalise identically - they did not in the first
+  draft).
 
 Test suite on `dev`, before and after:
 
 | suite | pristine `dev` | with this PR |
 |---|---|---|
-| `tests/test_direct_api` | 1169 passed, 2 skipped | **1184 passed, 2 skipped** (+15 new) |
+| `tests/test_direct_api` | 1169 passed, 2 skipped | **1187 passed, 2 skipped** (+18 new) |
 | rest of `tests/` | 1037 passed, 1 skipped | 1037 passed, 1 skipped |
 
 No failures either side, and no upstream test needed changing.
@@ -227,8 +239,14 @@ distinction expressible.
   while forward-porting this from 0.11.1 the removal of `Vector.to_tuple()` did exactly
   that.)
 * Seam search cost: `O(1)` for open shapes (two end points); for a closed shape, 512
-  arc-length samples plus a bounded golden-section and two bisections - only paid when
-  `canonical()`/`canonical_form()` is actually called.
+  arc-length samples plus, per extremal band, a bounded golden section and two
+  bisections - only paid when `canonical()`/`canonical_form()` is actually called.
+* Everything the seam search decides is phrased on quantities that do not depend on
+  where the samples fell: band *midpoints* rather than sample minima, circular
+  distances rather than raw `start` values, and "gap closed at all -> tangent -> gap"
+  rather than raw gaps when re-ordering the pieces of a re-seamed loop. That is what
+  makes a `Wire` and the same `Wire` reversed canonicalise identically, which is the
+  property the whole change exists to provide.
 * Sort tie-break cost, 200 sorts of 297 text glyph edges (OCP 7.9.3):
 
   | | pristine `dev` | default (`tie_break=False`) | `tie_break=True` |

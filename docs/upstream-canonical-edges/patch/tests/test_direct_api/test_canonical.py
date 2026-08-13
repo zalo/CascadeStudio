@@ -29,15 +29,19 @@ license:
 
 import unittest
 
-from build123d.build_enums import Mode
+from build123d.build_enums import GeomType, Mode
 from build123d.build_part import BuildPart
 from build123d.build_sketch import BuildSketch
-from build123d.geometry import Axis, Location, Plane, Vector
+from build123d.geometry import TOLERANCE, Axis, Location, Plane, Vector
 from build123d.objects_part import Cylinder
 from build123d.objects_sketch import Rectangle
 from build123d.operations_part import extrude
 from build123d.topology import Edge, Face, ShapeList, Solid, Wire
+from build123d.topology.one_d import edges_to_wires
+from OCP.TopoDS import TopoDS
+
 from build123d.topology.canonical import (
+    CANONICAL_BAND,
     canonical_form,
     lexicographic_key,
     loop_area_vector,
@@ -158,6 +162,90 @@ class TestKernelIndependence(DirectApiTestCase):
             self.assertAlmostEqual(canonical.length, reference.length, 4)
             for position in (0.0, 0.25, 0.5, 0.75):
                 self.assertTupleAlmostEquals(tuple(canonical.position_at(position)), tuple(reference.position_at(position)), 3, )
+
+    @staticmethod
+    def section_loop(sphere_rotation: float = 0.0) -> Wire:
+        """A closed sphere/cylinder intersection loop, reassembled into a Wire.
+
+        Rotating the sphere about its own axis gives the identical solid but
+        moves the sphere's u = 0 meridian, which changes how many Edges the loop
+        arrives in and where they start.
+        """
+        sphere = Solid.make_sphere(10)
+        if sphere_rotation:
+            sphere = sphere.rotate(Axis.Z, sphere_rotation)
+        cutter = Solid.make_cylinder(5, 40, Plane.XY.offset(-20)).locate(
+            Location((6, 0, 0))
+        )
+        loop = [
+            edge
+            for edge in sphere.cut(cutter).edges()
+            if edge.geom_type == GeomType.BSPLINE
+        ]
+        return max(edges_to_wires(loop), key=lambda wire: wire.length)
+
+    def test_reversed_loop_canonicalizes_the_same_way(self):
+        """A Wire and the same Wire reversed must canonicalize identically.
+
+        Regression: the seam of this loop lands on one of the Wire's own
+        vertices, where two Edges meet heading in opposite directions.  Ranking
+        the pieces by raw end point distance (1e-16 scale) before the tangent let
+        floating point noise pick the piece heading *against* the canonical
+        direction, and the loop was walked backwards.
+        """
+        for rotation in (0, 45, 90):
+            wire = self.section_loop(rotation)
+            reversed_wire = Wire(TopoDS.Wire_s(wire.wrapped.Reversed()))
+            forward = wire.canonical()
+            backward = reversed_wire.canonical()
+            for position in (0.0, 0.25, 0.5, 0.75):
+                self.assertTupleAlmostEquals(
+                    tuple(backward.position_at(position)),
+                    tuple(forward.position_at(position)),
+                    4,
+                    msg=f"sphere rotated {rotation} deg",
+                )
+
+    def test_loop_canonical_form_is_frame_independent(self):
+        """Every frame of the same locus - and every traversal of it - has to
+        agree, including the frames where the loop arrives as 1, 2 or 4 Edges."""
+        reference = self.section_loop(0).canonical()
+        for rotation in (37, 45, 90, 180, 270):
+            wire = self.section_loop(rotation)
+            for shape in (wire, Wire(TopoDS.Wire_s(wire.wrapped.Reversed()))):
+                canonical = shape.canonical()
+                self.assertAlmostEqual(canonical.length, reference.length, 4)
+                for position in (0.0, 0.25, 0.5):
+                    self.assertTupleAlmostEquals(
+                        tuple(canonical.position_at(position)),
+                        tuple(reference.position_at(position)),
+                        3,
+                        msg=f"sphere rotated {rotation} deg",
+                    )
+
+    def test_seam_already_at_the_start_is_not_reseamed(self):
+        """A shape whose seam is its own start point must come back untouched.
+
+        Regression: the "already canonical" test compared ``form.start`` against
+        a tolerance without wrapping it, so a band midpoint that landed an
+        epsilon *below* 1.0 - the same point as an epsilon above 0.0 - took the
+        re-seam path.
+        """
+        for shape in (
+            self.section_loop(0).canonical(),
+            Edge.make_circle(10).canonical(),
+            Wire(Face.make_rect(20, 10).outer_wire()).canonical(),
+        ):
+            form = shape.canonical_form()
+            wrapped = form.start % 1.0
+            box = shape.bounding_box()
+            resolution = max(TOLERANCE, CANONICAL_BAND * max(box.size.X, box.size.Y, box.size.Z))
+            self.assertLessEqual(
+                min(wrapped, 1.0 - wrapped) * shape.length,
+                resolution,
+                msg="canonical() must leave the seam at the start",
+            )
+            self.assertIs(shape.canonical(), shape)
 
     def test_sort_by_ties_are_deterministic(self):
         """With tie_break, objects that tie on the criterion are ordered by

@@ -74,10 +74,10 @@ index 1122b40..d2998ed 100644
          if location is not None:
 diff --git a/src/build123d/topology/canonical.py b/src/build123d/topology/canonical.py
 new file mode 100644
-index 0000000..5b40d19
+index 0000000..c13271f
 --- /dev/null
 +++ b/src/build123d/topology/canonical.py
-@@ -0,0 +1,310 @@
+@@ -0,0 +1,359 @@
 +"""
 +build123d canonical free-edge parametrisation
 +
@@ -132,6 +132,7 @@ index 0000000..5b40d19
 +
 +from __future__ import annotations
 +
++import math
 +from typing import Callable, Iterable, NamedTuple
 +
 +from build123d.geometry import TOLERANCE, Vector
@@ -179,6 +180,16 @@ index 0000000..5b40d19
 +# pure geometry helpers - these take a sampler so that they can be used with
 +# anything that can be evaluated by arc length (and unit tested with polylines)
 +# ---------------------------------------------------------------------------
++def _quantise(value: float, resolution: float) -> int:
++    """``value`` snapped to a multiple of ``resolution``.
++
++    Comparisons of "is this coordinate smaller?" are only meaningful above the
++    geometric tolerance; quantising makes near-equal values tie *exactly* so the
++    next coordinate can decide.
++    """
++    return int(math.floor(value / resolution + 0.5))
++
++
 +def _coordinate(point: Vector, index: int) -> float:
 +    """The ``index``-th coordinate of a Vector."""
 +    return (point.X, point.Y, point.Z)[index]
@@ -225,21 +236,6 @@ index 0000000..5b40d19
 +    return best
 +
 +
-+def _cyclic_runs(flags: list[bool]) -> list[tuple[int, int]]:
-+    """Maximal cyclic runs of ``True`` as (start_index, count) pairs."""
-+    count = len(flags)
-+    if all(flags):
-+        return [(0, count)]
-+    runs: list[tuple[int, int]] = []
-+    for index in range(count):
-+        if flags[index] and not flags[index - 1]:
-+            length = 1
-+            while flags[(index + length) % count]:
-+                length += 1
-+            runs.append((index, length))
-+    return runs
-+
-+
 +def _golden_min(
 +    function: Callable[[float], float], low: float, high: float, iterations: int = 40
 +) -> tuple[float, float]:
@@ -281,6 +277,61 @@ index 0000000..5b40d19
 +        else:
 +            high = mid
 +    return 0.5 * (low + high)
++
++
++def _local_minima(values: list[float]) -> list[int]:
++    """One representative index per local minimum of a cyclic sample list.
++
++    Plateaus (a straight extremal side, say) collapse to their middle sample, so
++    the number of candidates stays proportional to the number of *features*, not
++    to the number of samples.
++    """
++    count = len(values)
++    if count == 0:
++        return []
++    if all(value == values[0] for value in values):
++        return [0]
++    minima: list[int] = []
++    for index in range(count):
++        if not values[index] < values[index - 1]:
++            continue  # not a strict descent into index
++        end = index
++        while values[(end + 1) % count] == values[index] and end - index < count:
++            end += 1
++        if values[(end + 1) % count] > values[index]:
++            minima.append(((index + end) // 2) % count)
++    return minima
++
++
++def _band_midpoint(
++    value: Callable[[float], float],
++    inside: float,
++    level: float,
++    step: float,
++    samples: int,
++    length: float,
++) -> float:
++    """Arc-length midpoint of the ``value <= level`` band that contains
++    ``inside``.
++
++    The band edges are transversal crossings of ``level``, so bisection finds
++    them to full precision, and their midpoint cancels the leading curvature
++    term of the extremum inside the band.  Neither the midpoint nor the width
++    depends on where the samples happened to fall.
++    """
++    backward = inside
++    for _ in range(samples):
++        if value(backward - step) > level:
++            break
++        backward -= step
++    forward = inside
++    for _ in range(samples):
++        if value(forward + step) > level:
++            break
++        forward += step
++    band_start = _bisect_level(value, backward, backward - step, level)
++    band_end = _bisect_level(value, forward, forward + step, level)
++    return (band_start + 0.5 * ((band_end - band_start) % length)) % length
 +
 +
 +def canonical_form(
@@ -334,62 +385,60 @@ index 0000000..5b40d19
 +            return _coordinate(sampler(distance % length), coordinate)
 +
 +        values = [_coordinate(p, coordinate) for p in points]
-+        index = min(range(samples), key=lambda i: values[i])
-+        # the value of the minimum, refined so that the band below does not
-+        # depend on the (kernel supplied) phase of the sampling
-+        seed, minimum = _golden_min(value, (index - 1) * step, (index + 1) * step)
-+        if values[index] < minimum:
-+            seed, minimum = index * step, values[index]
-+        level = minimum + tolerance_band
 +
-+        inside = [sample_value <= level for sample_value in values]
-+        if all(inside):
++        # Every local minimum of the sampled coordinate is a candidate feature;
++        # refining each one's *value* (its location is ill conditioned, its value
++        # is not) says which of them are extremal to within the band.  Looking
++        # only at samples below a threshold would miss a band whose samples all
++        # sit just above it.
++        refined: list[tuple[float, float]] = []
++        for index in _local_minima(values):
++            location, minimum = _golden_min(value, (index - 1) * step, (index + 1) * step)
++            if values[index] < minimum:
++                location, minimum = index * step, values[index]
++            refined.append((minimum, location))
++        if not refined:
++            continue
++
++        level = min(minimum for minimum, _ in refined) + tolerance_band
++        if all(sample_value <= level for sample_value in values):
 +            continue  # loop is flat in this coordinate: fall through to the next
 +
-+        # Candidate bands: the sampled runs, plus the refined minimum itself in
-+        # case the band is narrower than the sampling step.
++        # Each extremal band is reduced to its own midpoint, and the bands are
++        # then ranked by *those points* in the remaining coordinates.  Comparing
++        # the minima of whichever samples fell inside a band would make the
++        # choice depend on the sampling phase.  Coordinates are quantised to the
++        # band width so that two candidates whose y agree to within tolerance tie
++        # on y and let z decide, instead of the last bits of a mirror-symmetric
++        # pair of minima picking the winner.
 +        others = [other for other in (0, 1, 2) if other != coordinate]
-+        candidates: list[tuple[tuple[float, ...], float]] = []
-+        for start, count in _cyclic_runs(inside):
-+            members = [points[(start + offset) % samples] for offset in range(count)]
-+            key = tuple(
-+                min(_coordinate(member, other) for member in members) for other in others
++        candidates: list[tuple[tuple[int, ...], float]] = []
++        for minimum, location in refined:
++            if minimum > level:
++                continue
++            midpoint = _band_midpoint(value, location, level, step, samples, length)
++            point = sampler(midpoint)
++            candidates.append(
++                (
++                    tuple(
++                        _quantise(_coordinate(point, other), tolerance_band)
++                        for other in others
++                    ),
++                    midpoint,
++                )
 +            )
-+            candidates.append((key, start * step))
-+        seed_point = sampler(seed % length)
-+        candidates.append(
-+            (tuple(_coordinate(seed_point, other) for other in others), seed)
-+        )
++        if not candidates:
++            continue
 +
-+        # A surviving tie means the loop is exactly symmetric, where no
-+        # geometric rule can choose - the first candidate in traversal order
-+        # wins, which is stable for a given input.
-+        _, inside_distance = min(candidates, key=lambda candidate: candidate[0])
-+        if value(inside_distance) > level:  # sampled run start just outside
-+            inside_distance = seed
-+
-+        # Walk out to the first sample outside the band, then bisect: the band
-+        # edges are transversal crossings, so they are found to full precision,
-+        # and their midpoint cancels the leading curvature term of the extremum.
-+        backward = inside_distance
-+        for _ in range(samples):
-+            if value(backward - step) > level:
-+                break
-+            backward -= step
-+        forward = inside_distance
-+        for _ in range(samples):
-+            if value(forward + step) > level:
-+                break
-+            forward += step
-+        band_start = _bisect_level(value, backward, backward - step, level)
-+        band_end = _bisect_level(value, forward, forward + step, level)
-+        span = (band_end - band_start) % length
-+        seam = (band_start + 0.5 * span) % length
++        # A surviving tie means the loop is symmetric about this band to within
++        # tolerance, where no geometric rule can choose - the smallest midpoint
++        # distance wins, which is stable for a given input.
++        seam = min(candidates)[1]
 +        break
 +
 +    return CanonicalForm(seam / length, sign, True)
 diff --git a/src/build123d/topology/one_d.py b/src/build123d/topology/one_d.py
-index 23cf821..7a3c4f3 100644
+index 23cf821..6420d97 100644
 --- a/src/build123d/topology/one_d.py
 +++ b/src/build123d/topology/one_d.py
 @@ -136,7 +136,7 @@ from OCP.GeomAPI import (
@@ -401,11 +450,12 @@ index 23cf821..7a3c4f3 100644
  from OCP.GeomFill import (
      GeomFill_CorrectedFrenet,
      GeomFill_Frenet,
-@@ -219,6 +219,11 @@ from build123d.geometry import (
+@@ -219,6 +219,12 @@ from build123d.geometry import (
      logger,
  )
  
 +from .canonical import (
++    CANONICAL_BAND,
 +    CANONICAL_SAMPLES,
 +    CanonicalForm,
 +    canonical_form as _canonical_form,
@@ -413,7 +463,7 @@ index 23cf821..7a3c4f3 100644
  from .constrained_lines import (
      _make_2tan_lines,
      _make_2tan_on_arcs,
-@@ -684,6 +689,82 @@ class Mixin1D(Shape[TOPODS]):
+@@ -684,6 +690,96 @@ class Mixin1D(Shape[TOPODS]):
              middle = self.bounding_box().center()
          return middle
  
@@ -461,8 +511,22 @@ index 23cf821..7a3c4f3 100644
 +        if not form.closed:
 +            return self if form.sign > 0 else _reverse_1d(self)
 +
-+        if form.sign > 0 and form.start <= TOLERANCE / max(self.length, TOLERANCE):
-+            return self  # already canonical: keep the original curve type
++        # The seam is a position on a loop, so "is it already at the start?" is a
++        # question about the circular distance: a band midpoint that lands an
++        # epsilon *below* 1.0 is the same point as one an epsilon above 0.0.
++        # The comparison is made at the resolution the seam is actually defined
++        # to - the width of the extremal band - because asking for more precision
++        # than that would re-seam a shape by a few nanometres, over and over.
++        box = self.bounding_box()
++        diagonal = max(box.size.X, box.size.Y, box.size.Z)
++        relative_tolerance = (
++            max(TOLERANCE, CANONICAL_BAND * diagonal) / max(self.length, TOLERANCE)
++        )
++        wrapped_start = form.start % 1.0
++        if min(wrapped_start, 1.0 - wrapped_start) <= relative_tolerance:
++            # Already seamed here: at most the direction needs flipping, which
++            # keeps the original topology and curve types.
++            return self if form.sign > 0 else _reverse_1d(self)
 +
 +        seam = self.position_at(form.start)
 +        direction = self.tangent_at(form.start) * form.sign
@@ -496,7 +560,7 @@ index 23cf821..7a3c4f3 100644
      def common_plane(
          self, *lines: Edge | Wire | None, tolerance: float = TOLERANCE
      ) -> None | Plane:
-@@ -2352,7 +2433,13 @@ class Edge(Mixin1D[TopoDS_Edge]):
+@@ -2352,7 +2448,13 @@ class Edge(Mixin1D[TopoDS_Edge]):
          Returns:
              Edge: linear Edge between two Edges
          """
@@ -511,7 +575,7 @@ index 23cf821..7a3c4f3 100644
          pnts = [
              Edge.make_line(
                  first.position_at(i), second.position_at(1 - i if flip else i)
-@@ -4608,6 +4695,84 @@ class Wire(Mixin1D[TopoDS_Wire]):
+@@ -4608,6 +4710,88 @@ class Wire(Mixin1D[TopoDS_Wire]):
          return Wire(trimmed_edges)
  
  
@@ -554,13 +618,17 @@ index 23cf821..7a3c4f3 100644
 +        for candidate in remaining:
 +            for reverse in (False, True):
 +                edge = candidate.reversed() if reverse else candidate
-+                score = (
-+                    (edge.position_at(0) - position).length,
-+                    -edge.tangent_at(0).dot(heading),
-+                )
++                gap = (edge.position_at(0) - position).length
++                # Rank on whether the gap is closed at all, then on the tangent,
++                # and only then on the gap itself.  Comparing raw gaps first
++                # would let 1e-16 noise decide between two pieces that meet at
++                # the same vertex - and at the seam of a loop those two pieces
++                # head in opposite directions, so the loop could be walked
++                # backwards.
++                score = (gap > gap_tolerance, -edge.tangent_at(0).dot(heading), gap)
 +                if best_score is None or score < best_score:
 +                    best, best_score, flip = candidate, score, reverse
-+        if best is None or best_score[0] > gap_tolerance:
++        if best is None or best_score[0]:
 +            return pieces  # not a connected chain - keep the input order
 +        edge = best.reversed() if flip else best
 +        ordered.append(edge)
@@ -822,10 +890,10 @@ index 3bb2f53..3f04eb9 100644
      out = {}  # using dict to prevent duplicates
 diff --git a/tests/test_direct_api/test_canonical.py b/tests/test_direct_api/test_canonical.py
 new file mode 100644
-index 0000000..5e75ea4
+index 0000000..661907d
 --- /dev/null
 +++ b/tests/test_direct_api/test_canonical.py
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,319 @@
 +"""
 +build123d canonical free-edge tests
 +
@@ -857,15 +925,19 @@ index 0000000..5e75ea4
 +
 +import unittest
 +
-+from build123d.build_enums import Mode
++from build123d.build_enums import GeomType, Mode
 +from build123d.build_part import BuildPart
 +from build123d.build_sketch import BuildSketch
-+from build123d.geometry import Axis, Location, Plane, Vector
++from build123d.geometry import TOLERANCE, Axis, Location, Plane, Vector
 +from build123d.objects_part import Cylinder
 +from build123d.objects_sketch import Rectangle
 +from build123d.operations_part import extrude
 +from build123d.topology import Edge, Face, ShapeList, Solid, Wire
++from build123d.topology.one_d import edges_to_wires
++from OCP.TopoDS import TopoDS
++
 +from build123d.topology.canonical import (
++    CANONICAL_BAND,
 +    canonical_form,
 +    lexicographic_key,
 +    loop_area_vector,
@@ -986,6 +1058,90 @@ index 0000000..5e75ea4
 +            self.assertAlmostEqual(canonical.length, reference.length, 4)
 +            for position in (0.0, 0.25, 0.5, 0.75):
 +                self.assertTupleAlmostEquals(tuple(canonical.position_at(position)), tuple(reference.position_at(position)), 3, )
++
++    @staticmethod
++    def section_loop(sphere_rotation: float = 0.0) -> Wire:
++        """A closed sphere/cylinder intersection loop, reassembled into a Wire.
++
++        Rotating the sphere about its own axis gives the identical solid but
++        moves the sphere's u = 0 meridian, which changes how many Edges the loop
++        arrives in and where they start.
++        """
++        sphere = Solid.make_sphere(10)
++        if sphere_rotation:
++            sphere = sphere.rotate(Axis.Z, sphere_rotation)
++        cutter = Solid.make_cylinder(5, 40, Plane.XY.offset(-20)).locate(
++            Location((6, 0, 0))
++        )
++        loop = [
++            edge
++            for edge in sphere.cut(cutter).edges()
++            if edge.geom_type == GeomType.BSPLINE
++        ]
++        return max(edges_to_wires(loop), key=lambda wire: wire.length)
++
++    def test_reversed_loop_canonicalizes_the_same_way(self):
++        """A Wire and the same Wire reversed must canonicalize identically.
++
++        Regression: the seam of this loop lands on one of the Wire's own
++        vertices, where two Edges meet heading in opposite directions.  Ranking
++        the pieces by raw end point distance (1e-16 scale) before the tangent let
++        floating point noise pick the piece heading *against* the canonical
++        direction, and the loop was walked backwards.
++        """
++        for rotation in (0, 45, 90):
++            wire = self.section_loop(rotation)
++            reversed_wire = Wire(TopoDS.Wire_s(wire.wrapped.Reversed()))
++            forward = wire.canonical()
++            backward = reversed_wire.canonical()
++            for position in (0.0, 0.25, 0.5, 0.75):
++                self.assertTupleAlmostEquals(
++                    tuple(backward.position_at(position)),
++                    tuple(forward.position_at(position)),
++                    4,
++                    msg=f"sphere rotated {rotation} deg",
++                )
++
++    def test_loop_canonical_form_is_frame_independent(self):
++        """Every frame of the same locus - and every traversal of it - has to
++        agree, including the frames where the loop arrives as 1, 2 or 4 Edges."""
++        reference = self.section_loop(0).canonical()
++        for rotation in (37, 45, 90, 180, 270):
++            wire = self.section_loop(rotation)
++            for shape in (wire, Wire(TopoDS.Wire_s(wire.wrapped.Reversed()))):
++                canonical = shape.canonical()
++                self.assertAlmostEqual(canonical.length, reference.length, 4)
++                for position in (0.0, 0.25, 0.5):
++                    self.assertTupleAlmostEquals(
++                        tuple(canonical.position_at(position)),
++                        tuple(reference.position_at(position)),
++                        3,
++                        msg=f"sphere rotated {rotation} deg",
++                    )
++
++    def test_seam_already_at_the_start_is_not_reseamed(self):
++        """A shape whose seam is its own start point must come back untouched.
++
++        Regression: the "already canonical" test compared ``form.start`` against
++        a tolerance without wrapping it, so a band midpoint that landed an
++        epsilon *below* 1.0 - the same point as an epsilon above 0.0 - took the
++        re-seam path.
++        """
++        for shape in (
++            self.section_loop(0).canonical(),
++            Edge.make_circle(10).canonical(),
++            Wire(Face.make_rect(20, 10).outer_wire()).canonical(),
++        ):
++            form = shape.canonical_form()
++            wrapped = form.start % 1.0
++            box = shape.bounding_box()
++            resolution = max(TOLERANCE, CANONICAL_BAND * max(box.size.X, box.size.Y, box.size.Z))
++            self.assertLessEqual(
++                min(wrapped, 1.0 - wrapped) * shape.length,
++                resolution,
++                msg="canonical() must leave the seam at the start",
++            )
++            self.assertIs(shape.canonical(), shape)
 +
 +    def test_sort_by_ties_are_deterministic(self):
 +        """With tie_break, objects that tie on the criterion are ordered by

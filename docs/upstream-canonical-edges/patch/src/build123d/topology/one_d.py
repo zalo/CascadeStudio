@@ -220,6 +220,7 @@ from build123d.geometry import (
 )
 
 from .canonical import (
+    CANONICAL_BAND,
     CANONICAL_SAMPLES,
     CanonicalForm,
     canonical_form as _canonical_form,
@@ -733,8 +734,22 @@ class Mixin1D(Shape[TOPODS]):
         if not form.closed:
             return self if form.sign > 0 else _reverse_1d(self)
 
-        if form.sign > 0 and form.start <= TOLERANCE / max(self.length, TOLERANCE):
-            return self  # already canonical: keep the original curve type
+        # The seam is a position on a loop, so "is it already at the start?" is a
+        # question about the circular distance: a band midpoint that lands an
+        # epsilon *below* 1.0 is the same point as one an epsilon above 0.0.
+        # The comparison is made at the resolution the seam is actually defined
+        # to - the width of the extremal band - because asking for more precision
+        # than that would re-seam a shape by a few nanometres, over and over.
+        box = self.bounding_box()
+        diagonal = max(box.size.X, box.size.Y, box.size.Z)
+        relative_tolerance = (
+            max(TOLERANCE, CANONICAL_BAND * diagonal) / max(self.length, TOLERANCE)
+        )
+        wrapped_start = form.start % 1.0
+        if min(wrapped_start, 1.0 - wrapped_start) <= relative_tolerance:
+            # Already seamed here: at most the direction needs flipping, which
+            # keeps the original topology and curve types.
+            return self if form.sign > 0 else _reverse_1d(self)
 
         seam = self.position_at(form.start)
         direction = self.tangent_at(form.start) * form.sign
@@ -4734,13 +4749,17 @@ def _walk_loop(pieces: list[Edge], start: Vector, direction: Vector) -> list[Edg
         for candidate in remaining:
             for reverse in (False, True):
                 edge = candidate.reversed() if reverse else candidate
-                score = (
-                    (edge.position_at(0) - position).length,
-                    -edge.tangent_at(0).dot(heading),
-                )
+                gap = (edge.position_at(0) - position).length
+                # Rank on whether the gap is closed at all, then on the tangent,
+                # and only then on the gap itself.  Comparing raw gaps first
+                # would let 1e-16 noise decide between two pieces that meet at
+                # the same vertex - and at the seam of a loop those two pieces
+                # head in opposite directions, so the loop could be walked
+                # backwards.
+                score = (gap > gap_tolerance, -edge.tangent_at(0).dot(heading), gap)
                 if best_score is None or score < best_score:
                     best, best_score, flip = candidate, score, reverse
-        if best is None or best_score[0] > gap_tolerance:
+        if best is None or best_score[0]:
             return pieces  # not a connected chain - keep the input order
         edge = best.reversed() if flip else best
         ordered.append(edge)

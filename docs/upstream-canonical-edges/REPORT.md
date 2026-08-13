@@ -228,18 +228,26 @@ i.e. the shape is closed.
    loop winds counter-clockwise seen from `+k`. If `|A_k| <= TOL^2` (a degenerate,
    self-cancelling loop) keep the incoming direction.
 2. *Seam.* For coordinate `c` in `(x, y, z)`:
-   * find the minimum `m` of that coordinate over the loop (sampled argmin, then a
-     40-iteration golden-section refinement of the *value*; the value of a smooth
-     minimum is well conditioned even though its location is not);
-   * if every sample is within `delta` of `m` the loop is flat in this coordinate:
-     continue to the next one (this is what makes a circle in the plane `x = const`
-     fall through to `y`);
-   * otherwise take the **band** `{d : c(p(d)) <= m + delta}`, which is one or more
-     arcs. Rank the arcs by the minima of the *remaining* coordinates and keep the
-     smallest; refine the chosen arc's two ends by **bisection** on
-     `c(p(d)) = m + delta` (a transversal crossing, hence full precision) and put the
-     seam at the arc's **arc-length midpoint**. Stop.
+   * find every **local minimum** of `c` over the sampled loop (plateaus - a straight
+     extremal side - collapse to one representative), and refine each one's *value* by
+     a 40-iteration golden section; the value of a smooth minimum is well conditioned
+     even though its location is not;
+   * let `m` be the smallest of those values. If every sample is within `delta` of `m`
+     the loop is flat in this coordinate: continue to the next one (this is what makes
+     a circle in the plane `x = const` fall through to `y`);
+   * every local minimum within `delta` of `m` defines a **band**
+     `{d : c(p(d)) <= m + delta}` around it. Refine each band's two ends by
+     **bisection** on `c(p(d)) = m + delta` (a transversal crossing, hence full
+     precision) and reduce the band to its **arc-length midpoint**;
+   * rank those midpoints by the *remaining* coordinates, each **quantised to
+     `delta`**, and take the smallest; that point is the seam. Stop.
    * if all three coordinates are flat, the loop is a point: seam `= 0`.
+
+   Both the band discovery and the ranking are deliberately phrased on the *bands*
+   rather than on the samples that happen to fall inside them: a band is usually
+   narrower than the sampling step, so "the smallest `y` among a band's samples"
+   would be a function of the sampling phase - and therefore of the incoming
+   parametrisation, which is the very thing being canonicalised (see section 3.3).
 3. *Parametrisation.* Normalised arc length from the seam in the canonical direction.
 
 Why a *band midpoint* rather than the extremum itself: for `c(s) = m + a s^2 + ...`
@@ -258,10 +266,10 @@ parameter is exactly the quantity that is implementation-defined (Table 1 vs Tab
 and build123d already resolves `position_at` through `GCPnts_AbscissaPoint`, so this
 part of the rule is a no-op in terms of behaviour.
 
-**Residual freedom, stated honestly.** If a loop has an exact symmetry that maps one
-candidate band onto another with identical remaining-coordinate minima (a circle
-centred on an axis, a square), no geometric rule can break the tie - by definition of
-symmetry. The implementation keeps the first candidate in the incoming traversal
+**Residual freedom, stated honestly.** If a loop has a symmetry that maps one
+candidate band onto another so that *all* remaining coordinates of their midpoints
+agree to within `delta` (a circle centred on an axis, a square), no geometric rule can
+break the tie - by definition of symmetry. The implementation keeps the first candidate in the incoming traversal
 order, so the result is stable for a given input and any two answers differ only by a
 symmetry of the loop. The same caveat applies to `_dominant_axis` when two `|A_k|`
 are equal to the last bit (a loop whose plane exactly bisects two axes).
@@ -276,12 +284,12 @@ every section edge, stitches them into loops **geometrically**, and runs the sam
 
 | case/loop | Hausdorff (mm) | raw start 7.9.3 | raw start 8.0.1 | canonical seam | canonical heading | seam delta (mm) | same direction |
 |---|---|---|---|---|---|---|---|
-| sph_cyl_xp6[0] | 0.00e+00 | (1, -0, 9.94987) | (1, 0, 9.94987) | (1, 0.000893, 9.94987) | (0.0073, -1, -0.0044) | 0.00e+00 | True |
-| sph_cyl_xm6[0] | 0.00e+00 | (-1, -0, -9.94987) | (-1, 0, -9.94987) | (-9.25, 3.79967, 0) | (0.0568, 0.0481, 0.9972) | 0.00e+00 | True |
+| sph_cyl_xp6[0] | 0.00e+00 | (1, -0, 9.94987) | (1, 0, 9.94987) | (1, 0.000288, -9.94987) | (0.0131, 0.9999, 0.0079) | 0.00e+00 | True |
+| sph_cyl_xm6[0] | 0.00e+00 | (-1, -0, -9.94987) | (-1, 0, -9.94987) | (-9.25, -3.79967, 0) | (0.1003, -0.0831, -0.9915) | 0.00e+00 | True |
 | sph_cyl_yp6[0] | 1.99e-05 | (5, 6, -6.245) | (5, 6, -6.245) | (-4.99998, 5.98964, -6.25493) | (0.0053, 0.7191, 0.6949) | 0.00e+00 | True |
 | sph_cyl_xp6_seam90[0] | 0.00e+00 | (9.25, 3.79967, 0) | (9.25, 3.79967, 0) | (1.00019, -0.03848, -9.94976) | (0.0031, 1, 0.0019) | 0.00e+00 | True |
 | sph_cyl_xp6_seam180[0] | 0.00e+00 | (9.25, 3.79967, 0) | (9.25, 3.79967, 0) | (1.00019, -0.03848, -9.94976) | (0.0031, 1, 0.0019) | 0.00e+00 | True |
-| sph_cyl_xp6_cylseam90[0] | 9.04e-05 | (1, -0, -9.94987) | (1, 0, -9.94987) | (1.00001, 0.00549, 9.94987) | (0.0098, -0.9999, -0.0059) | 2.60e-05 | True |
+| sph_cyl_xp6_cylseam90[0] | 9.04e-05 | (1, -0, -9.94987) | (1, 0, -9.94987) | (1.00001, 0.00549, -9.94987) | (0.0076, 1, 0.0046) | 2.60e-05 | True |
 | sph_sph[0] | 0.00e+00 | (6.1, 0, 7.92401) | (6.1, 0, 7.92401) | (6.1, -7.92401, 0) | (0, 0.0039, -1) | 0.00e+00 | True |
 | cyl_cyl[0] | 0.00e+00 | (5, -0, -7) | (5, 0, -7) | (-4.99991, 0.02484, -6.99993) | (0.0091, -0.9999, 0.0065) | 0.00e+00 | True |
 | cyl_cyl[1] | 0.00e+00 | (5, -0, 7) | (5, 0, 7) | (-4.99991, 0.02484, 6.99993) | (0.0091, -0.9999, -0.0065) | 0.00e+00 | True |
@@ -363,7 +371,7 @@ closes it.
 
 ## 3. The patch
 
-`patch/canonical-free-edges.diff` (against build123d **dev** @ `ef48b98`; +845/-61 lines,
+`patch/canonical-free-edges.diff` (against build123d **dev** @ `ef48b98`; +1001/-61 lines,
 regenerable with `experiments/apply_patch.py`):
 
 | file | change |
@@ -372,7 +380,7 @@ regenerable with `experiments/apply_patch.py`):
 | `src/build123d/topology/one_d.py` | `Mixin1D.canonical()` and `Mixin1D.canonical_form()`; helpers `_reverse_1d`, `_split_1d_at_point`, `_walk_loop`, `_concatenate_edges`; `Edge.make_mid_way` canonicalises its two reference edges. |
 | `src/build123d/geometry.py` | `Axis(edge, canonical=True)` opt-in: origin/direction from the canonical traversal (also fixes `Axis(edge)` disagreeing with `edge.position_at(0)` for REVERSED edges). Default stays `False`. |
 | `src/build123d/topology/shape_core.py` | `ShapeList.sort_by(..., tie_break=True)` - **opt-in**: ties are resolved by `_canonical_sort_key` (the shape's vertex positions, sorted and rounded to `TOL_DIGITS`) with `_canonical_center_key` as a second stage for shapes whose vertices coincide, instead of by the incoming (kernel traversal) order. Default `False` keeps the sort stable, so chained sorts are untouched and the cost is zero. |
-| `tests/test_direct_api/test_canonical.py` | **new** - 15 tests, build123d unittest style. |
+| `tests/test_direct_api/test_canonical.py` | **new** - 18 tests, build123d unittest style. |
 
 The PR targets **gumyr/build123d `dev`**; the diff is generated from that branch.
 The research above was done against 0.11.1 (the version the validation harness
@@ -383,7 +391,7 @@ Test results on `dev` (OCP 7.9.3):
 
 | suite | pristine dev | with the patch |
 |---|---|---|
-| `tests/test_direct_api` | 1169 passed, 2 skipped, 0 failed | **1184 passed, 2 skipped, 0 failed** (+15 new) |
+| `tests/test_direct_api` | 1169 passed, 2 skipped, 0 failed | **1187 passed, 2 skipped, 0 failed** (+18 new) |
 | rest of `tests/` | 1037 passed, 1 skipped, 0 failed | 1037 passed, 1 skipped, 0 failed |
 | `tests/test_examples.py` (builds every example) | 115 passed, 1 skipped | 115 passed, 1 skipped |
 
@@ -450,6 +458,40 @@ selecting the two tied top edges deterministically needs the caller to ask -
 `sort_by(Axis.Z, tie_break=True)` - which is a one-line change in the example. This
 is also why the earlier `test_algebra.test_sketch_plus` edit is **no longer part of
 the patch**: with the default unchanged, that test passes as written.
+
+### 3.3 Three defects the lite port's cross-kernel harness found (and their fixes)
+
+`test/b123d-validation/canonical-cross-kernel.mjs` checks canonical agreement *and*
+frame consistency inside each kernel, and it caught this branch failing its own
+premise: take the `sphere(10)` / `cylinder(r5, x=6)` section loop, reassemble it into
+a `Wire` and reverse that Wire - the reversal canonicalised to the **other** seam of
+the loop and wound the other way. Reproducible on OCP 7.9.3 alone. Three separate
+causes, all of the same species (a decision made on numerical noise before the
+decisive quantity is consulted):
+
+| # | defect | fix |
+|---|---|---|
+| 1 | `Mixin1D.canonical()` tested "already canonical" as `form.start <= TOLERANCE/length` **without wrapping** `form.start`. A band midpoint landing an epsilon *below* 1.0 is the same point as one above 0.0, so a loop already seamed at its own start (measured `start = 1 - 8e-9`) took the re-seam path. | Test the **circular** distance, and do it at the resolution the seam is defined to (the band width, from the shape's bounding box) - demanding more precision than the rule's own resolution re-seams by nanometres on every call. A closed shape that only needs its direction flipped now keeps its topology instead of being concatenated. |
+| 2 | `_walk_loop` ranked candidate pieces by **raw end-point distance before the tangent**. At a loop's seam the two pieces meet at one vertex, so both distances are noise: measured, the piece heading *along* the canonical direction was 8.9e-16 away and the piece heading *against* it 0.0 - so the loop was walked backwards. | Rank on "is the gap closed at all" -> tangent -> gap. |
+| 3 | Candidate bands were discovered by thresholding **samples**, and ranked by the minima of whichever samples fell inside them. A band narrower than the sampling step holds a single sample whose `y` can be 14 microns off the band's own minimum, and a band whose samples all sit just above the threshold is missed entirely - which is how the mirror-symmetric pair of bands on this loop resolved differently in different frames. | Discover bands as the **local minima** of the sampled coordinate (plateaus collapsed), reduce each to its bisection-refined **midpoint**, and rank the midpoints with the coordinates **quantised to the band width**, so a mirror-symmetric pair ties on `y` and `z` decides. |
+
+Result on the motivating loop - which arrives as 1, 2 or 4 Edges depending on the
+sphere's frame - measured over 7 sphere rotations x both traversals:
+
+| | before | after |
+|---|---|---|
+| frame/traversal combinations agreeing | 4 / 14 | **14 / 14** |
+
+The published evidence is unchanged: Table 4 (the arch path) still agrees across all
+five sphere frames to 4e-5 mm, Table 5 (joints) is still bit-identical, and the
+cross-kernel comparison in Table 3 still gives 13 of 14 loops at exactly 0 mm with the
+14th at 2.6e-5 mm. What *did* change are the canonical seams of the loops whose
+extremal band comes in a mirror-symmetric pair (`sph_cyl_xp6`, `sph_cyl_xm6`,
+`cyl_cyl`, `box_cyl_cut` in Table 3): they now land on the arc the rule prescribes -
+the one whose midpoint has the smaller `z` once `y` ties - instead of on whichever arc
+the sampling phase favoured. Any recorded expectation of the old values needs
+refreshing (`test/b123d-validation/canonical-cross-kernel.json` is regenerated by its
+own harness).
 
 ---
 

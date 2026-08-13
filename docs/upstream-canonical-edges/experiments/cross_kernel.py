@@ -106,14 +106,14 @@ def canonical_of(points):
     return {
         "length": round(sampler.length, 6),
         "closed": closed,
-        "seam": [round(v, 6) for v in seam.to_tuple()],
+        "seam": [round(v, 6) for v in tuple(seam)],
         "sign": form.sign,
-        "heading": [round(v, 4) for v in heading.to_tuple()],
+        "heading": [round(v, 4) for v in tuple(heading)],
         "quarter": [
             round(v, 6)
-            for v in sampler(
-                ((form.start + form.sign * 0.25) % 1.0) * sampler.length
-            ).to_tuple()
+            for v in tuple(
+                sampler(((form.start + form.sign * 0.25) % 1.0) * sampler.length)
+            )
         ],
     }
 
