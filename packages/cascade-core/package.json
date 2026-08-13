@@ -36,7 +36,7 @@
 	],
 	"dependencies": {
 		"brython": "^3.14.3",
-		"opencascade.js": "github:zalo/opencascade.js#cascadestudio-v2",
+		"opencascade.js": "github:zalo/opencascade.js#cascadestudio-v3-occt801",
 		"openscad-parser": "^0.6.3",
 		"opentype.js": "^1.3.4",
 		"potpack": "^2.0.0"
