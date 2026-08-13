@@ -1,6 +1,6 @@
 # build123d-lite validation report
 
-Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
+Generated 2026-08-13T01:24:27.139Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
@@ -22,8 +22,8 @@ Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because
 | `AttributeError: project_to_viewport` | 2 |
 | `NotImplemented: Helix is not supported in build123d-lite` | 2 |
 | `RuntimeError: INTERNAL OPENCASCADE ERROR DURING GENERATE: memory access out of bounds` | 2 |
-| `AttributeError: face` | 1 |
 | `AttributeError: location_at` | 1 |
+| `AttributeError: face` | 1 |
 | `NotImplemented: make_hull is not supported in build123d-lite` | 1 |
 | `ValueError: offset: nothing to offset` | 1 |
 | `other: Line 3592: Uncaught Error: Python JavascriptError: Cannot pass \"[object Object]\" as a TopoDS_Shape` | 1 |
@@ -44,15 +44,6 @@ Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because
 
 ## Mismatches (runs, but geometry differs)
 
-- **examples/build123d_customizable_logo_algebra**
-  - 'build' bbox[0] 4.1360 vs 0.3118 (d=3.8242)
-  - 'build_text' bbox[0] -10.3250 vs -4.8500 (d=5.4750)
-  - 'cmpd' volume 78.351 vs 64.391 (21.68%)
-  - 'cmpd' bbox[1] -9.6720 vs -7.0024 (d=2.6696)
-  - 'cust_text' bbox[0] -10.3250 vs -8.9393 (d=1.3857)
-  - 'extension_lines' bbox[3] 28.9220 vs 18.5020 (d=10.4200)
-  - 'l2' bbox[0] 28.9220 vs 18.5020 (d=10.4200)
-  - 'three_d' volume 112.620 vs 64.391 (74.90%)
 - **examples/build123d_logo_algebra**
   - 'build' bbox[0] 4.1360 vs 4.4010 (d=0.2650)
   - 'build_text' bbox[0] -10.3250 vs -4.8500 (d=5.4750)
@@ -62,6 +53,15 @@ Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because
   - 'l2' bbox[0] 28.9220 vs 18.5020 (d=10.4200)
   - 'three_d' volume 112.620 vs 64.391 (74.90%)
   - 'three_d' bbox[2] -2.2560 vs -0.0000 (d=2.2560)
+- **examples/build123d_customizable_logo_algebra**
+  - 'build' bbox[0] 4.1360 vs 0.3118 (d=3.8242)
+  - 'build_text' bbox[0] -10.3250 vs -4.8500 (d=5.4750)
+  - 'cmpd' volume 78.351 vs 64.391 (21.68%)
+  - 'cmpd' bbox[1] -9.6720 vs -7.0024 (d=2.6696)
+  - 'cust_text' bbox[0] -10.3250 vs -8.9393 (d=1.3857)
+  - 'extension_lines' bbox[3] 28.9220 vs 18.5020 (d=10.4200)
+  - 'l2' bbox[0] 28.9220 vs 18.5020 (d=10.4200)
+  - 'three_d' volume 112.620 vs 64.391 (74.90%)
 - **examples/custom_sketch_objects**
   - 'lid' volume 30067.985 vs 13597.408 (121.13%)
   - 'lid_builder' volume 30067.985 vs 13597.408 (121.13%)
@@ -101,14 +101,12 @@ Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because
 
 - examples/boxes_on_faces (1 shapes)
 - examples/boxes_on_faces_algebra (2 shapes)
-- examples/circuit_board (1 shapes)
 - examples/circuit_board_algebra (1 shapes)
+- examples/circuit_board (1 shapes)
 - examples/clock (5 shapes)
-- examples/clock_algebra (6 shapes)
 - examples/din_rail (3 shapes)
 - examples/din_rail_algebra (41 shapes)
-- examples/heat_exchanger (3 shapes)
-- examples/heat_exchanger_algebra (4 shapes)
+- examples/clock_algebra (6 shapes)
 - examples/holes (4 shapes)
 - examples/holes_algebra (4 shapes)
 - examples/intersecting_chamfers (1 shapes)
@@ -117,9 +115,9 @@ Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because
 - examples/lego (3 shapes)
 - examples/lego_algebra (3 shapes)
 - examples/loft (4 shapes)
-- examples/loft_algebra (3 shapes)
 - examples/multiple_workplanes (1 shapes)
 - examples/multiple_workplanes_algebra (1 shapes)
+- examples/loft_algebra (3 shapes)
 - examples/pillow_block (2 shapes)
 - examples/pillow_block_algebra (2 shapes)
 - general_examples/ex01 (1 shapes)
@@ -129,41 +127,41 @@ Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex09 (1 shapes)
 - general_examples/ex10 (1 shapes)
 - general_examples/ex11 (2 shapes)
-- general_examples/ex13 (1 shapes)
 - general_examples/ex14 (6 shapes)
+- general_examples/ex13 (1 shapes)
 - general_examples/ex15 (8 shapes)
-- general_examples/ex16 (3 shapes)
 - general_examples/ex17 (2 shapes)
 - general_examples/ex18 (1 shapes)
+- general_examples/ex16 (3 shapes)
 - general_examples/ex19 (6 shapes)
 - general_examples/ex20 (1 shapes)
 - general_examples/ex21 (2 shapes)
 - general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
-- general_examples/ex25 (4 shapes)
 - general_examples/ex26 (2 shapes)
+- general_examples/ex25 (4 shapes)
 - general_examples/ex27 (2 shapes)
 - general_examples/ex28 (7 shapes)
 - general_examples/ex29 (7 shapes)
 - general_examples/ex30 (5 shapes)
-- general_examples/ex31 (2 shapes)
 - general_examples/ex32 (3 shapes)
+- general_examples/ex31 (2 shapes)
 - general_examples/ex33 (3 shapes)
 - general_examples/ex35 (5 shapes)
-- general_examples/ex37 (2 shapes)
 - general_examples_algebra/ex01 (1 shapes)
 - general_examples_algebra/ex02 (1 shapes)
+- general_examples/ex37 (2 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
 - general_examples_algebra/ex09 (1 shapes)
-- general_examples_algebra/ex13 (1 shapes)
 - general_examples_algebra/ex14 (6 shapes)
+- general_examples_algebra/ex13 (1 shapes)
 - general_examples_algebra/ex15 (8 shapes)
-- general_examples_algebra/ex16 (10 shapes)
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
-- general_examples_algebra/ex19 (6 shapes)
+- general_examples_algebra/ex16 (10 shapes)
 - general_examples_algebra/ex20 (2 shapes)
+- general_examples_algebra/ex19 (6 shapes)
 - general_examples_algebra/ex21 (1 shapes)
 - general_examples_algebra/ex22 (2 shapes)
 - general_examples_algebra/ex23 (4 shapes)
@@ -171,38 +169,39 @@ Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because
 - general_examples_algebra/ex25 (5 shapes)
 - general_examples_algebra/ex26 (2 shapes)
 - general_examples_algebra/ex27 (2 shapes)
-- general_examples_algebra/ex28 (3 shapes)
 - general_examples_algebra/ex29 (8 shapes)
-- general_examples_algebra/ex31 (1 shapes)
+- general_examples_algebra/ex28 (3 shapes)
 - general_examples_algebra/ex32 (2 shapes)
 - general_examples_algebra/ex33 (1 shapes)
+- general_examples_algebra/ex31 (1 shapes)
 - general_examples_algebra/ex35 (4 shapes)
+- examples/heat_exchanger (3 shapes)
+- examples/heat_exchanger_algebra (4 shapes)
 
 ## Errors by script
 
-- examples/bicycle_tire: `AttributeError: face`
 - examples/bracelet: `AttributeError: location_at`
+- examples/bicycle_tire: `AttributeError: face`
 - examples/build123d_customizable_logo: `AttributeError: _specs`
 - examples/build123d_logo: `AttributeError: _specs`
 - examples/canadian_flag: `AttributeError: make_surface_from_array_of_points`
 - examples/canadian_flag_algebra: `AttributeError: make_surface_from_array_of_points`
 - examples/cast_bearing_unit: `NotImplemented: make_hull is not supported in build123d-lite`
 - examples/dual_color_3mf: `ValueError: offset: nothing to offset`
-- examples/extrude: `NotImplemented: extrude(until=...) is not supported in build123d-lite`
-- examples/extrude_algebra: `NotImplemented: extrude(until=...) is not supported in build123d-lite`
 - examples/fast_grid_holes: `other: Line 3592: Uncaught Error: Python JavascriptError: Cannot pass \"[object Object]\" as a TopoDS_Shape`
 - examples/handle: `TypeError: unsupported operand type(s) for ^: 'Curve' and 'float'`
 - examples/handle_algebra: `TypeError: unsupported operand type(s) for ^: 'Curve' and 'float'`
+- examples/extrude: `NotImplemented: extrude(until=...) is not supported in build123d-lite`
 - examples/joints: `TypeError: 'NullType' object is not iterable`
 - examples/joints_algebra: `AttributeError: x_axis`
 - examples/key_cap: `NotImplemented: non-uniform scale is not supported in build123d-lite`
 - examples/key_cap_algebra: `NotImplemented: non-uniform scale is not supported in build123d-lite`
+- examples/extrude_algebra: `NotImplemented: extrude(until=...) is not supported in build123d-lite`
 - examples/maker_coin: `NameError: DoubleTangentArc`
-- examples/packed_boxes: `AttributeError: project_to_viewport`
 - examples/pegboard_j_hook: `AttributeError: wires`
 - examples/pegboard_j_hook_algebra: `other: Line 3592: Uncaught Error: Python JavascriptError: e.ShapeType is not a function`
 - examples/platonic_solids: `ImportError: undefined`
-- examples/playing_cards: `AttributeError: project_to_viewport`
+- examples/packed_boxes: `AttributeError: project_to_viewport`
 - examples/projection: `AttributeError: make_sphere`
 - examples/projection_algebra: `AttributeError: project_to_shape`
 - examples/roller_coaster: `NotImplemented: Helix is not supported in build123d-lite`
@@ -213,6 +212,7 @@ Generated 2026-08-13T01:20:44.243Z - 129 scripts (126 scored, 3 excluded because
 - examples/toy_truck: `RuntimeError: INTERNAL OPENCASCADE ERROR DURING GENERATE: memory access out of bounds`
 - examples/twist_extrude: `AttributeError: extrude_linear_with_rotation`
 - examples/vase_algebra: `NotImplemented: make_face from raw edges without segment data`
+- examples/playing_cards: `AttributeError: project_to_viewport`
 - general_examples/ex24: `AttributeError: offset`
 - general_examples/ex36: `NotImplemented: extrude(until=...) is not supported in build123d-lite`
 - general_examples_algebra/ex11: `TypeError: unsupported operand type(s) for -: 'ShapeList' and 'ShapeList'`
