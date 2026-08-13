@@ -39,16 +39,7 @@
    },
    "sphere_cylinder_reassembled": {
     "frames": 3,
-    "inconsistent": [
-     {
-      "frame": "rot90",
-      "worst": 9.9994
-     },
-     {
-      "frame": "rot180",
-      "worst": 9.9994
-     }
-    ]
+    "inconsistent": []
    },
    "joints": {
     "frames": 3,
@@ -62,16 +53,7 @@
    },
    "sphere_cylinder_reassembled": {
     "frames": 3,
-    "inconsistent": [
-     {
-      "frame": "rot90",
-      "worst": 9.9994
-     },
-     {
-      "frame": "rot180",
-      "worst": 9.9994
-     }
-    ]
+    "inconsistent": []
    },
    "joints": {
     "frames": 3,
@@ -277,7 +259,7 @@
      ],
      "pos25": [
       8.1052,
-      4.9997,
+      -4.9997,
       3.0509
      ],
      "pos50": [
@@ -287,12 +269,12 @@
      ],
      "pos75": [
       8.1052,
-      -4.9997,
+      4.9997,
       3.0509
      ],
      "tan0": [
       0,
-      1,
+      -1,
       0
      ]
     }
@@ -694,7 +676,7 @@
      ],
      "pos25": [
       8.1052,
-      4.9997,
+      -4.9997,
       3.0509
      ],
      "pos50": [
@@ -704,12 +686,12 @@
      ],
      "pos75": [
       8.1052,
-      -4.9997,
+      4.9997,
       3.0509
      ],
      "tan0": [
       0,
-      1,
+      -1,
       0
      ]
     }

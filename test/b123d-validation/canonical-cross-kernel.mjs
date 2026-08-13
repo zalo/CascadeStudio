@@ -270,17 +270,12 @@ for (const caseName of Object.keys(nativeFrames)) {
     (same ? '' : '  <-- KERNELS BEHAVE DIFFERENTLY'));
   if (!same) frameFail = true;
 }
-if (nativeFrames.sphere_cylinder_reassembled?.inconsistent.length) {
-  console.log('\nNote: sphere_cylinder_reassembled.rot0 is frame-inconsistent in BOTH\n' +
-    '  kernels, identically. Mechanism (an upstream fragility, not a port\n' +
-    '  difference): Mixin1D.canonical() tests "already canonical" as\n' +
-    '  form.start <= TOLERANCE/length WITHOUT taking form.start modulo 1, so a\n' +
-    '  seam landing on the incoming wire\'s own start point (start = 1 - 4e-11\n' +
-    '  natively) takes the re-seam path instead; there _walk_loop compares raw\n' +
-    '  end-point distances (1e-16 scale) before the tangent, so the two edges\n' +
-    '  meeting at that vertex resolve by floating-point noise and the loop can be\n' +
-    '  walked backwards. Reproducible in patched upstream alone: reversing the\n' +
-    '  very same wire flips its canonical seam.');
+if (Object.values(nativeFrames).some((c) => c.inconsistent.length) ||
+    Object.values(liteFrames).some((c) => c.inconsistent.length)) {
+  console.log('\nA frame-inconsistent case means canonical() is not doing its job in\n' +
+    '  that kernel. All three cases were consistent as of the patch fixes in\n' +
+    '  REPORT.md 3.3 (circular already-canonical test, tangent-before-gap ranking\n' +
+    '  in _walk_loop, local-minima band discovery with quantised ranking).');
 }
 console.log(disagreements.length === 0 && !frameFail
   ? '\nAGREE — canonical() is kernel independent'

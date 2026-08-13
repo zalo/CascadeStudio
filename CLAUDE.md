@@ -290,9 +290,13 @@ parameter range the kernel found convenient, and those depend on the parametric
 frames of the operand surfaces, so `position_at(0)` / `Axis(edge)` move when a
 geometrically identical solid is re-framed. `edge.canonical()` returns the same
 geometry traversed from a geometry-defined start: open shapes from the
-lexicographically smaller end, closed shapes from the arc-length midpoint of the
-extremal band `{x ≤ x_min + 1e-6·bbox}` (x→y→z fall-through), winding CCW about
-the dominant axis of the loop's area vector. **Defaults match the patch exactly**:
+lexicographically smaller end; closed shapes from the arc-length midpoint of the
+extremal band `{x ≤ x_min + 1e-6·bbox}`, where the candidate bands are the
+**local minima** of the sampled coordinate (plateaus collapsed), each
+bisection-refined to its midpoint, and the midpoints are ranked with the
+remaining coordinates **quantised to the band width** so a mirror-symmetric pair
+ties on `y` and `z` decides (x→y→z fall-through for flat loops); winding CCW
+about the dominant axis of the loop's area vector. **Defaults match the patch exactly**:
 `canonical()`, `Axis(edge, canonical=True)` and `sort_by(..., tie_break=True)`
 are opt-in (the default sort stays a plain stable sort, so chained
 `sort_by(SortBy.RADIUS).sort_by(Axis.Z)` keeps working), while

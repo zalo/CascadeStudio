@@ -266,4 +266,65 @@ test.describe('Python mode: canonical free-edge parametrization', () => {
         [-4.47592, 1.52181, 10, 4.47592, 1.52181, 10], 4);
     }
   });
+
+  test('a reassembled section loop canonicalizes the same way from every frame '
+     + 'AND from either traversal', async ({ page }) => {
+    await gotoPythonMode(page);
+    const got = await runAndCollect(page, [
+      // sphere(10) cut by cylinder(r5) standing at x = 6: the section locus is
+      // one closed loop that the kernel delivers as 1, 2 or 4 Edges depending on
+      // the sphere's frame, so it has to be reassembled into a Wire first
+      // (upstream's recipe for the "different NUMBER of edges" case). This is
+      // the loop whose extremal band comes in a MIRROR-SYMMETRIC PAIR, and it is
+      // the regression that found the three seam defects fixed in the patch:
+      // before them, reversing this very Wire canonicalized to the other seam of
+      // the loop, winding the other way (reproducible on OCP 7.9.3 alone).
+      'def section_loop(rotation):',
+      '    sphere = Solid.make_sphere(10)',
+      '    if rotation:',
+      '        sphere = sphere.rotate(Axis.Z, rotation)',
+      '    cutter = Solid.make_cylinder(5, 40, Plane.XY.offset(-20))'
+        + '.locate(Location((6, 0, 0)))',
+      '    loop = [e for e in sphere.cut(cutter).edges()'
+        + ' if e.geom_type == GeomType.BSPLINE]',
+      '    return max(edges_to_wires(loop), key=lambda wr: wr.length)',
+      'for rotation in (0, 37, 45, 90, 180, 270):',
+      '    wire = section_loop(rotation)',
+      '    for tag, shape in (("F", wire), ("R", wire.reversed())):',
+      '        c = shape.canonical()',
+      '        p("LOOP_" + str(rotation) + tag, tuple(c.position_at(0))'
+        + ' + tuple(c.position_at(0.25)) + tuple(c.position_at(0.5)) + (c.length,))',
+      // a shape whose seam is already its own start must come back UNTOUCHED —
+      // the "already canonical" test is a circular distance judged at band-width
+      // resolution, not form.start against TOLERANCE/length
+      'for name, shape in (("LOOP", section_loop(0).canonical()),',
+      '                    ("CIRCLE", Circle(10, mode=Mode.PRIVATE).edges()[0].canonical()),',
+      '                    ("RECT", Wire(Rectangle(20, 10, mode=Mode.PRIVATE).edges()).canonical())):',
+      '    form = shape.canonical_form()',
+      '    wrapped = form.start % 1.0',
+      '    box = shape.bounding_box()',
+      '    resolution = max(1e-6,'
+        + ' CANONICAL_BAND * max(box.size.X, box.size.Y, box.size.Z))',
+      '    p("IDENT_" + name,'
+        + ' 1 if min(wrapped, 1.0 - wrapped) * shape.length <= resolution else 0,',
+      '      1 if shape.canonical() is shape else 0)',
+      'show(Box(1, 1, 1))',
+    ].join('\n'));
+
+    // The loop's extremal band in x is the PAIR {(1, 0, +9.9499), (1, 0, -9.9499)}
+    // — mirror images, so they tie on y once quantised to the band width and z
+    // decides: the seam is the NEGATIVE one. A quarter turn on (counter-clockwise
+    // about the dominant axis of the area vector, which is X here) is the loop's
+    // z = 0 turning point at +y.
+    const expected = [1, 0, -9.9499, 9.25, 3.7997, 0, 1, 0, 9.9499, 65.027];
+    for (const rotation of [0, 37, 45, 90, 180, 270]) {
+      for (const tag of ['F', 'R']) {
+        expectClose(got[`LOOP_${rotation}${tag}`], expected, 3);
+      }
+    }
+    for (const name of ['LOOP', 'CIRCLE', 'RECT']) {
+      // seam already at the start, and canonical() returned the very same object
+      expectClose(got[`IDENT_${name}`], [1, 1]);
+    }
+  });
 });

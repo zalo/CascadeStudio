@@ -96,17 +96,22 @@ CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/canonical-cross-kernel.
 
 Result (committed in `canonical-cross-kernel.json`): **185 canonical
 measurements, worst delta 0.00e+0 mm**, against 5 recorded raw (pre-canonical)
-kernel differences — which is the premise, not a failure. The harness also
-checks frame consistency *inside* each kernel and reports one case
-(`sphere_cylinder_reassembled.rot0`) that is frame-inconsistent in BOTH kernels
-identically: an upstream fragility the port faithfully reproduces —
-`Mixin1D.canonical()`'s "already canonical" early return does not take
-`form.start` modulo 1, so a seam landing on the incoming wire's own start point
-re-seams instead, and `_walk_loop` then compares 1e-16 end-point distances
-before the tangent. Reproducible in patched upstream alone by reversing the same
-wire. (Separately, a loop with an exact mirror symmetry through its extremal
-band has a seam defined only up to that symmetry — documented upstream in
-REPORT.md §2.2, and likewise traversal-order dependent in upstream.)
+kernel differences — which is the premise, not a failure. The harness also checks
+frame consistency *inside* each kernel, and all three cases are consistent in
+both.
+
+That frame-consistency check earned its keep: it caught the patch failing its own
+premise (reversing a reassembled section Wire canonicalized to the other seam of
+the loop, winding the other way — reproducible on OCP 7.9.3 alone), which the
+patch author fixed in three places, now mirrored here. See REPORT.md §3.3 for the
+numbers: a circular "already canonical" test at band-width resolution, a
+`_walk_loop` ranking that consults the tangent before the noise-scale gap, and
+band discovery by local minima with midpoints ranked on quantised coordinates.
+The lite port had a fourth instance of the same species — `_reverse_1d` flipped a
+Wire's orientation flag, which `Curve._walk` ignores — so a Wire is now rebuilt
+from its edges in reverse order. The canonical seams of loops whose extremal band
+comes in a mirror-symmetric pair moved as a result, and the expectations here were
+regenerated.
 
 The rule itself is frozen in `test/python-mode-canonical.spec.js` (part of the
 default suite), including a section loop asserted against hand-computed values.
