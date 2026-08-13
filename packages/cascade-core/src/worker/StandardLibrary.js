@@ -850,6 +850,45 @@ function OffsetWire(wire, offsetDistance, keepWire) {
   return result;
 }
 
+/** BRepOffsetAPI_MakeOffset on a planar wire with an explicit join type —
+ *  the exact construction of build123d's Wire.offset_2d (Init(kind) +
+ *  AddWire + Perform). For an OPEN wire the result is a closed contour: both
+ *  offset sides plus round end caps, which the caller can split per side. */
+function OffsetPlanarWire(wire, offsetDistance, joinType) {
+  let join = joinType === 'intersection'
+    ? self.oc.GeomAbs_JoinType.GeomAbs_Intersection
+    : self.oc.GeomAbs_JoinType.GeomAbs_Arc;
+  let result = self.CacheOp(arguments, "OffsetPlanarWire", () => {
+    let offset = new self.oc.BRepOffsetAPI_MakeOffset_1();
+    offset.Init_2(join, false);
+    offset.AddWire(_asWire(wire));
+    offset.Perform(offsetDistance, 0.0);
+    let out = offset.Shape();
+    if (out.ShapeType().value === 5) { return self.oc.TopoDS_Cast.Wire_1(out); }
+    let wires = [];
+    ForEachWire(out, (i, wr) => { wires.push(wr); });
+    if (wires.length !== 1) {
+      console.error("OffsetPlanarWire: expected one offset wire, got " + wires.length);
+      return null;
+    }
+    return wires[0];
+  });
+  if (result) { self.sceneShapes.push(result); }
+  return result;
+}
+
+/** Center of a circular/elliptical edge, or null (build123d Edge.arc_center). */
+function _edgeArcCenter(edge) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  let CT = self.oc.GeomAbs_CurveType;
+  let type = curve.GetType();
+  let loc = null;
+  if (type === CT.GeomAbs_Circle) { loc = curve.Circle().Location(); }
+  else if (type === CT.GeomAbs_Ellipse) { loc = curve.Ellipse().Location(); }
+  if (loc === null) { return null; }
+  return [loc.X(), loc.Y(), loc.Z()];
+}
+
 function Revolve(shape, degrees, direction, keepShape, copy) {
   if (!degrees  ) { degrees   = 360.0; }
   if (!direction) { direction = [0, 0, 1]; }
@@ -3154,6 +3193,8 @@ class CascadeStudioStandardLibrary {
     self.WireFromEdgesFixed = WireFromEdgesFixed;
     self._wireIsClosed = _wireIsClosed;
     self.OrderedEdges = OrderedEdges;
+    self.OffsetPlanarWire = OffsetPlanarWire;
+    self._edgeArcCenter = _edgeArcCenter;
     self.HLRProject = HLRProject;
     self.SurfaceFromPoints = SurfaceFromPoints;
     self.PipeShellSweep = PipeShellSweep;

@@ -47,6 +47,7 @@ FT = 304.8
 THOU = 0.0254
 
 _TOL = 1e-9
+_TOL_1E6 = 1e-6      # build123d's TOLERANCE
 
 
 # ---------------------------------------------------------------- enums ---
@@ -73,6 +74,16 @@ class Keep:
     ALL = 'ALL'
     INSIDE = 'INSIDE'
     OUTSIDE = 'OUTSIDE'
+
+
+class Unit:
+    """Standard units (build123d's Unit enum) — Mesher(unit=...)."""
+    MC = 'MC'
+    MM = 'MM'
+    CM = 'CM'
+    M = 'M'
+    IN = 'IN'
+    FT = 'FT'
 
 
 class Until:
@@ -267,6 +278,13 @@ class Vector:
         if ln < 1e-14:
             raise ValueError('cannot normalize a zero-length Vector')
         return self / ln
+
+    def get_signed_angle(self, vec, normal=None):
+        """Signed angle in DEGREES between this vector and vec about normal
+        (default -Z, like build123d): atan2((Va x Vb) . Vn, Va . Vb)."""
+        n = Vector(0, 0, -1) if normal is None else Vector(normal)
+        b = Vector(vec)
+        return math.degrees(math.atan2(self.cross(b).dot(n), self.dot(b)))
 
     def reverse(self):
         return -self
@@ -1315,10 +1333,18 @@ class Curve(Shape):
         topo = topos[0] if len(topos) == 1 else w.MakeCompound(topos)
         return Curve(topo, specs)
 
+    def _edge_chain(self):
+        """This curve's edges in CONNECTION order: BRepTools_WireExplorer for
+        a real wire (what build123d's BRepAdaptor_CompCurve follows), TopExp
+        storage order for anything else."""
+        if self.topo is not None and self.topo.ShapeType().value == 5:
+            return list(w.OrderedEdges(self.topo))
+        return list(w.Edges(self.topo).edges())
+
     def _walk(self, u, tangent):
         """Evaluate position/tangent at length-fraction u along the (possibly
         multi-edge) curve, orienting each edge to chain head-to-tail."""
-        es = list(w.Edges(self.topo).edges())
+        es = self._edge_chain()
         if len(es) == 1:
             fn = w._edgeTangentAt if tangent else w._edgePointAt
             return Vector(tuple(fn(es[0], float(u))))
@@ -1328,6 +1354,18 @@ class Curve(Shape):
         # orient edges into a chain (WireFromSegments adds them in order,
         # but individual edges may run tip-to-tail reversed)
         flips = [False] * len(es)
+        # In a real WIRE the edges above are in CONNECTION order, so the only
+        # ambiguity left is the first edge's raw parametrization direction —
+        # flip it when its start (not its end) is what touches the second edge.
+        # (For a COMPOUND of edges the order itself is arbitrary, and the
+        # greedy chaining below starting from edge 0 as-is is what matches
+        # build123d's BRepAdaptor_CompCurve there.)
+        if len(es) > 1 and self.topo.ShapeType().value == 5:
+            a0, a1 = ends[0]
+            b0, b1 = ends[1]
+            if min(math.dist(a0, b0), math.dist(a0, b1)) < \
+                    min(math.dist(a1, b0), math.dist(a1, b1)):
+                flips[0] = True
         for i in range(1, len(es)):
             prev_end = ends[i - 1][0] if flips[i - 1] else ends[i - 1][1]
             d_fwd = math.dist(prev_end, ends[i][0])
@@ -1396,6 +1434,75 @@ class Curve(Shape):
         if self.topo is None:
             return False
         return bool(w._wireIsClosed(self.topo))
+
+    def offset_2d(self, distance, kind=Kind.ARC, side=Side.BOTH, closed=True):
+        """2D offset of this planar wire (build123d Wire.offset_2d).
+        side=LEFT/RIGHT keeps only one side of the offset of an OPEN wire
+        (the end caps and the other side are dropped); closed=True then joins
+        that side back to the original line to make a closed region."""
+        if kind == Kind.TANGENT:
+            raise NotImplementedError('Kind.TANGENT offsets are not supported '
+                                      'in build123d-lite')
+        join = 'intersection' if kind == Kind.INTERSECTION else 'arc'
+        line = self
+        edges = line.edges()
+        if len(edges) == 1:
+            # BRepOffsetAPI_MakeOffset mishandles a single-edge wire, so split
+            # it in half first (exactly build123d's workaround)
+            halves = [edges[0].trim(0.0, 0.5), edges[0].trim(0.5, 1.0)]
+            src = w.WireFromEdgesFixed([_topo(h) for h in halves], 1e-7)
+        else:
+            src = _topo(line)
+        offset_topo = w.OffsetPlanarWire(src, distance, join)
+        if offset_topo is None:
+            raise RuntimeError('2D offset produced no wire')
+        offset_wire = Curve(offset_topo)
+        if side == Side.BOTH:
+            oes = offset_wire.edges()
+            return oes[0] if len(oes) == 1 else offset_wire
+
+        # drop the semicircular end caps, then keep the side asked for
+        endpoints = (line.position_at(0), line.position_at(1))
+
+        def _is_end_cap(e):
+            if e.geom_type != GeomType.CIRCLE:
+                return False
+            c = e.arc_center
+            for pt in endpoints:
+                if (c - pt).length < _TOL_1E6:
+                    return True
+            return False
+
+        sides = edges_to_wires(offset_wire.edges().filter_by(_is_end_cap,
+                                                            reverse=True))
+        if len(sides) != 2:
+            raise RuntimeError('one-sided offset expected two offset sides, '
+                               'got ' + repr(len(sides)))
+        tan0 = line.tangent_at(0)
+        angles = [tan0.get_signed_angle(wr.position_at(0.5) - endpoints[0])
+                  for wr in sides]
+        if side == Side.LEFT:
+            offset_wire = sides[int(angles[0] > angles[1])]
+        else:
+            offset_wire = sides[int(angles[0] <= angles[1])]
+
+        if closed:
+            self0, self1 = endpoints
+            end0 = offset_wire.position_at(0)
+            end1 = offset_wire.position_at(1)
+            if (self0 - end0).length - abs(distance) <= _TOL_1E6:
+                edge0 = Edge.make_line(self0, end0)
+                edge1 = Edge.make_line(self1, end1)
+            else:
+                edge0 = Edge.make_line(self0, end1)
+                edge1 = Edge.make_line(self1, end0)
+            joined = list(line.edges()) + list(offset_wire.edges()) + \
+                [edge0, edge1]
+            offset_wire = Curve(w.WireFromEdgesFixed(
+                [_topo(e) for e in joined], _TOL_1E6))
+
+        oes = offset_wire.edges()
+        return oes[0] if len(oes) == 1 else offset_wire
 
     def order_edges(self):
         """The edges in CONNECTION order (build123d Wire.order_edges —
@@ -1482,6 +1589,15 @@ class Edge(Curve):
     @property
     def is_forward(self):
         return bool(w._edgeIsForward(self.topo))
+
+    @property
+    def arc_center(self):
+        """Center of a circular/elliptical edge (build123d Edge.arc_center)."""
+        c = w._edgeArcCenter(self.topo)
+        if c is None:
+            raise ValueError('arc_center is only defined for circles and '
+                             'ellipses')
+        return Vector(tuple(c))
 
     def position_at(self, u):
         # orientation-aware like build123d (Axis(edge) stays raw-curve).
@@ -3720,6 +3836,39 @@ def Helix(pitch, height, radius, center=(0, 0, 0), direction=(0, 0, 1),
     return _line_object([spec], mode)
 
 
+def edges_to_wires(edges, tol=1e-6):
+    """Group connected edges into wires (build123d's edges_to_wires).
+    COMPROMISE(edges-to-wires): ShapeAnalysis_FreeBounds::ConnectEdgesToWires
+    needs TopTools_HSequenceOfShape, which this wasm build does not bind, so
+    the chaining is done here on edge endpoints — same grouping, and the
+    ordering inside each wire is then fixed by ShapeFix_Wire."""
+    remaining = [e for e in edges]
+    wires = ShapeList()
+    while remaining:
+        chain = [remaining.pop(0)]
+        start = chain[0].position_at(0)
+        end = chain[0].position_at(1)
+        grew = True
+        while grew:
+            grew = False
+            for i in range(len(remaining)):
+                p0 = remaining[i].position_at(0)
+                p1 = remaining[i].position_at(1)
+                if (p0 - end).length <= tol or (p1 - end).length <= tol:
+                    end = p1 if (p0 - end).length <= tol else p0
+                    chain.append(remaining.pop(i))
+                    grew = True
+                    break
+                if (p1 - start).length <= tol or (p0 - start).length <= tol:
+                    start = p0 if (p1 - start).length <= tol else p1
+                    chain.insert(0, remaining.pop(i))
+                    grew = True
+                    break
+        wires.append(Curve(w.WireFromEdgesFixed([_topo(e) for e in chain],
+                                                tol)))
+    return wires
+
+
 def _specs_from_topo_edges(shape):
     """Reconstruct segment specs from raw edges: lines and circular arcs
     analytically; anything else (BSplines, ellipses, ...) as an opaque 'raw'
@@ -4018,19 +4167,45 @@ def chamfer(objects, length, length2=None, angle=None):
 
 
 def offset(objects=None, amount=0, openings=None, kind=Kind.ARC,
-           side=None, min_edge_length=None, mode=Mode.REPLACE):
+           side=Side.BOTH, closed=True, min_edge_length=None,
+           mode=Mode.REPLACE):
     if kind == Kind.TANGENT:
         raise NotImplementedError('Kind.TANGENT offsets are not supported in '
                                   'build123d-lite')
-    if side is not None:
-        raise NotImplementedError('one-sided line offsets (side=) are not '
-                                  'supported in build123d-lite')
+    if min_edge_length is not None:
+        raise NotImplementedError('offset(min_edge_length=) is not supported '
+                                  'in build123d-lite')
     join = 'intersection' if kind == Kind.INTERSECTION else 'arc'
     builder = _active_builder()
     targets = _tolist(objects) if objects is not None else \
         ([builder._obj] if builder is not None and builder._obj is not None else [])
+    if not targets and objects is None and isinstance(builder, BuildLine):
+        # inside BuildLine the line lives in the pending segment specs
+        line = builder.line
+        targets = [line] if line is not None else []
     if not targets:
         raise ValueError('offset: nothing to offset')
+    if side != Side.BOTH:
+        # one-sided offset of an OPEN line (build123d's Wire.offset_2d with
+        # side=): keep one offset side, optionally closed back onto the line
+        if len(targets) != 1 or not isinstance(targets[0], (Curve, Edge)):
+            raise ValueError('offset(side=...) applies to a single line')
+        src = targets[0]
+        if isinstance(src, Edge):
+            src = Curve([src])
+        result = src.offset_2d(amount, kind=kind, side=side, closed=closed)
+        specs = _specs_from_topo_edges(result)
+        curve = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
+        if isinstance(builder, BuildLine):
+            if mode == Mode.REPLACE:
+                builder._specs = list(specs)
+            elif mode == Mode.ADD:
+                builder._specs.extend(specs)
+            elif mode != Mode.PRIVATE:
+                raise ValueError('offset: unsupported mode ' + repr(mode) +
+                                 ' inside BuildLine')
+            return curve
+        return _combine(builder, curve, mode)
     if openings is not None:
         # hollow the solid, removing the opening faces (MakeThickSolid —
         # the same operation build123d performs)

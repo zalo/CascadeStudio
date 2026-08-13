@@ -1,6 +1,6 @@
 # build123d-lite validation report
 
-Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
+Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
@@ -15,8 +15,8 @@ Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because
 | Gap | Scripts |
 |---|---|
 | `RuntimeError: INTERNAL OPENCASCADE ERROR DURING GENERATE: memory access out of bounds` | 1 |
-| `NotImplemented: one-sided line offsets (side=) are not supported in build123d-lite` | 1 |
-| `other: Line 5812: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
+| `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf` | 1 |
+| `other: Line 5985: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
 
 ## Mismatches (runs, but geometry differs)
 
@@ -75,8 +75,8 @@ Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because
 - examples/heat_exchanger (3 shapes)
 - examples/packed_boxes (100 shapes)
 - examples/pegboard_j_hook (10 shapes)
-- examples/pillow_block (2 shapes)
 - examples/pegboard_j_hook_algebra (11 shapes)
+- examples/pillow_block (2 shapes)
 - examples/pillow_block_algebra (2 shapes)
 - examples/platonic_solids (5 shapes)
 - examples/heat_exchanger_algebra (4 shapes)
@@ -88,10 +88,10 @@ Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because
 - examples/stud_wall (2 shapes)
 - examples/twist_extrude (2 shapes)
 - examples/vase (8 shapes)
+- examples/vase_algebra (8 shapes)
 - examples/tea_cup_algebra (5 shapes)
 - general_examples/ex01 (1 shapes)
 - general_examples/ex02 (1 shapes)
-- examples/vase_algebra (8 shapes)
 - general_examples/ex03 (2 shapes)
 - general_examples/ex08 (3 shapes)
 - general_examples/ex09 (1 shapes)
@@ -104,14 +104,14 @@ Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex17 (2 shapes)
 - general_examples/ex18 (1 shapes)
 - general_examples/ex19 (6 shapes)
-- general_examples/ex20 (1 shapes)
 - general_examples/ex16 (3 shapes)
+- general_examples/ex20 (1 shapes)
 - general_examples/ex21 (2 shapes)
 - general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
 - general_examples/ex25 (4 shapes)
-- general_examples/ex24 (3 shapes)
 - general_examples/ex26 (2 shapes)
+- general_examples/ex24 (3 shapes)
 - general_examples/ex27 (2 shapes)
 - general_examples/ex29 (7 shapes)
 - general_examples/ex28 (7 shapes)
@@ -123,8 +123,8 @@ Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex36 (3 shapes)
 - general_examples/ex34 (4 shapes)
 - general_examples_algebra/ex01 (1 shapes)
-- general_examples_algebra/ex02 (1 shapes)
 - general_examples/ex37 (2 shapes)
+- general_examples_algebra/ex02 (1 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
 - general_examples_algebra/ex09 (1 shapes)
@@ -136,8 +136,8 @@ Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
 - general_examples_algebra/ex16 (10 shapes)
-- general_examples_algebra/ex19 (6 shapes)
 - general_examples_algebra/ex20 (2 shapes)
+- general_examples_algebra/ex19 (6 shapes)
 - general_examples_algebra/ex21 (1 shapes)
 - general_examples_algebra/ex22 (2 shapes)
 - general_examples_algebra/ex23 (4 shapes)
@@ -152,14 +152,14 @@ Generated 2026-08-13T16:07:40.653Z - 129 scripts (126 scored, 3 excluded because
 - general_examples_algebra/ex33 (1 shapes)
 - general_examples_algebra/ex31 (1 shapes)
 - general_examples_algebra/ex35 (4 shapes)
-- general_examples_algebra/ex36 (3 shapes)
 - general_examples_algebra/ex34 (3 shapes)
+- general_examples_algebra/ex36 (3 shapes)
 
 ## Errors by script
 
 - examples/cast_bearing_unit: `RuntimeError: INTERNAL OPENCASCADE ERROR DURING GENERATE: memory access out of bounds`
-- examples/dual_color_3mf: `NotImplemented: one-sided line offsets (side=) are not supported in build123d-lite`
-- examples/toy_truck: `other: Line 5812: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
+- examples/dual_color_3mf: `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf`
+- examples/toy_truck: `other: Line 5985: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
 
 ## Timeouts
 
