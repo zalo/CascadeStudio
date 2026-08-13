@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 32 tests (incl. 10 frozen build123d example scripts)
+npx playwright test    # 51 tests (incl. 29 frozen build123d example scripts)
 ```
 
 ## Architecture (Monorepo)
@@ -161,8 +161,9 @@ users write **build123d algebra-mode** Python that evaluates in the existing CAD
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running the
 upstream docs/examples scripts through both, see `test/b123d-validation/`; currently
-**110/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 4 MISMATCH,
-12 ERROR, 0 timeouts — full breakdown with per-script reasons in the committed
+**117/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 4 MISMATCH,
+5 ERROR, 0 timeouts — full breakdown with per-script reasons AND a hand-maintained
+root-cause/defaults audit of every non-PASS in the committed
 `test/b123d-validation/report.md`. A full 129-script harness pass takes ~60 s with
 `--pages 4` (~2.5 min single-page); the harness MUST run with
 `CS_TEST_HEADFUL=1 DISPLAY=:99` on this machine (headless Chromium has no WebGL,
@@ -174,10 +175,23 @@ sweep uses MakePipeShell with upstream's trihedron/transition modes (incl.
 multisection, normal=, binormal=), section()/make_hull/draft/project (BuildPart
 form) work, joints are live (RigidJoint/RevoluteJoint/LinearJoint/
 CylindricalJoint/BallJoint with connect_to), scipy.optimize.minimize is shimmed
-(pure-Python Nelder-Mead) with DoubleTangentArc on top,
-make_surface_from_array_of_points skins interpolated rows, Mesher writes STL
-into MEMFS, and known OCCT 8.0.1 wasm kernel faults RAISE instead of returning
-silently-wrong geometry:
+(pure-Python Nelder-Mead) with DoubleTangentArc on top, and Mesher writes STL
+into MEMFS. Since the surface/text-parity round:
+make_surface_from_array_of_points is EXACT (GeomAPI_PointsToBSplineSurface via
+the fork's `Handle_Geom_BSplineSurface.AsGeomSurface` — never call `.get()` on
+the surface handle, wrap with `BRepBuilderAPI_MakeFace_8(hs, tol)`), Text
+topology matches upstream (one face per disjoint outer contour — i/j dots are
+separate faces; counters stay holes; +Z oriented normals per glyph face),
+`position_at`/`tangent_at` use arc-length fractions (GCPnts_AbscissaPoint,
+upstream's `_occt_param_at`), thicken/Solid.thicken work (reconstructed
+BRepOffset walls), Solid/Face.extrude/revolve/make_loft/make_sphere/
+make_cylinder classmethods, Compound.make_text, Shell(faces)+Solid(shell)
+sewing, Vertex(...) point forms, find_intersection_points +
+Shape.project_faces (text-on-path projection), and scipy.spatial.ConvexHull is
+served by the worker's bundled quickhull3d. The known OCCT 8.0.1 wasm fuse
+fault (coplanar BSpline-edged contact faces DROP an operand) is now detected
+by volume and RECOVERED from the correct General-Fuse partition instead of
+raising:
 
 | Area | Supported | Not supported |
 |---|---|---|
@@ -185,25 +199,27 @@ silently-wrong geometry:
 | 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=`; `Solid.extrude_linear_with_rotation` | `Wedge`, partial spheres/cones |
 | 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning), `BaseSketchObject`/`BasePartObject` subclassing, `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points` | `Triangle`, `Text(path=/font_path=)` |
 | 1D objects | `Line`, `Polyline`, `PolarLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc`, `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `DoubleTangentArc`, `Helix`, `EllipticalCenterArc`, `curve @ u / % u / ^ u` (incl. multi-edge curves), `Edge.make_line/make_mid_way`, `Wire(edges)` | `BlendCurve`, conical `Helix` |
-| Ops | `extrude` (dir/both/`taper=`/`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `bounding_box()`, `pack()` | `thicken`, `full_round`, `trim`, one-sided `offset(side=)`, `split(Keep.BOTH)`, screen-projection `project()` forms |
+| Ops | `extrude` (dir/both/`taper=`/`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()` | `full_round`, `trim`, one-sided `offset(side=)`, `split(Keep.BOTH)`, screen-projection `project()` forms, `make_gordon_surface`, `wrap_faces` |
 | Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `.position/.orientation/.x_axis/.y_axis/.z_axis`, `Pos`, `Rot`/`Rotation`, `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations`, `Workplanes` (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`; shapes track a composed `.location` (`locate()/located()` are absolute; `.position` settable) | `Location.orientation` edge cases |
 | Joints | `RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint` — upstream's exact relative-location algebra; `connect_to` repositions the other part; `copy.copy` rebinds joints; builder-scoped joints transfer to the part on exit | assembly structure / XCAF (roadmap), joint `symbol` rendering |
 | Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists with `filter_by` (Axis with DEGREES tolerance/GeomType/callable), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy incl. RADIUS), `sort_by_distance`, slicing, `+` keeps ShapeList; Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
 | Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy`, `Shape.__iter__` | — |
 | Measure | `volume/area/length` (volume = per-solid sum), `center()`, `bounding_box()` (exact Bnd_Box), `.wrapped`, `.is_forward` | mass properties |
-| Stdlib | `math`, `copy`, `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section) | `numpy`, `scipy.spatial` (raises loudly), everything else |
+| Stdlib | `math`, `copy`, `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d) | `numpy`, 2-D `ConvexHull`/`Voronoi` (raise loudly), everything else |
 | Export | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS) | 3MF (no lib3mf — raises), `export_step/gltf` (no-ops), `ExportDXF`, imports |
 
-**Known honest gaps** (kept as ERRORs rather than fake geometry — see
-report.md for the per-script list): `thicken`, screen-projection `project()`,
-`Solid.make_sphere/make_loft` classmethods, `Face.extrude/revolve` classmethods,
-`wrap_faces`, `find_intersection_points`, `make_gordon_surface`, one-sided
-`offset(side=)`, 3D `scipy.spatial.ConvexHull` (platonic_solids), 3MF export.
-Two scripts die on KNOWN OCCT 8.0.1 wasm kernel faults that lite DETECTS and
-RAISES (never silently-wrong geometry): fusing coplanar BSpline-edged contact
-faces drops an operand (ex34 x2), and FilletEdges on certain hull/draft results
-aborts the wasm heap (cast_bearing_unit, toy_truck). `handle` fails only its own
-in-script 1e-3 volume assert (OCCT 8.0.1 vs OCP 7.x MakePipeShell differ ~0.02%).
+**Known honest gaps** (kept as ERRORs rather than fake geometry — see the
+defaults-audit table in report.md for per-script root causes and
+upstream-vs-lite defaults comparisons): `make_gordon_surface` (upstream
+delegates to the external ocp_gordon curve-network interpolator — not an OCCT
+API; bracelet), `wrap_faces` (bicycle_tire), one-sided `offset(side=)`
+(dual_color_3mf), 3MF export. Two scripts die on a KNOWN OCCT 8.0.1 wasm
+kernel fault with byte-identical fillet defaults to upstream
+(BRepFilletAPI_MakeFillet, ChFi3d_Rational): FilletEdges on certain hull/draft
+solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT
+error (toy_truck). The 4 MISMATCHes (joints x2, projection x2) all reduce to
+COMPROMISE(edge-orientation): sub-edge FORWARD/REVERSED flags after booleans
+differ from OCP 7.x over identical curve geometry.
 
 **Known compromises** (each marked in source with a grep-able
 `COMPROMISE(<topic>)` comment — `grep -rn "COMPROMISE(" packages/` is the
@@ -212,12 +228,12 @@ authoritative list):
 - `joints` — location algebra on lite shapes; no assembly tree/XCAF (roadmap), no joint symbols.
 - `mesher` — STL only, written into the worker's in-memory Emscripten FS (no lib3mf, no disk).
 - `double-tangent-arc` — scan+bisection root solve over a sampled/refined curve distance; trims the over-extended target segment where upstream relies on wire fixing.
-- `kernel-guard` — fuse results smaller than the largest input RAISE naming the known 8.0.1 fuse fault.
+- `kernel-guard` — fuse results smaller than the largest input are rebuilt from the (correct) General-Fuse partition; the partition keeps internal contact faces, so selectors see the contact topology.
 - `make-hull` — 2000 samples/edge; line/circle boundary runs reconstructed exactly, other curves stay simplified polylines.
-- `surface-from-points` — rows interpolated exactly + ThruSections skin (Handle_Geom_BSplineSurface is unbound); agrees with upstream's 2-D fit to ~5e-3 (canadian_flag x2 MISMATCH).
 - `sweep` — trihedron/transition calls match upstream exactly; residual MakePipeShell numeric differences are kernel-version.
 - `helix` — exact interpolation through dense samples with analytic tangents (no surface-curve segment type).
-- `edge-orientation` — sub-edge FORWARD/REVERSED can differ from OCP 7.x; Axis(edge)-based measuring can land at the other end (joints x2 MISMATCH).
+- `edge-orientation` — sub-edge FORWARD/REVERSED can differ from OCP 7.x over identical curve geometry; Axis(edge)-based measuring lands at the other end (joints x2) and closed intersection-curve paths traverse the opposite way (projection x2).
+- `thicken` — upstream's BRepOffset_MakeOffset Thickening mode is unbound; the same offset shell is built via MakeThickSolidByJoin and the missing side walls are reconstructed as ruled lofts + sewing.
 - `project` — only the BuildPart pending-faces form; projected pending planes use the reversed projection direction (validated on maker_coin).
 - `text` — bundled FreeSans only; non-Latin glyph metrics may differ from other Arial substitutes.
 - `raw-segments` — non-line/circle edges ride through wires as opaque TopoDS edges (exact, but not transformable at spec level).
@@ -239,7 +255,7 @@ dragged corner/base placement into the shape's center. Fillet emits
 **Validation against real build123d**: `test/b123d-validation/` (see its README)
 runs the upstream build123d examples through BOTH real build123d 0.11.1 (native
 venv) and Python mode, comparing per-variable volume/bbox. Re-run it whenever
-Build123dLite.js changes. Twenty-five representative passing scripts are frozen
+Build123dLite.js changes. Twenty-nine representative passing scripts are frozen
 as regression tests in `test/python-mode-examples.spec.js` (part of the default
 suite) with volumes hardcoded from the native run.
 

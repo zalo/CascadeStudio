@@ -70,10 +70,15 @@ natively). On the OCCT 8.0.1 wasm build:
 
 | Status | Count | Note |
 |---|---|---|
-| PASS | 110 | volume within 0.5%, bbox within 1e-3/axis, per variable |
-| MISMATCH | 4 | canadian_flag x2: the point-grid surface is skinned from exactly-interpolated rows (Handle_Geom_BSplineSurface is unbound), agreeing with upstream's 2-D least-squares fit only to ~5e-3; joints x2: sub-edge FORWARD/REVERSED orientation differs from OCP 7.x, so Axis(edge)-measured slider/pin positions land at the other end of the (correct) slot — see COMPROMISE(edge-orientation) |
-| ERROR | 12 | honest gaps + detected kernel faults: fusing coplanar BSpline-edged contact faces silently drops an operand — lite DETECTS and RAISES (ex34 x2); FilletEdges aborts the wasm heap on certain hull/draft solids (cast_bearing_unit, toy_truck); `handle` fails only its own 1e-3 in-script assert (8.0.1 vs 7.x MakePipeShell ~0.02%); the rest are unimplemented one-offs (thicken/wrap_faces/Face.extrude classmethods/screen-projection project()/3-D ConvexHull/3MF/one-sided offsets/find_intersection_points) |
+| PASS | 117 | volume within 0.5%, bbox within 1e-3/axis, per variable |
+| MISMATCH | 4 | all COMPROMISE(edge-orientation): joints x2 (sub-edge FORWARD/REVERSED differs from OCP 7.x, so Axis(edge)-measured slider/pin positions land at the other end of the correct slot) and projection x2 (the closed sphere-cylinder intersection path carries the opposite orientation flag over identical geometry, so the projected text wraps the other way; everything else — make_text align, arc-length position_at, per-contour glyph faces — now matches exactly) |
+| ERROR | 5 | honest gaps + detected kernel faults: make_gordon_surface needs the external ocp_gordon curve-network interpolator (bracelet); wrap_faces (bicycle_tire) and one-sided offset side= (dual_color_3mf) are unimplemented; FilletEdges on certain hull/draft solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT error (toy_truck) with byte-identical fillet defaults to upstream |
 | TIMEOUT | 0 | |
+
+Every non-PASS is root-caused in the **defaults-audit table** appended to
+report.md (maintained in `defaults-audit.md`): upstream vs lite defaults
+(boolean fuzz/glue, fillet continuity, alignment modes, position_at
+parametrization) compared per script, with an honest verdict each.
 
 Iteration history: round 0 (pre-builders lite) 0 PASS / 126 ERROR → builders +
 algebra + selectors + stdlib shims 21 → 2D fillets, hole conventions, face
@@ -85,8 +90,13 @@ Face.offset, until=, HLR projection, pack/random shims, non-uniform scale
 85 → exact GeomAPI_Interpolate splines, MakePipeShell sweeps (multisection/
 normal/binormal), section/make_hull/draft/project, joints, scipy shim +
 DoubleTangentArc, surface-from-points, Mesher STL, baked uniform scale,
-Text2D cache fix, kernel-fault guards 110. Full harness pass: ~60 s (4 pages)
-/ ~2.5 min (single page); ALWAYS run with CS_TEST_HEADFUL=1 DISPLAY=:99
+Text2D cache fix, kernel-fault guards 110 → exact PointsToBSplineSurface
+(AsGeomSurface), quickhull3d ConvexHull, thicken, general-fuse fallback for
+the coplanar fuse operand-drop fault, per-glyph +Z text normals (conditional
+reverse), make_text align=None parity, arc-length position_at
+(GCPnts_AbscissaPoint), per-contour glyph faces (i/j dots),
+find_intersection_points + project_faces 117. Full harness pass: ~60 s (4
+pages) / ~2.5 min (single page); ALWAYS run with CS_TEST_HEADFUL=1 DISPLAY=:99
 (headless Chromium has no WebGL here — it manifests as every script reporting
 "no measurement produced").
 <!-- COVERAGE:END -->
@@ -109,5 +119,5 @@ Text2D cache fix, kernel-fault guards 110. Full harness pass: ~60 s (4 pages)
   JSON, worker errors and the last console lines.
 - After a raw wasm kernel abort ("memory access out of bounds") the OCCT
   heap is corrupt; run-lite.mjs recycles the page before the next script.
-- The 25 best representative passing scripts are frozen as regression tests
+- The 29 best representative passing scripts are frozen as regression tests
   in `test/python-mode-examples.spec.js` (part of the default suite).

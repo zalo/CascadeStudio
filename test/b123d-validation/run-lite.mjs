@@ -322,6 +322,12 @@ function writeReport(results, path) {
   md += `\n## Excluded (reference failed natively)\n\n`;
   for (const [id, r] of buckets.SKIP) md += `- ${id}: ${r.reason}\n`;
 
+  // Hand-maintained root-cause / defaults audit of every non-PASS script,
+  // kept in its own file so regenerating this report never loses it.
+  try {
+    md += `\n` + readFileSync(join(HERE, 'defaults-audit.md'), 'utf8');
+  } catch { /* no audit file yet */ }
+
   writeFileSync(path, md);
 }
 
