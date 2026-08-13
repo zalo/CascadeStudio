@@ -21,15 +21,17 @@
 //  * Rotation(x,y,z) is intrinsic-XYZ (matrix Rx*Ry*Rz), matching build123d.
 //  * align= offsets are computed from the object's own bounding box (mesh
 //    approximated for non-analytic shapes), like build123d.
-//  * Spline() APPROXIMATES through points (GeomAPI_PointsToBSpline, 1e-3
-//    tolerance) instead of interpolating exactly; tangents= is rejected.
+//  * Spline()/Edge.make_spline INTERPOLATE exactly (GeomAPI_Interpolate,
+//    incl. tangents=/tangent_scalars=/per-point tangents/periodic).
 //  * Unsupported (raise NotImplementedError rather than fake geometry):
-//    Text (font metrics differ), joints, extrude(until=...), taper,
-//    thicken/project/make_hull, partial spheres, Wedge, Ellipse,
-//    offset(openings=...), split(keep=Keep.BOTH), non-uniform scale.
+//    Wedge, Triangle, partial spheres/cones, full_round, trim,
+//    split(keep=Keep.BOTH), offset(min_edge_length=) (no
+//    fix_degenerate_edges), Kind.TANGENT offsets, 3MF export, imports.
 //  * Boolean results are cleaned with ShapeUpgrade_UnifySameDomain (the
 //    standard library always does); face/edge COUNTS can therefore differ
 //    from build123d even when the geometry (volume/bbox) matches.
+//  * Every remaining deliberate deviation is marked in source with a
+//    grep-able COMPROMISE(<topic>) comment; CLAUDE.md indexes them.
 
 export const BUILD123D_LITE_PY = `
 # build123d-lite: a subset of build123d (algebra + builder mode) for

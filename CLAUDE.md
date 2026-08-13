@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 51 tests (incl. 29 frozen build123d example scripts)
+npx playwright test    # 54 tests (incl. 32 frozen build123d example scripts)
 ```
 
 ## Architecture (Monorepo)
@@ -161,11 +161,11 @@ users write **build123d algebra-mode** Python that evaluates in the existing CAD
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running the
 upstream docs/examples scripts through both, see `test/b123d-validation/`; currently
-**117/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 4 MISMATCH,
-5 ERROR, 0 timeouts — full breakdown with per-script reasons AND a hand-maintained
+**119/126 scripts PASS** (volume within 0.5%, bbox within 1e-3/axis), 4 MISMATCH,
+3 ERROR, 0 timeouts — full breakdown with per-script reasons AND a hand-maintained
 root-cause/defaults audit of every non-PASS in the committed
-`test/b123d-validation/report.md`. A full 129-script harness pass takes ~60 s with
-`--pages 4` (~2.5 min single-page); the harness MUST run with
+`test/b123d-validation/report.md`. A full 129-script harness pass takes ~85 s with
+`--pages 4` (~3 min single-page); the harness MUST run with
 `CS_TEST_HEADFUL=1 DISPLAY=:99` on this machine (headless Chromium has no WebGL,
 which manifests as every script reporting "no measurement produced"). Debug a
 single script with `test/b123d-validation/probe.mjs` (prints raw measurements +
@@ -191,15 +191,26 @@ Shape.project_faces (text-on-path projection), and scipy.spatial.ConvexHull is
 served by the worker's bundled quickhull3d. The known OCCT 8.0.1 wasm fuse
 fault (coplanar BSpline-edged contact faces DROP an operand) is now detected
 by volume and RECOVERED from the correct General-Fuse partition instead of
-raising:
+raising. Since the freeform-surface round: `Face.make_gordon_surface` builds
+real curve-network Gordon surfaces (a JS port of ocp_gordon — GordonSurface.js
+— realized through a scored least-squares refit, see
+COMPROMISE(gordon-surface-realization)), `Face.wrap`/`Shape.wrap_faces`
+conform flat Edges/Wires/Faces onto a curved surface along a path,
+`Face.make_surface` fills a non-planar boundary (BRepOffsetAPI_MakeFilling),
+`Face.location_at`/`normal_at` give surface frames at normalized u/v or a 3D
+point, `Wire`/`Edge.project_to_shape` project along a direction or from a
+cone apex (BRepProj_Projection), and `offset(side=Side.LEFT/RIGHT)` does
+one-sided offsets of OPEN lines. `Face(wire)` is now planar-only like
+upstream, `make_face` cleans its result like upstream's `_add_to_context`,
+and `Trapezoid`'s obtuse-side-angle case matches upstream:
 
 | Area | Supported | Not supported |
 |---|---|---|
 | Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple workplanes, pending faces/edges/path), `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `add()` (incl. Locations-context replication into BuildLine), `Select.LAST` for edges, `Workplanes()` (shares the Locations fanout path — a plane basis IS its Location) | — |
 | 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=`; `Solid.extrude_linear_with_rotation` | `Wedge`, partial spheres/cones |
 | 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning), `BaseSketchObject`/`BasePartObject` subclassing, `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points` | `Triangle`, `Text(path=/font_path=)` |
-| 1D objects | `Line`, `Polyline`, `PolarLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc`, `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `DoubleTangentArc`, `Helix`, `EllipticalCenterArc`, `curve @ u / % u / ^ u` (incl. multi-edge curves), `Edge.make_line/make_mid_way`, `Wire(edges)` | `BlendCurve`, conical `Helix` |
-| Ops | `extrude` (dir/both/`taper=`/`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()` | `full_round`, `trim`, one-sided `offset(side=)`, `split(Keep.BOTH)`, screen-projection `project()` forms, `make_gordon_surface`, `wrap_faces` |
+| 1D objects | `Line`, `Polyline`, `PolarLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc`, `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `DoubleTangentArc`, `Helix`, `EllipticalCenterArc`, `curve @ u / % u / ^ u` (incl. multi-edge curves), `Edge.make_line/make_mid_way/make_spline/param_at/trim`, `Wire(edges)`, `Wire.order_edges`/`is_closed`, `Edge.arc_center` | `BlendCurve`, conical `Helix` |
+| Ops | `extrude` (dir/both/`taper=`/`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `edges_to_wires` | `full_round`, `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
 | Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `.position/.orientation/.x_axis/.y_axis/.z_axis`, `Pos`, `Rot`/`Rotation`, `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations`, `Workplanes` (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`; shapes track a composed `.location` (`locate()/located()` are absolute; `.position` settable) | `Location.orientation` edge cases |
 | Joints | `RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint` — upstream's exact relative-location algebra; `connect_to` repositions the other part; `copy.copy` rebinds joints; builder-scoped joints transfer to the part on exit | assembly structure / XCAF (roadmap), joint `symbol` rendering |
 | Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists with `filter_by` (Axis with DEGREES tolerance/GeomType/callable), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy incl. RADIUS), `sort_by_distance`, slicing, `+` keeps ShapeList; Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
@@ -210,10 +221,10 @@ raising:
 
 **Known honest gaps** (kept as ERRORs rather than fake geometry — see the
 defaults-audit table in report.md for per-script root causes and
-upstream-vs-lite defaults comparisons): `make_gordon_surface` (upstream
-delegates to the external ocp_gordon curve-network interpolator — not an OCCT
-API; bracelet), `wrap_faces` (bicycle_tire), one-sided `offset(side=)`
-(dual_color_3mf), 3MF export. Two scripts die on a KNOWN OCCT 8.0.1 wasm
+upstream-vs-lite defaults comparisons): 3MF export (no lib3mf in this wasm
+build — dual_color_3mf builds all six of its shapes correctly and then fails
+on `Mesher.write`), `fix_degenerate_edges`/`offset(min_edge_length=)`,
+`split(Keep.BOTH)`, `full_round`. Two scripts die on a KNOWN OCCT 8.0.1 wasm
 kernel fault with byte-identical fillet defaults to upstream
 (BRepFilletAPI_MakeFillet, ChFi3d_Rational): FilletEdges on certain hull/draft
 solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT
@@ -238,6 +249,10 @@ authoritative list):
 - `text` — bundled FreeSans only; non-Latin glyph metrics may differ from other Arial substitutes.
 - `raw-segments` — non-line/circle edges ride through wires as opaque TopoDS edges (exact, but not transformable at spec level).
 - `volume-measure` — volume is summed per solid (8.0.1's VolumeProperties picks up stray-face contributions on mixed compounds).
+- `gordon-*` (GordonSurface.js) — the ocp_gordon port: curve/curve intersections via GeomAPI_ExtremaCurveCurve, a JS Geom2dAPI_Interpolate reimplementation, conic→non-rational approximation, and `gordon-surface-realization` (the exact tensor-product surface cannot be built as a Geom_BSplineSurface in this wasm build, so it is refit from a dense sample grid with a C2 least-squares approximation scored against the exact surface's area — bracelet's tip lands within 0.02%).
+- `point-projection` — GeomAPI_ProjectPointOnSurf cannot be instantiated (its Extrema_ExtAlgo argument is unbound), so point→UV is a coarse UV grid search refined by Newton on grad|S(u,v)-P|^2, searching the face's own UV box.
+- `projection-sort` / `projected-edge-split` — projected wires are ordered by centre of mass (upstream uses the half-arc-length point), and a projected curve that this kernel splits where it grazes the surface boundary is re-concatenated (build123d's clean() leaves the B-spline-concat flag off).
+- `edges-to-wires` — ShapeAnalysis_FreeBounds::ConnectEdgesToWires needs the unbound TopTools_HSequenceOfShape, so edges are chained on their endpoints and each group is ordered by ShapeFix_Wire.
 
 **Roadmap (deliberately deferred)**:
 - XCAF-based assemblies: real part identities, STEP hierarchy/names/colors, a

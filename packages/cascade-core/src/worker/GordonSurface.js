@@ -37,11 +37,16 @@
 //    Geom_BSplineSurface in this wasm build — the concrete class does not
 //    compile (no constructor, no pole accessors; only the opaque handle
 //    exists). The final Face is instead built by sampling the exact surface
-//    on a dense grid (every knot line included) and interpolating with
-//    GeomAPI_PointsToBSplineSurface::Interpolate. The interpolant passes
-//    exactly through all samples; the deviation between samples is far below
-//    the harness tolerances. An `OCJS.MakeBSplineSurface(...)` C++ helper
-//    would make this step exact (signature in test/b123d-validation/report.md).
+//    on a dense grid (every knot line included) and REFITTING it with
+//    GeomAPI_PointsToBSplineSurface's C2 least-squares approximation, scored
+//    against the exact surface's area (see realizeSurfaceAsFace). Its
+//    Interpolate is unusable here: interpolating 200+ sample lines through a
+//    surface with a DEGENERATE boundary (point guides) oscillates at the pole
+//    and the boundary stops being degenerate. The refit reproduces the exact
+//    boundaries, degenerate poles included, to under a micron; on
+//    examples/bracelet the resulting tip surface is within 0.02% of the
+//    reference area. An `OCJS.MakeBSplineSurface(...)` C++ helper would make
+//    this step exact (signature in test/b123d-validation/report.md).
 //
 // Everything else — curve-network sorting, [0,1] reparametrization, network
 // compatibility + averaging of intersection parameters, the continuous

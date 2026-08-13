@@ -70,9 +70,9 @@ natively). On the OCCT 8.0.1 wasm build:
 
 | Status | Count | Note |
 |---|---|---|
-| PASS | 117 | volume within 0.5%, bbox within 1e-3/axis, per variable |
-| MISMATCH | 4 | all COMPROMISE(edge-orientation): joints x2 (sub-edge FORWARD/REVERSED differs from OCP 7.x, so Axis(edge)-measured slider/pin positions land at the other end of the correct slot) and projection x2 (the closed sphere-cylinder intersection path carries the opposite orientation flag over identical geometry, so the projected text wraps the other way; everything else — make_text align, arc-length position_at, per-contour glyph faces — now matches exactly) |
-| ERROR | 5 | honest gaps + detected kernel faults: make_gordon_surface needs the external ocp_gordon curve-network interpolator (bracelet); wrap_faces (bicycle_tire) and one-sided offset side= (dual_color_3mf) are unimplemented; FilletEdges on certain hull/draft solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT error (toy_truck) with byte-identical fillet defaults to upstream |
+| PASS | 119 | volume within 0.5%, bbox within 1e-3/axis, per variable |
+| MISMATCH | 4 | all COMPROMISE(edge-orientation): joints x2 (sub-edge FORWARD/REVERSED differs from OCP 7.x, so Axis(edge)-measured slider/pin positions land at the other end of the correct slot) and projection x2 (the closed sphere-cylinder intersection path carries the opposite orientation flag over identical geometry, so the projected text wraps the other way; everything else — make_text align, arc-length position_at, per-contour glyph faces — matches exactly) |
+| ERROR | 3 | detected kernel faults + one export gap: FilletEdges on certain hull/draft solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT error (toy_truck) with byte-identical fillet defaults to upstream; dual_color_3mf builds all six shapes correctly and then fails on `Mesher.write("*.3mf")` — COMPROMISE(mesher), there is no lib3mf in this wasm build |
 | TIMEOUT | 0 | |
 
 Every non-PASS is root-caused in the **defaults-audit table** appended to
@@ -95,10 +95,15 @@ Text2D cache fix, kernel-fault guards 110 → exact PointsToBSplineSurface
 the coplanar fuse operand-drop fault, per-glyph +Z text normals (conditional
 reverse), make_text align=None parity, arc-length position_at
 (GCPnts_AbscissaPoint), per-contour glyph faces (i/j dots),
-find_intersection_points + project_faces 117. Full harness pass: ~60 s (4
-pages) / ~2.5 min (single page); ALWAYS run with CS_TEST_HEADFUL=1 DISPLAY=:99
-(headless Chromium has no WebGL here — it manifests as every script reporting
-"no measurement produced").
+find_intersection_points + project_faces 117 → Gordon curve-network surfaces
+(ocp_gordon port + least-squares realization), surface location_at/normal_at,
+wire project_to_shape, planar Face(wire) → **bracelet** 118 → wrap()/
+wrap_faces(), Face.make_surface, Edge.make_spline/param_at/trim, Trapezoid
+obtuse-angle fix, make_face clean parity → **bicycle_tire** 119 → one-sided
+open-line offsets (offset(side=)) → dual_color_3mf geometry (still ERROR on
+its 3MF write). Full harness pass: ~85 s (4 pages) / ~3 min (single page);
+ALWAYS run with CS_TEST_HEADFUL=1 DISPLAY=:99 (headless Chromium has no WebGL
+here — it manifests as every script reporting "no measurement produced").
 <!-- COVERAGE:END -->
 
 ## Notes / caveats
@@ -119,5 +124,5 @@ pages) / ~2.5 min (single page); ALWAYS run with CS_TEST_HEADFUL=1 DISPLAY=:99
   JSON, worker errors and the last console lines.
 - After a raw wasm kernel abort ("memory access out of bounds") the OCCT
   heap is corrupt; run-lite.mjs recycles the page before the next script.
-- The 29 best representative passing scripts are frozen as regression tests
+- The 32 best representative passing scripts are frozen as regression tests
   in `test/python-mode-examples.spec.js` (part of the default suite).

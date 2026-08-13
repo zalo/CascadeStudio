@@ -1877,11 +1877,12 @@ function ProjectWireOnShape(profile, target, direction, center) {
     let pw = proj.Current();
     if (pw.Orientation_1() !== wanted) { pw = self.oc.TopoDS_Cast.Wire_1(pw.Reversed()); }
     // build123d cleans the projected wires "to remove cases where projection
-    // artificially split edges". This kernel splits more eagerly than OCP
-    // 7.x's — a single projected arc comes back as two BSpline edges meeting
-    // where the curve grazes the surface boundary — so unification has to
-    // CONCATENATE B-splines (build123d's clean() leaves that flag off) to get
-    // back to build123d's one-edge result. Same curve, same length.
+    // artificially split edges".
+    // COMPROMISE(projected-edge-split): this kernel splits more eagerly than
+    // OCP 7.x's — a single projected arc comes back as two BSpline edges
+    // meeting where the curve grazes the surface boundary — so unification
+    // has to CONCATENATE B-splines (build123d's clean() leaves that flag off)
+    // to get back to build123d's one-edge result. Same curve, same length.
     pw = UnifyWire(pw, true);
     pw.hash = self.oc.OCJS.HashCode(pw, 100000000);
     found.push(pw);

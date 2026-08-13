@@ -1,6 +1,6 @@
 # build123d-lite validation report
 
-Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
+Generated 2026-08-13T16:31:26.047Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
@@ -41,8 +41,8 @@ Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because
 - examples/build123d_customizable_logo (14 shapes)
 - examples/build123d_logo (13 shapes)
 - examples/build123d_logo_algebra (12 shapes)
-- examples/canadian_flag (20 shapes)
 - examples/canadian_flag_algebra (25 shapes)
+- examples/canadian_flag (20 shapes)
 - examples/circuit_board (1 shapes)
 - examples/circuit_board_algebra (1 shapes)
 - examples/clock_algebra (6 shapes)
@@ -54,8 +54,8 @@ Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because
 - examples/extrude (10 shapes)
 - examples/extrude_algebra (35 shapes)
 - examples/handle (10 shapes)
-- examples/handle_algebra (4 shapes)
 - examples/bicycle_tire (102 shapes)
+- examples/handle_algebra (4 shapes)
 - examples/fast_grid_holes (4 shapes)
 - examples/holes (4 shapes)
 - examples/holes_algebra (4 shapes)
@@ -75,22 +75,22 @@ Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because
 - examples/heat_exchanger (3 shapes)
 - examples/packed_boxes (100 shapes)
 - examples/pegboard_j_hook (10 shapes)
-- examples/pegboard_j_hook_algebra (11 shapes)
 - examples/pillow_block (2 shapes)
 - examples/pillow_block_algebra (2 shapes)
+- examples/pegboard_j_hook_algebra (11 shapes)
 - examples/platonic_solids (5 shapes)
 - examples/heat_exchanger_algebra (4 shapes)
-- examples/playing_cards (14 shapes)
+- examples/maker_coin (8 shapes)
 - examples/roller_coaster (4 shapes)
 - examples/roller_coaster_algebra (4 shapes)
 - examples/shamrock (1 shapes)
-- examples/maker_coin (8 shapes)
 - examples/stud_wall (2 shapes)
+- examples/playing_cards (14 shapes)
 - examples/twist_extrude (2 shapes)
 - examples/vase (8 shapes)
 - examples/vase_algebra (8 shapes)
-- examples/tea_cup_algebra (5 shapes)
 - general_examples/ex01 (1 shapes)
+- examples/tea_cup_algebra (5 shapes)
 - general_examples/ex02 (1 shapes)
 - general_examples/ex03 (2 shapes)
 - general_examples/ex08 (3 shapes)
@@ -104,17 +104,17 @@ Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex17 (2 shapes)
 - general_examples/ex18 (1 shapes)
 - general_examples/ex19 (6 shapes)
-- general_examples/ex16 (3 shapes)
 - general_examples/ex20 (1 shapes)
+- general_examples/ex16 (3 shapes)
 - general_examples/ex21 (2 shapes)
 - general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
 - general_examples/ex25 (4 shapes)
-- general_examples/ex26 (2 shapes)
 - general_examples/ex24 (3 shapes)
+- general_examples/ex26 (2 shapes)
 - general_examples/ex27 (2 shapes)
-- general_examples/ex29 (7 shapes)
 - general_examples/ex28 (7 shapes)
+- general_examples/ex29 (7 shapes)
 - general_examples/ex30 (5 shapes)
 - general_examples/ex32 (3 shapes)
 - general_examples/ex31 (2 shapes)
@@ -123,8 +123,8 @@ Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex36 (3 shapes)
 - general_examples/ex34 (4 shapes)
 - general_examples_algebra/ex01 (1 shapes)
-- general_examples/ex37 (2 shapes)
 - general_examples_algebra/ex02 (1 shapes)
+- general_examples/ex37 (2 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
 - general_examples_algebra/ex09 (1 shapes)
@@ -136,8 +136,8 @@ Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
 - general_examples_algebra/ex16 (10 shapes)
-- general_examples_algebra/ex20 (2 shapes)
 - general_examples_algebra/ex19 (6 shapes)
+- general_examples_algebra/ex20 (2 shapes)
 - general_examples_algebra/ex21 (1 shapes)
 - general_examples_algebra/ex22 (2 shapes)
 - general_examples_algebra/ex23 (4 shapes)
@@ -152,8 +152,8 @@ Generated 2026-08-13T16:21:11.722Z - 129 scripts (126 scored, 3 excluded because
 - general_examples_algebra/ex33 (1 shapes)
 - general_examples_algebra/ex31 (1 shapes)
 - general_examples_algebra/ex35 (4 shapes)
-- general_examples_algebra/ex34 (3 shapes)
 - general_examples_algebra/ex36 (3 shapes)
+- general_examples_algebra/ex34 (3 shapes)
 
 ## Errors by script
 
@@ -184,9 +184,9 @@ investigation itself is the record.
 | examples/projection, examples/projection_algebra (MISMATCH, `projected_text` only, d=0.12) | The text wraps the *opposite way* around the sphere: the arch path (closed sphere-cylinder intersection edge) is TopAbs_REVERSED in OCP 7.x but FORWARD in 8.0.1 wasm over the SAME geometric parametrization (verified: raw curve at 25% is +Y on both; upstream's flag flips traversal to -Y first, lite's does not). | Everything else now byte-matches: `make_text` align default fixed to `None` (was bbox-CENTER; closed a 1.02 mm shift on `flat_planar_text_faces`), `position_at` switched to arc-length fraction via GCPnts_AbscissaPoint (upstream `_occt_param_at` does exactly this even in PARAMETER mode), and per-glyph text faces now split disjoint outer contours (i/j dots) into separate faces (40 faces == upstream). | Same defaults, kernel edge-orientation history on a closed intersection curve — COMPROMISE(edge-orientation). Not honestly closable. |
 | general_examples/ex34, general_examples_algebra/ex34 (now PASS) | `BRepAlgoAPI_Fuse` silently DROPS an operand when coplanar faces meet along BSpline edges (glyph solids fused onto a box face); result was the bare box. | Upstream fuse defaults — no fuzzy value (`tol=None`), glue off, NonDestructive unset — reproduce the drop identically on this kernel; it is the fuse *result-assembly* phase that is broken, the General-Fuse *split* phase is correct on the same inputs. Lite's `Union` detects the drop (result volume < largest input) and rebuilds from the `BOPAlgo_Builder` partition; see COMPROMISE(kernel-guard). Lite also always passes fuzz 1e-7 (upstream 0) and runs ShapeUpgrade_UnifySameDomain (upstream's `clean=True`). | Genuine kernel fault (8.0.1 wasm), worked around via the exact GF partition. Fixed this round together with the Text normal flip (extrusions follow the face's oriented normal). |
 | examples/build123d_logo_algebra, examples/build123d_customizable_logo_algebra (now PASS) | Regression from the per-glyph text compound: glyph faces inside a mirrored COMPOUND already get their orientation flags flipped by BRepTools_TrsfModification, so Text2D's unconditional `.Reversed()` double-flipped them to -Z and algebra `extrude()` (which follows the face's oriented normal) went below z=0. | Upstream text faces have +Z oriented normals; lite now reverses each glyph face CONDITIONALLY on its measured oriented normal. Builder-mode scripts were unaffected because BuildSketch extrudes along the workplane z_dir, not the face normal. | Lite bug (double reversal), fixed. |
-| examples/bracelet (ERROR) | Needs `Face.make_gordon_surface` — upstream delegates to the external `ocp_gordon` package (a Python port of TiGL's curve-network Gordon interpolator, not an OCCT API) — plus `Face.location_at` surface frames and 2D `moved()` class preservation. | No comparable defaults: the Gordon interpolator does not exist in OCCT at all (upstream imports it from a separate PyPI package). | Can't adopt — would mean porting the whole ocp_gordon interpolator; honest feature gap. |
+| examples/bracelet (now PASS) | Needed `Face.make_gordon_surface` (upstream delegates to the external `ocp_gordon` package — a Python port of TiGL's curve-network Gordon interpolator, not an OCCT API), plus surface `location_at`/`normal_at` frames, `Shape.__neg__`, `Location.__neg__`, wire `project_to_shape`, planar `Face(wire)` and `Shape.solid()`. | The Gordon interpolator is now a JS port (GordonSurface.js) whose EXACT surface reproduces the reference boundaries to 1e-6 relative. Two defaults had to change to match upstream: `Face(wire)` uses BRepBuilderAPI's OnlyPlane mode (lite built whatever surface the wire's pcurves implied, so the tip cap came back as the freeform surface instead of a flat face), and `Plane(origin, x_dir, z_dir)` orthogonalizes a non-perpendicular `x_dir` the way `gp_Ax3` does inside upstream's `Plane.__init__`. | Closed this round. Final: bracelet volume -0.04%, area -0.001%, tip surface +0.02% (COMPROMISE(gordon-surface-realization) — the exact surface cannot be built as a Geom_BSplineSurface in this wasm build, so it is refit from a dense sample grid). |
 | examples/cast_bearing_unit (ERROR) | `FilletEdges` on the hull/draft solid corrupts the wasm heap ("memory access out of bounds"); after a raw abort the OCCT heap is unusable. | Upstream `Solid.fillet` = `BRepFilletAPI_MakeFillet(shape)` (default ChFi3d_Rational) + `Add(radius, edge)`. Lite is identical (explicit ChFi3d_Rational, same Add). No tolerance/continuity knobs differ. | Same defaults, genuine kernel fault in the 8.0.1 wasm fillet on this input. |
 | examples/toy_truck (ERROR) | Same fillet path; this input now raises "INTERNAL OPENCASCADE ERROR in FilletEdges" (caught, no heap corruption). | Identical fillet defaults as above. | Same defaults, genuine kernel fault. |
-| examples/bicycle_tire (ERROR) | `Shape.wrap_faces` (place planar faces onto a curved surface along a path, geodesic-ish layout) is unimplemented. | Upstream is a large 0.11 feature built on surface UV mapping/projection; no lite counterpart to compare defaults against. | Unimplemented — honest feature gap (raises AttributeError: wrap_faces). |
-| examples/dual_color_3mf (ERROR) | `offset_2d(..., side=Side.LEFT/RIGHT)` — one-sided offsets of OPEN lines. Lite's line offset only supports the symmetric `Side.BOTH` construction and raises NotImplemented. | Upstream: `BRepOffsetAPI_MakeOffset` open-mode with side selection + end closing; lite has not ported the open one-sided branch. | Unimplemented (deliberate NotImplemented with message); not a defaults issue. |
+| examples/bicycle_tire (now PASS) | `Shape.wrap_faces` (conform planar faces onto a curved surface along a path) was unimplemented. | Ported statement-for-statement from upstream (`Face.wrap`/`_wrap_face`/`_wrap_wire`/`_wrap_edge`, `Face.make_surface`'s BRepOffsetAPI_MakeFilling parameters, `Edge.make_spline`/`param_at`/`trim`/`_extend_spline`). Two lite defaults were wrong and are now upstream's: `Trapezoid` widens the BOTTOM for an obtuse side angle instead of narrowing the top (the tread pattern was 120 mm^2 instead of 96.86), and `make_face` CLEANS its result like upstream's `_add_to_context` (ShapeUpgrade_UnifySameDomain merges tangent Bezier chains into one B-spline — without it the tire profile had 40 edges instead of 37 and the revolved tire was 0.84% off). | Closed this round. All 104 measured shapes match, including the three wrapped tread faces (bit-identical areas), the thickened nubs and all 64 rotated copies. |
+| examples/dual_color_3mf (ERROR, narrowed) | Was `offset_2d(..., side=Side.LEFT/RIGHT)` (one-sided offsets of OPEN lines); that is now implemented and ALL SIX measured shapes match the reference exactly (inset 91.6342 mm^3, outset 308.3658 mm^3). The script still ERRORs on its last statement, `Mesher.write("dual_color.3mf")`. | Upstream's `Wire.offset_2d` open-mode branch is ported exactly (MakeOffset with an explicit join type, end-cap removal, side pick by signed angle, close-back edges); verified against native band areas 28.0 / 35.141593. `Wire.position_at` also had to walk a wire in BRepTools_WireExplorer connection order and flip a first edge whose raw parametrization runs backwards. | Geometry closed this round. Remaining failure is COMPROMISE(mesher): there is no lib3mf in this wasm build, so only STL export exists. |
 | SKIP x3 (python_logo, tea_cup builder, general_examples_algebra/ex10) | Real build123d 0.11.1 fails natively on these (no shapes / exceptions). | n/a | Excluded from scoring by the harness. |
