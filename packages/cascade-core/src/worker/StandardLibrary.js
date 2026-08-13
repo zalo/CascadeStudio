@@ -1273,6 +1273,71 @@ function FilletFace2D(face, radius, points, keepFace) {
   return result;
 }
 
+/** Reverse a face's topological orientation (flips the oriented normal),
+ *  returning a properly-typed TopoDS_Face. */
+function ReverseFace(face, keepFace) {
+  let reversed = self.oc.TopoDS_Cast.Face_1(face.Reversed());
+  reversed.hash = self.oc.OCJS.HashCode(reversed, 100000000);
+  if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
+  self.sceneShapes.push(reversed);
+  return reversed;
+}
+
+/** Non-uniform scale via gp_GTrsf + BRepBuilderAPI_GTransform (converts
+ *  analytic surfaces to BSplines where needed — same as build123d). */
+function ScaleXYZ(factors, shape, keepShape) {
+  if (!shape || shape.IsNull()) { console.error("ScaleXYZ: input shape is null!"); return shape; }
+  let scaled = self.CacheOp(arguments, "ScaleXYZ", () => {
+    let gtrsf = new self.oc.gp_GTrsf_1();
+    gtrsf.SetValue(1, 1, factors[0]);
+    gtrsf.SetValue(2, 2, factors[1]);
+    gtrsf.SetValue(3, 3, factors[2]);
+    let op = new self.oc.BRepBuilderAPI_GTransform_2(shape, gtrsf, true);
+    op.Build(new self.oc.Message_ProgressRange_1());
+    return op.Shape();
+  });
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(scaled);
+  return scaled;
+}
+
+/** Hidden-line-removal projection: project the shape onto a viewport with
+ *  the given view direction, returning [visibleEdges, hiddenEdges] as two
+ *  compounds (HLRBRep — what build123d's project_to_viewport uses). */
+function HLRProject(shape, viewDir, keepShape) {
+  let result = self.CacheOp(arguments, "HLRProject", () => {
+    let hlr = new self.oc.HLRBRep_Algo_1();
+    hlr.Add_2(shape, 0);
+    let projDir = new self.oc.gp_Dir_5(viewDir[0], viewDir[1], viewDir[2]);
+    let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(0, 0, 0), projDir);
+    let projector = new self.oc.HLRAlgo_Projector_2(ax2);
+    hlr.Projector_1(projector);
+    hlr.Update();
+    hlr.Hide_1();
+    let toShape = new self.oc.HLRBRep_HLRToShape(new self.oc.Handle_HLRBRep_Algo_2(hlr));
+    let visible = [];
+    let hidden = [];
+    let grab = (s, into) => { if (s && !s.IsNull()) { into.push(s); } };
+    grab(toShape.VCompound_1(), visible);
+    grab(toShape.Rg1LineVCompound_1(), visible);
+    grab(toShape.OutLineVCompound_1(), visible);
+    grab(toShape.HCompound_1(), hidden);
+    grab(toShape.Rg1LineHCompound_1(), hidden);
+    grab(toShape.OutLineHCompound_1(), hidden);
+    let mk = (list) => {
+      let builder = new self.oc.BRep_Builder();
+      let compound = new self.oc.TopoDS_Compound();
+      builder.MakeCompound(compound);
+      for (let i = 0; i < list.length; i++) { builder.Add(compound, list[i]); }
+      self.oc.BRepLib.BuildCurves3d_2(compound);
+      compound.hash = self.oc.OCJS.HashCode(compound, 100000000);
+      return compound;
+    };
+    return [mk(visible), mk(hidden)];
+  });
+  return result;
+}
+
 /** Group shapes into a single TopoDS_Compound (no boolean fusion). */
 function MakeCompound(shapes, keepInputs) {
   let builder = new self.oc.BRep_Builder();
@@ -1813,9 +1878,12 @@ function Text2D(text, size, fontName, halign, valign) {
     let dy = valign === 'bottom' ? 0 :
              valign === 'top' ? -typoAsc : lineSpacing / 2 - typoAsc;
     // opentype glyph paths are y-DOWN (canvas convention) — mirror across
-    // the baseline (bakes geometry, keeping hole orientations valid)
+    // the baseline (bakes geometry, keeping hole orientations valid), then
+    // reverse the face so its oriented normal is +Z like build123d text
+    // (mirroring flips the surface handedness; extrusions and fuses follow
+    // the ORIENTED normal)
     let mirrored = Mirror([0, 1, 0], face);
-    let moved = Translate([dx, dy, 0], mirrored);
+    let moved = self.oc.TopoDS_Cast.Face_1(Translate([dx, dy, 0], mirrored).Reversed());
     self.sceneShapes = self.Remove(self.sceneShapes, moved);
     return moved;
   });
@@ -1956,6 +2024,9 @@ class CascadeStudioStandardLibrary {
     self.ThickSolidOffset = ThickSolidOffset;
     self.TaperExtrude = TaperExtrude;
     self.Text2D = Text2D;
+    self.ScaleXYZ = ScaleXYZ;
+    self.ReverseFace = ReverseFace;
+    self.HLRProject = HLRProject;
 
     // Per-entity introspection helpers (used by build123d-lite's Python
     // selectors: filter_by/group_by/sort_by need positions, directions,

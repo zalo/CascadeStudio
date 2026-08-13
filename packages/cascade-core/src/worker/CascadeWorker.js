@@ -220,7 +220,11 @@ class CascadeStudioWorker {
         const len = dv.getUint16(off + 2);
         const coverage = dv.getUint16(off + 4);
         const format = coverage >> 8;
-        if (format === 0) {
+        // horizontal kerning only: skip 'minimum' and cross-stream subtables
+        const horizontal = (coverage & 0x1) === 1;
+        const minimum = (coverage & 0x2) !== 0;
+        const crossStream = (coverage & 0x4) !== 0;
+        if (format === 0 && horizontal && !minimum && !crossStream) {
           const nPairs = dv.getUint16(off + 6);
           let p = off + 14;
           for (let i = 0; i < nPairs; i++, p += 6) {
