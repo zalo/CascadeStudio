@@ -221,11 +221,15 @@ class ToolManager {
   }
 
   /** Append an emitted snippet to the editor and re-evaluate the code.
-   *  If the worker is busy, evaluation is deferred until it frees up. */
+   *  If the worker is busy, evaluation is deferred until it frees up.
+   *  Committing returns to the Select tool: creation tools are one-shot,
+   *  so the camera is immediately usable after each placement (reactivate
+   *  the tool from the toolbar to place another). */
   commitCode(snippet) {
     const editor = this.editor;
     editor.insertCode(snippet);
     this.evaluateSoon();
+    if (this.activeToolName !== 'select') { this.activate('select'); }
   }
 
   /** Evaluate the editor code now, or as soon as the worker is free. */

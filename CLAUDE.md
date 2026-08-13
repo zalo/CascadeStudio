@@ -76,7 +76,7 @@ emits JavaScript into the Monaco editor — the code IS the scene.** Committing 
 action appends a snippet (via `executeEdits`, so Monaco undo works) and re-evaluates.
 
 **Tools**: Select (default), Box, Cylinder, Sphere, Sketch, Fillet. One active at a
-time; Escape cancels the current interaction, then returns to Select. OrbitControls
+time; Escape cancels the current interaction, then returns to Select; committing a tool action also returns to Select (creation tools are one-shot — reactivate from the toolbar to place another). OrbitControls
 are disabled while a creation drag is in progress (like HandleManager's gizmo drags).
 
 **Gestures — every numeric stage accepts BOTH** (`Tool.stageDown`/`stageUp`):
