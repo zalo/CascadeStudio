@@ -12,6 +12,7 @@
 //  - From there, you can graft those into CascadeStudio/node_modules/opencascade.js/dist (following its existing conventions)
 
 import { CascadeStudioUtils } from './StandardUtils.js';
+import quickhull3d from 'quickhull3d';
 
 // --- CAD API Functions ---
 // These are regular function declarations (NOT class methods) to preserve
@@ -531,6 +532,18 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
       }
     }
 
+    // Recover from the known 8.0.1 fuse operand-drop fault (see
+    // _rebuildFuseFromGF above): a valid fuse can never be smaller than
+    // its largest input.
+    let maxInput = Math.max(...objectsToJoin.map(o => _quickVolume(o)));
+    if (maxInput > 1e-6 && _quickVolume(combined) < maxInput * 0.999 - 1e-9) {
+      let rebuilt = _rebuildFuseFromGF(objectsToJoin);
+      if (rebuilt && _quickVolume(rebuilt) >= maxInput * 0.999 - 1e-9) {
+        console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); rebuilt the union from the General-Fuse partition.");
+        combined = rebuilt;
+      }
+    }
+
     if (!keepEdges) {
       let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
       combined = fusor.Shape();
@@ -548,6 +561,29 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   }
   self.sceneShapes.push(curUnion);
   return curUnion;
+}
+
+// KNOWN OCCT 8.0.1 wasm kernel fault: BRepAlgoAPI_Fuse's result-ASSEMBLY
+// phase can silently DROP an operand when coplanar faces meet along BSpline
+// edges (e.g. font glyphs extruded off a planar face). The defaults audit
+// (test/b123d-validation/report.md) showed upstream build123d/OCP defaults
+// (no fuzzy value, no NonDestructive) reproduce the drop identically — but
+// the General-Fuse SPLIT phase is correct on the same inputs. So fall back
+// to the exact GF partition: a compound of disjoint-interior solids whose
+// union IS the fuse result (volumes/bboxes exact). COMPROMISE(kernel-guard):
+// the partition keeps the internal contact faces (the operands are not
+// merged into one solid), so face/edge selectors see the contact topology.
+function _rebuildFuseFromGF(shapes) {
+  try {
+    let op = new self.oc.BOPAlgo_Builder_1();
+    for (let i = 0; i < shapes.length; i++) { op.AddArgument(shapes[i]); }
+    op.Perform(new self.oc.Message_ProgressRange_1());
+    if (op.HasErrors()) { return null; }
+    let gf = op.Shape();
+    let sawSolid = false;
+    ForEachSolid(gf, () => { sawSolid = true; });
+    return sawSolid ? gf : null;
+  } catch (e) { return null; }
 }
 
 function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdges) {
@@ -1399,40 +1435,36 @@ function HLRProject(shape, viewDir, keepShape) {
  *  BRepOffsetAPI_ThruSections (non-solid, 1e-6). Both constructions
  *  approximate the same grid to well below harness tolerance.
  *  `points` outer index = V, inner = U, like build123d. */
-function SurfaceFromPoints(points, tol, degMin, degMax) {
+function SurfaceFromPoints(points, tol, degMin, degMax, smoothing) {
   let curFace = self.CacheOp(arguments, "SurfaceFromPoints", () => {
-    let loft = new self.oc.BRepOffsetAPI_ThruSections(false, false, 1.0e-6);
+    // The exact calls build123d's Face.make_surface_from_array_of_points
+    // makes: GeomAPI_PointsToBSplineSurface(points, DegMin, DegMax,
+    // GeomAbs_C2, Tol3D) — a 2-D least-squares fit — then
+    // BRepBuilderAPI_MakeFace(surface, Precision::Confusion()).
+    // With smoothing weights: the variational (Weight1..3) constructor.
+    let arr = new self.oc.TColgp_Array2OfPnt_2(1, points.length, 1, points[0].length);
     for (let i = 0; i < points.length; i++) {
       let row = points[i];
-      let ptList = new self.oc.TColgp_HArray1OfPnt_2(1, row.length);
       for (let j = 0; j < row.length; j++) {
         let p = row[j];
-        ptList.SetValue(j + 1, new self.oc.gp_Pnt_3(p[0], p[1], p.length > 2 ? p[2] : 0));
+        arr.SetValue(i + 1, j + 1, new self.oc.gp_Pnt_3(p[0], p[1], p.length > 2 ? p[2] : 0));
       }
-      // COMPROMISE(surface-from-points): each row is interpolated EXACTLY
-      // and the rows are skinned; build123d's 2-D least-squares fit (tol
-      // 1e-2) smooths peaks slightly differently, so surfaces agree to
-      // ~5e-3 rather than exactly (per-row least squares was tried and is
-      // no closer — the residual pattern of the 2-D fit is OCCT-internal).
-      let interp = new self.oc.GeomAPI_Interpolate_1(
-        new self.oc.Handle_TColgp_HArray1OfPnt_2(ptList), false, 1.0e-6);
-      interp.Perform();
-      if (!interp.IsDone()) {
-        console.error("SurfaceFromPoints: row interpolation failed");
-        return null;
-      }
-      let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(
-        new self.oc.Handle_Geom_Curve_2(interp.Curve().get())).Edge();
-      loft.AddWire(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
     }
-    loft.Build(new self.oc.Message_ProgressRange_1());
-    let shell = loft.Shape();
-    // single-face shell -> return the face itself (build123d returns a Face)
-    let face = null;
-    let exp = new self.oc.TopExp_Explorer_2(shell, self.oc.TopAbs_ShapeEnum.TopAbs_FACE,
-      self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
-    if (exp.More()) { face = self.oc.TopoDS_Cast.Face_1(exp.Current()); exp.Next(); }
-    if (face === null || exp.More()) { return shell; }
+    let alg;
+    if (smoothing && smoothing.length === 3) {
+      alg = new self.oc.GeomAPI_PointsToBSplineSurface_4(
+        arr, smoothing[0], smoothing[1], smoothing[2], degMax,
+        self.oc.GeomAbs_Shape.GeomAbs_C2, tol);
+    } else {
+      alg = new self.oc.GeomAPI_PointsToBSplineSurface_2(
+        arr, degMin, degMax, self.oc.GeomAbs_Shape.GeomAbs_C2, tol);
+    }
+    if (!alg.IsDone()) {
+      console.error("SurfaceFromPoints: B-spline surface approximation failed");
+      return null;
+    }
+    let surfaceHandle = alg.Surface().AsGeomSurface();
+    let face = new self.oc.BRepBuilderAPI_MakeFace_8(surfaceHandle, 1.0e-7).Face();
     face.hash = self.oc.OCJS.HashCode(face, 100000000);
     return face;
   });
@@ -2269,6 +2301,46 @@ function Section(shape, planeOrigin, planeNormal) {
   return curSection;
 }
 
+/** 3-D convex hull of an array of [x,y,z] points via quickhull3d (pure JS,
+ *  esbuild-bundled into the worker). Returns triangulated facets as arrays
+ *  of vertex indices — the same convention as scipy's ConvexHull.simplices
+ *  (used by build123d-lite's scipy.spatial shim). */
+function ConvexHull3D(points) {
+  return quickhull3d(points);
+}
+
+/** Sew a list of faces into shell(s) and build solid(s) — the OCCT calls
+ *  behind build123d's Solid(Shell(faces)): BRepBuilderAPI_Sewing +
+ *  ShapeFix_Solid::SolidFromShell (which also orients the shell outward).
+ *  Returns a single solid, or a compound if the faces sew into multiple
+ *  closed shells. */
+function SewSolidFromFaces(faces) {
+  let curSolid = self.CacheOp(arguments, "SewSolidFromFaces", () => {
+    let sew = new self.oc.BRepBuilderAPI_Sewing(1.0e-6, true, true, true, false);
+    for (let i = 0; i < faces.length; i++) { sew.Add(faces[i]); }
+    sew.Perform(new self.oc.Message_ProgressRange_1());
+    let sewed = sew.SewedShape();
+    let solids = [];
+    ForEachShell(sewed, (i, shell) => {
+      let fixer = new self.oc.ShapeFix_Solid_1();
+      let solid = fixer.SolidFromShell(shell);
+      if (solid && !solid.IsNull()) { solids.push(solid); }
+    });
+    if (solids.length === 0) {
+      console.error("SewSolidFromFaces: sewing produced no closed shell");
+      return null;
+    }
+    if (solids.length === 1) { return solids[0]; }
+    let builder = new self.oc.BRep_Builder();
+    let compound = new self.oc.TopoDS_Compound();
+    builder.MakeCompound(compound);
+    for (let i = 0; i < solids.length; i++) { builder.Add(compound, solids[i]); }
+    return compound;
+  });
+  self.sceneShapes.push(curSolid);
+  return curSolid;
+}
+
 // --- Library Class (organizes initialization and self-registration) ---
 
 /** Wraps initialization of all CAD standard library functions.
@@ -2376,6 +2448,8 @@ class CascadeStudioStandardLibrary {
     // Additional primitives & operations
     self.Wedge = Wedge;
     self.Section = Section;
+    self.ConvexHull3D = ConvexHull3D;
+    self.SewSolidFromFaces = SewSolidFromFaces;
   }
 }
 

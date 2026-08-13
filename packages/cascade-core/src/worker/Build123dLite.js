@@ -792,16 +792,19 @@ class Shape:
         fused = w.Union(topos)
         # COMPROMISE(kernel-guard): this OCCT 8.0.1 wasm build has a known
         # kernel fault where BooleanFuse SILENTLY DROPS an operand when
-        # coplanar faces meet along BSpline edges. A mathematically valid
-        # fuse can never be smaller than its largest input, so detect the
-        # drop and RAISE (never return silently-wrong geometry).
+        # coplanar faces meet along BSpline edges. The JS Union now detects
+        # the drop and rebuilds the union from the General-Fuse partition
+        # (whose split phase is unaffected); if even that fails, a valid
+        # fuse can never be smaller than its largest input, so RAISE here
+        # (never return silently-wrong geometry).
         if max(vols) > 1e-6:
             rv = _solid_volume(fused)
             if rv < max(vols) * 0.999 - 1e-9:
                 raise RuntimeError(
                     'KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an '
                     'operand (result volume ' + repr(rv) + ' < largest '
-                    'input ' + repr(max(vols)) + '). This build\\'s '
+                    'input ' + repr(max(vols)) + ') and the General-Fuse '
+                    'rebuild could not recover it. This build\\'s '
                     'BooleanFuse mishandles coplanar BSpline-edged contact '
                     'faces; offset or restructure the touching geometry.')
         return _wrap_like(self, fused)
@@ -1375,13 +1378,13 @@ class Face(Shape):
     def make_surface_from_array_of_points(cls, points, tol=1e-2,
                                           smoothing=None, min_deg=1,
                                           max_deg=3):
-        """Approximate a BSpline surface through a 2D grid of points
-        (GeomAPI_PointsToBSplineSurface; outer index = V, inner = U)."""
-        if smoothing is not None:
-            raise NotImplementedError('surface smoothing weights are not '
-                                      'supported in build123d-lite')
+        """Approximate a BSpline surface through a 2D grid of points —
+        upstream's exact GeomAPI_PointsToBSplineSurface 2-D least-squares
+        fit (outer index = V, inner = U)."""
         pts = [[list(_v3(p)) for p in row] for row in points]
-        topo = w.SurfaceFromPoints(pts, tol, min_deg, max_deg)
+        # [] = no smoothing (None does not survive CacheOp's JSON hashing)
+        smooth = list(smoothing) if smoothing is not None else []
+        topo = w.SurfaceFromPoints(pts, tol, min_deg, max_deg, smooth)
         if topo is None:
             raise ValueError('B-spline surface approximation failed')
         return cls(topo)

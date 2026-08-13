@@ -39,6 +39,7 @@
 		"opencascade.js": "github:zalo/opencascade.js#cascadestudio-v3-occt801",
 		"openscad-parser": "^0.6.3",
 		"opentype.js": "^1.3.4",
-		"potpack": "^2.0.0"
+		"potpack": "^2.0.0",
+		"quickhull3d": "^3.1.2"
 	}
 }
