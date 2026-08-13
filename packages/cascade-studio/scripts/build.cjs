@@ -155,9 +155,11 @@ fs.writeFileSync(path.join(distDir, 'index.html'), `<!DOCTYPE html>
                 </label>
                 <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="window.clearExternalFiles();">Clear Imported</a>
                 <select id="editorMode" class="topnav-select" title="Editor Language Mode">
+                    <!-- Python is the default mode; CascadeMain sets .value to
+                         the mode it resolves from the URL / saved project. -->
+                    <option value="python" selected>Python (build123d)</option>
                     <option value="cascadestudio">CascadeStudio JS</option>
                     <option value="openscad">OpenSCAD</option>
-                    <option value="python">Python (build123d)</option>
                 </select>
             </div>
         </div>

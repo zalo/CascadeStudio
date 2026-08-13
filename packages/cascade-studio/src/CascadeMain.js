@@ -107,13 +107,7 @@ class CascadeStudioApp {
         this._savedCode[this.editor.mode] = this.editor.getCode();
         this.editor.setMode(newMode);
         // Load saved code or starter code for the new mode
-        const starters = {
-          cascadestudio: CascadeStudioApp.STARTER_CODE,
-          openscad: CascadeStudioApp.OPENSCAD_STARTER_CODE,
-          python: CascadeStudioApp.PYTHON_STARTER_CODE,
-        };
-        const starter = starters[newMode] || CascadeStudioApp.STARTER_CODE;
-        this.editor.setCode(this._savedCode[newMode] || starter);
+        this.editor.setCode(this._savedCode[newMode] || CascadeStudioApp.starterCode(newMode));
         // Re-fit camera and auto-evaluate
         if (this.viewport) { this.viewport._fitOnNextRender = true; }
         this.editor.evaluateCode();
@@ -192,7 +186,20 @@ class CascadeStudioApp {
     let searchParams = new URLSearchParams(window.location.search || window.location.hash.substr(1));
     let loadFromURL = searchParams.has("code");
 
-    let codeStr = CascadeStudioApp.STARTER_CODE;
+    // Resolve the language mode BEFORE the code, so every source of content
+    // brings its own default with it:
+    //   fresh load (no URL params, no project) → Python (build123d)
+    //   ?code=... without &mode=               → CascadeStudio JS, because
+    //     links shared before mode serialization existed are always JS and
+    //     must NOT be captured by the new Python default
+    //   ?mode=... (with or without &code=)     → that mode
+    //   saved project                          → the mode stored in the file
+    //     (legacy project files have none → CascadeStudio JS)
+    let mode = loadFromURL ? 'cascadestudio' : CascadeStudioApp.DEFAULT_MODE;
+    const urlMode = searchParams.get("mode");
+    if (CascadeStudioApp.MODES.includes(urlMode)) { mode = urlMode; }
+
+    let codeStr = CascadeStudioApp.starterCode(mode);
     this.gui.state = {};
 
     if (projectContent) {
@@ -201,19 +208,28 @@ class CascadeStudioApp {
         let parsed = JSON.parse(projectContent);
         if (parsed._cascadeState) {
           // New Dockview project format
-          codeStr = parsed._cascadeState.code || codeStr;
+          mode = CascadeStudioApp.MODES.includes(parsed._cascadeState.mode)
+            ? parsed._cascadeState.mode : 'cascadestudio';
+          codeStr = parsed._cascadeState.code || CascadeStudioApp.starterCode(mode);
           this.gui.state = parsed._cascadeState.guiState || {};
         } else if (parsed.content || parsed.root) {
           // Legacy GoldenLayout project format — extract code from componentState
+          mode = 'cascadestudio';
           let code = this._extractLegacyCode(parsed);
-          if (code) { codeStr = code; }
+          codeStr = code || CascadeStudioApp.STARTER_CODE;
         }
       } catch (e) {
         console.error("Failed to parse project:", e);
       }
     } else if (loadFromURL) {
       codeStr = CascadeStudioApp.decode(searchParams.get("code"));
-      this.gui.state = JSON.parse(CascadeStudioApp.decode(searchParams.get("gui")));
+      if (searchParams.has("gui")) {
+        try {
+          this.gui.state = JSON.parse(CascadeStudioApp.decode(searchParams.get("gui")));
+        } catch (e) {
+          console.error("Failed to parse the GUI state in the URL: " + e.message);
+        }
+      }
     }
 
     // Dispose previous layout
@@ -333,6 +349,9 @@ class CascadeStudioApp {
       }, 50);
     }
 
+    // The editor panel now exists — switch it to the resolved language mode
+    this._applyMode(mode);
+
     // Resize the layout when the browser resizes
     if (this._updateLayoutSize) {
       window.removeEventListener('resize', this._updateLayoutSize);
@@ -345,6 +364,19 @@ class CascadeStudioApp {
     window.addEventListener('resize', this._updateLayoutSize);
     window.addEventListener('orientationchange', this._updateLayoutSize);
     requestAnimationFrame(this._updateLayoutSize);
+  }
+
+  /** Apply a resolved language mode to the editor and the topnav switcher,
+   *  keeping the content the caller already loaded into the editor. */
+  _applyMode(mode) {
+    const modeSelect = document.getElementById('editorMode');
+    if (modeSelect) { modeSelect.value = mode; }
+    if (!this.editor || !this.editor.editor || mode === this.editor.mode) { return; }
+    const code = this.editor.getCode();
+    this.editor.setMode(mode);
+    // setMode swaps in the new mode's starter when the current text is another
+    // mode's starter; the content we were handed always wins here.
+    if (this.editor.getCode() !== code) { this.editor.setCode(code); }
   }
 
   /** Initialize the Three.js 3D Viewport. */
@@ -402,6 +434,7 @@ class CascadeStudioApp {
     let projectData = {
       _cascadeState: {
         code: currentCode,
+        mode: this.editor.mode,
         guiState: this.gui.state,
         externalFiles: this.console.goldenContainer.getState()
       }
@@ -464,6 +497,13 @@ class CascadeStudioApp {
   }
 
   // --- Static utility methods ---
+
+  /** Starter code for a language mode (falls back to CascadeStudio JS). */
+  static starterCode(mode) {
+    if (mode === 'python')   { return CascadeStudioApp.PYTHON_STARTER_CODE; }
+    if (mode === 'openscad') { return CascadeStudioApp.OPENSCAD_STARTER_CODE; }
+    return CascadeStudioApp.STARTER_CODE;
+  }
 
   /** Get a new file handle via the File System Access API. */
   static async getNewFileHandle(desc, mime, ext, open = false) {
@@ -533,9 +573,20 @@ class CascadeStudioApp {
   }
 }
 
-/** Default starter code shown in the editor. */
+/** Editor language modes, and the mode a fresh (parameter-less) load starts in.
+ *  Share URLs carry `&mode=<one of MODES>`; links without it are pre-mode
+ *  legacy links and load as CascadeStudio JS (see initialize()). */
+CascadeStudioApp.MODES = ['cascadestudio', 'openscad', 'python'];
+CascadeStudioApp.DEFAULT_MODE = 'python';
+
+/** CascadeStudio JS starter code (the `cascadestudio` mode). */
 CascadeStudioApp.STARTER_CODE =
-`// Welcome to Cascade Studio!  A Browser-Based CAD Modeling Environment.
+`// Cascade Studio — CascadeStudio JS mode (OpenCascade, Z-up, millimetres).
+// F5 (or Ctrl+S) evaluates; the language dropdown up top switches to
+// Python (build123d, the default mode) or OpenSCAD.
+// The viewport toolbar (Box / Cylinder / Sphere / Sketch / Fillet) writes
+// code into THIS editor — the code is the scene, so tool output is editable.
+//
 // Adjust these sliders to modify the model in real time:
 let width     = Slider("Width",      80, 40, 120);
 let depth     = Slider("Depth",      60, 30, 100);
@@ -652,21 +703,39 @@ translate([0, 0, shaft_h + 2])
   }
 `;
 
-/** Default Python (build123d-lite) starter code shown when switching to Python mode. */
+/** Default Python (build123d-lite) starter code — the default mode on a fresh
+ *  load. A parametric flanged bearing mount: 2-D profile → extrude → booleans
+ *  → selector-driven fillet. Renders in well under a second. */
 CascadeStudioApp.PYTHON_STARTER_CODE =
-`# Welcome to Python mode! Powered by Brython + build123d-lite,
-# an algebra-mode subset of build123d (https://build123d.readthedocs.io).
-#
-# Algebra mode: a + b fuses, a - b cuts, a & b intersects.
-# Box/Cylinder/Sphere/Cone are CENTERED on the origin (build123d convention);
-# place them with Pos(x, y, z) * shape and Rot(x, y, z) * shape (degrees).
+`# CascadeStudio build123d mode — see Help for the compatibility table.
+# Algebra mode: \`+\` fuses, \`-\` cuts, \`&\` intersects. Primitives are CENTERED,
+# so Pos(x, y, z) * shape moves and Rot(rx, ry, rz) * shape turns (degrees).
 from build123d import *
 
-part = Box(40, 30, 10) - Pos(0, 0, 0) * Cylinder(8, 20)
-part = fillet(part.edges(), 2)
-show(part)
+L, W, T = 80, 60, 8        # flange plate: length / width / thickness
+boss_d, boss_h, bore_d = 34, 20, 16
+hole_d, inset = 6, 10      # M6 bolt holes, inset from the plate edges
 
-print("volume:", round(volume(part), 1), "mm^3")
+# Selectors: edges() is a ShapeList — filter_by(Axis.Z) grabs the four
+# vertical corner edges, so one fillet() call rounds the whole plate
+plate = Pos(0, 0, T / 2) * Box(L, W, T)
+plate = fillet(plate.edges().filter_by(Axis.Z), 12)
+
+# Algebra: fuse the bearing boss on top, then cut the bore, the bolt holes
+# (GridLocations * shape places one cutter per location) and a set screw
+mount = plate + Pos(0, 0, T + boss_h / 2) * Cylinder(boss_d / 2, boss_h)
+mount -= Cylinder(bore_d / 2, 200)
+mount -= GridLocations(L - 2 * inset, W - 2 * inset, 2, 2) * Cylinder(hole_d / 2, 200)
+mount -= Pos(0, 0, T + boss_h / 2) * Rot(0, 90, 0) * Cylinder(2.5, 200)
+
+# group_by(Axis.Z)[-1] = the highest edges, i.e. the boss's top rim
+mount = fillet(mount.edges().group_by(Axis.Z)[-1], 1.5)
+
+show(mount)                # show() puts a shape in the 3-D viewport
+print("volume:", round(volume(mount), 1), "mm^3")
+
+# 2-D -> 3-D works too: extrude(RectangleRounded(L, W, 12), T) instead of
+# the Box above, or sweep/revolve/loft a Curve — see Help for the full list.
 `;
 
 export { CascadeStudioApp };

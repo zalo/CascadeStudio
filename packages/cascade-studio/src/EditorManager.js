@@ -209,10 +209,14 @@ class EditorManager {
     if (saveToURL) {
       const AppClass = this._app.constructor;
       console.log("Saved to URL!");
+      // `mode` is a plain, human-readable param so the language travels with
+      // the code. Links without it predate mode serialization and load as
+      // CascadeStudio JS (see CascadeStudioApp.initialize).
       window.history.replaceState({}, 'Cascade Studio',
         new URL(
           location.pathname + "?code=" + AppClass.encode(newCode) +
-          "&gui=" + AppClass.encode(JSON.stringify(this._app.gui.state)),
+          "&gui=" + AppClass.encode(JSON.stringify(this._app.gui.state)) +
+          "&mode=" + encodeURIComponent(this.mode),
           location.href
         ).href
       );
