@@ -1238,7 +1238,7 @@ function Dropdown(name = "Dropdown", defaultValue = "", options = {}, realTime =
 // --- Internal Topology Helpers (used by selectors, not exported to user API) ---
 
 function _edgeMidpoint(edge) {
-  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
   let midParam = (curve.FirstParameter() + curve.LastParameter()) / 2;
   let pnt = new self.oc.gp_Pnt_1();
   curve.D0(midParam, pnt);
@@ -1252,7 +1252,7 @@ function _edgeLength(edge) {
 }
 
 function _edgeCurveType(edge) {
-  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
   let type = curve.GetType();
   let CT = self.oc.GeomAbs_CurveType;
   if (type === CT.GeomAbs_Line)        return "Line";
@@ -1492,7 +1492,7 @@ function _faceOuterWire(face) {
 /** Whether an edge's topological orientation is FORWARD (build123d's
  *  Edge.is_forward — position_at/tangent_at flip on REVERSED edges). */
 function _edgeIsForward(edge) {
-  return edge.Orientation_1() !== self.oc.TopAbs_Orientation.TopAbs_REVERSED;
+  return _asEdge(edge).Orientation_1() !== self.oc.TopAbs_Orientation.TopAbs_REVERSED;
 }
 
 /** TopoDS_Shape::IsSame across the Brython boundary. */
@@ -1523,7 +1523,7 @@ function _edgeParamAtFraction(curve, u) {
 }
 
 function _edgePointAt(edge, u) {
-  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
   let param = _edgeParamAtFraction(curve, u);
   let pnt = new self.oc.gp_Pnt_1();
   curve.D0(param, pnt);
@@ -1531,7 +1531,7 @@ function _edgePointAt(edge, u) {
 }
 
 function _edgeTangentAt(edge, u) {
-  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
   let param = _edgeParamAtFraction(curve, u);
   let pnt = new self.oc.gp_Pnt_1();
   let vec = new self.oc.gp_Vec_1();
@@ -1585,6 +1585,203 @@ function ReverseFace(face, keepFace) {
   if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
   self.sceneShapes.push(reversed);
   return reversed;
+}
+
+// ---------------------------------------------------------------------------
+// Curve-on-surface primitives for build123d-lite's wrap()/wrap_faces(): the
+// exact OCCT calls upstream's Face._wrap_edge / _wrap_wire / _wrap_face and
+// Edge._extend_spline / trim / param_at make.
+// ---------------------------------------------------------------------------
+
+function _asEdge(shape) {
+  return shape.ShapeType().value === 6 ? self.oc.TopoDS_Cast.Edge_1(shape) : shape;
+}
+
+/** Curve parameter at an arc-length FRACTION of an edge, allowing fractions
+ *  outside [0, 1] (build123d's Edge.param_at, which _extend_spline calls with
+ *  -0.1 / 1.1 to run past the ends). */
+function _edgeParam(edge, u) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  let first = curve.FirstParameter(), last = curve.LastParameter();
+  let len = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, last);
+  let ap = new self.oc.GCPnts_AbscissaPoint_2(curve, len * u, first);
+  if (ap.IsDone()) { return ap.Parameter(); }
+  return first + (last - first) * u;
+}
+
+/** The part of an edge between two arc-length fractions (build123d
+ *  Edge.trim), oriented from f0 towards f1. */
+function TrimEdge(edge, f0, f1) {
+  let e = _asEdge(edge);
+  let p0 = _edgeParam(e, f0), p1 = _edgeParam(e, f1);
+  let first = { current: 0 }, last = { current: 0 };
+  let curve = self.oc.BRep_Tool.Curve_2(e, first, last);
+  let lo = Math.min(p0, p1), hi = Math.max(p0, p1);
+  let trimmed = new self.oc.BRepBuilderAPI_MakeEdge_25(curve, lo, hi).Edge();
+  if (p1 < p0) { trimmed = self.oc.TopoDS_Cast.Edge_1(trimmed.Reversed()); }
+  trimmed.hash = self.oc.OCJS.HashCode(trimmed, 100000000);
+  self.sceneShapes.push(trimmed);
+  return trimmed;
+}
+
+/** An edge's 3D curve projected onto a face's surface (GeomProjLib::Project —
+ *  build123d's "snap_to_face" step of _wrap_edge). */
+function ProjectEdgeOnFace(edge, face) {
+  let e = _asEdge(edge);
+  let first = { current: 0 }, last = { current: 0 };
+  let curve = self.oc.BRep_Tool.Curve_2(e, first, last);
+  let surf = self.oc.BRep_Tool.Surface_2(_asFace(face));
+  let projected = self.oc.GeomProjLib.Project(curve, surf);
+  if (!projected) { return null; }
+  let out = new self.oc.BRepBuilderAPI_MakeEdge_24(projected).Edge();
+  out.hash = self.oc.OCJS.HashCode(out, 100000000);
+  self.sceneShapes.push(out);
+  return out;
+}
+
+/** Extend a B-spline edge past one of its ends by `factor` of its length and
+ *  snap the result back onto a face's surface — build123d's
+ *  Edge._extend_spline, used to make the first and last wrapped edges of a
+ *  closed wire cross so they can be trimmed to a clean junction. */
+function ExtendSplineOnFace(edge, atStart, face, factor) {
+  let e = _asEdge(edge);
+  let adaptor = new self.oc.BRepAdaptor_Curve_2(e);
+  let bspl = adaptor.BSpline().get();
+  let poles = [];
+  for (let i = 1; i <= bspl.NbPoles(); i++) {
+    let p = bspl.Pole(i);
+    poles.push([p.X(), p.Y(), p.Z()]);
+  }
+  let pointAt = (f) => {
+    let pnt = new self.oc.gp_Pnt_1();
+    adaptor.D0(_edgeParam(e, f), pnt);
+    return [pnt.X(), pnt.Y(), pnt.Z()];
+  };
+  let tangentAt = (f) => {
+    let pnt = new self.oc.gp_Pnt_1(), vec = new self.oc.gp_Vec_1();
+    adaptor.D1(_edgeParam(e, f), pnt, vec);
+    let m = vec.Magnitude() || 1;
+    return [vec.X() / m, vec.Y() / m, vec.Z() / m];
+  };
+  let ends = atStart ? [-factor, 1] : [0, 1 + factor];
+  if (atStart) { poles.unshift(pointAt(-factor)); } else { poles.push(pointAt(1 + factor)); }
+  let tangents = [tangentAt(ends[0]), tangentAt(ends[1])];
+  let extended = InterpolatedEdge(poles, tangents, false, true);
+  return ProjectEdgeOnFace(extended, face);
+}
+
+/** A single edge exactly interpolating the given points (GeomAPI_Interpolate,
+ *  build123d's Edge.make_spline). */
+function InterpolatedEdge(points, tangents, periodic, scale) {
+  let wire = WireFromSegments([['interp', points.map((p) => [p[0], p[1], p[2]]),
+    [tangents && tangents.length ? tangents : null, !!periodic,
+     scale === undefined ? true : !!scale]]], true);
+  let edges = [];
+  ForEachEdge(wire, (i, e) => { edges.push(e); });
+  if (edges.length !== 1) {
+    throw new Error('InterpolatedEdge: expected one edge, got ' + edges.length);
+  }
+  return edges[0];
+}
+
+/** Curve parameters of the closest extremum between two edges' curves
+ *  (GeomAPI_ExtremaCurveCurve, build123d's first/last wrapped-edge junction).
+ *  Returns [paramOnFirst, paramOnSecond] or null. */
+function ExtremaEdgeParams(edgeA, edgeB) {
+  let fa = { current: 0 }, la = { current: 0 }, fb = { current: 0 }, lb = { current: 0 };
+  let ca = self.oc.BRep_Tool.Curve_2(_asEdge(edgeA), fa, la);
+  let cb = self.oc.BRep_Tool.Curve_2(_asEdge(edgeB), fb, lb);
+  let ext = new self.oc.GeomAPI_ExtremaCurveCurve_2(ca, cb);
+  if (ext.NbExtrema() < 1) { return null; }
+  let u = { current: 0 }, v = { current: 0 };
+  ext.LowerDistanceParameters(u, v);
+  return [u.current, v.current];
+}
+
+/** A potentially NON-planar face bounded by the given edges, optionally
+ *  refined by interior points and holed by interior wires — the exact
+ *  BRepOffsetAPI_MakeFilling construction of build123d's Face.make_surface. */
+function FillingFace(edges, points, interiorWires) {
+  let filling = new self.oc.BRepOffsetAPI_MakeFilling(
+    3, 15, 2, false, 0.00001, 0.0001, 0.01, 0.1, 8, 9);
+  let C0 = self.oc.GeomAbs_Shape.GeomAbs_C0;
+  for (let i = 0; i < edges.length; i++) {
+    filling.Add_1(_asEdge(edges[i]), C0, true);
+  }
+  filling.Build(new self.oc.Message_ProgressRange_1());
+  if (!filling.IsDone()) { console.error("FillingFace: surface filling failed"); return null; }
+  if (points && points.length) {
+    for (let i = 0; i < points.length; i++) {
+      filling.Add_4(new self.oc.gp_Pnt_3(points[i][0], points[i][1], points[i][2]));
+    }
+    filling.Build(new self.oc.Message_ProgressRange_1());
+    if (!filling.IsDone()) {
+      console.error("FillingFace: surface filling with interior points failed");
+      return null;
+    }
+  }
+  let face = self.oc.TopoDS_Cast.Face_1(filling.Shape());
+  if (interiorWires && interiorWires.length) {
+    face = _asFace(FaceWithHoles(_faceOuterWire(face), interiorWires.map(_asWire)));
+  }
+  let fixer = new self.oc.ShapeFix_Shape_2(face);
+  fixer.Perform(new self.oc.Message_ProgressRange_1());
+  face = _asFace(fixer.Shape());
+  face.hash = self.oc.OCJS.HashCode(face, 100000000);
+  self.sceneShapes.push(face);
+  return face;
+}
+
+/** A wire from edges, reordered and gap-closed with ShapeFix_Wire (build123d
+ *  closes the wrapped-wire junction this way). */
+function WireFromEdgesFixed(edges, precision) {
+  let mkWire = new self.oc.BRepBuilderAPI_MakeWire_1();
+  // build123d adds every edge at once (TopTools_ListOfShape), which lets the
+  // builder connect them in any order instead of demanding that each new edge
+  // touch the wire built so far
+  let list = new self.oc.TopTools_ListOfShape();
+  for (let i = 0; i < edges.length; i++) { list.Append(_asEdge(edges[i])); }
+  mkWire.Add_3(list);
+  let raw;
+  if (mkWire.IsDone()) {
+    raw = mkWire.Wire();
+  } else {
+    // The gaps between independently projected wrapped edges can exceed
+    // MakeWire's connectivity tolerance. Assemble the wire directly and let
+    // ShapeFix close the gaps — which is exactly what build123d's
+    // SetPrecision(2 * closing_error) + FixConnected pass is there for.
+    let builder = new self.oc.BRep_Builder();
+    raw = new self.oc.TopoDS_Wire();
+    builder.MakeWire(raw);
+    for (let i = 0; i < edges.length; i++) { builder.Add(raw, _asEdge(edges[i])); }
+  }
+  let fixer = new self.oc.ShapeFix_Wire_1();
+  if (precision > 0) { fixer.SetPrecision(precision); }
+  fixer.Load_1(raw);
+  fixer.FixReorder_1(false);
+  fixer.FixConnected_1(precision > 0 ? precision : 1e-7);
+  let wire = fixer.Wire();
+  wire.hash = self.oc.OCJS.HashCode(wire, 100000000);
+  self.sceneShapes.push(wire);
+  return wire;
+}
+
+/** Whether a wire is topologically closed (BRep_Tool::IsClosed). */
+function _wireIsClosed(wire) {
+  return !!self.oc.BRep_Tool.IsClosed_1(_asWire(wire));
+}
+
+/** A wire's edges in CONNECTION order (BRepTools_WireExplorer — build123d's
+ *  Wire.order_edges); ForEachEdge follows TopExp's storage order instead. */
+function OrderedEdges(wire) {
+  let out = [];
+  let exp = new self.oc.BRepTools_WireExplorer_2(_asWire(wire));
+  for (; exp.More(); exp.Next()) {
+    let e = self.oc.TopoDS_Cast.Edge_1(exp.Current());
+    if (e.hash === undefined) { e.hash = self.oc.OCJS.HashCode(e, 100000000); }
+    out.push(e);
+  }
+  return out;
 }
 
 /** The single TopoDS_Face of a one-face shape (shell/compound), or the shape
@@ -2941,6 +3138,16 @@ class CascadeStudioStandardLibrary {
     self.ReverseShape = ReverseShape;
     self.ProjectWireOnShape = ProjectWireOnShape;
     self.AsSingleFace = AsSingleFace;
+    self._edgeParam = _edgeParam;
+    self.TrimEdge = TrimEdge;
+    self.ProjectEdgeOnFace = ProjectEdgeOnFace;
+    self.ExtendSplineOnFace = ExtendSplineOnFace;
+    self.InterpolatedEdge = InterpolatedEdge;
+    self.ExtremaEdgeParams = ExtremaEdgeParams;
+    self.FillingFace = FillingFace;
+    self.WireFromEdgesFixed = WireFromEdgesFixed;
+    self._wireIsClosed = _wireIsClosed;
+    self.OrderedEdges = OrderedEdges;
     self.HLRProject = HLRProject;
     self.SurfaceFromPoints = SurfaceFromPoints;
     self.PipeShellSweep = PipeShellSweep;

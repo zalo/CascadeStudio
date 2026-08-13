@@ -700,6 +700,18 @@ class Plane:
     def shift_origin(self, new_origin):
         return Plane(Vector(new_origin), self.x_dir, self.z_dir)
 
+    def from_local_coords(self, pt):
+        """A point given in this plane's local frame, in world coordinates
+        (build123d Plane.from_local_coords)."""
+        v = Vector(pt)
+        return (self.origin + self.x_dir * v.X + self.y_dir * v.Y +
+                self.z_dir * v.Z)
+
+    def to_local_coords(self, pt):
+        """The world point expressed in this plane's local frame."""
+        d = Vector(pt) - self.origin
+        return Vector(d.dot(self.x_dir), d.dot(self.y_dir), d.dot(self.z_dir))
+
     def __mul__(self, other):
         if isinstance(other, Location):
             return self.location * other
@@ -1379,6 +1391,18 @@ class Curve(Shape):
         return ShapeList([Curve(t) for t in out])
 
     @property
+    def is_closed(self):
+        """Whether the wire/edge closes on itself (BRep_Tool::IsClosed)."""
+        if self.topo is None:
+            return False
+        return bool(w._wireIsClosed(self.topo))
+
+    def order_edges(self):
+        """The edges in CONNECTION order (build123d Wire.order_edges —
+        BRepTools_WireExplorer, not TopExp's storage order)."""
+        return ShapeList([Edge(t) for t in w.OrderedEdges(self.topo)])
+
+    @property
     def start_point(self):
         return self @ 0
 
@@ -1486,6 +1510,39 @@ class Edge(Curve):
         wires = Curve.project_to_shape(self, target_object, direction, center)
         return wires.edges()
 
+    def param_at(self, position=0.5):
+        """The raw OCCT curve parameter at the normalized ARC-LENGTH position
+        (build123d Edge.param_at; positions outside [0, 1] extrapolate)."""
+        return w._edgeParam(self.topo, float(position))
+
+    def trim(self, start, end):
+        """A new edge keeping only the section between two normalized
+        arc-length positions (build123d Edge.trim)."""
+        return Edge(w.TrimEdge(self.topo, float(start), float(end)))
+
+    def _extend_spline(self, at_start, surface_face, extension_factor=0.1):
+        """A copy of this B-spline edge extended past one end by
+        extension_factor of its length and snapped back onto the surface
+        (build123d Edge._extend_spline)."""
+        if self.geom_type != GeomType.BSPLINE:
+            raise TypeError('_extend_spline only works with splines')
+        topo = w.ExtendSplineOnFace(self.topo, bool(at_start),
+                                    _topo(surface_face),
+                                    float(extension_factor))
+        if topo is None:
+            raise RuntimeError('Failed to snap extended edge to surface')
+        return Edge(topo)
+
+    @classmethod
+    def make_spline(cls, points, tangents=None, periodic=False,
+                    parameters=None, scale=True, tol=1e-6):
+        """Edge interpolating the points EXACTLY (GeomAPI_Interpolate, like
+        build123d's Edge.make_spline). tangents are either the two end
+        tangents or one per point."""
+        pts = [list(_v3(p)) for p in points]
+        tans = [list(_v3(t)) for t in tangents] if tangents else []
+        return cls(w.InterpolatedEdge(pts, tans, bool(periodic), bool(scale)))
+
     @classmethod
     def make_line(cls, p1, p2):
         """Linear edge between two points (build123d Edge.make_line)."""
@@ -1562,6 +1619,8 @@ class Face(Shape):
         return w._faceArea(self.topo)
 
     def center(self, center_of=CenterOf.GEOMETRY):
+        if center_of == CenterOf.BOUNDING_BOX:
+            return self.bounding_box().center()
         return Vector(tuple(w._faceCentroid(self.topo)))
 
     def _surface_params(self, surface_point, u, v):
@@ -1681,6 +1740,239 @@ class Face(Shape):
         return ShapeList(sorted([Face(f.topo) for f in pieces], key=_dist))
 
     @classmethod
+    def make_surface(cls, exterior, surface_points=None, interior_wires=None):
+        """A potentially NON-planar face bounded by exterior (a wire or
+        edges), pulled towards surface_points and holed by interior_wires —
+        the exact BRepOffsetAPI_MakeFilling construction of build123d's
+        Face.make_surface."""
+        if isinstance(exterior, Shape):
+            edges = [e.topo for e in exterior.edges()]
+        else:
+            edges = [_topo(e) for e in exterior]
+        pts = [list(Vector(p)) for p in (surface_points or [])]
+        holes = [_topo(x) for x in (interior_wires or [])]
+        topo = w.FillingFace(edges, pts, holes)
+        if topo is None:
+            raise RuntimeError('non planar face is invalid')
+        return cls(topo)
+
+    # --- wrapping flat geometry onto this surface (build123d Face.wrap) ---
+
+    def _intersect_surface_normal(self, point, direction, target_center):
+        """(point, unit normal) of the closest crossing of the axis
+        (point, direction) with this surface — the inner helper of
+        build123d's Face._wrap_edge."""
+        hits = self.find_intersection_points(Axis(point, direction))
+        if not hits:
+            raise RuntimeError('wrapping over surface boundary, try a '
+                               'different surface_loc')
+        best, best_d = hits[0], (hits[0][0] - point).length
+        for h in hits[1:]:
+            d = (h[0] - point).length
+            if d < best_d:
+                best, best_d = h, d
+        return best
+
+    def _wrap_edge(self, planar_edge, surface_loc, snap_to_face=True,
+                   tolerance=0.001):
+        """Wrap one flat edge onto this surface: march along the edge in the
+        local surface frame, casting each step back onto the surface, refining
+        the subdivision until the wrapped length matches — build123d's
+        Face._wrap_edge."""
+        if self.topo is None:
+            raise ValueError('cannot wrap around an empty face')
+        target_center = self.center(CenterOf.BOUNDING_BOX)
+        surface_x_direction = surface_loc.x_axis.direction
+        planar_edge_length = planar_edge.length
+
+        def find_point_on_surface(current_point, normal, relative_position):
+            local_plane = Plane(origin=current_point,
+                                x_dir=surface_x_direction, z_dir=normal)
+            world_point = local_plane.from_local_coords(relative_position)
+            return self._intersect_surface_normal(
+                world_point, world_point - target_center, target_center)
+
+        if planar_edge.position_at(0).length > tolerance:
+            # the edge does not start at the surface location: wrap a
+            # construction line to find where it does
+            to_start_edge = Edge.make_line((0, 0, 0), planar_edge @ 0)
+            wrapped_to_start = self._wrap_edge(to_start_edge, surface_loc,
+                                              True, tolerance)
+            start_pnt = wrapped_to_start @ 1
+            start_normal = self._intersect_surface_normal(
+                start_pnt, start_pnt - target_center, target_center)[1]
+        else:
+            start_pnt = surface_loc.position
+            start_normal = surface_loc.z_axis.direction
+
+        closed = planar_edge.is_closed
+        subdivisions = 3
+        loop_count = 0
+        length_error = 1e308
+        wrapped_edge = None
+        while length_error > tolerance and loop_count < 10:
+            points = [start_pnt]
+            current_point, current_normal = start_pnt, start_normal
+            for div in range(1, subdivisions + (0 if closed else 1)):
+                prev = planar_edge.position_at((div - 1) / subdivisions)
+                curr = planar_edge.position_at(div / subdivisions)
+                current_point, current_normal = find_point_on_surface(
+                    current_point, current_normal, curr - prev)
+                points.append(current_point)
+            wrapped_edge = Edge.make_spline(points, periodic=closed)
+            length_error = abs(planar_edge_length - wrapped_edge.length)
+            subdivisions *= 2
+            loop_count += 1
+
+        if length_error > tolerance:
+            raise RuntimeError('Length error of ' + repr(length_error) +
+                               ' exceeds tolerance ' + repr(tolerance))
+        if not snap_to_face:
+            return wrapped_edge
+        snapped = w.ProjectEdgeOnFace(_topo(wrapped_edge), self.topo)
+        if snapped is None:
+            raise RuntimeError('Projection failed, try setting snap_to_face '
+                               'to False.')
+        return Edge(snapped)
+
+    def _wrap_wire(self, planar_wire, surface_loc, tolerance=0.001,
+                   extension_factor=0.1):
+        """Wrap a flat wire onto this surface edge by edge, then close the
+        junction the distortion opens between the first and last edge —
+        build123d's Face._wrap_wire."""
+        surface_point = surface_loc.position
+        surface_x_direction = surface_loc.x_axis.direction
+
+        planar_edges = planar_wire.order_edges()
+        if len(planar_edges) == 1:
+            return Curve([self._wrap_edge(planar_edges[0], surface_loc, True,
+                                          tolerance)])
+
+        wrapped_edges = []
+        first_start_point = None
+
+        if planar_edges[0].position_at(0) == Vector(0, 0, 0):
+            edge_surface_point = surface_point
+            planar_edge_end_point = Vector(0, 0, 0)
+        else:
+            construction_line = Edge.make_line(
+                (0, 0, 0), planar_edges[0].position_at(0))
+            wrapped_construction_line = self._wrap_edge(
+                construction_line, surface_loc, True, tolerance)
+            edge_surface_point = wrapped_construction_line.position_at(1)
+            planar_edge_end_point = planar_edges[0].position_at(0)
+        edge_surface_location = Location(Plane(
+            origin=edge_surface_point, x_dir=surface_x_direction,
+            z_dir=self.normal_at(edge_surface_point)))
+
+        for planar_edge in planar_edges:
+            # re-wrap as an Edge: _wrap_like turns a transformed Edge into a
+            # Curve, and Curve.position_at is not orientation-aware, so a
+            # REVERSED edge of the wire would march from the wrong end
+            local_planar_edge = Edge(_topo(
+                planar_edge.translate(-planar_edge_end_point)))
+            wrapped_edge = self._wrap_edge(local_planar_edge,
+                                           edge_surface_location, True,
+                                           tolerance)
+            edge_surface_point = wrapped_edge.position_at(1)
+            edge_surface_location = Location(Plane(
+                origin=edge_surface_point, x_dir=surface_x_direction,
+                z_dir=self.normal_at(edge_surface_point)))
+            planar_edge_end_point = planar_edge.position_at(1)
+            if first_start_point is None:
+                first_start_point = wrapped_edge.position_at(0)
+            wrapped_edges.append(wrapped_edge)
+
+        if not planar_wire.is_closed:
+            return Curve(wrapped_edges)
+
+        # extend the first and last wrapped edge so that they cross, then trim
+        # both at the crossing
+        first_edge = wrapped_edges[0]._extend_spline(True, self,
+                                                    extension_factor)
+        last_edge = wrapped_edges[-1]._extend_spline(False, self,
+                                                     extension_factor)
+        params = w.ExtremaEdgeParams(_topo(first_edge), _topo(last_edge))
+        if params is None:
+            raise RuntimeError('Extended first/last edges do not intersect; '
+                               'increase extension.')
+        param_first, param_last = params[0], params[1]
+
+        u_start_first = first_edge.param_at(0)
+        u_end_first = first_edge.param_at(1)
+        new_start = (param_first - u_start_first) / (u_end_first - u_start_first)
+        trimmed_first = first_edge.trim(new_start, 1.0)
+
+        u_start_last = last_edge.param_at(0)
+        u_end_last = last_edge.param_at(1)
+        new_end = (param_last - u_start_last) / (u_end_last - u_start_last)
+        trimmed_last = last_edge.trim(0.0, new_end)
+
+        wrapped_edges[0] = trimmed_first
+        wrapped_edges[-1] = trimmed_last
+
+        closing_error = (trimmed_first.position_at(0) -
+                         trimmed_last.position_at(1)).length
+        wire = w.WireFromEdgesFixed([_topo(e) for e in wrapped_edges],
+                                    2 * closing_error)
+        return Curve(wire)
+
+    def _wrap_face(self, planar_face, surface_loc, tolerance=0.001,
+                   extension_factor=0.1):
+        """Wrap a flat face onto this surface (build123d Face._wrap_face)."""
+        wrapped_perimeter = self._wrap_wire(planar_face.outer_wire(),
+                                            surface_loc, tolerance,
+                                            extension_factor)
+        wrapped_holes = [self._wrap_wire(iw, surface_loc, tolerance,
+                                         extension_factor)
+                         for iw in planar_face.inner_wires()]
+        wrapped_face = Face.make_surface(
+            wrapped_perimeter, surface_points=[surface_loc.position],
+            interior_wires=wrapped_holes)
+        # flip the wrapped face if it ended up facing away from the surface
+        surface_normal = surface_loc.z_axis.direction
+        wrapped_normal = wrapped_face.normal_at(surface_loc.position)
+        if surface_normal.dot(wrapped_normal) < 0:
+            wrapped_face = -wrapped_face
+        return wrapped_face
+
+    def wrap(self, planar_shape, surface_loc, tolerance=0.001,
+             extension_factor=0.1):
+        """Wrap a flat Edge/Wire/Face (drawn on Plane.XY) onto this surface
+        starting at surface_loc (build123d Face.wrap)."""
+        if isinstance(planar_shape, Edge):
+            return self._wrap_edge(planar_shape, surface_loc, True, tolerance)
+        if isinstance(planar_shape, (Face, Sketch)):
+            return self._wrap_face(planar_shape, surface_loc, tolerance,
+                                   extension_factor)
+        if isinstance(planar_shape, Curve):
+            return self._wrap_wire(planar_shape, surface_loc, tolerance,
+                                   extension_factor)
+        raise TypeError('planar_shape must be an Edge, Wire or Face')
+
+    def wrap_faces(self, faces, path, start=0.0):
+        """Wrap flat faces onto this surface, spaced along a path that lies on
+        it: each face keeps its relative X position, mapped to arc length
+        along the path (build123d Shape.wrap_faces)."""
+        path_length = path.length
+        face_list = [f for f in faces]
+        first_face_min_x = face_list[0].bounding_box().min[0]
+        wrapped = ShapeList()
+        for face in face_list:
+            bbox = face.bounding_box()
+            face_center_x = (bbox.min[0] + bbox.max[0]) / 2.0
+            delta_x = face_center_x - first_face_min_x
+            relative_position = start + delta_x / path_length
+            path_position = path.position_at(relative_position)
+            surface_location = Location(Plane(
+                origin=path_position,
+                x_dir=path.tangent_at(relative_position),
+                z_dir=self.normal_at(path_position)))
+            face.position = face.position - Vector(delta_x, 0, 0)
+            wrapped.append(self._wrap_face(face, surface_location))
+        return wrapped
+
+    @classmethod
     def make_surface_from_array_of_points(cls, points, tol=1e-2,
                                           smoothing=None, min_deg=1,
                                           max_deg=3):
@@ -1747,6 +2039,14 @@ Sketch._surface_args = Face._surface_args
 Sketch._surface_params = Face._surface_params
 Sketch.normal_at = Face.normal_at
 Sketch.location_at = Face.location_at
+Sketch.outer_wire = Face.outer_wire
+Sketch.inner_wires = Face.inner_wires
+Sketch._intersect_surface_normal = Face._intersect_surface_normal
+Sketch._wrap_edge = Face._wrap_edge
+Sketch._wrap_wire = Face._wrap_wire
+Sketch._wrap_face = Face._wrap_face
+Sketch.wrap = Face.wrap
+Sketch.wrap_faces = Face.wrap_faces
 
 
 class Shell(Shape):
@@ -2796,12 +3096,32 @@ def Trapezoid(width, height, left_side_angle, right_side_angle=None,
               rotation=0, align=(Align.CENTER, Align.CENTER), mode=Mode.ADD):
     if right_side_angle is None:
         right_side_angle = left_side_angle
-    x, y = width / 2.0, height / 2.0
-    dl = height / math.tan(math.radians(left_side_angle))
-    dr = height / math.tan(math.radians(right_side_angle))
-    pts = [[-x, -y, 0], [x, -y, 0], [x - dr, y, 0], [-x + dl, y, 0]]
+    y = height / 2.0
+    red_l = 0.0 if left_side_angle == 90 else \
+        height / math.tan(math.radians(left_side_angle))
+    red_r = 0.0 if right_side_angle == 90 else \
+        height / math.tan(math.radians(right_side_angle))
+    top_l = top_r = bot_l = bot_r = width / 2.0
+    # build123d narrows the TOP for an acute side angle but widens the BOTTOM
+    # for an obtuse one (negative reduction), so 'width' is always the width
+    # of the wider of the two edges
+    if red_l > 0:
+        top_l -= red_l
+    else:
+        bot_l += red_l
+    if red_r > 0:
+        top_r -= red_r
+    else:
+        bot_r += red_r
+    if bot_l + bot_r < 0:
+        raise ValueError('Trapezoid bottom invalid - change angles')
+    if top_l + top_r < 0:
+        raise ValueError('Trapezoid top invalid - change angles')
+    pts = [[-bot_l, -y, 0], [bot_r, -y, 0], [top_r, y, 0], [-top_l, y, 0]]
+    xs = [p[0] for p in pts]
     maker = lambda: w.Polygon(pts)
-    return _sketch_object(maker, ((-x, -y), (x, y)), rotation, align, mode)
+    return _sketch_object(maker, ((min(xs), -y), (max(xs), y)), rotation,
+                          align, mode)
 
 
 class TextAlign:
