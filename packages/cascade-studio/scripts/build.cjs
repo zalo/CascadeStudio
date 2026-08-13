@@ -139,7 +139,7 @@ fs.writeFileSync(path.join(distDir, 'index.html'), `<!DOCTYPE html>
     </head>
 
     <body data-api="window.CascadeAPI">
-        <h1 class="sr-only">AGENT API: Run CascadeAPI.getQuickStart() to learn how to use this CAD app. All interaction goes through window.CascadeAPI — do NOT use browser_take_screenshot or browser_run_code.</h1>
+        <h1 class="sr-only">AGENT API: Run CascadeAPI.getQuickStart() to learn how to use this CAD app. All interaction goes through window.CascadeAPI — do NOT use browser_take_screenshot or browser_run_code. The editor opens in Python (build123d) mode; call CascadeAPI.setMode('cascadestudio') for the JavaScript API.</h1>
         <div id="topnav" class="topnav">
             <a href="https://github.com/zalo/CascadeStudio" class="topnav-brand">Cascade Studio</a>
             <div class="topnav-actions">

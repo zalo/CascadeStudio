@@ -27,11 +27,14 @@ async function evaluateCode(page, code, timeout = 60000) {
 
 /**
  * Navigate to the app and wait until it's fully ready (WASM loaded, starter code done).
+ * A parameter-less load now starts in Python (build123d) mode, so the specs that
+ * evaluate CascadeStudio JS select that mode explicitly.
  */
-async function gotoAndReady(page) {
+async function gotoAndReady(page, mode = 'cascadestudio') {
   await page.goto('/');
   await waitForReady(page);
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(), { timeout: 60000 });
+  if (mode) { await page.evaluate((m) => window.CascadeAPI.setMode(m), mode); }
 }
 
 /**
@@ -110,9 +113,10 @@ test.describe('Application Startup & CascadeAPI', () => {
     const retrieved = await page.evaluate(() => window.CascadeAPI.getCode());
     expect(retrieved).toBe(testCode);
 
-    // getMode
-    const mode = await page.evaluate(() => window.CascadeAPI.getMode());
-    expect(mode).toBe('cascadestudio');
+    // getMode — a parameter-less load starts in Python (build123d) mode
+    expect(await page.evaluate(() => window.CascadeAPI.getMode())).toBe('python');
+    await page.evaluate(() => window.CascadeAPI.setMode('cascadestudio'));
+    expect(await page.evaluate(() => window.CascadeAPI.getMode())).toBe('cascadestudio');
 
     // screenshot
     const screenshot = await page.evaluate(() => window.CascadeAPI.screenshot());

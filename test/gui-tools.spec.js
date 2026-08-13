@@ -10,11 +10,13 @@ async function waitForReady(page, timeout = 60000) {
   }, { timeout });
 }
 
-/** Navigate to the app and wait until it's fully ready. */
-async function gotoAndReady(page) {
+/** Navigate to the app and wait until it's fully ready. Fresh loads start in
+ *  Python mode now, so these JS-emission tests select CascadeStudio JS. */
+async function gotoAndReady(page, mode = 'cascadestudio') {
   await page.goto('/');
   await waitForReady(page);
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(), { timeout: 60000 });
+  if (mode) { await page.evaluate((m) => window.CascadeAPI.setMode(m), mode); }
 }
 
 /** Run code via the API and wait for the mesh render to land
@@ -59,6 +61,35 @@ const POINTER_HELPERS = `
     }));
   }
 `;
+
+/** Screen (client) coordinates of a CAD point — the Node-side twin of the
+ *  in-page `screenOfCad` helper, for driving Playwright's real mouse API. */
+async function screenOfCad(page, x, y, z) {
+  return await page.evaluate(([cx, cy, cz]) => {
+    const env = window.threejsViewport.environment;
+    const rect = env.renderer.domElement.getBoundingClientRect();
+    const v = env.camera.position.clone().set(cx, cz, -cy).project(env.camera);
+    return {
+      x: rect.left + (v.x + 1) / 2 * rect.width,
+      y: rect.top + (1 - (v.y + 1) / 2) * rect.height,
+    };
+  }, [x, y, z]);
+}
+
+/** Snapshot of a creation tool's state machine. */
+function toolState(page, tool) {
+  return page.evaluate((name) => {
+    const t = window.CascadeAPI._tools.tools[name];
+    return {
+      state: t.state,
+      pressed: t.stagePressed,
+      height: t.height,
+      radius: t.radius,
+      activeTool: window.CascadeAPI._tools.activeToolName,
+      controls: window.threejsViewport.environment.controls.enabled,
+    };
+  }, tool);
+}
 
 test.describe('GUI Modeling Tools', () => {
   test('toolbar renders with 6 tools, Select active, Escape returns to Select', async ({ page }) => {
@@ -127,6 +158,77 @@ test.describe('GUI Modeling Tools', () => {
     const rerun = await page.evaluate((c) => window.CascadeAPI.runCode(c), editorCode);
     expect(rerun.errors).toEqual([]);
     expect(rerun.historySteps.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Regression: the old code only accepted "move, then click to commit" for
+  // the second stage. Pressing to drag the height cancelled the whole box.
+  // This uses Playwright's mouse API (real CDP input, unlike the synthetic
+  // PointerEvents above, which is why the old tests never caught it).
+  test('Box tool: real pointer press-drag-release drives BOTH stages', async ({ page }) => {
+    await gotoAndReady(page);
+    await runCodeAndRender(page, 'Box(10, 10, 10);', 1);
+    await page.evaluate(() => window.CascadeAPI._tools.activate('box'));
+
+    const a = await screenOfCad(page, 20, 20, 0);   // footprint corner A
+    const b = await screenOfCad(page, 60, 50, 0);   // footprint corner B
+    const c = await screenOfCad(page, 40, 35, 25);  // height 25 above center
+
+    // Stage 1: press, drag the footprint, release
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y, { steps: 8 });
+    await page.mouse.up();
+    expect(await toolState(page, 'box')).toMatchObject({ state: 2, controls: false });
+
+    // Stage 2: press to start the height drag. The old code cancelled here
+    // (state 0, controls re-enabled, nothing emitted).
+    await page.mouse.down();
+    expect(await toolState(page, 'box')).toMatchObject({
+      state: 2, pressed: true, controls: false, activeTool: 'box',
+    });
+
+    // ...drag up, then release to commit
+    await page.mouse.move(c.x, c.y, { steps: 8 });
+    expect((await toolState(page, 'box')).height).toBe(25);
+    await page.mouse.up();
+
+    const after = await toolState(page, 'box');
+    expect(after).toMatchObject({ state: 0, controls: true, activeTool: 'box' });
+    const code = await page.evaluate(() => window.CascadeAPI.getCode());
+    expect(code).toContain('let box1 = Translate([20, 20, 0], Box(40, 30, 25));');
+
+    await waitForToolEvaluation(page, 2);
+  });
+
+  test('Cylinder tool: real pointer click-move-click drives both stages', async ({ page }) => {
+    await gotoAndReady(page);
+    await runCodeAndRender(page, 'Box(10, 10, 10);', 1);
+    await page.evaluate(() => window.CascadeAPI._tools.activate('cylinder'));
+
+    const center = await screenOfCad(page, 40, 0, 0);
+    const rim    = await screenOfCad(page, 55, 0, 0);   // radius 15
+    const top    = await screenOfCad(page, 40, 0, 18);  // height 18
+
+    // Click the center (no drag) — must arm the radius stage, not cancel
+    await page.mouse.move(center.x, center.y);
+    await page.mouse.click(center.x, center.y);
+    expect(await toolState(page, 'cylinder')).toMatchObject({ state: 1, controls: false });
+
+    // Move to size the radius, click to lock it
+    await page.mouse.move(rim.x, rim.y, { steps: 5 });
+    expect((await toolState(page, 'cylinder')).radius).toBe(15);
+    await page.mouse.click(rim.x, rim.y);
+    expect(await toolState(page, 'cylinder')).toMatchObject({ state: 2 });
+
+    // Move to size the height, click to commit
+    await page.mouse.move(top.x, top.y, { steps: 5 });
+    await page.mouse.click(top.x, top.y);
+    expect(await toolState(page, 'cylinder')).toMatchObject({ state: 0, controls: true });
+
+    const code = await page.evaluate(() => window.CascadeAPI.getCode());
+    expect(code).toMatch(/let cylinder1 = Translate\(\[40, 0, 0\], Cylinder\(15, \d+\)\);/);
+
+    await waitForToolEvaluation(page, 2);
   });
 
   test('Fillet tool: edge click selects, commit emits FilletEdges with picked indices', async ({ page }) => {

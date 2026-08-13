@@ -64,16 +64,19 @@ test.describe('Python (build123d) mode', () => {
   test('starter script evaluates with no errors and renders shapes', async ({ page }) => {
     await gotoAndReady(page);
 
-    // Switching modes swaps in the Python starter (previous content was the JS starter)
+    // Python is the default mode on a fresh load, so the starter is already in
+    // the editor (setMode('python') is a no-op here, and stays correct if the
+    // default ever moves again)
     const starter = await page.evaluate(() => {
       window.CascadeAPI.setMode('python');
       return window.CascadeAPI.getCode();
     });
     expect(await page.evaluate(() => window.CascadeAPI.getMode())).toBe('python');
     expect(starter).toContain('from build123d import *');
-    expect(starter).toContain('part = Box(40, 30, 10) - Pos(0, 0, 0) * Cylinder(8, 20)');
-    expect(starter).toContain('part = fillet(part.edges(), 2)');
-    expect(starter).toContain('show(part)');
+    expect(starter).toContain('plate = fillet(plate.edges().filter_by(Axis.Z), 12)');
+    expect(starter).toContain('mount -= GridLocations(');
+    expect(starter).toContain('mount = fillet(mount.edges().group_by(Axis.Z)[-1], 1.5)');
+    expect(starter).toContain('show(mount)');
 
     const result = await runCodeAndRender(page, starter, 1);
     expect(result.errors).toEqual([]);
@@ -81,7 +84,7 @@ test.describe('Python (build123d) mode', () => {
 
     // History steps carry real Python line numbers (via Brython's frame chain)
     const fnNames = result.historySteps.map((s) => s.fnName);
-    expect(fnNames).toEqual(expect.arrayContaining(['Box', 'Cylinder', 'Difference', 'FilletEdges']));
+    expect(fnNames).toEqual(expect.arrayContaining(['Box', 'Cylinder', 'Union', 'Difference', 'FilletEdges']));
     for (const step of result.historySteps) {
       expect(step.lineNumber).toBeGreaterThan(0);
     }

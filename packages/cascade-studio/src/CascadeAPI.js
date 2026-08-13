@@ -71,6 +71,14 @@ class CascadeAPI {
   /** Compact quick-start guide. Call this FIRST to learn the API. */
   getQuickStart() {
     return {
+      mode: {
+        current: this._app.editor.mode,
+        note: 'The editor language mode decides how runCode() interprets your code. ' +
+          'A fresh load starts in "python" (build123d algebra mode: ' +
+          '`from build123d import *` … `show(shape)`). Everything below documents the ' +
+          'CascadeStudio JS API — call CascadeAPI.setMode("cascadestudio") before using it.',
+        switch: 'CascadeAPI.setMode("python" | "cascadestudio" | "openscad")',
+      },
       workflow: [
         'result = await CascadeAPI.runCode(code) → {success, errors, logs, historySteps}',
         'CascadeAPI.setCameraAngle(azimuth, elevation) → 0=front, 90=right; 0=level, 90=top',
