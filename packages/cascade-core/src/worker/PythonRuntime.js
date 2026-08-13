@@ -117,7 +117,11 @@ async function _bootstrap() {
     run(code) {
       // The build123d module persists across evaluations — clear its
       // builder-context stacks in case a previous run aborted inside a
-      // `with BuildPart():` block without unwinding.
+      // `with BuildPart():` block without unwinding. The op cache is also
+      // cleared: rare hash collisions between shapes from DIFFERENT
+      // evaluations have produced observably wrong booleans, and a stale
+      // cache buys little in Python mode (scripts are re-run whole).
+      for (const k in self.argCache) { delete self.argCache[k]; }
       _runGuarded(B, 'import build123d\nbuild123d._reset_state()', '_b123d_reset');
       _runGuarded(B, code, PY_USER_MODULE);
     }

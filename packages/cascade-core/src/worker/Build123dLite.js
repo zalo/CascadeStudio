@@ -137,6 +137,19 @@ class GeomType:
     OTHER = ('Other',)
 
 
+class LineType:
+    CONTINUOUS = 'CONTINUOUS'
+    CENTER = 'CENTER'
+    DASHED = 'DASHED'
+    DOT = 'DOT'
+    HIDDEN = 'HIDDEN'
+    PHANTOM = 'PHANTOM'
+    ISO_DASH = 'ISO_DASH'
+    ISO_DOT = 'ISO_DOT'
+    ISO_DASH_DOT = 'ISO_DASH_DOT'
+    ISO_LONG_DASH_DOT = 'ISO_LONG_DASH_DOT'
+
+
 class FontStyle:
     REGULAR = 'REGULAR'
     BOLD = 'BOLD'
@@ -795,9 +808,15 @@ class Shape:
 
     @property
     def length(self):
+        if getattr(self, '_length_attr', None) is not None:
+            return self._length_attr
         if self.topo is None:
             return 0.0
         return w.EdgeLength(self.topo)
+
+    @length.setter
+    def length(self, value):
+        self._length_attr = value
 
     def center(self, center_of=CenterOf.MASS):
         if center_of == CenterOf.BOUNDING_BOX:
@@ -835,11 +854,25 @@ class Shape:
             topo = w.Translate([o[0], o[1], o[2]], topo)
         return _wrap_like(self, topo)
 
+    def translate(self, v):
+        return Pos(Vector(v)) * self
+
     def scale(self, factor):
         return _wrap_like(self, w.Scale(factor, self.topo))
 
     def mirror(self, mirror_plane=None):
         return mirror(self, about=mirror_plane or Plane.XZ, mode=Mode.PRIVATE)
+
+    def project_to_viewport(self, viewport_origin, viewport_up=(0, 0, 1),
+                            look_at=None):
+        """Hidden-line projection (HLRBRep): returns (visible, hidden)
+        edge compounds like build123d."""
+        vo = Vector(viewport_origin)
+        target = Vector(look_at) if look_at is not None else \
+            self.bounding_box().center()
+        view_dir = (target - vo).normalized()
+        vis, hid = w.HLRProject(self.topo, list(view_dir))
+        return (Curve(vis).edges(), Curve(hid).edges())
 
     def is_valid(self):
         return self.topo is not None
@@ -926,6 +959,20 @@ class Curve(Shape):
     def __mod__(self, u):  # curve % u -> tangent
         return self._walk(u, True)
 
+    def location_at(self, u, x_dir=None):
+        """Location at length-fraction u: origin on the curve, z along the
+        tangent (build123d convention for sweep section placement)."""
+        pos = self._walk(u, False)
+        tan = self._walk(u, True)
+        if x_dir is not None:
+            pl = Plane(pos, x_dir=Vector(x_dir), z_dir=tan)
+        else:
+            pl = Plane(pos, z_dir=tan)
+        return pl.location
+
+    def __xor__(self, u):  # curve ^ u -> location
+        return self.location_at(u)
+
     @property
     def start_point(self):
         return self @ 0
@@ -1008,6 +1055,10 @@ class Face(Shape):
 
     def normal_at(self, *args):
         return Vector(tuple(w._faceNormal(self.topo)))
+
+    def offset(self, amount):
+        """The face's plane offset by amount (build123d Face.offset)."""
+        return Plane(self).offset(amount)
 
 
 class Vertex(Shape):
@@ -1182,6 +1233,13 @@ class ShapeList(list):
             groups[-1].append(s)
         return GroupBy(groups)
 
+    def __sub__(self, other):
+        removed = list(other)
+        return ShapeList([s for s in self
+                          if not any(s is o or (s.topo is not None and
+                                                s.topo is o.topo)
+                                     for o in removed)])
+
     @property
     def first(self):
         return self[0]
@@ -1317,9 +1375,7 @@ class Builder:
         self.pending_edge_specs = []  # segment specs for BuildSketch
 
     def _wrap(self, topo):
-        s = self._shape_cls.__new__(self._shape_cls)
-        Shape.__init__(s, topo)
-        return s
+        return self._shape_cls(topo)
 
     def __enter__(self):
         self._loc_depth = len(_loc_stack)
@@ -2229,7 +2285,7 @@ def Bezier(*cpts, weights=None, mode=Mode.ADD):
     return _line_object([('spline', dense)], mode)
 
 
-def _cubic_spline(pts, d0=None, d1=None, samples_per_seg=16):
+def _cubic_spline(pts, d0=None, d1=None, samples_per_seg=48):
     """Densely sample a C2 cubic through the points (chord-length
     parametrized) — approximates GeomAPI_Interpolate, whose point-array
     types are not bound in the WASM build. End conditions: clamped to the
@@ -2396,8 +2452,25 @@ def Ellipse(x_radius, y_radius, rotation=0, align=(Align.CENTER, Align.CENTER),
                           rotation, align, mode)
 
 
-def Helix(*args, **kwargs):
-    raise NotImplementedError('Helix is not supported in build123d-lite')
+def Helix(pitch, height, radius, center=(0, 0, 0), direction=(0, 0, 1),
+          cone_angle=0, lefthand=False, mode=Mode.ADD):
+    """Helical curve, sampled exactly from its parametric form and fitted
+    (the WASM build cannot express surface-curves in segment specs)."""
+    if cone_angle:
+        raise NotImplementedError('conical Helix is not supported in '
+                                  'build123d-lite')
+    turns = height / pitch
+    n = max(16, int(64 * turns))
+    sgn = -1.0 if lefthand else 1.0
+    pts = []
+    for i in range(n + 1):
+        a = sgn * 2.0 * math.pi * turns * i / n
+        pts.append((radius * math.cos(a), radius * math.sin(a),
+                    height * i / n))
+    loc = Plane(Vector(center), z_dir=Vector(direction)).location
+    fn_dir = lambda d: _mat_vec(loc._R, d)
+    spec = _seg_transform(('spline', pts), loc._transform_point, fn_dir)
+    return _line_object([spec], mode)
 
 
 def _specs_from_topo_edges(shape):
@@ -2461,8 +2534,41 @@ def _pending_or_given(to_extrude):
 def extrude(to_extrude=None, amount=None, dir=None, until=None, target=None,
             both=False, taper=0.0, clean=True, mode=Mode.ADD):
     if until is not None:
-        raise NotImplementedError('extrude(until=...) is not supported in '
-                                  'build123d-lite')
+        if until not in (Until.NEXT, Until.LAST):
+            raise NotImplementedError('extrude until=' + str(until) +
+                                      ' is not supported in build123d-lite')
+        builder = _active_builder(BuildPart)
+        body = target if target is not None else \
+            (builder._obj if builder is not None else None)
+        if body is None or body.topo is None:
+            raise ValueError('extrude(until=...) requires a target part')
+        profiles = _pending_or_given(to_extrude)
+        bb = list(w.BoundingBox(body.topo, 0.01))
+        ln = 3.0 * max(bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2])
+        results = []
+        for (face, plane) in profiles:
+            d = tuple(plane.z_dir)
+            candidate = Part(w.Extrude(face, [d[0] * ln, d[1] * ln, d[2] * ln]))
+            # pieces of the candidate OUTSIDE the body, ordered along dir
+            outside = Part(w.Difference(candidate.topo, [body.topo],
+                                        True, 1e-7, True))
+            pieces = outside.solids()
+
+            def proj(s):
+                sb = list(w.BoundingBox(s.topo, 0.01))
+                return (min(sb[0] * d[0], sb[3] * d[0]) +
+                        min(sb[1] * d[1], sb[4] * d[1]) +
+                        min(sb[2] * d[2], sb[5] * d[2]))
+            pieces = sorted(pieces, key=proj)
+            if until == Until.NEXT:
+                # first void between the sketch plane and the body
+                results.append(pieces[0])
+            else:
+                # everything up to the body's LAST surface: drop the piece
+                # that extends to the candidate's far end
+                results.append(candidate - pieces[-1])
+        obj = results[0] if len(results) == 1 else results[0] + results[1:]
+        return _combine(builder, obj, mode)
     if amount is None and isinstance(to_extrude, (int, float)):
         amount = to_extrude
         to_extrude = None
@@ -2634,6 +2740,9 @@ def offset(objects=None, amount=0, openings=None, kind=Kind.ARC,
     if kind == Kind.TANGENT:
         raise NotImplementedError('Kind.TANGENT offsets are not supported in '
                                   'build123d-lite')
+    if side is not None:
+        raise NotImplementedError('one-sided line offsets (side=) are not '
+                                  'supported in build123d-lite')
     join = 'intersection' if kind == Kind.INTERSECTION else 'arc'
     builder = _active_builder()
     targets = _tolist(objects) if objects is not None else \
@@ -2746,16 +2855,22 @@ def split(objects=None, bisect_by=Plane.XZ, keep=Keep.TOP, mode=Mode.REPLACE):
 
 
 def scale(objects=None, by=1, mode=Mode.REPLACE):
+    factors = None
     if not isinstance(by, (int, float)):
         f = tuple(by)
+        if len(f) == 2:
+            f = (f[0], f[1], 1.0)
         if abs(f[0] - f[1]) > 1e-9 or abs(f[0] - f[2]) > 1e-9:
-            raise NotImplementedError('non-uniform scale is not supported in '
-                                      'build123d-lite')
-        by = f[0]
+            factors = [f[0], f[1], f[2]]  # gp_GTrsf non-uniform scale
+        else:
+            by = f[0]
     builder = _active_builder()
     targets = _tolist(objects) if objects is not None else \
         ([builder._obj] if builder is not None and builder._obj is not None else [])
-    results = [_wrap_like(t, w.Scale(by, _topo(t))) for t in targets]
+    if factors is not None:
+        results = [_wrap_like(t, w.ScaleXYZ(factors, _topo(t))) for t in targets]
+    else:
+        results = [_wrap_like(t, w.Scale(by, _topo(t))) for t in targets]
     obj = results[0] if len(results) == 1 else results[0] + results[1:]
     return _combine(builder, obj, mode)
 
@@ -2765,6 +2880,28 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
     if builder is None:
         raise ValueError('add() requires an active builder context')
     objs = _tolist(objects)
+    # curves added to a BuildLine contribute their segments (optionally
+    # rotated) so make_face()/sweep() keep exact geometry
+    if isinstance(builder, BuildLine):
+        rot = None
+        if rotation is not None:
+            r = (0, 0, rotation) if isinstance(rotation, (int, float)) else tuple(rotation)
+            rot = Rotation(r[0], r[1], r[2])
+        out = []
+        for o in objs:
+            if isinstance(o, Curve) and o._specs:
+                specs = list(o._specs)
+            elif isinstance(o, (Curve, Edge)):
+                specs = _specs_from_topo_edges(o)
+            else:
+                raise TypeError('add() to BuildLine expects curves')
+            if rot is not None:
+                fn_dir = lambda d: _mat_vec(rot._R, d)
+                specs = [_seg_transform(s, rot._transform_point, fn_dir)
+                         for s in specs]
+            builder._specs.extend(specs)
+            out.append(Curve(w.WireFromSegments(_chain_segments(specs)), specs))
+        return out[0] if len(out) == 1 else ShapeList(out)
     # 2D objects added to a BuildPart become pending sketch faces (build123d)
     def _is_2d(o):
         if not (isinstance(o, Shape) and o.topo is not None):
@@ -2814,9 +2951,10 @@ def make_face(edges=None, mode=Mode.ADD):
         for e in _tolist(edges):
             if isinstance(e, Curve) and e._specs:
                 specs.extend(e._specs)
+            elif isinstance(e, (Curve, Edge)):
+                specs.extend(_specs_from_topo_edges(e))
             else:
-                raise NotImplementedError('make_face from raw edges without '
-                                          'segment data')
+                raise NotImplementedError('make_face from non-curve objects')
     chained = _chain_segments(specs)
     wire = w.WireFromSegments(chained)
     face = w.MakeFace(wire)
@@ -2824,9 +2962,8 @@ def make_face(edges=None, mode=Mode.ADD):
     # come out +Z regardless of the chained winding; ours follow the wire)
     n = w._faceNormal(face)
     bb = w.BoundingBox(face)
-    if n[2] < -0.5 and bb and abs(bb[5] - bb[2]) < 1e-9:
-        rev = [_seg_reverse(s) for s in reversed(chained)]
-        face = w.MakeFace(w.WireFromSegments(rev))
+    if n[2] < -0.5 and bb and abs(bb[5] - bb[2]) < 1e-6:
+        face = w.ReverseFace(face)
     return _combine(builder, Sketch(face), mode)
 
 
@@ -2874,6 +3011,28 @@ def section(*args, **kwargs):
 
 # --------------------------------------------------- joints & exporters ---
 
+def _hlr_curve(topo):
+    c = Curve(topo)
+    return c
+
+
+class ExportSVG:
+    """No-op SVG exporter: geometry-side effects only (browser worker has
+    no filesystem for the .svg — a warning is printed instead)."""
+
+    def __init__(self, *args, **kwargs):
+        print('build123d-lite: ExportSVG writes nothing in the browser')
+
+    def add_layer(self, *args, **kwargs):
+        return self
+
+    def add_shape(self, *args, **kwargs):
+        return self
+
+    def write(self, *args, **kwargs):
+        return True
+
+
 def _unsupported(name):
     def f(*args, **kwargs):
         raise NotImplementedError(name + ' is not supported in build123d-lite')
@@ -2886,7 +3045,6 @@ LinearJoint = _unsupported('LinearJoint')
 CylindricalJoint = _unsupported('CylindricalJoint')
 BallJoint = _unsupported('BallJoint')
 Mesher = _unsupported('Mesher')
-ExportSVG = _unsupported('ExportSVG')
 ExportDXF = _unsupported('ExportDXF')
 import_step = _unsupported('import_step')
 import_stl = _unsupported('import_stl')
@@ -2924,7 +3082,8 @@ def _pack2d(objects, width_fn, length_fn):
             self.right = None
 
     sizes = sorted(((o, width_fn(o), length_fn(o)) for o in objects),
-                   key=lambda t: max(t[1], t[2]), reverse=True)
+                   key=lambda t: min(t[1], t[2]), reverse=True)
+    sizes = sorted(sizes, key=lambda t: max(t[1], t[2]), reverse=True)
     root = _Node(w=sizes[0][1], h=sizes[0][2])
 
     def find_node(start, ww, hh):
