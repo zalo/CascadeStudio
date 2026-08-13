@@ -171,6 +171,9 @@ function _runGuarded(B, source, moduleName) {
 
   let caught = null;
   try {
+    // Each evaluation starts with an undefined scene: the first show() call
+    // replaces the auto-added shapes (see Build123dLite show()).
+    self._b123dSceneDefined = false;
     B.runPythonSource(source, moduleName);
   } catch (exc) {
     caught = exc;

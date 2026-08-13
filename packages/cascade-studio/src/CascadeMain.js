@@ -707,7 +707,7 @@ translate([0, 0, shaft_h + 2])
  *  load. A parametric flanged bearing mount: 2-D profile → extrude → booleans
  *  → selector-driven fillet. Renders in well under a second. */
 CascadeStudioApp.PYTHON_STARTER_CODE =
-`# CascadeStudio build123d mode — see Help for the compatibility table.
+`# CascadeStudio build123d mode — coverage table: github.com/zalo/CascadeStudio#python-build123d-mode
 # Algebra mode: \`+\` fuses, \`-\` cuts, \`&\` intersects. Primitives are CENTERED,
 # so Pos(x, y, z) * shape moves and Rot(rx, ry, rz) * shape turns (degrees).
 from build123d import *

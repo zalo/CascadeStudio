@@ -5765,10 +5765,20 @@ def volume(shape):
 
 
 def show(*shapes, **kwargs):
-    """Ensure shapes are in the render scene (build123d-sandbox compat).
+    """Define the render scene (build123d-sandbox / ocp_vscode compat).
+    The FIRST show() of an evaluation replaces the auto-added scene with
+    exactly the shown shapes (so 2-D intermediates no longer leak into the
+    viewport and exports); later show()/show_object() calls append.
+    # COMPROMISE(show-semantics): ocp_vscode's show() replaces the view on
+    # every call (last-wins); appending on subsequent calls preserves the
+    # intent of scripts that show several results separately.
     Extra viewer kwargs (names=, colors=, ...) are accepted and ignored.
     Membership is tested with 'is' — Brython compares the underlying JS
     objects, so it works across wrapper instances."""
+    if not getattr(w, '_b123dSceneDefined', False):
+        while len(w.sceneShapes) > 0:
+            w.sceneShapes.pop()
+        w._b123dSceneDefined = True
     flat = []
     for s in shapes:
         if isinstance(s, (list, tuple, ShapeList)):
