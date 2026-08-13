@@ -107,6 +107,15 @@ async function _bootstrap() {
   // caches it in $B.imported for subsequent imports.
   for (const name of Object.keys(PY_SHIM_MODULES)) {
     _runGuarded(B, PY_SHIM_MODULES[name], name);
+    if (name.indexOf('.') !== -1 && !B.imported[name]) {
+      // run_script sanitizes dots out of script ids ('scipy.optimize' is
+      // cached as 'scipy_optimize') — alias the module back under its
+      // dotted submodule name so `from scipy.optimize import minimize`
+      // resolves from the imported-module cache (the 'scipy' shim sets
+      // __path__ = [] to satisfy the package check).
+      const sanitized = name.replace(/\./g, '_');
+      if (B.imported[sanitized]) { B.imported[name] = B.imported[sanitized]; }
+    }
   }
   _runGuarded(B, BUILD123D_LITE_PY, 'build123d');
 
