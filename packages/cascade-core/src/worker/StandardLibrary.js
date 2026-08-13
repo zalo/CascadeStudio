@@ -1,3 +1,5 @@
+import { createGordonEngine } from './GordonSurface.js';
+
 // Cascade Studio Standard Library
 // Adding new standard library features and functions:
 // 1. Research the OpenCascade API: https://www.opencascade.com/doc/occt-7.4.0/refman/html/annotated.html
@@ -2599,6 +2601,28 @@ class CascadeStudioStandardLibrary {
   constructor() {
     // Instantiate utility dependencies
     this.utils = new CascadeStudioUtils();
+
+    // Gordon curve-network surfaces (build123d Face.make_gordon_surface —
+    // see GordonSurface.js). Engine is created lazily: oc must be live.
+    let gordonEngine = null;
+    self.GordonSurfaceFace = function (profiles, guides, tolerance) {
+      if (!gordonEngine) { gordonEngine = createGordonEngine(self.oc); }
+      // The engine's edgeToCurveData needs a downcast TopoDS_Edge; callers
+      // hand generic TopoDS_Shape (single-edge wires included). Points pass
+      // through as [x, y, z] arrays.
+      const toEdge = (item) => {
+        if (Array.isArray(item)) { return item; }
+        const t = item.ShapeType().value;
+        if (t === 6) { return self.oc.TopoDS_Cast.Edge_1(item); }
+        let edge = null, count = 0;
+        for (let ex = new self.oc.TopExp_Explorer_2(item, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+          edge = self.oc.TopoDS_Cast.Edge_1(ex.Current()); count++;
+        }
+        if (count !== 1) { throw new Error("make_gordon_surface: each profile/guide must be a single edge or a point (got " + count + " edges)"); }
+        return edge;
+      };
+      return gordonEngine.gordonSurfaceFace(profiles.map(toEdge), guides.map(toEdge), tolerance);
+    };
 
     // Assign all CAD API functions to self for eval() access
     self.Box = Box;

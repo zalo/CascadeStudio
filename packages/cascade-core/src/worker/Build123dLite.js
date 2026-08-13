@@ -1469,6 +1469,22 @@ class Face(Shape):
         self.parent = parent
         self.index = index
 
+    @classmethod
+    def make_gordon_surface(cls, profiles, guides, tolerance=0.0003):
+        # Gordon curve-network surface interpolation. Upstream delegates to
+        # the external ocp_gordon package; here the algorithm is a JS port
+        # (GordonSurface.js, COMPROMISE notes in its header) exposed as
+        # w.GordonSurfaceFace. Profiles/guides: Edge/Curve/Wire or points
+        # (only first/last entries may be points, matching upstream).
+        def conv(item):
+            if isinstance(item, Shape):
+                return _topo(item)
+            v = Vector(item)
+            return [v.X, v.Y, v.Z]
+        p = [conv(i) for i in profiles]
+        g = [conv(i) for i in guides]
+        return cls(w.GordonSurfaceFace(p, g, tolerance))
+
     @property
     def geom_type(self):
         t = w._faceSurfaceType(self.topo)

@@ -1,6 +1,6 @@
 # build123d-lite validation report
 
-Generated 2026-08-13T08:00:20.967Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
+Generated 2026-08-13T08:07:33.127Z - 129 scripts (126 scored, 3 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
@@ -39,12 +39,12 @@ Generated 2026-08-13T08:00:20.967Z - 129 scripts (126 scored, 3 excluded because
 
 - examples/boxes_on_faces (1 shapes)
 - examples/boxes_on_faces_algebra (2 shapes)
-- examples/build123d_logo (13 shapes)
 - examples/build123d_customizable_logo_algebra (13 shapes)
+- examples/build123d_logo (13 shapes)
 - examples/build123d_customizable_logo (14 shapes)
 - examples/build123d_logo_algebra (12 shapes)
-- examples/circuit_board_algebra (1 shapes)
 - examples/circuit_board (1 shapes)
+- examples/circuit_board_algebra (1 shapes)
 - examples/canadian_flag (20 shapes)
 - examples/canadian_flag_algebra (25 shapes)
 - examples/clock_algebra (6 shapes)
@@ -64,8 +64,8 @@ Generated 2026-08-13T08:00:20.967Z - 129 scripts (126 scored, 3 excluded because
 - examples/extrude_algebra (35 shapes)
 - examples/intersecting_pipes (3 shapes)
 - examples/key_cap (5 shapes)
-- examples/lego (3 shapes)
 - examples/key_cap_algebra (5 shapes)
+- examples/lego (3 shapes)
 - examples/lego_algebra (3 shapes)
 - examples/loft (4 shapes)
 - examples/loft_algebra (3 shapes)
@@ -110,8 +110,8 @@ Generated 2026-08-13T08:00:20.967Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
 - general_examples/ex25 (4 shapes)
-- general_examples/ex24 (3 shapes)
 - general_examples/ex26 (2 shapes)
+- general_examples/ex24 (3 shapes)
 - general_examples/ex27 (2 shapes)
 - general_examples/ex29 (7 shapes)
 - general_examples/ex28 (7 shapes)
@@ -123,15 +123,15 @@ Generated 2026-08-13T08:00:20.967Z - 129 scripts (126 scored, 3 excluded because
 - general_examples/ex36 (3 shapes)
 - general_examples/ex34 (4 shapes)
 - general_examples_algebra/ex01 (1 shapes)
-- general_examples/ex37 (2 shapes)
 - general_examples_algebra/ex02 (1 shapes)
+- general_examples/ex37 (2 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
 - general_examples_algebra/ex09 (1 shapes)
 - general_examples_algebra/ex12 (6 shapes)
 - general_examples_algebra/ex11 (2 shapes)
-- general_examples_algebra/ex14 (6 shapes)
 - general_examples_algebra/ex13 (1 shapes)
+- general_examples_algebra/ex14 (6 shapes)
 - general_examples_algebra/ex15 (8 shapes)
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
@@ -150,8 +150,8 @@ Generated 2026-08-13T08:00:20.967Z - 129 scripts (126 scored, 3 excluded because
 - general_examples_algebra/ex30 (3 shapes)
 - general_examples_algebra/ex32 (2 shapes)
 - general_examples_algebra/ex33 (1 shapes)
-- general_examples_algebra/ex35 (4 shapes)
 - general_examples_algebra/ex31 (1 shapes)
+- general_examples_algebra/ex35 (4 shapes)
 - general_examples_algebra/ex36 (3 shapes)
 - general_examples_algebra/ex34 (3 shapes)
 
