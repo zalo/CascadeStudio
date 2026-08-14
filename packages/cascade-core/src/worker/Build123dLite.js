@@ -246,7 +246,13 @@ class Vector:
                 self._v = a._v
             else:
                 t = tuple(a)
-                if len(t) == 2:
+                if len(t) == 0:
+                    # Vector(()) is the origin upstream too (0 * (x, y, z) is
+                    # how the docs write a conditional offset)
+                    self._v = (0.0, 0.0, 0.0)
+                elif len(t) == 1:
+                    self._v = (_num(t[0]), 0.0, 0.0)
+                elif len(t) == 2:
                     self._v = (_num(t[0]), _num(t[1]), 0.0)
                 else:
                     self._v = (_num(t[0]), _num(t[1]), _num(t[2]))
@@ -360,6 +366,10 @@ def _v3(a):
     if isinstance(a, Vector):
         return a._v
     t = tuple(a)
+    if len(t) == 0:
+        return (0.0, 0.0, 0.0)
+    if len(t) == 1:
+        return (_num(t[0]), 0.0, 0.0)
     if len(t) == 2:
         return (_num(t[0]), _num(t[1]), 0.0)
     return (_num(t[0]), _num(t[1]), _num(t[2]))
@@ -1322,6 +1332,12 @@ class Shape:
         return self.__sub__(list(others))
 
     def intersect(self, *others):
+        # intersect(Axis) on a 1-D shape is the POINT intersection upstream
+        # returns as a ShapeList of Vertex (Mixin1D._intersect), not a boolean
+        if len(others) == 1 and isinstance(others[0], Axis) and \
+                isinstance(self, Curve):
+            return ShapeList([Vertex(tuple(p)) for p in
+                              self.find_intersection_points(others[0])])
         return self.__and__(list(others))
 
     # --- selectors ---
@@ -2331,6 +2347,14 @@ class Edge(Curve):
         for i in range(1, n + 1):
             u = i / n
             cur = offset(u)
+            if abs(cur) <= tolerance:
+                # contact WITHOUT a sign change: an end point sitting on the
+                # line, or a tangency. Upstream's Geom2dAPI_InterCurveCurve is
+                # tolerance-based and reports these, so the sampled search has
+                # to as well (the wing example's trailing edge ends exactly on
+                # the axis it is measured against).
+                if not any(abs(u - r) < 1e-9 for r in roots):
+                    roots.append(u)
             if (prev <= 0.0 <= cur) or (cur <= 0.0 <= prev):
                 lo, hi, flo = prev_u, u, prev
                 for _ in range(60):
@@ -3369,6 +3393,92 @@ def _sort_key_fn(key):
     raise TypeError('unsupported sort/group key: ' + repr(key))
 
 
+def topo_distance_to(other):
+    """A sort_by/group_by key function giving the TOPOLOGICAL distance to the
+    reference shape(s) (build123d's topo_distance_to): 0 for the references
+    themselves, 1 for their direct neighbours, and so on, measured over the
+    full topology of their shared parent. Adjacency is sharing a lower-order
+    sub-shape, exactly as upstream defines it — Faces via an Edge, Edges/Wires
+    via a Vertex, Shells/Solids via a Face — with the sub-shapes identified
+    geometrically (lite re-wraps every shape, so there is no TopoDS identity to
+    hash)."""
+    sources = [other] if isinstance(other, Shape) else list(other)
+    if not sources:
+        raise ValueError('Cannot measure topological distance to an empty '
+                         'object')
+    kind_lut = [(Vertex, 'vertex'), (Face, 'face'), (Edge, 'edge'),
+                (Shell, 'shell'), (Part, 'solid'), (Curve, 'wire')]
+    peer_kind = None
+    for cls, name in kind_lut:
+        if isinstance(sources[0], cls):
+            peer_kind = name
+            break
+    if peer_kind is None:
+        raise ValueError('Topological distance is not supported for ' +
+                         type(sources[0]).__name__)
+    for s in sources:
+        if not isinstance(s, type(sources[0])):
+            raise ValueError('Topological distance requires shapes of the '
+                             'same type')
+    parent = getattr(sources[0], 'parent', None)
+    if parent is None or parent.topo is None:
+        raise ValueError('Topological distance requires shapes with a '
+                         'topo_parent')
+    connector = {'vertex': 'edge', 'edge': 'vertex', 'wire': 'vertex',
+                 'face': 'edge', 'shell': 'face', 'solid': 'face'}[peer_kind]
+    peers = {'vertex': parent.vertices, 'edge': parent.edges,
+             'wire': parent.wires, 'face': parent.faces,
+             'shell': parent.faces, 'solid': parent.solids}[peer_kind]()
+
+    def sub_keys(shape):
+        if connector == 'vertex':
+            return [_shape_key(v, 'vertex') for v in shape.vertices()]
+        if connector == 'edge':
+            return [_shape_key(e, 'edge') for e in shape.edges()]
+        return [_shape_key(f, 'face') for f in shape.faces()]
+    peer_keys = [_shape_key(p, peer_kind) for p in peers]
+    peer_subs = [sub_keys(p) for p in peers]
+    # adjacency: peers that share at least one connector sub-shape
+    by_sub = {}
+    for i, subs in enumerate(peer_subs):
+        for key in subs:
+            by_sub.setdefault(key, []).append(i)
+    neighbours = [set() for _ in peers]
+    for key in by_sub:
+        group = by_sub[key]
+        for i in group:
+            for j in group:
+                if i != j:
+                    neighbours[i].add(j)
+    # breadth-first search out of the reference shapes
+    distances = {}
+    frontier = []
+    for s in sources:
+        key = _shape_key(s, peer_kind)
+        if key in peer_keys:
+            i = peer_keys.index(key)
+            if i not in distances:
+                distances[i] = 0
+                frontier.append(i)
+    step = 0
+    while frontier:
+        step += 1
+        nxt = []
+        for i in frontier:
+            for j in neighbours[i]:
+                if j not in distances:
+                    distances[j] = step
+                    nxt.append(j)
+        frontier = nxt
+
+    def key_f(shape):
+        key = _shape_key(shape, peer_kind)
+        if key not in peer_keys:
+            return float('inf')
+        return distances.get(peer_keys.index(key), float('inf'))
+    return key_f
+
+
 def _group_key_fn(key, tol_digits=6):
     """group_by's key function: the sort key ROUNDED to tol_digits, with
     non-numeric keys passed through unchanged (build123d's group_by wraps
@@ -3678,9 +3788,17 @@ def _shape_key(shape, kind):
         c = w._edgeMidpoint(topo)
         return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
                 round(w._edgeLength(topo), 6))
+    if kind == 'face' or kind == 'shell':
+        # CenterOfMass is a VOLUME integral in this build and degenerates to
+        # the bounding-box corner on an open shape, so every face of a solid
+        # got the same key — the face centroid is the honest identity
+        c = tuple(w._faceCentroid(topo)) if kind == 'face' else \
+            tuple(w.CenterOfMass(topo))
+        return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
+                round(w.SurfaceArea(topo), 6))
     c = tuple(w.CenterOfMass(topo))
-    size = w.SurfaceArea(topo) if kind == 'face' else w.SolidsVolume(topo)
-    return (round(c[0], 6), round(c[1], 6), round(c[2], 6), round(size, 6))
+    return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
+            round(w.SolidsVolume(topo), 6))
 
 
 def new_edges(*objects, combined=None):
@@ -3785,6 +3903,16 @@ class Builder:
 
     def _wrap(self, topo):
         return self._shape_cls(topo)
+
+    def _lite_copy(self):
+        """copy.copy(<builder>) — a SHALLOW copy of the builder, exactly like
+        upstream's: the copy keeps a reference to the result object as it is
+        NOW, and every later operation rebinds the original's _obj, so the copy
+        is the snapshot the docs use it as (before_fillet = copy(part))."""
+        clone = self.__class__.__new__(self.__class__)
+        for key in list(self.__dict__.keys()):
+            clone.__dict__[key] = self.__dict__[key]
+        return clone
 
     def __enter__(self):
         self._loc_depth = len(_loc_stack)
@@ -4333,8 +4461,36 @@ def Torus(major_radius, minor_radius, rotation=(0, 0, 0),
     return _create_object(Part, maker, bbox, rotation, align, mode, BuildPart)
 
 
-def Wedge(*args, **kwargs):
-    raise NotImplementedError('Wedge is not supported in build123d-lite')
+def ConvexPolyhedron(points, rotation=(0, 0, 0), align=Align.NONE,
+                     mode=Mode.ADD):
+    """Part Object: the convex hull of the given points as a solid
+    (build123d ConvexPolyhedron): every hull facet becomes a polygonal Face,
+    which are then sewn into a Shell and solidified."""
+    pnts = [tuple(_v3(p)) for p in points]
+    # the same quickhull3d the scipy shim's ConvexHull uses (upstream reads
+    # scipy's .simplices here)
+    faces = []
+    for facet in w.ConvexHull3D([list(p) for p in pnts]):
+        corners = [pnts[int(i)] for i in facet]
+        faces.append(Face(Curve([Edge.make_line(corners[i], corners[
+            (i + 1) % len(corners)]) for i in range(len(corners))])))
+    solid = Part(w.SewSolidFromFaces([f.topo for f in faces]))
+    maker = lambda: solid.topo
+    align3 = _norm_align(align, 3) if align is not None else None
+    return _create_object(Part, maker, None, rotation, align3, mode, BuildPart)
+
+
+def Wedge(xsize, ysize, zsize, xmin, zmin, xmax, zmax, rotation=(0, 0, 0),
+          align=(Align.CENTER, Align.CENTER, Align.CENTER), mode=Mode.ADD):
+    """Part Object: a wedge whose near face is xsize by zsize and whose far
+    face spans xmin..xmax by zmin..zmax, ysize deep (build123d Wedge ->
+    Solid.make_wedge -> BRepPrimAPI_MakeWedge's min/max form)."""
+    if any([v <= 0 for v in (xsize, ysize, zsize)]):
+        raise ValueError('xsize, ysize & zsize must all be greater than zero')
+    align = _norm_align(align, 3)
+    bbox = ((0.0, 0.0, 0.0), (xsize, ysize, zsize))
+    maker = lambda: w.WedgeMinMax(xsize, ysize, zsize, xmin, zmin, xmax, zmax)
+    return _create_object(Part, maker, bbox, rotation, align, mode, BuildPart)
 
 
 def _part_maxdim(builder):
@@ -4772,11 +4928,13 @@ def Text(txt, font_size, font='Arial', font_path=None,
     kerning (matches what the reference build123d resolves 'Arial' to on
     this machine for Latin text). COMPROMISE(text): only the bundled
     FreeSans faces exist — other font names fall back with a warning,
-    font_path/path raise, and non-Latin glyph METRICS (e.g. Greek) can
-    differ from other Arial substitutes."""
-    if path is not None:
-        raise NotImplementedError('Text along a path is not supported in '
-                                  'build123d-lite')
+    font_path raises, and non-Latin glyph METRICS (e.g. Greek) can
+    differ from other Arial substitutes.
+
+    path= places each glyph on a curve like upstream's position_glyph: the
+    glyph's bottom-centre advances the relative position along the path, and
+    the glyph is rotated by the signed angle between +X and the path tangent
+    there."""
     if font_path is not None:
         raise NotImplementedError('Text font_path= is not supported in '
                                   'build123d-lite (fonts are bundled)')
@@ -4791,7 +4949,30 @@ def Text(txt, font_size, font='Arial', font_path=None,
               ' is not bundled; using FreeSans (what OCCT resolves Arial to)')
     maker = lambda: w.Text2D(txt, float(font_size), fname,
                              text_align[0], text_align[1])
-    return _sketch_object(maker, None, rotation, align, mode)
+    if path is None:
+        return _sketch_object(maker, None, rotation, align, mode)
+    # Text on a path: upstream splits the flat text into its TOP LEVEL shapes
+    # (one per glyph) and repositions each of them (Compound.make_text's
+    # position_glyph).
+    flat = Sketch(maker())
+    path_length = path.length
+    placed = []
+    for glyph in flat.faces():
+        bbox = glyph.bounding_box()
+        bottom_center_x = (bbox.min.X + bbox.max.X) / 2.0
+        relative = position_on_path + bottom_center_x / path_length
+        tangent = path.tangent_at(relative)
+        wire_angle = Vector(1, 0, 0).get_signed_angle(tangent)
+        wire_position = path.position_at(relative)
+        shift = wire_position - Vector(bottom_center_x, 0, 0)
+        moved = Pos(shift.X, shift.Y, shift.Z) * glyph
+        placed.append(moved.rotate(Axis(wire_position, (0, 0, 1)),
+                                   -wire_angle))
+    result = Sketch(w.MakeCompound([_topo(g) for g in placed]))
+    builder = _active_builder()
+    if rotation:
+        result = Rotation(0, 0, rotation) * result
+    return _combine(builder, result, mode) if builder is not None else result
 
 
 # ---------------------------------------------------------- 1D objects ---
@@ -4812,6 +4993,10 @@ def _seg_make(kind, pts, params=None):
 
 def _seg_reverse(seg):
     params = _seg_params(seg)
+    if seg[0] == 'circle' and params is not None:
+        n = _v3(params[1])
+        params = [list(params[0]), [-n[0], -n[1], -n[2]], list(params[2]),
+                  params[3]]
     if seg[0] in ('parab', 'hypr') and params is not None:
         # same parameter interval, opposite sense (GC_MakeArcOf*'s Sense flag)
         params = list(params[:6]) + [not params[6]]
@@ -4832,7 +5017,11 @@ def _seg_transform(seg, fn_point, fn_dir, loc=None):
     pts = [fn_point(_v3(p)) for p in _seg_pts(seg)]
     params = _seg_params(seg)
     if params is not None:
-        if seg[0] in ('earc', 'parab', 'hypr'):
+        if seg[0] == 'circle':
+            # [center, normal, xdir, radius]
+            params = [list(fn_point(_v3(params[0]))), list(fn_dir(_v3(params[1]))),
+                      list(fn_dir(_v3(params[2]))), params[3]]
+        elif seg[0] in ('earc', 'parab', 'hypr'):
             # [center/origin, xdir, normal, ...sizes and angles]
             params = [list(fn_point(_v3(params[0]))), list(fn_dir(_v3(params[1]))),
                       list(fn_dir(_v3(params[2])))] + list(params[3:])
@@ -4870,6 +5059,10 @@ def _seg_scale(seg, k):
             params = [[c[0] * k, c[1] * k, c[2] * k], list(params[1]),
                       list(params[2]), params[3] * k, params[4] * k] + \
                      list(params[5:])
+        elif seg[0] == 'circle':
+            cc = _v3(params[0])
+            params = [[cc[0] * k, cc[1] * k, cc[2] * k], list(params[1]),
+                      list(params[2]), params[3] * k]
         elif seg[0] in ('parab', 'hypr'):
             # a conic's PARAMETER range does not scale with its size (a
             # parabola's U is the y offset, a hyperbola's is a hyperbolic
@@ -5011,10 +5204,13 @@ def CenterArc(center, radius, start_angle, arc_size, mode=Mode.ADD):
         return [c[0] + radius * math.cos(math.radians(a)),
                 c[1] + radius * math.sin(math.radians(a)), c[2]]
     if abs(arc_size) >= 360:
-        specs = [('arc3', [at(start_angle), at(start_angle + 90),
-                           at(start_angle + 180)]),
-                 ('arc3', [at(start_angle + 180), at(start_angle + 270),
-                           at(start_angle + 360)])]
+        # ONE closed circle edge, like upstream — not two half arcs. The edge
+        # COUNT of a full circle is observable: group_by(Edge.length) keys and
+        # anything that samples per edge (make_hull) change with it.
+        xdir = [math.cos(math.radians(start_angle)),
+                math.sin(math.radians(start_angle)), 0.0]
+        specs = [('circle', [at(start_angle), at(start_angle + 360)],
+                  [list(c), [0.0, 0.0, 1.0], xdir, float(radius)])]
     else:
         specs = [('arc3', [at(start_angle), at(start_angle + arc_size / 2.0),
                            at(start_angle + arc_size)])]
@@ -8014,6 +8210,55 @@ from _scipy_shim import minimize, minimize_scalar, OptimizeResult
 `,
   'scipy.spatial': `
 from _scipy_shim import ConvexHull, Voronoi
+`,
+  pytest: `
+# pytest shim: approx() ONLY, implemented for real (pytest's documented
+# default tolerances: relative 1e-6, absolute 1e-12, whichever is looser).
+# Several build123d doc scripts close with 'assert value == pytest.approx(x)',
+# which is a genuine numeric comparison worth honouring; everything else about
+# pytest (fixtures, marks, raises, the test runner) is absent, so a script that
+# actually wants to run tests fails loudly.
+
+
+class approx:
+    def __init__(self, expected, rel=None, abs=None, nan_ok=False):
+        self.expected = expected
+        self.rel = 1e-6 if rel is None else rel
+        self.abs = 1e-12 if abs is None else abs
+        self.nan_ok = nan_ok
+
+    def _close(self, actual, expected):
+        tolerance = max(self.abs, self.rel * builtins_abs(expected))
+        return builtins_abs(actual - expected) <= tolerance
+
+    def __eq__(self, actual):
+        if isinstance(self.expected, (list, tuple)):
+            if len(actual) != len(self.expected):
+                return False
+            return all([self._close(a, e)
+                        for a, e in zip(actual, self.expected)])
+        if isinstance(self.expected, dict):
+            if set(actual.keys()) != set(self.expected.keys()):
+                return False
+            return all([self._close(actual[k], self.expected[k])
+                        for k in self.expected])
+        return self._close(actual, self.expected)
+
+    def __ne__(self, actual):
+        return not self.__eq__(actual)
+
+    def __repr__(self):
+        return 'approx(' + repr(self.expected) + ' +- ' + \\
+            repr(max(self.abs, self.rel * builtins_abs(self.expected))) + ')'
+
+
+builtins_abs = abs
+
+
+def __getattr__(name):
+    raise NotImplementedError(
+        'build123d-lite ships only pytest.approx, not ' + repr(name) +
+        ' (there is no test runner in the CAD worker)')
 `,
   os: `
 # os shim: pure PATH ARITHMETIC only (os.path.join/dirname/abspath/... and

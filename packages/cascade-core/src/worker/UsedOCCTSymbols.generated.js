@@ -53,6 +53,7 @@ export const USED_OCCT_SYMBOLS = [
   "BRepPrimAPI_MakeSphere_12",
   "BRepPrimAPI_MakeSphere_9",
   "BRepPrimAPI_MakeWedge_1",
+  "BRepPrimAPI_MakeWedge_3",
   "BRepProj_Projection_1",
   "BRepProj_Projection_2",
   "BRepTools",

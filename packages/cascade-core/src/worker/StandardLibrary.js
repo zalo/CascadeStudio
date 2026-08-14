@@ -1691,8 +1691,13 @@ function _vertexPoint(vertex) {
 function _edgeParamAtFraction(curve, u) {
   let first = curve.FirstParameter();
   let last = curve.LastParameter();
-  if (u <= 0) { return first; }
-  if (u >= 1) { return last; }
+  if (u === 0) { return first; }
+  if (u === 1) { return last; }
+  // u outside [0, 1] EXTRAPOLATES along the underlying curve, like
+  // build123d's param_at/position_at ("positions outside [0, 1] are not
+  // validated and yield OCCT-dependent results"). The docs rely on it:
+  // `line @ 2/3` parses as `(line @ 2) / 3`, so the object lands at twice the
+  // line's end point divided by three.
   let len = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, last);
   let ap = new self.oc.GCPnts_AbscissaPoint_2(curve, len * u, first);
   if (ap.IsDone()) { return ap.Parameter(); }
@@ -3207,6 +3212,16 @@ function WireFromSegments(segments, keepInputs) {
         wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
         started = true;
         continue;
+      } else if (kind === 'circle') {
+        // a FULL circle as ONE closed edge (build123d's CenterArc with
+        // |arc_size| >= 360 is a single Geom_Circle edge, and the number of
+        // edges a full circle is made of changes what sampling-based
+        // operations like make_hull see): params = [center, normal, xdir, r]
+        let p = segments[s][2];
+        let edge = CircularEdge(p[3], 360, 360, p[0], p[1], p[2]);
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
       } else if (kind === 'parab' || kind === 'hypr') {
         // conic arc: pts = [start, end] (chaining bookkeeping only), params =
         // [origin, xdir, normal, focal | [xr, yr], a1deg, a2deg, sense]
@@ -3521,6 +3536,17 @@ function MeasureShape(shape, deflection) {
 
 // --- Additional Primitives ---
 
+/** A wedge whose near face is dx by dz and whose far face spans xmin..xmax by
+ *  zmin..zmax (BRepPrimAPI_MakeWedge's min/max form) — build123d's
+ *  Solid.make_wedge. */
+function WedgeMinMax(dx, dy, dz, xmin, zmin, xmax, zmax) {
+  let result = self.CacheOp(arguments, "WedgeMinMax", () => {
+    return new self.oc.BRepPrimAPI_MakeWedge_3(dx, dy, dz, xmin, zmin, xmax, zmax).Shape();
+  });
+  self.sceneShapes.push(result);
+  return result;
+}
+
 function Wedge(dx, dy, dz, ltx) {
   let curWedge = self.CacheOp(arguments, "Wedge", () => {
     return new self.oc.BRepPrimAPI_MakeWedge_1(dx, dy, dz, ltx).Shape();
@@ -3786,6 +3812,7 @@ class CascadeStudioStandardLibrary {
 
     // Additional primitives & operations
     self.Wedge = Wedge;
+    self.WedgeMinMax = WedgeMinMax;
     self.Section = Section;
     self.ConvexHull3D = ConvexHull3D;
     self.SewSolidFromFaces = SewSolidFromFaces;
