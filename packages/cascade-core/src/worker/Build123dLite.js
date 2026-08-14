@@ -3853,10 +3853,50 @@ def _context_selector(name):
     return getter
 
 
+def _align_sketch_faces(obj):
+    """build123d's BuildSketch._add_to_context step 'Align sketch planar faces
+    with Plane.XY': a face that is NOT coplanar with Plane.XY is expressed in
+    its own plane's local frame and dropped onto z = 0, and every face is then
+    oriented +Z (an up-side-down face is negated). Without the orientation
+    half, a MIRRORED face never fuses with the face it was mirrored from
+    (coplanar faces with opposite normals are not the same domain) and a
+    BuildSketch mirror leaves two half faces behind."""
+    faces = obj.faces()
+    if not faces:
+        return obj
+    aligned = []
+    changed = False
+    for face in faces:
+        normal = face.normal_at()
+        coplanar = abs(normal.Z) > 1.0 - _TOL_1E6 and \
+            abs(face.center().Z) <= _TOL_1E6
+        if not coplanar:
+            try:
+                plane = Plane(origin=(0, 0, 0), x_dir=(1, 0, 0), z_dir=normal)
+            except Exception:
+                plane = Plane(origin=(0, 0, 0), z_dir=normal)
+            # take the transformed FACE back out of the result (a transformed
+            # shape is a generic TopoDS_Shape, which the face helpers reject)
+            face = (plane.location.inverse() * face).faces()[0]
+            face = (Pos(0, 0, -face.center().Z) * face).faces()[0]
+            changed = True
+        if face.normal_at().Z <= 0:
+            face = -face
+            changed = True
+        aligned.append(face)
+    if not changed:
+        return obj
+    topos = [_topo(f) for f in aligned]
+    return Sketch(topos[0] if len(topos) == 1 else w.MakeCompound(topos))
+
+
 def _combine(builder, obj, mode, warn_cls=None):
     """Merge obj into builder._obj per mode. Returns the CREATED object."""
     if builder is None or mode == Mode.PRIVATE:
         return obj
+    if isinstance(builder, BuildSketch) and obj is not None and \
+            getattr(obj, 'topo', None) is not None:
+        obj = _align_sketch_faces(obj)
     before = builder._obj
     pre = builder._sub_shape_lists()
     if mode == Mode.REPLACE or builder._obj is None or builder._obj.topo is None:
@@ -6425,6 +6465,35 @@ def offset(objects=None, amount=0, openings=None, kind=Kind.ARC,
         result = _wrap_like(target,
                             w.ThickSolidOffset(_topo(target), faces, amount, 1e-4))
         return _combine(builder, result, mode)
+    def _is_2d(t):
+        return t.topo is not None and len(t.solids()) == 0 and \
+            len(t.faces()) > 0
+
+    if all([_is_2d(t) for t in targets]):
+        # 2-D offset of FACES: upstream offsets the outer wire by +amount and
+        # every inner wire by -amount, rebuilds the planar face and subtracts
+        # the (possibly overshooting) inner faces — operations_generic.offset's
+        # face branch. A 3-D MakeOffsetShape here would thicken the sketch.
+        new_faces = []
+        for t in targets:
+            for face in t.faces():
+                outer = face.outer_wire().offset_2d(amount, kind=kind)
+                inner_wires = []
+                for hole in face.inner_wires():
+                    try:
+                        inner_wires.append(hole.offset_2d(-amount, kind=kind))
+                    except Exception:
+                        pass
+                new_face = Face(outer)
+                if (new_face.normal_at() - face.normal_at()).length > 0.001:
+                    new_face = -new_face
+                if inner_wires:
+                    new_face = new_face - [Face(iw) for iw in inner_wires]
+                new_faces.append(new_face)
+        obj = Sketch(w.MakeCompound([_topo(f) for f in new_faces])) \
+            if len(new_faces) > 1 else Sketch(_topo(new_faces[0]))
+        return _combine(builder, obj, mode)
+
     results = []
     for t in targets:
         results.append(_wrap_like(t, w.Offset(_topo(t), amount, 1e-4, False, join)))
