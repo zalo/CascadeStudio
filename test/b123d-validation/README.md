@@ -152,9 +152,9 @@ real build123d fails on them natively). On the OCCT 8.0.1 wasm build:
 
 | Status | Count | Note |
 |---|---|---|
-| PASS | 202 | volume within 0.5%, bbox within 1e-3/axis, per variable |
+| PASS | 204 | volume within 0.5%, bbox within 1e-3/axis, per variable |
 | MISMATCH | 8 | joints x2 + projection x2 + sort_axis — COMPROMISE(edge-orientation); filter_all_edges_circle + tips/b04 — COMPROMISE(traversal-order) (a mirror-symmetric pair / a fully TIED sort_by); objects_1d — COMPROMISE(triad-labels) |
-| ERROR | 11 | `ConstrainedArcs`/`ConstrainedLines` x2 (OCCT's Geom2dGcc solvers are unbound in this build), the `drafting` module x1 (objects_2d), `import_step` x2, `full_round` x1 (needs a 2-D Voronoi), sm_hanger x1 (1-D wire fillet + `make_brake_formed`), `sympy` x1, 3MF export x1, and 2 kernel faults (toy_truck fillet, ttt-ppp0110 fuse) |
+| ERROR | 9 | the `drafting` module x1 (objects_2d), `import_step` x2, `full_round` x1 (needs a 2-D Voronoi), sm_hanger x1 (1-D wire fillet + `make_brake_formed`), `sympy` x1, 3MF export x1, and 2 kernel faults (toy_truck fillet, ttt-ppp0110 fuse) |
 | TIMEOUT | 1 | spitfire_wing_gordon: reaches the wing Gordon surface, which needs ~390 s here (harness budget 60 s) and then returns a null surface |
 | SKIP | 10 | real build123d 0.11.1 fails natively (`bd_warehouse` x3, `ImageFace`, `ColorMap`, `tcv_screenshots`, no module-level shapes) |
 
@@ -171,7 +171,8 @@ contexts → property selectors → **177** → topology-selection properties
 EllipticalStartArc, BlendCurve, Airfoil, Triangle) → 194 → Wedge,
 ConvexPolyhedron, text-on-path, `topo_distance_to`, `pytest.approx` and the
 position_at/circle-edge/copy-snapshot fidelity fixes → 199 → 2-D face offsets +
-BuildSketch's face alignment → 201 → upstream's taper-extrude branch → **202**.
+BuildSketch's face alignment → 201 → upstream's taper-extrude branch → 202 →
+closed-form ConstrainedArcs/ConstrainedLines for circle/point targets → **204**.
 
 <details><summary>previous corpus (129 candidates / 126 scored)</summary>
 

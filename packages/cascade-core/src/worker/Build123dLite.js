@@ -5892,6 +5892,263 @@ def EllipticalStartArc(start_pnt, start_tangent, x_radius, y_radius, arc_size,
                                rotation=rotation, mode=mode)
 
 
+# ------------------------------------------- constrained arcs and lines ---
+# build123d's ConstrainedArcs/ConstrainedLines drive OCCT's 2-D geometric
+# constraint solvers (Geom2dGcc_Circ2d2TanRad, _Circ2d2TanOn, _Circ2d3Tan,
+# _Circ2dTanCen, _Circ2dTanOnRad, _Lin2d2Tan, _Lin2dTanObl) through
+# Geom2dGcc_QualifiedCurve. NONE of that family is registered in this wasm
+# build (the .d.ts declares them, but the module exposes no such property at
+# runtime - and none for GccEnt either), so the two cases the docs exercise -
+# circles/points tangent to circles/points - are solved in closed form here,
+# with the same qualifier semantics, the same trim-range rejection and the same
+# Sagitta arc selection. Anything else raises rather than approximating: the
+# result of these solvers is a SET of candidate solutions that a user selector
+# then picks from, so a different enumeration is a different answer.
+
+def _tangency_target(arg):
+    """Normalize a tangency argument to (center, radius, angular range or None,
+    qualifier). A point is the radius-0 case, which is exactly build123d's
+    Geom2d_CartesianPoint argument."""
+    qualifier = Tangency.UNQUALIFIED
+    if isinstance(arg, tuple) and len(arg) == 2 and \
+            not isinstance(arg[0], (int, float)):
+        arg, qualifier = arg[0], arg[1]
+    if isinstance(arg, Axis):
+        raise NotImplementedError(
+            'constrained arcs/lines tangent to an Axis or line need OCCT\\'s '
+            'Geom2dGcc solvers, which are not bound in this build')
+    if isinstance(arg, Vertex):
+        return (Vector(arg.to_tuple()), 0.0, None, qualifier)
+    if isinstance(arg, (Curve, Edge)) and getattr(arg, 'topo', None) is not None:
+        edge = arg if isinstance(arg, Edge) else _single_edge_of(arg)
+        if edge.geom_type != GeomType.CIRCLE:
+            raise NotImplementedError(
+                'constrained arcs/lines are only supported for CIRCULAR and '
+                'point tangency targets in build123d-lite (OCCT\\'s Geom2dGcc '
+                'solvers are not bound in this build)')
+        center = Vector(edge.arc_center)
+        radius = edge.radius
+        raw_start = Vector(tuple(w._edgePointAt(edge.topo, 0.0)))
+        raw_end = Vector(tuple(w._edgePointAt(edge.topo, 1.0)))
+        if (raw_start - raw_end).length <= _TOL_1E6:
+            angular = None                      # closed circle
+        else:
+            angular = (math.atan2(raw_start.Y - center.Y,
+                                  raw_start.X - center.X),
+                       math.atan2(raw_end.Y - center.Y,
+                                  raw_end.X - center.X))
+        return (center, radius, angular, qualifier)
+    return (Vector(tuple(_v3(arg))), 0.0, None, qualifier)
+
+
+def _tangency_distances(solution_radius, target_radius, qualifier):
+    """Centre distances that make a solution of the given radius tangent to the
+    target, per GccEnt qualifier: OUTSIDE is external contact, ENCLOSING means
+    the solution contains the target, ENCLOSED means the target contains it."""
+    outside = solution_radius + target_radius
+    enclosing = solution_radius - target_radius
+    enclosed = target_radius - solution_radius
+    if qualifier == Tangency.OUTSIDE:
+        return [outside]
+    if qualifier == Tangency.ENCLOSING:
+        return [enclosing] if enclosing > _TOL_1E6 else []
+    if qualifier == Tangency.ENCLOSED:
+        return [enclosed] if enclosed > _TOL_1E6 else []
+    out = [outside]
+    if abs(enclosing) > _TOL_1E6:
+        out.append(abs(enclosing))
+    return out
+
+
+def _circle_circle_centers(p1, d1, p2, d2):
+    """Intersections of the two centre loci (circle p1 radius d1, circle p2
+    radius d2)."""
+    delta = p2 - p1
+    d = delta.length
+    if d <= _TOL_1E6 or d > d1 + d2 + _TOL_1E6 or d < abs(d1 - d2) - _TOL_1E6:
+        return []
+    a = (d1 * d1 - d2 * d2 + d * d) / (2.0 * d)
+    h2 = d1 * d1 - a * a
+    h = math.sqrt(h2) if h2 > 0 else 0.0
+    base = p1 + delta * (a / d)
+    normal = Vector(-delta.Y / d, delta.X / d, 0.0)
+    if h <= _TOL_1E6:
+        return [base]
+    return [base + normal * h, base - normal * h]
+
+
+def _tangency_point(center, radius, target_center, target_radius, distance):
+    """Where a solution circle touches its target."""
+    direction = target_center - center
+    if direction.length <= _TOL_1E6:
+        return None
+    direction = direction * (1.0 / distance)
+    if target_radius - radius > _TOL_1E6 and \
+            abs(distance - (target_radius - radius)) <= _TOL_1E6:
+        # the solution is ENCLOSED by the target: the contact is on the far side
+        return center - direction * radius
+    return center + direction * radius
+
+
+def _angle_in_range(angular, angle):
+    """Is the angle inside the target's own (CCW) parameter range?"""
+    if angular is None:
+        return True
+    start, end = angular
+    span = (end - start) % (2.0 * math.pi)
+    offset = (angle - start) % (2.0 * math.pi)
+    return offset <= span + 1e-9 or abs(offset - 2.0 * math.pi) <= 1e-9
+
+
+def _two_sagitta_arcs(center, radius, u1, u2):
+    """Both arcs of the solution circle between the two tangency parameters
+    (build123d's _two_arc_edges_from_params: the forward span and its
+    complement)."""
+    period = 2.0 * math.pi
+    delta = (u2 - u1) % period
+    if delta <= _TOL_1E6 or abs(period - delta) <= _TOL_1E6:
+        return []
+    plane = Plane(origin=center, x_dir=(1, 0, 0), z_dir=(0, 0, 1))
+    minor = Edge.make_circle(radius, plane, math.degrees(u1),
+                             math.degrees(u1 + delta))
+    major = Edge.make_circle(radius, plane, math.degrees(u2),
+                             math.degrees(u2 + (period - delta)))
+    return [minor, major]
+
+
+def _pick_sagitta(arcs, sagitta):
+    if not arcs:
+        return []
+    if sagitta == Sagitta.BOTH:
+        return list(arcs)
+    ordered = sorted(arcs, key=lambda e: e.length)
+    return [ordered[sagitta]]
+
+
+def _constrained_arc_edges(targets, radius, sagitta):
+    """Every circular arc of the given radius tangent to both targets
+    (build123d's _make_2tan_rad_arcs, restricted to circle/point targets)."""
+    (c1, r1, rng1, q1), (c2, r2, rng2, q2) = targets
+    out = ShapeList()
+    for d1 in _tangency_distances(radius, r1, q1):
+        for d2 in _tangency_distances(radius, r2, q2):
+            for center in _circle_circle_centers(c1, d1, c2, d2):
+                t1 = _tangency_point(center, radius, c1, r1, d1)
+                t2 = _tangency_point(center, radius, c2, r2, d2)
+                if t1 is None or t2 is None:
+                    continue
+                # reject solutions whose contact point is off the TRIMMED
+                # target (upstream's _param_in_trim on the argument curve)
+                if not _angle_in_range(rng1, math.atan2(t1.Y - c1.Y,
+                                                        t1.X - c1.X)):
+                    continue
+                if not _angle_in_range(rng2, math.atan2(t2.Y - c2.Y,
+                                                        t2.X - c2.X)):
+                    continue
+                u1 = math.atan2(t1.Y - center.Y, t1.X - center.X)
+                u2 = math.atan2(t2.Y - center.Y, t2.X - center.X)
+                for arc in _pick_sagitta(_two_sagitta_arcs(center, radius,
+                                                           u1, u2), sagitta):
+                    if not any([(arc.center() - other.center()).length <=
+                                _TOL_1E6 and
+                                abs(arc.length - other.length) <= _TOL_1E6
+                                for other in out]):
+                        out.append(arc)
+    if not out:
+        raise RuntimeError('Unable to find a tangent arc')
+    return out
+
+
+def _constrained_line_edges(targets):
+    """The common tangent lines of two circles/points, each trimmed between its
+    two contact points (build123d's _make_2tan_lines)."""
+    (c1, r1, rng1, _q1), (c2, r2, rng2, _q2) = targets
+    delta = c2 - c1
+    d = delta.length
+    if d <= _TOL_1E6:
+        raise RuntimeError('Unable to find a tangent line')
+    base_angle = math.atan2(delta.Y, delta.X)
+    out = ShapeList()
+    for s1, s2 in ((1.0, 1.0), (1.0, -1.0)):
+        k = s2 * r2 - s1 * r1
+        if abs(k / d) > 1.0 + 1e-12:
+            continue
+        offset = math.acos(max(-1.0, min(1.0, k / d)))
+        for sign in (1.0, -1.0):
+            theta = base_angle + sign * offset
+            normal = Vector(math.cos(theta), math.sin(theta), 0.0)
+            t1 = c1 - normal * (s1 * r1)
+            t2 = c2 - normal * (s2 * r2)
+            if (t1 - t2).length <= _TOL_1E6:
+                continue
+            if not _angle_in_range(rng1, math.atan2(t1.Y - c1.Y,
+                                                    t1.X - c1.X)) and r1 > 0:
+                continue
+            if not _angle_in_range(rng2, math.atan2(t2.Y - c2.Y,
+                                                    t2.X - c2.X)) and r2 > 0:
+                continue
+            edge = Edge.make_line(t1, t2)
+            if not any([(edge.center() - other.center()).length <= _TOL_1E6 and
+                        abs(edge.length - other.length) <= _TOL_1E6
+                        for other in out]):
+                out.append(edge)
+    if not out:
+        raise RuntimeError('Unable to find a tangent line')
+    return out
+
+
+def _constrained_curve(edges, selector, mode):
+    """Apply the user's selector and hand the result to the BuildLine, like
+    build123d's BaseCurveObject does."""
+    selected = selector(edges) if selector is not None else edges
+    if selected is None:
+        raise ValueError('selector must return an Edge or list of Edges, not '
+                         'None')
+    if isinstance(selected, (Edge, Curve)):
+        selected = [selected]
+    if not selected:
+        raise ValueError('selector must return an Edge or list of Edges, not '
+                         'None')
+    specs = []
+    for edge in selected:
+        specs.extend(_specs_from_topo_edges(edge))
+    return _line_object(specs, mode)
+
+
+def ConstrainedArcs(*args, radius=None, center=None, center_on=None,
+                    sagitta=Sagitta.SHORT, selector=None, mode=Mode.ADD):
+    """Circular arc(s) constrained by tangency to two other objects
+    (build123d ConstrainedArcs). Supported here: two CIRCLE/point targets with
+    a given radius, with per-target Tangency qualifiers, Sagitta selection and
+    a selector - see the module comment for why the other overloads raise."""
+    if center is not None or center_on is not None or len(args) != 2 or \
+            radius is None:
+        raise NotImplementedError(
+            'build123d-lite supports ConstrainedArcs(two circle/point '
+            'targets, radius=) only; the center=/center_on=/three-tangency '
+            'forms need OCCT\\'s Geom2dGcc solvers, which are not bound in '
+            'this build')
+    if radius <= 0:
+        raise ValueError('radius must be > 0.0')
+    targets = [_tangency_target(a) for a in args]
+    return _constrained_curve(_constrained_arc_edges(targets, radius, sagitta),
+                              selector, mode)
+
+
+def ConstrainedLines(*args, angle=None, direction=None, selector=None,
+                     mode=Mode.ADD):
+    """Line(s) constrained by tangency to two other objects (build123d
+    ConstrainedLines). Supported here: two CIRCLE/point targets (the common
+    tangents), each trimmed between its contact points."""
+    if angle is not None or direction is not None or len(args) != 2:
+        raise NotImplementedError(
+            'build123d-lite supports ConstrainedLines(two circle/point '
+            'targets) only; the angle=/direction= forms need OCCT\\'s '
+            'Geom2dGcc solvers, which are not bound in this build')
+    targets = [_tangency_target(a) for a in args]
+    return _constrained_curve(_constrained_line_edges(targets), selector, mode)
+
+
 def BSpline(control_points, knots, degree, weights=None, periodic=False,
             mode=Mode.ADD):
     """An EXACT B-spline edge from poles, a knot sequence and a degree
