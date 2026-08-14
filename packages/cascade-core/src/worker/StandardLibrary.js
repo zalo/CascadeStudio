@@ -902,6 +902,44 @@ function _edgeArcCenter(edge) {
   return [loc.X(), loc.Y(), loc.Z()];
 }
 
+/** An EXACT B-spline edge from poles, unique knots + multiplicities, degree and
+ *  optional weights (build123d's Edge.make_bspline -> Geom_BSplineCurve). */
+function BSplineEdge(poles, knots, mults, degree, weights, periodic) {
+  return self.CacheOp(arguments, "BSplineEdge", () => {
+    let poleArr = new self.oc.TColgp_Array1OfPnt_2(1, poles.length);
+    for (let i = 0; i < poles.length; i++) {
+      poleArr.SetValue(i + 1, new self.oc.gp_Pnt_3(poles[i][0], poles[i][1], poles[i][2] || 0));
+    }
+    let knotArr = new self.oc.TColStd_Array1OfReal_2(1, knots.length);
+    for (let i = 0; i < knots.length; i++) { knotArr.SetValue(i + 1, knots[i]); }
+    let multArr = new self.oc.TColStd_Array1OfInteger_2(1, mults.length);
+    for (let i = 0; i < mults.length; i++) { multArr.SetValue(i + 1, mults[i]); }
+    let spline;
+    if (weights && weights.length) {
+      let weightArr = new self.oc.TColStd_Array1OfReal_2(1, weights.length);
+      for (let i = 0; i < weights.length; i++) { weightArr.SetValue(i + 1, weights[i]); }
+      spline = new self.oc.Geom_BSplineCurve_2(poleArr, weightArr, knotArr, multArr,
+        degree, !!periodic, false);
+    } else {
+      spline = new self.oc.Geom_BSplineCurve_1(poleArr, knotArr, multArr, degree, !!periodic);
+    }
+    return new self.oc.BRepBuilderAPI_MakeEdge_24(
+      new self.oc.Handle_Geom_Curve_2(spline)).Edge();
+  });
+}
+
+/** The order-th derivative of an edge's curve at the normalized arc-length
+ *  position u — build123d's Mixin1D.derivative_at (BRepAdaptor_Curve::DN at
+ *  the same GCPnts_AbscissaPoint parameter position_at uses). NOT normalized:
+ *  the magnitude carries the curve's natural "speed", which is what
+ *  BlendCurve's tangent scalars scale. */
+function _edgeDerivativeAt(edge, u, order) {
+  let e = _asEdge(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(e);
+  let vec = curve.DN(_edgeParamAtFraction(curve, u), order);
+  return [vec.X(), vec.Y(), vec.Z()];
+}
+
 /** Normal of a circular/elliptical edge: its gp_Circ/gp_Elips axis direction
  *  (build123d Mixin1D.normal's conic branch). null for any other curve type —
  *  the caller falls back to a planarity check. */
@@ -3169,6 +3207,38 @@ function WireFromSegments(segments, keepInputs) {
         wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
         started = true;
         continue;
+      } else if (kind === 'parab' || kind === 'hypr') {
+        // conic arc: pts = [start, end] (chaining bookkeeping only), params =
+        // [origin, xdir, normal, focal | [xr, yr], a1deg, a2deg, sense]
+        // — build123d's Edge.make_parabola / make_hyperbola
+        let p = segments[s][2];
+        let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(p[0][0], p[0][1], p[0][2]),
+          new self.oc.gp_Dir_5(p[2][0], p[2][1], p[2][2]));
+        ax2.SetXDirection(new self.oc.gp_Dir_5(p[1][0], p[1][1], p[1][2]));
+        let deg = Math.PI / 180;
+        let arc;
+        if (kind === 'parab') {
+          arc = new self.oc.GC_MakeArcOfParabola_1(
+            new self.oc.gp_Parab_2(ax2, p[3]), p[4] * deg, p[5] * deg, !!p[6]).Value();
+        } else {
+          arc = new self.oc.GC_MakeArcOfHyperbola_1(
+            new self.oc.gp_Hypr_2(ax2, p[3][0], p[3][1]), p[4] * deg, p[5] * deg,
+            !!p[6]).Value();
+        }
+        let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(
+          new self.oc.Handle_Geom_Curve_2(arc.get())).Edge();
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
+      } else if (kind === 'bspline') {
+        // EXACT B-spline: pts = [start, end] (chaining bookkeeping only),
+        // params = [poles, knots, mults, degree, weights, periodic]
+        // — build123d's Edge.make_bspline
+        let p = segments[s][2];
+        let edge = BSplineEdge(p[0], p[1], p[2], p[3], p[4], p[5]);
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
       } else {
         console.error("WireFromSegments: unknown segment kind '" + kind + "'");
         continue;
@@ -3676,6 +3746,8 @@ class CascadeStudioStandardLibrary {
     self._edgeArcCenter = _edgeArcCenter;
     self._edgeArcRadius = _edgeArcRadius;
     self._edgeArcNormal = _edgeArcNormal;
+    self._edgeDerivativeAt = _edgeDerivativeAt;
+    self.BSplineEdge = BSplineEdge;
     self._distShapeShape = _distShapeShape;
     self._faceCurvatureSign = _faceCurvatureSign;
     self.CircularEdge = CircularEdge;

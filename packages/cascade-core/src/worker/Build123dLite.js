@@ -132,6 +132,37 @@ class Side:
     BOTH = 'BOTH'
 
 
+class AngularDirection:
+    CLOCKWISE = 'CLOCKWISE'
+    COUNTER_CLOCKWISE = 'COUNTER_CLOCKWISE'
+
+
+class ContinuityLevel:
+    """How smoothly a blend joins its neighbours (build123d
+    ContinuityLevel): position only, tangent, or curvature."""
+    C0 = 0
+    C1 = 1
+    C2 = 2
+
+
+class Sagitta:
+    """Which of the two arcs between the tangency points a constrained-arc
+    solution contributes (build123d Sagitta — the values ARE the indices into
+    the length-sorted pair)."""
+    SHORT = 0
+    LONG = -1
+    BOTH = 1
+
+
+class Tangency:
+    """Where the solution lies relative to a tangency argument (build123d
+    Tangency, GccEnt's qualifiers)."""
+    UNQUALIFIED = 'UNQUALIFIED'
+    ENCLOSING = 'ENCLOSING'
+    ENCLOSED = 'ENCLOSED'
+    OUTSIDE = 'OUTSIDE'
+
+
 class SortBy:
     LENGTH = 'LENGTH'
     AREA = 'AREA'
@@ -829,7 +860,7 @@ class Location:
                 fn_dir = lambda d: _mat_vec(self._R, d)
                 try:
                     moved._specs = [_seg_transform(s, self._transform_point,
-                                                   fn_dir)
+                                                   fn_dir, self)
                                     for s in moved._specs]
                 except NotImplementedError:
                     # opaque 'raw' segments cannot be re-derived; the moved
@@ -1909,6 +1940,88 @@ class Curve(Shape):
     def __xor__(self, u):  # curve ^ u -> location
         return self.location_at(u)
 
+    def _to_param(self, value):
+        """A float position stays as it is; a point becomes its normalized
+        position along this shape (build123d Mixin1D._to_param)."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        return self.param_at_point(value)
+
+    def derivative_at(self, position, order=2):
+        """The order-th derivative of the underlying curve at the normalized
+        position (build123d Mixin1D.derivative_at). NOT normalized: the
+        magnitude is the curve's natural speed, which is what BlendCurve's
+        tangent_scalars scale. Odd orders follow the shape's orientation."""
+        u = self._to_param(position)
+        es = self._edge_chain()
+        if len(es) == 1:
+            # like position_at, a REVERSED edge is traversed the other way
+            # (upstream's _occt_param_at maps u -> 1 - u before evaluating)
+            forward = bool(w._edgeIsForward(es[0]))
+            edge, local_u, flipped = es[0], (u if forward else 1.0 - u), False
+        else:
+            lens = [w._edgeLength(e) for e in es]
+            ends = [(tuple(w._edgePointAt(e, 0.0)),
+                     tuple(w._edgePointAt(e, 1.0))) for e in es]
+            flips = self._chain_flips(es, ends)
+            total = sum(lens)
+            target = max(0.0, min(1.0, u)) * total
+            acc = 0.0
+            edge, local_u, flipped = es[-1], 1.0, flips[-1]
+            for i, e in enumerate(es):
+                if target <= acc + lens[i] + 1e-12 or i == len(es) - 1:
+                    local_u = (target - acc) / lens[i] if lens[i] > 0 else 0.0
+                    if flips[i]:
+                        local_u = 1.0 - local_u
+                    edge, flipped = e, flips[i]
+                    break
+                acc += lens[i]
+        d = Vector(tuple(w._edgeDerivativeAt(edge, float(local_u), int(order))))
+        reverse = flipped if len(es) > 1 else not bool(w._edgeIsForward(es[0]))
+        if order % 2 == 1 and reverse:
+            d = -d
+        return d
+
+    def trim(self, start, end):
+        """A new Edge keeping only the section between two normalized
+        positions, which may be given as POINTS on the curve (build123d
+        Edge.trim)."""
+        return _single_edge_of(self).trim(start, end)
+
+    def curvature_comb(self, count=100, max_tooth_size=None):
+        """The curvature comb of a planar (XY) curve: short line Edges erected
+        along the left normal, their length proportional to the signed
+        curvature (build123d Mixin1D.curvature_comb, ported statement for
+        statement)."""
+        closed = bool(self.is_closed) if hasattr(self, 'is_closed') else False
+        # numpy's linspace(0, 1, count, endpoint=not closed)
+        if closed:
+            u_values = [i / count for i in range(count)]
+        else:
+            u_values = [i / (count - 1) for i in range(count)] if count > 1 \
+                else [0.0]
+        kappas, tangents = [], []
+        for u in u_values:
+            tangent = self.derivative_at(u, 1)
+            curvature = self.derivative_at(u, 2)
+            tangents.append(tangent)
+            cross = tangent.cross(curvature)
+            kappa = cross.length / (tangent.length ** 3 + _TOL_1E6)
+            kappas.append(kappa if cross.Z >= 0 else -kappa)
+        max_kappa_size = max([_TOL_1E6] + [abs(k) for k in kappas])
+        curve_size = max(tuple(self.bounding_box().size))
+        tooth = max_tooth_size if max_tooth_size is not None else curve_size / 10
+        scale_factor = tooth / max_kappa_size
+        out = ShapeList()
+        for i in range(len(u_values)):
+            length = scale_factor * kappas[i]
+            if abs(length) < _TOL_1E6:
+                continue
+            pnt = self._walk(u_values[i], False)
+            kappa_dir = tangents[i].normalized().cross(Vector(0, 0, 1))
+            out.append(Edge.make_line(pnt, pnt + kappa_dir * length))
+        return out
+
     def reversed(self):
         """A copy of this Edge/Wire with the opposite orientation
         (build123d Edge.reversed - the OCCT orientation flag, not a rebuild)."""
@@ -2346,8 +2459,30 @@ class Edge(Curve):
 
     def trim(self, start, end):
         """A new edge keeping only the section between two normalized
-        arc-length positions (build123d Edge.trim)."""
-        return Edge(w.TrimEdge(self.topo, float(start), float(end)))
+        arc-length positions, each of which may be given as a POINT on the
+        edge instead (build123d Edge.trim)."""
+        start_u = self._to_param(start)
+        end_u = self._to_param(end)
+        trimmed = Edge(w.TrimEdge(self.topo, float(min(start_u, end_u)),
+                                  float(max(start_u, end_u))))
+        # keep the requested direction (upstream rebuilds it reversed)
+        start_point = self.position_at(start_u)
+        same_start = (trimmed.position_at(0) - start_point).length < _TOL_1E6
+        same_direction = self.tangent_at(start_u).dot(
+            trimmed.tangent_at(0)) > 1 - _TOL_1E6
+        if same_start and same_direction:
+            return trimmed
+        return _reverse_1d(trimmed)
+
+    def trim_to_other(self, other):
+        """The SHORTEST piece of this edge trimmed at its intersections with
+        other, or None when they do not intersect (build123d
+        Edge.trim_to_other)."""
+        points = self.find_intersection_points(other)
+        if not points:
+            return None
+        trims = ShapeList([self.trim(0.0, p) for p in points])
+        return trims.sort_by(Edge.length)[0]
 
     def _extend_spline(self, at_start, surface_face, extension_factor=0.1):
         """A copy of this B-spline edge extended past one end by
@@ -3873,7 +4008,7 @@ class BuildLine(Builder):
         wp = self.workplanes[0]
         loc = wp.location
         fn_dir = lambda d: _mat_vec(loc._R, d)
-        specs = [_seg_transform(s, loc._transform_point, fn_dir)
+        specs = [_seg_transform(s, loc._transform_point, fn_dir, loc)
                  for s in self._specs]
         if specs:
             self._obj = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
@@ -4434,6 +4569,192 @@ def Trapezoid(width, height, left_side_angle, right_side_angle=None,
                           align, mode)
 
 
+class HeadType:
+    STRAIGHT = 'STRAIGHT'
+    CURVED = 'CURVED'
+    FILLETED = 'FILLETED'
+
+
+def ArrowHead(size, head_type=HeadType.CURVED, rotation=0, mode=Mode.ADD):
+    """Sketch Object: an arrow head, tip at the origin pointing +X
+    (build123d's drafting.ArrowHead, same construction)."""
+    if head_type == HeadType.STRAIGHT:
+        return Polygon((-size, size / 3), (-size, -size / 3), (0, 0),
+                       align=None, rotation=rotation, mode=mode)
+    if head_type not in (HeadType.CURVED, HeadType.FILLETED):
+        raise ValueError('unknown arrow HeadType ' + repr(head_type))
+    with BuildSketch() as arrow_head:
+        with BuildLine():
+            side = TangentArc((0, 0), (-size, size / 3),
+                              tangent=(-size, size / 6))
+            Line(side @ 1, (-7 * size / 8, 0))
+            mirror(about=Plane.XZ)
+        make_face()
+        if head_type == HeadType.FILLETED:
+            fillet(arrow_head.vertices().filter_by_position(
+                Axis.X, -2 * size, -size / 5), radius=size / 20)
+    return add(arrow_head.sketch, rotation=rotation, mode=mode) \
+        if _active_builder() is not None else arrow_head.sketch
+
+
+# --------------------------------------------------------------- Triangle ---
+# build123d's Triangle solves the triangle with the trianglesolver package
+# (Steven Byrnes, Apache-2.0-compatible MIT); its law-of-sines/cosines solver
+# is small enough to port outright, which is what these four helpers are.
+
+def _tri_aaas(D, E, F, f):
+    return (f * math.sin(D) / math.sin(F), f * math.sin(E) / math.sin(F), f,
+            D, E, F)
+
+
+def _tri_sss(d, e, f):
+    if not (d + e > f and e + f > d and f + d > e):
+        raise ValueError('no such triangle')
+    F = math.acos((d ** 2 + e ** 2 - f ** 2) / (2 * d * e))
+    E = math.acos((d ** 2 + f ** 2 - e ** 2) / (2 * d * f))
+    return (d, e, f, math.pi - F - E, E, F)
+
+
+def _tri_sas(d, e, F):
+    return _tri_sss(d, e, math.sqrt(d ** 2 + e ** 2 - 2 * d * e * math.cos(F)))
+
+
+def _tri_ssa(d, e, D, ssa_flag):
+    sin_e = math.sin(D) * e / d
+    if abs(sin_e - 1.0) < 1e-9:
+        E = math.pi / 2
+    else:
+        if sin_e >= 1.0:
+            raise ValueError('no such triangle')
+        e_acute = math.asin(sin_e)
+        e_obtuse = math.pi - e_acute
+        acute_ok = 0 < (math.pi - D - e_acute) < math.pi
+        obtuse_ok = 0 < (math.pi - D - e_obtuse) < math.pi
+        if ssa_flag == 'acute':
+            if not acute_ok:
+                raise ValueError('no such triangle')
+            E = e_acute
+        elif ssa_flag == 'obtuse':
+            if not obtuse_ok:
+                raise ValueError('no such triangle')
+            E = e_obtuse
+        else:
+            if acute_ok and obtuse_ok:
+                raise ValueError('Two different triangles fit this '
+                                 'description')
+            if not acute_ok and not obtuse_ok:
+                raise ValueError('No such triangle')
+            E = e_acute if acute_ok else e_obtuse
+    F = math.pi - D - E
+    e_, f_, d_, E_, F_, D_ = _tri_aaas(E, F, D, d)
+    return (d_, e_, f_, D_, E_, F_)
+
+
+def _tri_solve(a=None, b=None, c=None, A=None, B=None, C=None,
+               ssa_flag='forbid'):
+    """trianglesolver.solve, ported: give any three of the six and get all
+    six back (angles in RADIANS)."""
+    given = [x for x in (a, b, c, A, B, C) if x is not None]
+    if len(given) != 3:
+        raise ValueError('Must provide exactly 3 inputs')
+    sides = [x for x in (a, b, c) if x is not None]
+    if not sides:
+        raise ValueError('Must provide at least 1 side length')
+    if len(sides) == 3:
+        return _tri_sss(a, b, c)
+    if len(sides) == 2:
+        if a is not None and A is not None and b is not None:
+            return _tri_ssa(a, b, A, ssa_flag)
+        if a is not None and A is not None and c is not None:
+            a, c, b, A, C, B = _tri_ssa(a, c, A, ssa_flag)
+            return (a, b, c, A, B, C)
+        if b is not None and B is not None and a is not None:
+            b, a, c, B, A, C = _tri_ssa(b, a, B, ssa_flag)
+            return (a, b, c, A, B, C)
+        if b is not None and B is not None and c is not None:
+            b, c, a, B, C, A = _tri_ssa(b, c, B, ssa_flag)
+            return (a, b, c, A, B, C)
+        if c is not None and C is not None and a is not None:
+            c, a, b, C, A, B = _tri_ssa(c, a, C, ssa_flag)
+            return (a, b, c, A, B, C)
+        if c is not None and C is not None and b is not None:
+            c, b, a, C, B, A = _tri_ssa(c, b, C, ssa_flag)
+            return (a, b, c, A, B, C)
+        if a is not None and b is not None and C is not None:
+            return _tri_sas(a, b, C)
+        if b is not None and c is not None and A is not None:
+            b, c, a, B, C, A = _tri_sas(b, c, A)
+            return (a, b, c, A, B, C)
+        if c is not None and a is not None and B is not None:
+            c, a, b, C, A, B = _tri_sas(c, a, B)
+            return (a, b, c, A, B, C)
+        raise ValueError('unsupported triangle specification')
+    if A is None:
+        A = math.pi - B - C
+    elif B is None:
+        B = math.pi - A - C
+    else:
+        C = math.pi - A - B
+    if not (A > 0 and B > 0 and C > 0):
+        raise ValueError('no such triangle')
+    if c is not None:
+        return _tri_aaas(A, B, C, c)
+    if a is not None:
+        b, c, a, B, C, A = _tri_aaas(B, C, A, a)
+        return (a, b, c, A, B, C)
+    c, a, b, C, A, B = _tri_aaas(C, A, B, b)
+    return (a, b, c, A, B, C)
+
+
+def Triangle(a=None, b=None, c=None, A=None, B=None, C=None, align=None,
+             rotation=0, mode=Mode.ADD):
+    """Sketch Object: a triangle from one side length and any two other sides
+    or interior angles (build123d Triangle). Side 'a' is the bottom, 'b' the
+    right, going counter-clockwise; angle 'X' is opposite side 'x'. The result
+    carries the solved a/b/c/A/B/C, the three edges and the three vertices."""
+    if [v is None for v in (a, b, c)].count(True) == 3 or \
+            [v is None for v in (a, b, c, A, B, C)].count(True) != 3:
+        raise ValueError('One length and two other values must be provided')
+    ar, br, cr, Ar, Br, Cr = _tri_solve(
+        a, b, c,
+        math.radians(A) if A is not None else None,
+        math.radians(B) if B is not None else None,
+        math.radians(C) if C is not None else None)
+    apex = Vector(cr, 0, 0).rotate(Axis.Z, math.degrees(Br))
+    pts = [(0.0, 0.0, 0.0), (ar, 0.0, 0.0), (apex.X, apex.Y, 0.0)]
+    cx = sum([p[0] for p in pts]) / 3.0
+    cy = sum([p[1] for p in pts]) / 3.0
+    pts = [[p[0] - cx, p[1] - cy, 0.0] for p in pts]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    maker = lambda: w.Polygon(pts)
+    obj = _sketch_object(maker, ((min(xs), min(ys)), (max(xs), max(ys))),
+                         rotation, align, mode)
+    obj.a, obj.b, obj.c = ar, br, cr
+    obj.A, obj.B, obj.C = math.degrees(Ar), math.degrees(Br), math.degrees(Cr)
+    obj.edge_a = obj.edges().filter_by(
+        lambda e: abs(e.length - ar) < _TOL_1E6)[0]
+    obj.edge_b = obj.edges().filter_by(
+        lambda e: abs(e.length - br) < _TOL_1E6 and
+        not (abs(e.length - obj.edge_a.length) < _TOL_1E6 and
+             (e.center() - obj.edge_a.center()).length < _TOL_1E6))[0]
+    obj.edge_c = obj.edges().filter_by(
+        lambda e: all([(e.center() - other.center()).length > _TOL_1E6
+                       for other in (obj.edge_a, obj.edge_b)]))[0]
+
+    def _common_vertex(e1, e2):
+        for v1 in e1.vertices():
+            for v2 in e2.vertices():
+                if (Vector(v1.to_tuple()) - Vector(v2.to_tuple())).length < \
+                        _TOL_1E6:
+                    return v1
+        raise ValueError('these edges share no vertex')
+    obj.vertex_A = _common_vertex(obj.edge_b, obj.edge_c)
+    obj.vertex_B = _common_vertex(obj.edge_a, obj.edge_c)
+    obj.vertex_C = _common_vertex(obj.edge_a, obj.edge_b)
+    return obj
+
+
 class TextAlign:
     LEFT = 'left'
     CENTER = 'center'
@@ -4491,6 +4812,9 @@ def _seg_make(kind, pts, params=None):
 
 def _seg_reverse(seg):
     params = _seg_params(seg)
+    if seg[0] in ('parab', 'hypr') and params is not None:
+        # same parameter interval, opposite sense (GC_MakeArcOf*'s Sense flag)
+        params = list(params[:6]) + [not params[6]]
     if seg[0] == 'interp' and params is not None:
         tans = params[0]
         if tans:
@@ -4500,7 +4824,7 @@ def _seg_reverse(seg):
     return _seg_make(seg[0], list(reversed(_seg_pts(seg))), params)
 
 
-def _seg_transform(seg, fn_point, fn_dir):
+def _seg_transform(seg, fn_point, fn_dir, loc=None):
     """Rigid-transform a segment: points via fn_point, directions via fn_dir.
     Kind-aware params: earc carries [center, xdir, normal, ...], interp
     carries [tangents, periodic, scale], raw carries an untransformable
@@ -4508,9 +4832,14 @@ def _seg_transform(seg, fn_point, fn_dir):
     pts = [fn_point(_v3(p)) for p in _seg_pts(seg)]
     params = _seg_params(seg)
     if params is not None:
-        if seg[0] == 'earc':
+        if seg[0] in ('earc', 'parab', 'hypr'):
+            # [center/origin, xdir, normal, ...sizes and angles]
             params = [list(fn_point(_v3(params[0]))), list(fn_dir(_v3(params[1]))),
                       list(fn_dir(_v3(params[2])))] + list(params[3:])
+        elif seg[0] == 'bspline':
+            # only the POLES move; knots/mults/degree/weights are invariant
+            params = [[list(fn_point(_v3(p))) for p in params[0]]] + \
+                list(params[1:])
         elif seg[0] == 'interp':
             tans = params[0]
             if tans:
@@ -4518,12 +4847,15 @@ def _seg_transform(seg, fn_point, fn_dir):
                         for t in tans]
             params = [tans] + list(params[1:])
         elif seg[0] == 'raw':
-            # COMPROMISE(raw-segments): edges that are not lines/circles
-            # ride through wires as opaque TopoDS edges — exact geometry,
-            # but they cannot be re-derived under transforms (the caller
-            # falls back to transforming the baked topo and dropping specs)
-            raise NotImplementedError('cannot transform an opaque edge '
-                                      'segment in build123d-lite')
+            # COMPROMISE(raw-segments): edges that are not lines/circles ride
+            # through wires as opaque TopoDS edges. A rigid transform given as
+            # a Location can still be applied to the edge itself (exact); an
+            # arbitrary point/direction mapping cannot, and the caller falls
+            # back to transforming the baked topo and dropping specs.
+            if loc is None:
+                raise NotImplementedError('cannot transform an opaque edge '
+                                          'segment in build123d-lite')
+            params = [_topo(loc * Edge(params[0]))]
     return _seg_make(seg[0], pts, params)
 
 
@@ -4538,6 +4870,16 @@ def _seg_scale(seg, k):
             params = [[c[0] * k, c[1] * k, c[2] * k], list(params[1]),
                       list(params[2]), params[3] * k, params[4] * k] + \
                      list(params[5:])
+        elif seg[0] in ('parab', 'hypr'):
+            # a conic's PARAMETER range does not scale with its size (a
+            # parabola's U is the y offset, a hyperbola's is a hyperbolic
+            # angle), so scaling one would need the trim range recomputed —
+            # refuse rather than return the wrong arc
+            raise NotImplementedError('cannot scale a parabolic/hyperbolic '
+                                      'arc in build123d-lite')
+        elif seg[0] == 'bspline':
+            params = [[[p[0] * k, p[1] * k, p[2] * k] for p in
+                       [_v3(q) for q in params[0]]]] + list(params[1:])
         elif seg[0] == 'interp':
             # tangents stay UNCHANGED: GeomAPI_Interpolate parametrizes by
             # chord length, so scaling the points by k scales the parameter
@@ -5125,6 +5467,309 @@ def EllipticalCenterArc(center, x_radius, y_radius, start_angle=0.0,
     spec = ('earc', [at(start_angle), at(end_angle)],
             [list(c), xdir, [0.0, 0.0, 1.0], major, minor, a0, a1])
     return _line_object([spec], mode)
+
+
+# ----------------------------------------------- conic & spline 1-D objects
+# build123d's analytic 1-D objects that are not circular arcs: exact conics
+# (gp_Parab / gp_Hypr / gp_Elips through GC_MakeArcOf*) and exact B-splines
+# (Geom_BSplineCurve from poles + knots). All of them build a LOCAL segment
+# spec, which BuildLine transforms by its workplane on exit like every other
+# 1-D object.
+
+def _rot_z(v, degrees_):
+    """Rotate a 3-vector about +Z (the workplane normal for 1-D objects)."""
+    a = math.radians(degrees_)
+    ca, sa = math.cos(a), math.sin(a)
+    return [v[0] * ca - v[1] * sa, v[0] * sa + v[1] * ca, v[2]]
+
+
+def _parabola_point(origin, xdir, ydir, focal, u):
+    """OCCT gp_Parab parametrization: P(U) = O + U^2/(4 f) X + U Y."""
+    k = u * u / (4.0 * focal)
+    return [origin[i] + k * xdir[i] + u * ydir[i] for i in range(3)]
+
+
+def _hyperbola_point(origin, xdir, ydir, major, minor, u):
+    """OCCT gp_Hypr parametrization: P(U) = O + a cosh(U) X + b sinh(U) Y."""
+    ch, sh = math.cosh(u), math.sinh(u)
+    return [origin[i] + major * ch * xdir[i] + minor * sh * ydir[i]
+            for i in range(3)]
+
+
+def _conic_arc_spec(kind, center, xdir, normal, sizes, a1_deg, a2_deg, sense):
+    """A 'parab'/'hypr' segment spec, with the chaining end points evaluated
+    from the same parametric equation the kernel will use."""
+    ydir = list(Vector(tuple(normal)).cross(Vector(tuple(xdir))))
+    u1, u2 = math.radians(a1_deg), math.radians(a2_deg)
+    if kind == 'parab':
+        p0 = _parabola_point(center, xdir, ydir, sizes, u1)
+        p1 = _parabola_point(center, xdir, ydir, sizes, u2)
+    else:
+        p0 = _hyperbola_point(center, xdir, ydir, sizes[0], sizes[1], u1)
+        p1 = _hyperbola_point(center, xdir, ydir, sizes[0], sizes[1], u2)
+    if not sense:
+        p0, p1 = p1, p0
+    return (kind, [p0, p1],
+            [list(center), list(xdir), list(normal), sizes, a1_deg, a2_deg,
+             bool(sense)])
+
+
+def _arc_limit_curve(specs, arc_limit):
+    """build123d's numeric-or-limit arc_size: build the half arc both ways,
+    trim each at its first intersection with the limit and keep the shorter
+    (ParabolicCenterArc / HyperbolicCenterArc)."""
+    full = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
+    edge = _single_edge_of(full)
+    candidates = ShapeList()
+    for candidate in (edge, _reverse_1d(edge)):
+        trimmed = candidate.trim_to_other(arc_limit)
+        if trimmed is not None:
+            candidates.append(trimmed)
+    if not candidates:
+        raise ValueError('the arc does not intersect the arc limit ' +
+                         repr(arc_limit))
+    return candidates.sort_by(Edge.length)[0]
+
+
+def ParabolicCenterArc(vertex, focal_length, start_angle=0.0, end_angle=None,
+                       arc_size=90.0, rotation=0.0, angular_direction=None,
+                       mode=Mode.ADD):
+    """Parabolic arc about a vertex point (build123d ParabolicCenterArc):
+    gp_Parab(plane, focal_length) trimmed by GC_MakeArcOfParabola between the
+    two given "angles" (upstream converts them to radians and passes them as
+    the curve parameters)."""
+    c = _v3(vertex)
+    xdir = _rot_z([1.0, 0.0, 0.0], rotation)
+    normal = [0.0, 0.0, 1.0]
+    if end_angle is not None or angular_direction is not None:
+        if not isinstance(arc_size, (int, float)):
+            raise ValueError('ParabolicCenterArc limit arc_size cannot be '
+                             'combined with end_angle / angular_direction')
+        end_a = end_angle if end_angle is not None else start_angle + arc_size
+        sense = angular_direction != AngularDirection.CLOCKWISE
+        spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
+                               start_angle, end_a, sense)
+        return _line_object([spec], mode)
+    if isinstance(arc_size, (int, float)):
+        spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
+                               start_angle, start_angle + arc_size,
+                               arc_size >= 0)
+        return _line_object([spec], mode)
+    spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
+                           start_angle, start_angle + 180.0, True)
+    trimmed = _arc_limit_curve([spec], arc_size)
+    return _line_object(_specs_from_topo_edges(trimmed), mode)
+
+
+def HyperbolicCenterArc(center, x_radius, y_radius, start_angle=0.0,
+                        end_angle=None, arc_size=90.0, rotation=0.0,
+                        angular_direction=None, mode=Mode.ADD):
+    """Hyperbolic arc about a center point (build123d HyperbolicCenterArc):
+    gp_Hypr trimmed by GC_MakeArcOfHyperbola. gp_Hypr needs major >= minor, so
+    a taller-than-wide hyperbola is built rotated by 90 degrees with its angle
+    range shifted to match, exactly like Edge.make_hyperbola."""
+    c = _v3(center)
+    normal = [0.0, 0.0, 1.0]
+    if y_radius > x_radius:
+        major, minor, correction = y_radius, x_radius, 90.0
+    else:
+        major, minor, correction = x_radius, y_radius, 0.0
+    xdir = _rot_z([1.0, 0.0, 0.0], rotation + correction)
+    sizes = [float(major), float(minor)]
+    if end_angle is not None or angular_direction is not None:
+        if not isinstance(arc_size, (int, float)):
+            raise ValueError('HyperbolicCenterArc limit arc_size cannot be '
+                             'combined with end_angle / angular_direction')
+        end_a = end_angle if end_angle is not None else start_angle + arc_size
+        sense = angular_direction != AngularDirection.CLOCKWISE
+        spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
+                               start_angle - correction, end_a - correction,
+                               sense)
+        return _line_object([spec], mode)
+    if isinstance(arc_size, (int, float)):
+        spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
+                               start_angle - correction,
+                               start_angle + arc_size - correction,
+                               arc_size >= 0)
+        return _line_object([spec], mode)
+    spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
+                           start_angle - correction,
+                           start_angle + 180.0 - correction, True)
+    trimmed = _arc_limit_curve([spec], arc_size)
+    return _line_object(_specs_from_topo_edges(trimmed), mode)
+
+
+def EllipticalStartArc(start_pnt, start_tangent, x_radius, y_radius, arc_size,
+                       start_angle=None, major_axis_dir=None, mode=Mode.ADD):
+    """Elliptical arc from a start point + tangent (build123d
+    EllipticalStartArc): the ellipse frame is derived from the tangent, then
+    the arc is the ordinary EllipticalCenterArc of that frame."""
+    start = Vector(tuple(_v3(start_pnt)))
+    normal = Vector(0, 0, 1)
+
+    def proj(v):
+        return v - normal * v.dot(normal)
+    tangent = proj(Vector(tuple(_v3(start_tangent))))
+    if start_angle is not None:
+        rad = math.radians(start_angle)
+        pln_tangent = tangent.normalized()
+        a_radius = -x_radius * math.sin(rad)
+        b_radius = y_radius * math.cos(rad)
+        x_dir = (pln_tangent * a_radius -
+                 normal.cross(pln_tangent) * b_radius) * \
+            (1.0 / (a_radius * a_radius + b_radius * b_radius))
+        pln_x_dir = x_dir.normalized()
+    elif major_axis_dir is not None:
+        pln_x_dir = proj(Vector(tuple(_v3(major_axis_dir)))).normalized()
+        pln_y_dir = normal.cross(pln_x_dir)
+        start_angle = math.degrees(math.atan2(
+            -(tangent.dot(pln_x_dir) / x_radius),
+            (tangent.dot(pln_y_dir) / y_radius)))
+        rad = math.radians(start_angle)
+    else:
+        raise ValueError('Either start_angle or major_axis_dir must be '
+                         'provided')
+    pln_y_dir = normal.cross(pln_x_dir)
+    origin = start - pln_x_dir * (x_radius * math.cos(rad)) - \
+        pln_y_dir * (y_radius * math.sin(rad))
+    rotation = math.degrees(math.atan2(pln_x_dir.Y, pln_x_dir.X))
+    return EllipticalCenterArc(origin, x_radius, y_radius,
+                               start_angle=start_angle, arc_size=arc_size,
+                               rotation=rotation, mode=mode)
+
+
+def BSpline(control_points, knots, degree, weights=None, periodic=False,
+            mode=Mode.ADD):
+    """An EXACT B-spline edge from poles, a knot sequence and a degree
+    (build123d BSpline / Edge.make_bspline): repeated knot values become knot
+    multiplicities, weights make it rational."""
+    knot_list = [float(k) for k in knots]
+    if not knot_list:
+        raise ValueError('B-spline requires at least one knot')
+    poles = [list(_v3(p)) for p in control_points]
+    unique_knots = [knot_list[0]]
+    mults = [1]
+    for knot in knot_list[1:]:
+        if abs(knot - unique_knots[-1]) <= _TOL_1E6:
+            mults[-1] += 1
+        else:
+            unique_knots.append(knot)
+            mults.append(1)
+    weight_list = [float(x) for x in weights] if weights else []
+    params = [poles, unique_knots, mults, int(degree), weight_list,
+              bool(periodic)]
+    topo = w.BSplineEdge(poles, unique_knots, mults, int(degree), weight_list,
+                         bool(periodic))
+    p0 = list(w._edgePointAt(topo, 0.0))
+    p1 = list(w._edgePointAt(topo, 1.0))
+    return _line_object([('bspline', [p0, p1], params)], mode)
+
+
+def Airfoil(airfoil_code, n_points=50, finite_te=False, mode=Mode.ADD):
+    """A NACA 4-digit (or fractional) airfoil section as a closed line
+    (build123d Airfoil): cosine-spaced chord stations, the standard thickness
+    distribution and camber line, interpolated as one periodic spline."""
+    s = str(airfoil_code).replace('NACA', '').strip()
+    if '.' in s:
+        int_part, frac_part = s.split('.', 1)
+        m = int(int_part[0]) / 100.0
+        p = int(int_part[1]) / 10.0
+        t = float(('%02d' % int(int_part[2:])) + '.' + frac_part) / 100.0
+    else:
+        m = int(s[0]) / 100.0
+        p = int(s[1]) / 10.0
+        t = int(s[2:]) / 100.0
+    xs = [(1 - math.cos(math.pi * i / (n_points - 1))) / 2.0
+          for i in range(n_points)]
+    a0, a1, a2, a3 = 0.2969, -0.1260, -0.3516, 0.2843
+    a4 = -0.1015 if finite_te else -0.1036
+    yt = [5 * t * (a0 * math.sqrt(x) + a1 * x + a2 * x ** 2 + a3 * x ** 3 +
+                   a4 * x ** 4) for x in xs]
+    yc, dyc = [], []
+    for x in xs:
+        if m == 0 or p == 0 or p == 1:
+            yc.append(0.0)
+            dyc.append(0.0)
+        elif x < p:
+            yc.append(m / p ** 2 * (2 * p * x - x * x))
+            dyc.append(2 * m / p ** 2 * (p - x))
+        else:
+            yc.append(m / (1 - p) ** 2 * ((1 - 2 * p) + 2 * p * x - x * x))
+            dyc.append(2 * m / (1 - p) ** 2 * (p - x))
+    theta = [math.atan(d) for d in dyc]
+    upper = [(xs[i] - yt[i] * math.sin(theta[i]),
+              yc[i] + yt[i] * math.cos(theta[i]), 0.0)
+             for i in range(n_points)]
+    lower = [(xs[i] + yt[i] * math.sin(theta[i]),
+              yc[i] - yt[i] * math.cos(theta[i]), 0.0)
+             for i in range(n_points)]
+    ordered = upper[::-1] + lower
+    # dict.fromkeys over build123d Vectors: identity is the position ROUNDED
+    # to GEOM_KEY_DIGITS (Vector.__hash__), which is what collapses the two
+    # trailing-edge points (1, +-1.8e-17) into one — without that the
+    # periodic interpolation is handed a 3.6e-17 closing gap and OCCT's
+    # BSplCLib::Interpolate fails
+    unique, seen = [], []
+    for pnt in ordered:
+        key = (round(pnt[0], 5), round(pnt[1], 5), round(pnt[2], 5))
+        if key not in seen:
+            seen.append(key)
+            unique.append(pnt)
+    specs = [('interp', [list(pnt) for pnt in unique],
+              [[], not finite_te, True])]
+    if finite_te:
+        specs.append(('line', [list(unique[-1]), list(unique[0])]))
+    return _line_object(specs, mode)
+
+
+def BlendCurve(curve0, curve1, continuity=ContinuityLevel.C2, end_points=None,
+               tangent_scalars=None, mode=Mode.ADD):
+    """A Bezier transition between two curves that matches position, tangent
+    (C1, cubic) and curvature (C2, quintic) at the join — build123d
+    BlendCurve's control-point construction, verbatim."""
+    tan_scalars = (1.0, 1.0) if tangent_scalars is None else tuple(tangent_scalars)
+    if len(tan_scalars) != 2:
+        raise ValueError('tangent_scalars must be a (start, end) pair')
+    curves = (curve0, curve1)
+    if end_points is None:
+        best, end_pnts = None, None
+        for v0 in curve0.vertices():
+            for v1 in curve1.vertices():
+                d = (Vector(v0.to_tuple()) - Vector(v1.to_tuple())).length
+                if best is None or d < best:
+                    best = d
+                    end_pnts = (v0.to_tuple(), v1.to_tuple())
+    else:
+        end_pnts = tuple(end_points)
+    end_params = [0, 0]
+    for i in range(2):
+        given = Vector(tuple(_v3(end_pnts[i])))
+        if (given - curves[i].position_at(0)).length < _TOL_1E6:
+            end_params[i] = 0
+        elif (given - curves[i].position_at(1)).length < _TOL_1E6:
+            end_params[i] = 1
+        else:
+            raise ValueError('end_points must be at either the start or end '
+                             'of a curve')
+    start_pos = curve0.position_at(end_params[0])
+    end_pos = curve1.position_at(end_params[1])
+    start_deriv = curve0.derivative_at(end_params[0], 1) * tan_scalars[0]
+    end_deriv = curve1.derivative_at(end_params[1], 1) * tan_scalars[1]
+    if continuity == ContinuityLevel.C0:
+        return Line(start_pos, end_pos, mode=mode)
+    if continuity == ContinuityLevel.C1:
+        cntl_pnts = [start_pos, start_pos + start_deriv * (1.0 / 3.0),
+                     end_pos - end_deriv * (1.0 / 3.0), end_pos]
+    else:
+        start_curv = curve0.derivative_at(end_params[0], 2)
+        end_curv = curve1.derivative_at(end_params[1], 2)
+        cntl_pnts = [start_pos,
+                     start_pos + start_deriv * 0.2,
+                     start_pos + start_deriv * 0.4 + start_curv * 0.05,
+                     end_pos - end_deriv * 0.4 + end_curv * 0.05,
+                     end_pos - end_deriv * 0.2,
+                     end_pos]
+    return Bezier(*cntl_pnts, mode=mode)
 
 
 def Ellipse(x_radius, y_radius, rotation=0, align=(Align.CENTER, Align.CENTER),
@@ -5746,7 +6391,7 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
                 raise TypeError('add() to BuildLine expects curves')
             if rot is not None:
                 fn_dir = lambda d: _mat_vec(rot._R, d)
-                specs = [_seg_transform(s, rot._transform_point, fn_dir)
+                specs = [_seg_transform(s, rot._transform_point, fn_dir, rot)
                          for s in specs]
             # replicate at the active Locations contexts, like every other
             # object creation (build123d dimension-arrow pattern)
@@ -5754,7 +6399,8 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
             for loc in ctx_locs:
                 fn_dir = lambda d: _mat_vec(loc._R, d)
                 placed_specs.extend([_seg_transform(s, loc._transform_point,
-                                                    fn_dir) for s in specs])
+                                                    fn_dir, loc)
+                                     for s in specs])
             builder._specs.extend(placed_specs)
             out.append(Curve(w.WireFromSegments(_chain_segments(placed_specs)),
                              placed_specs))
