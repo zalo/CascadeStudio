@@ -220,8 +220,10 @@ test.describe('GUI Modeling Tools', () => {
     expect(dims.h).toBeGreaterThan(0);
     await page.mouse.up();
 
+    // Committing is one-shot: the Box tool resets AND the manager returns to
+    // Select so the camera is usable again (ToolManager.commitCode).
     expect(await toolState(page, 'box')).toMatchObject({
-      state: 0, controls: true, activeTool: 'box',
+      state: 0, controls: true, activeTool: 'select',
     });
     // The dragged dimensions are exactly what got emitted
     const code = await page.evaluate(() => window.CascadeAPI.getCode());

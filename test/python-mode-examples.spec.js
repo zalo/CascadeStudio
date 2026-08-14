@@ -684,4 +684,145 @@ test.describe('Python mode: frozen build123d example scripts', () => {
       .toBeLessThan(13.732352941176471 * 0.005);
   });
 
+
+  // ------------------------------------------------------------------
+  // Broadened corpus (docs .py scripts, the Too Tall Toby challenge
+  // parts and docs .rst code-blocks) - frozen when they first passed.
+  // ------------------------------------------------------------------
+
+  // ttt/ttt-ppp0101 — Too Tall Toby PPP01-01 bearing bracket: PolarLine(length_mode=VERTICAL), split, mirror, CounterBoreHole - the script's own mass assert is part of the test
+  test("ttt/ttt-ppp0101", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\ndensa = 7800 / 1e6  # carbon steel density g/mm^3\ndensb = 2700 / 1e6  # aluminum alloy\ndensc = 1020 / 1e6  # ABS\n\nwith BuildPart() as p:\n    with BuildSketch() as s:\n        Rectangle(115, 50)\n        with Locations((5 / 2, 0)):\n            SlotOverall(90, 12, mode=Mode.SUBTRACT)\n    extrude(amount=15)\n\n    with BuildSketch(Plane.XZ.offset(50 / 2)) as s3:\n        with Locations((-115 / 2 + 26, 15)):\n            SlotOverall(42 + 2 * 26 + 12, 2 * 26, rotation=90)\n    zz = extrude(amount=-12)\n    split(bisect_by=Plane.XY)\n    edgs = p.part.edges().filter_by(Axis.Y).group_by(Axis.X)[-2]\n    fillet(edgs, 9)\n\n    with Locations(zz.faces().sort_by(Axis.Y)[0]):\n        with Locations((42 / 2 + 6, 0)):\n            CounterBoreHole(24 / 2, 34 / 2, 4)\n    mirror(about=Plane.XZ)\n\n    with BuildSketch() as s4:\n        RectangleRounded(115, 50, 6)\n    extrude(amount=80, mode=Mode.INTERSECT)\n    # fillet does not work right, mode intersect is safer\n\n    with BuildSketch(Plane.YZ) as s4:\n        with BuildLine() as bl:\n            l1 = Line((0, 0), (18 / 2, 0))\n            l2 = PolarLine(l1 @ 1, 8, 60, length_mode=LengthMode.VERTICAL)\n            l3 = Line(l2 @ 1, (0, 8))\n            mirror(about=Plane.YZ)\n        make_face()\n    extrude(amount=115/2, both=True, mode=Mode.SUBTRACT)\n\nshow_object(p)\n\n\ngot_mass = p.part.volume*densa\nwant_mass = 797.15\ntolerance = 1\ndelta = abs(got_mass - want_mass)\nprint(f\"Mass: {got_mass:0.2f} g\")\nassert delta < tolerance, f'{got_mass=}, {want_mass=}, {delta=}, {tolerance=}'\n");
+    // real build123d: p.volume == 102198.22251481404
+    expect(Math.abs(measured["p"].volume - 102198.22251481404))
+      .toBeLessThan(102198.22251481404 * 0.005);
+    // real build123d: zz.volume == 59180.599605920404
+    expect(Math.abs(measured["zz"].volume - 59180.599605920404))
+      .toBeLessThan(59180.599605920404 * 0.005);
+  });
+
+  // ttt/ttt-ppp0102 — Too Tall Toby PPP01-02: PolarLine(length_mode=) + sweep(path=<BuildLine>)
+  test("ttt/ttt-ppp0102", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\ndensa = 7800 / 1e6  # carbon steel density g/mm^3\ndensb = 2700 / 1e6  # aluminum alloy\ndensc = 1020 / 1e6  # ABS\n\n\n# TTT Party Pack 01: PPP0102, mass(abs) = 43.09g\nwith BuildPart() as p:\n    with BuildSketch(Plane.XZ) as sk1:\n        Rectangle(49, 48 - 8, align=(Align.CENTER, Align.MIN))\n        Rectangle(9, 48, align=(Align.CENTER, Align.MIN))\n        with Locations((9 / 2, 40)):\n            Ellipse(20, 8)\n        split(bisect_by=Plane.YZ)\n    revolve(axis=Axis.Z)\n\n    with BuildSketch(Plane.YZ.offset(-15)) as xc1:\n        with Locations((0, 40 / 2 - 17)):\n            Ellipse(10 / 2, 4 / 2)\n        with BuildLine(Plane.XZ) as l1:\n            CenterArc((-15, 40 / 2), 17, 90, 180)\n    sweep(path=l1)\n\n    fillet(p.edges().filter_by(GeomType.CIRCLE, reverse=True).group_by(Axis.X)[0], 1)\n\n    with BuildLine(mode=Mode.PRIVATE) as lc1:\n        PolarLine(\n            (42 / 2, 0), 37, 94, length_mode=LengthMode.VERTICAL\n        )  # construction line\n\n    pts = [\n        (0, 0),\n        (42 / 2, 0),\n        ((lc1.line @ 1).X, (lc1.line @ 1).Y),\n        (0, (lc1.line @ 1).Y),\n    ]\n    with BuildSketch(Plane.XZ) as sk2:\n        Polygon(*pts, align=None)\n        fillet(sk2.vertices().group_by(Axis.X)[1], 3)\n    revolve(axis=Axis.Z, mode=Mode.SUBTRACT)\n\nshow(p)\n\n\ngot_mass = p.part.volume*densc\nwant_mass = 43.09\ntolerance = 1\ndelta = abs(got_mass - want_mass)\nprint(f\"Mass: {got_mass:0.2f} g\")\nassert delta < tolerance, f'{got_mass=}, {want_mass=}, {delta=}, {tolerance=}'\n\n");
+    // real build123d: p.volume == 42248.61825268254
+    expect(Math.abs(measured["p"].volume - 42248.61825268254))
+      .toBeLessThan(42248.61825268254 * 0.005);
+  });
+
+  // ttt/ttt-ppp0103 — Too Tall Toby PPP01-03: revolve profile + PolarLocations bosses, mass assert
+  test("ttt/ttt-ppp0103", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\ndensa = 7800 / 1e6  # carbon steel density g/mm^3\ndensb = 2700 / 1e6  # aluminum alloy\ndensc = 1020 / 1e6  # ABS\n\n\nwith BuildPart() as ppp0103:\n    with BuildSketch() as sk1:\n        RectangleRounded(34 * 2, 95, 18)\n        with Locations((0, -2)):\n            RectangleRounded((34 - 16) * 2, 95 - 18 - 14, 7, mode=Mode.SUBTRACT)\n        with Locations((-34 / 2, 0)):\n            Rectangle(34, 95, 0, mode=Mode.SUBTRACT)\n    extrude(amount=16)\n    with BuildSketch(Plane.XZ.offset(-95 / 2)) as cyl1:\n        with Locations((0, 16 / 2)):\n            Circle(16 / 2)\n    extrude(amount=18)\n    with BuildSketch(Plane.XZ.offset(95 / 2 - 14)) as cyl2:\n        with Locations((0, 16 / 2)):\n            Circle(16 / 2)\n    extrude(amount=23)\n    with Locations(Plane.XZ.offset(95 / 2 + 9)):\n        with Locations((0, 16 / 2)):\n            CounterSinkHole(5.5 / 2, 11.2 / 2, None, 90)\n\nshow(ppp0103)\n\ngot_mass = ppp0103.part.volume*densb\nwant_mass = 96.13\ntolerance = 1\ndelta = abs(got_mass - want_mass)\nprint(f\"Mass: {got_mass:0.2f} g\")\nassert delta < tolerance, f'{got_mass=}, {want_mass=}, {delta=}, {tolerance=}'\n");
+    // real build123d: ppp0103.volume == 35605.546935185695
+    expect(Math.abs(measured["ppp0103"].volume - 35605.546935185695))
+      .toBeLessThan(35605.546935185695 * 0.005);
+  });
+
+  // ttt/ttt-ppp0104 — Too Tall Toby PPP01-04: extrude/until + fillet chains, mass assert
+  test("ttt/ttt-ppp0104", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\ndensa = 7800 / 1e6  # carbon steel density g/mm^3\ndensb = 2700 / 1e6  # aluminum alloy\ndensc = 1020 / 1e6  # ABS\n\nd1, d2, d3 = 38, 26, 16\nh1, h2, h3, h4 = 20, 8, 7, 23\nw1, w2, w3 = 80, 10, 5\nf1, f2, f3 = 4, 10, 5\nsloth1, sloth2 = 18, 12\nslotw1, slotw2 = 17, 14\n\nwith BuildPart() as p:\n    with BuildSketch() as s:\n        Circle(d1 / 2)\n    extrude(amount=h1)\n    with BuildSketch(Plane.XY.offset(h1)) as s2:\n        Circle(d2 / 2)\n    extrude(amount=h2)\n    with BuildSketch(Plane.YZ) as s3:\n        Rectangle(d1 + 15, h3, align=(Align.CENTER, Align.MIN))\n    extrude(amount=w1 - d1 / 2)\n    # fillet workaround \\/\n    ped = p.part.edges().group_by(Axis.Z)[2].filter_by(GeomType.CIRCLE)\n    fillet(ped, f1)\n    with BuildSketch(Plane.YZ) as s3a:\n        Rectangle(d1 + 15, 15, align=(Align.CENTER, Align.MIN))\n        Rectangle(d1, 15, mode=Mode.SUBTRACT, align=(Align.CENTER, Align.MIN))\n    extrude(amount=w1 - d1 / 2, mode=Mode.SUBTRACT)\n    # end fillet workaround /\\\n    with BuildSketch() as s4:\n        Circle(d3 / 2)\n    extrude(amount=h1 + h2, mode=Mode.SUBTRACT)\n    with BuildSketch() as s5:\n        with Locations((w1 - d1 / 2 - w2 / 2, 0)):\n            Rectangle(w2, d1)\n    extrude(amount=-h4)\n    fillet(p.part.edges().group_by(Axis.X)[-1].sort_by(Axis.Z)[-1], f2)\n    fillet(p.part.edges().group_by(Axis.X)[-4].sort_by(Axis.Z)[-2], f3)\n    pln = Plane.YZ.offset(w1 - d1 / 2)\n    with BuildSketch(pln) as s6:\n        with Locations((0, -h4)):\n            SlotOverall(slotw1 * 2, sloth1, 90)\n    extrude(amount=-w3, mode=Mode.SUBTRACT)\n    with BuildSketch(pln) as s6b:\n        with Locations((0, -h4)):\n            SlotOverall(slotw2 * 2, sloth2, 90)\n    extrude(amount=-w2, mode=Mode.SUBTRACT)\n\nshow(p)\n\n\ngot_mass = p.part.volume*densa\nwant_mass = 310\ntolerance = 1\ndelta = abs(got_mass - want_mass)\nprint(f\"Mass: {got_mass:0.2f} g\")\nassert delta < tolerance, f'{got_mass=}, {want_mass=}, {delta=}, {tolerance=}'\n");
+    // real build123d: p.volume == 39743.211180667735
+    expect(Math.abs(measured["p"].volume - 39743.211180667735))
+      .toBeLessThan(39743.211180667735 * 0.005);
+  });
+
+  // ttt/ttt-ppp0105 — Too Tall Toby PPP01-05: lofted transition + holes, mass assert
+  test("ttt/ttt-ppp0105", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\ndensa = 7800 / 1e6  # carbon steel density g/mm^3\ndensb = 2700 / 1e6  # aluminum alloy\ndensc = 1020 / 1e6  # ABS\n\nwith BuildPart() as p:\n    with BuildSketch() as s:\n        SlotOverall(45, 38)\n        offset(amount=3)\n    with BuildSketch(Plane.XY.offset(133 - 30)) as s2:\n        SlotOverall(60, 4)\n        offset(amount=3)\n    loft()\n\n    with BuildSketch() as s3:\n        SlotOverall(45, 38)\n    with BuildSketch(Plane.XY.offset(133 - 30)) as s4:\n        SlotOverall(60, 4)\n    loft(mode=Mode.SUBTRACT)\n\n    extrude(p.part.faces().sort_by(Axis.Z)[0], amount=30)\n\nshow(p)\n\n\ngot_mass = p.part.volume*densc\nwant_mass = 57.08\ntolerance = 1\ndelta = abs(got_mass - want_mass)\nprint(f\"Mass: {got_mass:0.2f} g\")\nassert delta < tolerance, f'{got_mass=}, {want_mass=}, {delta=}, {tolerance=}'\n\n");
+    // real build123d: p.volume == 55617.528016135795
+    expect(Math.abs(measured["p"].volume - 55617.528016135795))
+      .toBeLessThan(55617.528016135795 * 0.005);
+  });
+
+  // ttt/ttt-ppp0108 — Too Tall Toby PPP01-08: the largest of the challenge parts (3.4 kg), mass assert
+  test("ttt/ttt-ppp0108", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\ndensa = 7800 / 1e6  # carbon steel density g/mm^3\ndensb = 2700 / 1e6  # aluminum alloy\ndensc = 1020 / 1e6  # ABS\n\nwith BuildPart() as p:\n    with BuildSketch() as s1:\n        Rectangle(188 / 2 - 33, 162, align=(Align.MIN, Align.CENTER))\n        with Locations((188 / 2 - 33, 0)):\n            SlotOverall(190, 33 * 2, rotation=90)\n        mirror(about=Plane.YZ)\n        with GridLocations(188 - 2 * 33, 190 - 2 * 33, 2, 2):\n            Circle(29 / 2, mode=Mode.SUBTRACT)\n        Circle(84 / 2, mode=Mode.SUBTRACT)\n    extrude(amount=16)\n\n    with BuildPart() as p2:\n        with BuildSketch(Plane.XZ) as s2:\n            with BuildLine() as l1:\n                l1 = Polyline(\n                    (222 / 2 + 14 - 40 - 40, 0),\n                    (222 / 2 + 14 - 40, -35 + 16),\n                    (222 / 2 + 14, -35 + 16),\n                    (222 / 2 + 14, -35 + 16 + 30),\n                    (222 / 2 + 14 - 40 - 40, -35 + 16 + 30),\n                    close=True,\n                )\n            make_face()\n            with Locations((222 / 2, -35 + 16 + 14)):\n                Circle(11 / 2, mode=Mode.SUBTRACT)\n        extrude(amount=20 / 2, both=True)\n        with BuildSketch() as s3:\n            with Locations(l1 @ 0):\n                Rectangle(40 + 40, 8, align=(Align.MIN, Align.CENTER))\n                with Locations((40, 0)):\n                    Rectangle(40, 20, align=(Align.MIN, Align.CENTER))\n        extrude(amount=30, both=True, mode=Mode.INTERSECT)\n        mirror(about=Plane.YZ)\n\nshow(p)\n\n\ngot_mass = p.part.volume*densa\nwant_mass = 3387.06\ntolerance = 1\ndelta = abs(got_mass - want_mass)\nprint(f\"Mass: {got_mass:0.2f} g\")\nassert delta < tolerance, f'{got_mass=}, {want_mass=}, {delta=}, {tolerance=}'\n");
+    // real build123d: p.volume == 434238.2673538104
+    expect(Math.abs(measured["p"].volume - 434238.2673538104))
+      .toBeLessThan(434238.2673538104 * 0.005);
+    // real build123d: p2.volume == 57318.67288915634
+    expect(Math.abs(measured["p2"].volume - 57318.67288915634))
+      .toBeLessThan(57318.67288915634 * 0.005);
+  });
+
+  // ttt/ttt-ppp0109 — Too Tall Toby PPP01-09: Edge.find_tangent + tangent construction lines, mass assert
+  test("ttt/ttt-ppp0109", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from math import sqrt\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\ndensa = 7800 / 1e6  # carbon steel density g/mm^3\ndensb = 2700 / 1e6  # aluminum alloy\ndensc = 1020 / 1e6  # ABS\n\nwith BuildPart() as ppp109:\n    with BuildSketch() as one:\n        Rectangle(69, 75, align=(Align.MAX, Align.CENTER))\n        fillet(one.vertices().group_by(Axis.X)[0], 17)\n    extrude(amount=13)\n    centers = [\n        arc.arc_center\n        for arc in ppp109.edges().filter_by(GeomType.CIRCLE).group_by(Axis.Z)[-1]\n    ]\n    with Locations(*centers):\n        CounterBoreHole(radius=8 / 2, counter_bore_radius=15 / 2, counter_bore_depth=4)\n\n    with BuildSketch(Plane.YZ) as two:\n        with Locations((0, 45)):\n            Circle(15)\n        with BuildLine() as bl:\n            c = Line((75 / 2, 0), (75 / 2, 60), mode=Mode.PRIVATE)\n            u = two.edge().find_tangent(75 / 2 + 90)[0]  # where is the slope 75/2?\n            l1 = IntersectingLine(\n                two.edge().position_at(u), -two.edge().tangent_at(u), other=c\n            )\n            Line(l1 @ 0, (0, 45))\n            Polyline((0, 0), c @ 0, l1 @ 1)\n            mirror(about=Plane.YZ)\n        make_face()\n        with Locations((0, 45)):\n            Circle(12 / 2, mode=Mode.SUBTRACT)\n    extrude(amount=-13)\n\n    with BuildSketch(Plane((0, 0, 0), x_dir=(1, 0, 0), z_dir=(1, 0, 1))) as three:\n        Rectangle(45 * 2 / sqrt(2) - 37.5, 75, align=(Align.MIN, Align.CENTER))\n        with Locations(three.edges().sort_by(Axis.X)[-1].center()):\n            Circle(37.5)\n            Circle(33 / 2, mode=Mode.SUBTRACT)\n        split(bisect_by=Plane.YZ)\n    extrude(amount=6)\n    f = ppp109.faces().filter_by(Axis((0, 0, 0), (-1, 0, 1)))[0]\n    extrude(f, until=Until.NEXT)\n    fillet(ppp109.edges().filter_by(Axis.Y).sort_by(Axis.Z)[2], 16)\n    # extrude(f, amount=10)\n    # fillet(ppp109.edges(Select.NEW), 16)\n\n\nshow(ppp109)\n\ngot_mass = ppp109.part.volume * densb\nwant_mass = 307.23\ntolerance = 1\ndelta = abs(got_mass - want_mass)\nprint(f\"Mass: {got_mass:0.2f} g\")\nassert delta < tolerance, f\"{got_mass=}, {want_mass=}, {delta=}, {tolerance=}\"\n");
+    // real build123d: ppp109.volume == 113789.2638826812
+    expect(Math.abs(measured["ppp109"].volume - 113789.2638826812))
+      .toBeLessThan(113789.2638826812 * 0.005);
+  });
+
+  // docs-rst/topology_selection/b08 — new_edges(box, cylinder, combined=part) - the module-level selector
+  test("docs-rst/topology_selection/b08", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\nbox = Box(5, 5, 1)\ncircle = Cylinder(2, 5)\npart = box + circle\nedges = new_edges(box, circle, combined=part)\n");
+    // real build123d: part.volume == 75.26548245743669
+    expect(Math.abs(measured["part"].volume - 75.26548245743669))
+      .toBeLessThan(75.26548245743669 * 0.005);
+    // real build123d: circle.volume == 62.83185307179585
+    expect(Math.abs(measured["circle"].volume - 62.83185307179585))
+      .toBeLessThan(62.83185307179585 * 0.005);
+    // real build123d: box.volume == 24.999999999999993
+    expect(Math.abs(measured["box"].volume - 24.999999999999993))
+      .toBeLessThan(24.999999999999993 * 0.005);
+  });
+
+  // docs-rst/topology_selection/b09 — new_edges() after a fillet (upstream's Select.NEW-returns-nothing example)
+  test("docs-rst/topology_selection/b09", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\nbox = Box(5, 5, 1)\ncircle = Cylinder(2, 5)\npart_before = box + circle\nedges = part_before.edges().filter_by(lambda a: a.length == 1)\npart = fillet(edges, 1)\nedges = new_edges(part_before, combined=part)\n");
+    // real build123d: part_before.volume == 75.26548245743669
+    expect(Math.abs(measured["part_before"].volume - 75.26548245743669))
+      .toBeLessThan(75.26548245743669 * 0.005);
+    // real build123d: part.volume == 74.40707511102647
+    expect(Math.abs(measured["part"].volume - 74.40707511102647))
+      .toBeLessThan(74.40707511102647 * 0.005);
+    // real build123d: circle.volume == 62.83185307179585
+    expect(Math.abs(measured["circle"].volume - 62.83185307179585))
+      .toBeLessThan(62.83185307179585 * 0.005);
+  });
+
+  // docs-rst/tips/b05 — module-level vertices() context selector on a rotated workplane
+  test("docs-rst/tips/b05", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\nwith BuildSketch(Plane.YZ.rotated((123, 45, 6))) as custom_plane:\n    Rectangle(1, 1, align=Align.MIN)\n    with Locations(vertices().group_by(Axis.X)[-1].sort_by(Axis.Y)[-1]):\n        Circle(0.2)\n");
+    // real build123d: custom_plane.area == 1.0942477796076904
+    expect(Math.abs(measured["custom_plane"].area - 1.0942477796076904))
+      .toBeLessThan(1.0942477796076904 * 0.005);
+  });
+
+  // docs-rst/OpenSCAD/b01 — fillet(edges().filter_by(lambda e: e.is_interior))
+  test("docs-rst/OpenSCAD/b01", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\n# Builder mode\nwith BuildPart() as angle_iron:\n    with BuildSketch() as profile:\n        Rectangle(3 * CM, 4 * MM, align=Align.MIN)\n        Rectangle(4 * MM, 3 * CM, align=Align.MIN)\n    extrude(amount=10 * CM)\n    fillet(angle_iron.edges().filter_by(lambda e: e.is_interior), 5 * MM)\n");
+    // real build123d: angle_iron.volume == 22936.50459150638
+    expect(Math.abs(measured["angle_iron"].volume - 22936.50459150638))
+      .toBeLessThan(22936.50459150638 * 0.005);
+  });
+
+  // docs-rst/tutorial_design/b07 — FilletPolyline
+  test("docs-rst/tutorial_design/b07", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import show_all\n\nthickness = 3 * MM\nwidth = 25 * MM\nlength = 50 * MM\nheight = 25 * MM\nhole_diameter = 5 * MM\nbend_radius = 5 * MM\nfillet_radius = 2 * MM\n\nwith BuildPart() as bracket:\n    with BuildSketch() as sketch:\n        with BuildLine() as profile:\n            FilletPolyline(\n                (0, 0), (length / 2, 0), (length / 2, height), radius=bend_radius\n            )\n            offset(amount=thickness, side=Side.LEFT)\n        make_face()\n        mirror(about=Plane.YZ)\n    extrude(amount=width / 2)\n    mirror(about=Plane.XY)\n    corners = bracket.edges().filter_by(Axis.X).group_by(Axis.Y)[-1]\n    fillet(corners, fillet_radius)\n    with Locations(bracket.faces().sort_by(Axis.X)[-1]):\n        Hole(hole_diameter / 2)\n    with BuildSketch(bracket.faces().sort_by(Axis.Y)[0]):\n        SlotOverall(20 * MM, hole_diameter)\n    extrude(amount=-thickness, mode=Mode.SUBTRACT)\n\nshow_all()\n");
+    // real build123d: bracket.volume == 6412.652585245836
+    expect(Math.abs(measured["bracket"].volume - 6412.652585245836))
+      .toBeLessThan(6412.652585245836 * 0.005);
+  });
+
+  // docs-rst/key_concepts_builder/b13 — Locations around a nested BuildSketch must NOT replicate (0.11.1 semantics)
+  test("docs-rst/key_concepts_builder/b13", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\nwith BuildPart() as model:\n    with Locations((-20, 0), (20, 0)):\n        with BuildSketch() as holes:\n            Circle(3)\n        extrude(amount=5)\n");
+    // real build123d: model.volume == 141.3716694115407
+    expect(Math.abs(measured["model"].volume - 141.3716694115407))
+      .toBeLessThan(141.3716694115407 * 0.005);
+  });
+
 });

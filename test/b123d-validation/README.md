@@ -11,18 +11,42 @@ Not part of the default playwright suite — run it manually when extending
 ## How it works
 
 1. **`collect.py`** enumerates candidate scripts from a build123d source
-   clone (`B123D_SRC`, default `/tmp/b123d`): every `examples/*.py` plus the
-   numbered snippets split out of `docs/general_examples.py` (builder mode)
-   and `docs/general_examples_algebra.py` (algebra mode). Viewer imports
-   (`ocp_vscode`) and SVG-export helpers are stripped; geometry code is kept
-   verbatim. Output: `manifest.json` (script code inlined).
-2. **`reference.py`** runs each script under the reference venv
+   clone (`B123D_SRC`, default `/tmp/b123d`) — **everything runnable in
+   `examples/` and `docs/`**:
+   - every `examples/*.py`;
+   - the numbered snippets split out of `docs/general_examples.py` (builder
+     mode) and `docs/general_examples_algebra.py` (algebra mode);
+   - the standalone documentation scripts `docs/*.py` (`objects_1d/2d/3d`,
+     `tutorial_joints`, `slide_latch`, `rod_end`, `heart_token`,
+     `spitfire_wing_gordon`, `technical_drawing`, …),
+     `docs/objects/examples/*.py` and `docs/topology_selection/examples/*.py`;
+   - the 13 **Too Tall Toby** challenge parts in `docs/assets/ttt/*.py`, whose
+     closing `assert abs(got_mass - want_mass) < tolerance` is kept verbatim —
+     a ~0.1% bar that a script must clear on its own;
+   - every ``code-block:: build123d`` / ``python`` snippet in `docs/**/*.rst`,
+     plus one cumulative script per page (what a reader pasting a whole
+     tutorial page actually runs). `>>>` doctest transcripts are unwrapped.
+
+   Viewer imports (`ocp_vscode`) and viewer-only calls are stripped
+   statement-wise (a multi-line `write_svg(...)` goes as a whole); SVG/DXF
+   export machinery is left in place, since lite ships a no-op `ExportSVG` and
+   the reference run gets a scratch `assets/` directory. Output:
+   `manifest-all.json` (382 candidates, code inlined).
+2. **`reference.py`** runs each candidate under the reference venv
    (`B123D_REF_PY`, default `~/Desktop/ocjs-deps/b123d-ref-venv/bin/python`,
-   build123d 0.11.1) in a guarded subprocess (60s timeout) and records, for
-   every module-level shape result — `Shape` instances, `Builder._obj`
-   results and lists of Shapes, keyed by VARIABLE NAME — volume, bounding box
-   (6 floats), area, face count, edge count. Scripts that fail natively are
-   recorded and excluded from scoring. Output: `reference.json`.
+   build123d 0.11.1) in a guarded subprocess (60s timeout, scratch cwd with
+   `__file__` set and the script's non-`.py` siblings symlinked in) and
+   records, for every module-level shape result — `Shape` instances,
+   `Builder._obj` results and lists of Shapes, keyed by VARIABLE NAME —
+   volume, bounding box (6 floats), area, face count, edge count. Scripts that
+   fail natively are recorded and excluded from scoring.
+   Output: `reference-all.json`.
+
+   `collect.py prune` then writes the **scored corpus**, `manifest.json` +
+   `reference.json`: real scripts are always kept (a native failure becomes a
+   SKIP), while `.rst` fragments that produced no geometry natively — `...`
+   placeholders, prose pseudo-code, snippets that only print — are dropped,
+   because they were never runnable code. 382 candidates → **232 scripts**.
 3. **`run-lite.mjs`** (playwright) serves the built app, switches to Python
    mode and runs every script with a measurement footer appended. The footer
    calls `build123d._measure_globals_json(globals())`, which measures the
@@ -119,8 +143,26 @@ default suite), including a section loop asserted against hand-computed values.
 ## Current coverage
 
 <!-- COVERAGE:BEGIN (updated by hand from report.md) -->
-129 candidate scripts, 126 scored (3 excluded — real build123d fails on them
-natively). On the OCCT 8.0.1 wasm build:
+382 candidates → **232 scripts** in the scored corpus, 222 scored (10 excluded —
+real build123d fails on them natively). On the OCCT 8.0.1 wasm build:
+
+| Status | Count | Note |
+|---|---|---|
+| PASS | 177 | volume within 0.5%, bbox within 1e-3/axis, per variable |
+| MISMATCH | 11 | joints x2 + projection x2 (COMPROMISE(edge-orientation), below), slide_latch (0.11.1 does not localize `add(<global face>)` in a face-workplane BuildSketch), objects_1d (COMPROMISE(triad-labels)), ttt-ppp0107 (-1.0% on two `extrude(until=)` intermediates), heart_token / sort_axis / selectors_operators / tips-b04 (newly reached, geometry differs) |
+| ERROR | 34 | biggest bucket is the 1-D CONSTRAINED objects (BlendCurve, ConstrainedArcs, Triangle, ParabolicCenterArc, EllipticalStartArc, BSpline, Airfoil — 10 scripts); then 8 topology-selection properties, 4 kernel faults, `import_step` x2, `sympy`/`pytest` x2, and 5 single missing objects/ops |
+| TIMEOUT | 0 | |
+| SKIP | 10 | real build123d 0.11.1 fails natively (`bd_warehouse` x3, `ImageFace`, `ColorMap`, `tcv_screenshots`, no module-level shapes) |
+
+Every non-PASS is root-caused in the **defaults-audit table** appended to
+report.md. Iteration on the broadened corpus: 158 PASS on the first pass →
+Select.LAST/NEW + `new_edges` + module-level context selectors → `os` shim →
+FilletPolyline / IntersectingLine / SlotCenterPoint / LengthMode / partial
+Sphere / `Edge.radius`/`is_interior`/`find_tangent`/`make_circle` / `Axis(
+Location)` / `Shell.extrude` / `Compound.make_triad` → builder-scoped location
+contexts → property selectors → **177**.
+
+<details><summary>previous corpus (129 candidates / 126 scored)</summary>
 
 | Status | Count | Note |
 |---|---|---|
@@ -155,9 +197,14 @@ wire project_to_shape, planar Face(wire) → **bracelet** 118 → wrap()/
 wrap_faces(), Face.make_surface, Edge.make_spline/param_at/trim, Trapezoid
 obtuse-angle fix, make_face clean parity → **bicycle_tire** 119 → one-sided
 open-line offsets (offset(side=)) → dual_color_3mf geometry (still ERROR on
-its 3MF write). Full harness pass: ~85 s (4 pages) / ~3 min (single page);
-ALWAYS run with CS_TEST_HEADFUL=1 DISPLAY=:99 (headless Chromium has no WebGL
-here — it manifests as every script reporting "no measurement produced").
+its 3MF write).
+
+</details>
+
+Full harness pass: ~105 s (4 pages, 232 scripts) / ~5 min single-page; a full
+`reference.py` sweep of the 382 candidates is ~90 s with `--jobs 12`. ALWAYS run
+the lite stage with CS_TEST_HEADFUL=1 DISPLAY=:99 (headless Chromium has no
+WebGL here — it manifests as every script reporting "no measurement produced").
 <!-- COVERAGE:END -->
 
 ## Notes / caveats
@@ -178,5 +225,8 @@ here — it manifests as every script reporting "no measurement produced").
   JSON, worker errors and the last console lines.
 - After a raw wasm kernel abort ("memory access out of bounds") the OCCT
   heap is corrupt; run-lite.mjs recycles the page before the next script.
-- The 32 best representative passing scripts are frozen as regression tests
-  in `test/python-mode-examples.spec.js` (part of the default suite).
+- **45** representative passing scripts are frozen as regression tests in
+  `test/python-mode-examples.spec.js` (part of the default suite) — including
+  seven Too Tall Toby challenge parts (their own mass asserts run too), the
+  `new_edges` / context-selector / `is_interior` / `FilletPolyline` doc blocks
+  and the two "Locations around a builder" cases.

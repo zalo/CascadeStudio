@@ -1988,6 +1988,12 @@ class Compound(Shape):
         return Curve(parts)
 
     def __init__(self, children=None, label='', **kwargs):
+        # Compound(shape.wrapped) / Compound(topods): a single raw TopoDS shape
+        # (build123d's Shape(obj) form, used by Compound subclasses that call
+        # super().__init__(builder.part.wrapped, ...) - tutorial_joints' Hinge)
+        if children is not None and not isinstance(children, Shape) and \
+                hasattr(children, 'ShapeType'):
+            children = [children]
         topos = [_topo(c) for c in _tolist(children) if not (isinstance(c, Shape) and c.topo is None)]
         topo = None
         if len(topos) == 1:
@@ -3049,6 +3055,10 @@ def _sort_key_fn(key):
         return lambda s: Vector(_entity_center(s)).length
     if callable(key):
         return key
+    if isinstance(key, property):
+        # sort_by(Face.area) / group_by(Edge.length): a class PROPERTY object
+        # is called on each shape (build123d's documented selector form)
+        return lambda s: key.fget(s)
     raise TypeError('unsupported sort/group key: ' + repr(key))
 
 
@@ -3096,8 +3106,24 @@ class ShapeList(list):
                     return s.geom_type == f
                 except Exception:
                     return False
+        elif hasattr(f, 'z_dir') and hasattr(f, 'origin'):
+            # filter_by(Plane): shapes lying IN that plane (build123d's
+            # Plane filter - contains() on every vertex)
+            def pred(s):
+                try:
+                    for v in s.vertices():
+                        d = (Vector(v.to_tuple()) - Vector(f.origin)).dot(
+                            Vector(f.z_dir))
+                        if abs(d) > tolerance:
+                            return False
+                    return True
+                except Exception:
+                    return False
         elif callable(f):
             pred = f
+        elif isinstance(f, property):
+            # filter_by(Face.is_planar): a class PROPERTY used as a predicate
+            pred = lambda s: bool(f.fget(s))
         else:
             raise TypeError('filter_by: unsupported filter ' + repr(f))
         out = ShapeList([s for s in self if bool(pred(s)) != bool(reverse)])
@@ -3256,8 +3282,21 @@ def _active_builder(cls=None):
 
 
 def _ctx_locations():
+    """The active local locations, in the CURRENT builder's scope only.
+
+    build123d 0.11.1 gives every builder a fresh location context on entry
+    (build_common Builder.__enter__ sets local_locations = LocationList(
+    [Location()])), so a Locations context wrapping a builder does NOT
+    replicate what the builder constructs - the builder always builds locally.
+    Truncating at the builder's own stack depth reproduces that exactly; before
+    this, an enclosing GridLocations fanned out objects created inside a nested
+    BuildSketch (key_concepts_builder's documented "Locations around a builder"
+    case built four rectangles instead of one)."""
+    builder = _active_builder()
+    start = builder._loc_depth if (builder is not None and
+                                   builder._loc_depth is not None) else 0
     locs = [Location()]
-    for ctx in _loc_stack:
+    for ctx in _loc_stack[start:]:
         locs = [a * b for a in locs for b in ctx.locations]
     return locs
 
@@ -3311,9 +3350,26 @@ def new_edges(*objects, combined=None):
         combined = combined._obj
     if combined is None or combined.topo is None:
         return ShapeList()
+    # Return the CORRESPONDING edges of 'combined' (same parent + per-shape
+    # index), so the result can be handed straight to fillet()/chamfer() the
+    # way upstream's maker_coin does. The cut result is geometry only: it
+    # carries no index, and its edges have fresh TopoDS handles.
+    own = combined.edges()
+    keyed = {}
+    for e in own:
+        c = w._edgeMidpoint(e.topo)
+        keyed[(round(c[0], 6), round(c[1], 6), round(c[2], 6),
+               round(w._edgeLength(e.topo), 6))] = e
     out = ShapeList()
     for raw in w.NewEdges(combined.topo, topos):
-        out.append(Edge(raw, parent=combined))
+        c = w._edgeMidpoint(raw)
+        key = (round(c[0], 6), round(c[1], 6), round(c[2], 6),
+               round(w._edgeLength(raw), 6))
+        match = keyed.get(key)
+        # COMPROMISE(new-edges-partial): an edge that is only PARTLY new comes
+        # back as a trimmed piece with no counterpart in 'combined'; it is
+        # returned as bare geometry (usable for measuring, not for fillet()).
+        out.append(match if match is not None else Edge(raw, parent=combined))
     return out
 
 
@@ -5172,7 +5228,13 @@ def _edges_by_parent(objects):
     for e in edges:
         if e.parent is not parent:
             raise ValueError('all edges must belong to the same shape')
-    return parent, [e.index for e in edges]
+    indices = [e.index for e in edges]
+    if any(i is None for i in indices):
+        raise ValueError('these edges are not sub-shapes of a single parent '
+                         'shape, so they cannot be filleted/chamfered '
+                         '(select them with shape.edges() / '
+                         'builder.edges(...))')
+    return parent, indices
 
 
 def _vertex_op_2d(objs, radius, opname):
