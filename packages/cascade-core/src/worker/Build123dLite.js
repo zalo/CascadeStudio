@@ -3580,7 +3580,12 @@ class ShapeList(list):
         tie_break=False (the default) keeps Python's stable sort exactly, so
         ties carry the incoming order - which is itself a useful contract for
         CHAINED sorts (sort_by(SortBy.RADIUS).sort_by(Axis.Z) keeps the radius
-        order inside each equal-Z group). tie_break=True instead resolves ties
+        order inside each equal-Z group). COMPROMISE(traversal-order): that
+        incoming order is the CAD kernel's traversal of lite's construction,
+        so a script that resolves a COMPLETE tie this way (or keeps whichever
+        of two symmetric results came last) can land on the other candidate
+        than it does on OCP 7.x - which is exactly the ambiguity the canonical
+        rule below exists to remove, opt-in on both sides. tie_break=True instead resolves ties
         with _canonical_sort_key, so identical geometry always sorts identically
         rather than in the kernel's traversal order (see Curve.canonical). Like
         upstream, the geometric key is computed only for objects inside a tie
