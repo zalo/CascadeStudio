@@ -4059,20 +4059,29 @@ class Builder:
             originals.append(self._lasts_created)
         return new_edges(*originals, combined=self._obj)
 
+    def _selection_shape(self):
+        """The shape the selectors read. BuildLine overrides it so that
+        mid-context selectors (side_line.vertices() inside the with-block, which
+        the sheet-metal examples fillet) see the line built SO FAR - _obj only
+        exists after __exit__."""
+        return self._obj
+
     # selector passthroughs (builder.edges() etc.)
     def edges(self, select=Select.ALL):
         if select == Select.LAST:
             return self._lasts('edge')
         if select == Select.NEW:
             return self.new_edges
-        return self._obj.edges() if self._obj else ShapeList()
+        shape = self._selection_shape()
+        return shape.edges() if shape is not None else ShapeList()
 
     def wires(self, select=Select.ALL):
         if select == Select.LAST:
             return ShapeList(edges_to_wires(self._lasts('edge')))
         if select == Select.NEW:
             raise ValueError('Select.NEW only valid for edges')
-        return self._obj.wires() if self._obj else ShapeList()
+        shape = self._selection_shape()
+        return shape.wires() if shape is not None else ShapeList()
 
     def face(self):
         return self._obj.face() if self._obj else None
@@ -4088,21 +4097,24 @@ class Builder:
             return self._lasts('face')
         if select == Select.NEW:
             raise ValueError('Select.NEW only valid for edges')
-        return self._obj.faces() if self._obj else ShapeList()
+        shape = self._selection_shape()
+        return shape.faces() if shape is not None else ShapeList()
 
     def vertices(self, select=Select.ALL):
         if select == Select.LAST:
             return self._lasts('vertex')
         if select == Select.NEW:
             raise ValueError('Select.NEW only valid for edges')
-        return self._obj.vertices() if self._obj else ShapeList()
+        shape = self._selection_shape()
+        return shape.vertices() if shape is not None else ShapeList()
 
     def solids(self, select=Select.ALL):
         if select == Select.LAST:
             return self._lasts('solid')
         if select == Select.NEW:
             raise ValueError('Select.NEW only valid for edges')
-        return self._obj.solids() if self._obj else ShapeList()
+        shape = self._selection_shape()
+        return shape.solids() if shape is not None else ShapeList()
 
 
 class BuildPart(Builder):
@@ -4159,6 +4171,9 @@ class BuildLine(Builder):
     def __init__(self, *workplanes, mode=Mode.ADD):
         Builder.__init__(self, *workplanes, mode=mode)
         self._specs = []
+
+    def _selection_shape(self):
+        return self._obj if self._obj is not None else self.line
 
     @property
     def line(self):
@@ -6201,9 +6216,33 @@ def extrude(to_extrude=None, amount=None, dir=None, until=None, target=None,
     results = []
     for (face, plane) in profiles:
         if taper:
-            # draft-angle extrusion (LocOpe_DPrism) along the face normal
-            solid = w.TaperExtrude(face, amount, taper)
-            results.append(Part(solid))
+            # build123d's Solid.extrude_taper uses TWO algorithms: LocOpe_DPrism
+            # only when the extrusion runs along the profile normal with a
+            # POSITIVE taper and no holes, otherwise a LOFT between the profile
+            # wires and their 2-D offsets (offset = -length * tan(taper),
+            # Kind.INTERSECTION), with the inner wires' taper flipped.
+            profile = Face(face)
+            inner = profile.inner_wires()
+            if taper > 0 and not inner and plane.z_dir.Z > 0:
+                solid = w.TaperExtrude(face, amount, taper)
+                results.append(Part(solid))
+                continue
+            offset_amt = -abs(amount) * math.tan(math.radians(taper))
+            base = Plane(profile)
+            shift = Pos(base.z_dir.X * amount, base.z_dir.Y * amount,
+                        base.z_dir.Z * amount)
+            solids = []
+            for i, wire in enumerate([profile.outer_wire()] + list(inner)):
+                flip = -1.0 if i > 0 else 1.0
+                local = base.location.inverse() * wire
+                local_taper = Curve(_topo(local)).offset_2d(
+                    flip * offset_amt, kind=Kind.INTERSECTION)
+                taper_wire = shift * (base.location * Curve(_topo(local_taper)))
+                solids.append(Part(w.Loft([_topo(wire), _topo(taper_wire)],
+                                          False)))
+            solid = solids[0] if len(solids) == 1 else \
+                (solids[0] - solids[1:])
+            results.append(Part(_topo(solid)))
             continue
         d = tuple(Vector(dir).normalized()) if dir is not None else tuple(plane.z_dir)
         vec = [d[0] * amount, d[1] * amount, d[2] * amount]
@@ -6376,6 +6415,11 @@ def _vertex_op_2d(objs, radius, opname):
     if parent is None or parent.topo is None:
         raise ValueError('fillet: vertices have no parent sketch')
     faces = parent.faces()
+    if len(faces) == 0:
+        raise NotImplementedError(
+            'fillet(<wire vertices>) - the 1-D corner fillet of an open line '
+            '(build123d Wire.fillet_2d) - is not supported in build123d-lite; '
+            'use FilletPolyline for straight segments')
     if len(faces) != 1:
         raise NotImplementedError('2D vertex fillets on multi-face sketches '
                                   'are not supported in build123d-lite')
