@@ -24,7 +24,9 @@
 //  * Spline()/Edge.make_spline INTERPOLATE exactly (GeomAPI_Interpolate,
 //    incl. tangents=/tangent_scalars=/per-point tangents/periodic).
 //  * Unsupported (raise NotImplementedError rather than fake geometry):
-//    Wedge, Triangle, partial spheres/cones, full_round, trim,
+//    ConstrainedArcs/ConstrainedLines (OCCT's Geom2dGcc solvers are unbound in
+//    this build), the drafting module beyond ArrowHead, Wire.fillet_2d,
+//    make_brake_formed, full_round (needs a 2-D Voronoi), partial cones,
 //    split(keep=Keep.BOTH), offset(min_edge_length=) (no
 //    fix_degenerate_edges), Kind.TANGENT offsets, 3MF export, imports.
 //  * Boolean results are cleaned with ShapeUpgrade_UnifySameDomain (the
@@ -390,7 +392,8 @@ def _v3(a):
 #
 # This is a port of build123d's proposed topology/canonical.py - same names,
 # same defaults, same tie-break conventions; see
-# docs/upstream-canonical-edges/ for the research record and the upstream
+# the canonical-edges research record (zalo/build123d branch canonical-research,
+# research/) for the full write-up and the upstream
 # patch. Pure geometry: the only primitive needed is "give me the point at arc
 # length d", which is why it can be driven by a polyline and checked against a
 # second CAD kernel.

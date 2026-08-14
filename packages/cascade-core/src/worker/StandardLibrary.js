@@ -1809,7 +1809,8 @@ function TrimEdge(edge, f0, f1) {
 // ---------------------------------------------------------------------------
 // Canonical free-edge parametrization primitives (build123d-lite's
 // Mixin1D.canonical — see the upstream proposal in
-// docs/upstream-canonical-edges/). The rule itself is pure geometry and lives
+// zalo/build123d branch canonical-research, research/). The rule itself is pure
+// geometry and lives
 // in Python (Build123dLite.js); these are the four kernel operations it needs:
 // reverse a 1D shape, locate a point on an edge, measure a point's distance to
 // an edge, and concatenate an ordered edge chain into ONE edge (which is what

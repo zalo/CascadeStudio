@@ -50,7 +50,8 @@ Implication: canonicalizing seams/orientation in lite would make results
 kernel-stable going forward but cannot reproduce OCP 7.x's incidental
 choices, so the 4 reference mismatches remain COMPROMISE(edge-orientation).
 
-## CORRECTION (see docs/upstream-canonical-edges/REPORT.md for the full story)
+## CORRECTION (see REPORT.md in the canonical-edges research record — zalo/build123d
+## branch canonical-research, research/ — for the full story)
 
 The parametrization claim above — "(0,1) native vs (0,2480) wasm" — was an
 API artefact, NOT a kernel difference: BRepAlgoAPI_Section defaults
@@ -63,4 +64,4 @@ domain (primitive local frames decide!), (2) build123d's orientation-
 insensitive entity dedup making "first face explored" decide FORWARD vs
 REVERSED, and (3) ShapeList.sort_by tie order falling back to kernel
 traversal order. Mechanism citations and the canonicalization patch live in
-docs/upstream-canonical-edges/.
+the canonical-edges research record (zalo/build123d branch canonical-research, research/).

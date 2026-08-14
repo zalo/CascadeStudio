@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 67 tests (incl. 32 frozen build123d example scripts)
+npx playwright test    # 85 tests (incl. 50 frozen build123d example scripts)
 ```
 
 ## Architecture (Monorepo)
@@ -179,11 +179,11 @@ Defaults" for how each entry point picks its mode.
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,
 see `test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
 Too Tall Toby challenge parts (mass asserts kept) and every docs `.rst`
-code-block; currently **177/222 scripts PASS** (volume within 0.5%, bbox within
-1e-3/axis), 11 MISMATCH, 34 ERROR, 0 timeouts, 10 SKIP (real build123d fails
+code-block; currently **202/222 scripts PASS** (volume within 0.5%, bbox within
+1e-3/axis), 8 MISMATCH, 11 ERROR, 1 TIMEOUT, 10 SKIP (real build123d fails
 natively) — full breakdown with per-script reasons AND a hand-maintained
 root-cause/defaults audit of every non-PASS in the committed
-`test/b123d-validation/report.md`. A full 232-script harness pass takes ~105 s
+`test/b123d-validation/report.md`. A full 232-script harness pass takes ~150 s
 with `--pages 4` (~5 min single-page); the harness MUST run with
 `CS_TEST_HEADFUL=1 DISPLAY=:99` on this machine (headless Chromium has no WebGL,
 which manifests as every script reporting "no measurement produced"). Debug a
@@ -221,47 +221,84 @@ point, `Wire`/`Edge.project_to_shape` project along a direction or from a
 cone apex (BRepProj_Projection), and `offset(side=Side.LEFT/RIGHT)` does
 one-sided offsets of OPEN lines. `Face(wire)` is now planar-only like
 upstream, `make_face` cleans its result like upstream's `_add_to_context`,
-and `Trapezoid`'s obtuse-side-angle case matches upstream:
+and `Trapezoid`'s obtuse-side-angle case matches upstream. Since the
+selectors/1-D-solver round: `make_hull` is a statement-for-statement port of
+`Wire.make_convex_hull` (trimmed source arcs, no polyline approximation — which
+also closed two supposed "kernel fillet faults"), the topology-selection
+property surface is complete (`Face.center_location`/`position_at`/
+`is_circular_convex`/`is_circular_concave`, `Mixin1D.normal`,
+`Edge`/`Wire.param_at_point`, `Shape.distance`/`distance_to`/`closest_points`
+via BRepExtrema, `sort_by(<Edge|Wire>)`, `topo_distance_to`,
+`GroupBy.group(key)`), the analytic 1-D objects are in (`BSpline`,
+`ParabolicCenterArc`/`HyperbolicCenterArc` incl. limit `arc_size`,
+`EllipticalStartArc`, `BlendCurve`, `Airfoil`, `Triangle`, `derivative_at`,
+`curvature_comb`, `trim` by point, `trim_to_other`), `Wedge`,
+`ConvexPolyhedron`, `Text(path=)` and `ArrowHead` exist, and five fidelity
+defaults were corrected: `position_at` EXTRAPOLATES outside [0, 1] (`line @ 2/3`
+parses as `(line @ 2) / 3`), a full `CenterArc` is ONE closed edge,
+`copy.copy(<Builder>)` snapshots, `extrude(taper=)` follows both of upstream's
+algorithms, and `BuildSketch` localizes + orients (+Z) every incoming face:
 
 | Area | Supported | Not supported |
 |---|---|---|
 | Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple workplanes, pending faces/edges/path), `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `add()` (incl. Locations-context replication into BuildLine), `Select.LAST`/`Select.NEW` for vertices/edges/faces/solids (upstream's `post - pre` bookkeeping; a builder gets a FRESH location context on entry, so an enclosing `Locations` never replicates its result), `Workplanes()` (shares the Locations fanout path — a plane basis IS its Location) | — |
-| 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=`; partial `Sphere(r, a1, a2, a3)`; `Solid.extrude_linear_with_rotation` | `Wedge`, partial cones |
-| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotCenterPoint`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning), `BaseSketchObject`/`BasePartObject` subclassing, `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points` | `Triangle`, `Text(path=/font_path=)` |
-| 1D objects | `Line`, `Polyline`, `PolarLine` (incl. `length_mode=` and a limit shape as `length=`), `FilletPolyline`, `IntersectingLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc`, `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `DoubleTangentArc`, `Helix`, `EllipticalCenterArc`, `curve @ u / % u / ^ u` (incl. multi-edge curves), `Edge.make_line/make_circle/make_mid_way/make_spline/param_at/trim`, `Wire(edges)`, `Wire.order_edges`/`is_closed`, `Edge.arc_center`/`radius`/`is_interior`/`find_tangent`/`find_intersection_points` | `BlendCurve`, `ConstrainedArcs`/`ConstrainedLines`, `EllipticalStartArc`, `ParabolicCenterArc`/`HyperbolicCenterArc`, `BSpline`, `Airfoil`, conical `Helix` |
-| Ops | `extrude` (dir/both/`taper=`/`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `edges_to_wires` | `full_round`, `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
+| 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Wedge`, `ConvexPolyhedron`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=`; partial `Sphere(r, a1, a2, a3)`; `Solid.extrude_linear_with_rotation` | partial cones |
+| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Triangle` (ported trianglesolver), `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotCenterPoint`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning, incl. `path=`/`position_on_path=`), `ArrowHead`/`HeadType`, `BaseSketchObject`/`BasePartObject` subclassing, `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points` | `Text(font_path=)`, the rest of `drafting` (`Draft`, `ExtensionLine`, `DimensionLine`, `TechnicalDrawing`) |
+| 1D objects | `Line`, `Polyline`, `PolarLine` (incl. `length_mode=` and a limit shape as `length=`), `FilletPolyline`, `IntersectingLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc` (a full one is ONE closed edge, like upstream), `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `BSpline` (EXACT poles/knots/multiplicities/weights), `DoubleTangentArc`, `BlendCurve` (C0/C1/C2), `Helix`, `EllipticalCenterArc`, `EllipticalStartArc`, `ParabolicCenterArc`/`HyperbolicCenterArc` (incl. the LIMIT form of `arc_size`), `Airfoil` (NACA 4-digit), `curve @ u / % u / ^ u` (incl. multi-edge curves and EXTRAPOLATION outside [0, 1]), `Edge.make_line/make_circle/make_mid_way/make_spline/make_bspline/param_at/param_at_point/trim (by point)/trim_to_other`, `derivative_at`, `curvature_comb`, `Mixin1D.normal`, `Wire(edges)`, `Wire.order_edges`/`is_closed`/`param_at_point`, `Edge.arc_center`/`radius`/`is_interior`/`find_tangent`/`find_intersection_points` | `ConstrainedArcs`/`ConstrainedLines` (OCCT's Geom2dGcc solvers are unbound in this build), `Wire.fillet_2d` (1-D corner fillets), conical `Helix` |
+| Ops | `extrude` (dir/both/`taper=` — both of upstream's algorithms: LocOpe_DPrism for a positive taper along the normal, otherwise the offset loft — /`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset` (2-D FACE offsets follow upstream's outer/inner-wire branch), `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `edges_to_wires` | `full_round` (needs a 2-D Voronoi), `make_brake_formed`, `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
 | Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `.position/.orientation/.x_axis/.y_axis/.z_axis`, `Axis(Location)`/`Axis(Plane)`, `Pos`, `Rot`/`Rotation`, `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations`, `Workplanes` (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`; shapes track a composed `.location` (`locate()/located()` are absolute; `.position` settable) | `Location.orientation` edge cases |
 | Joints | `RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint` — upstream's exact relative-location algebra; `connect_to` repositions the other part; `copy.copy` rebinds joints; builder-scoped joints transfer to the part on exit | assembly structure / XCAF (roadmap), joint `symbol` rendering |
-| Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists (plus the module-level `edges()`/`vertices()`/… context getters and `Select.ALL/LAST/NEW` on every builder, `new_edges(*objects, combined=)`) with `filter_by` (Axis with DEGREES tolerance/GeomType/Plane/callable/class property), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy/class property incl. RADIUS, opt-in geometric `tie_break=`), `sort_by_distance`, slicing, `+` keeps ShapeList; Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
+| Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists (a Builder's selectors read the shape built SO FAR, which matters inside a BuildLine) (plus the module-level `edges()`/`vertices()`/… context getters and `Select.ALL/LAST/NEW` on every builder, `new_edges(*objects, combined=)`) with `filter_by` (Axis with DEGREES tolerance/GeomType/Plane/callable/class property), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy/class property incl. RADIUS, opt-in geometric `tie_break=`), `sort_by(<Edge|Wire>)` (parameter along that shape), `sort_by_distance` (MINIMAL distance), `topo_distance_to`, `GroupBy.group(key)`/`group_for`, slicing, `+` keeps ShapeList; `Face.center_location`/`position_at`/`is_circular_convex`/`is_circular_concave`, `Shape.distance`/`distance_to`/`closest_points` (BRepExtrema); Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
 | Canonical edges | `canonical()`/`canonical_form()` on Edge/Wire, `canonical_form(sampler, length, closed)`, `lexicographic_key`, `loop_area_vector`, `CanonicalForm`, `CANONICAL_SAMPLES`/`CANONICAL_BAND`, `Axis(edge, canonical=True)`, `Edge.reversed()`; `Edge.make_mid_way` canonicalizes its references (default-on) and `sort_by(..., tie_break=True)` breaks ties geometrically (opt-in) — defaults exactly as in the patch | automatic merging of C0-continuous free edges (out of scope upstream too — reassemble with `edges_to_wires` first) |
 | Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy`, `Shape.__iter__` | — |
 | Measure | `volume/area/length` (volume = per-solid sum), `center()`, `bounding_box()` (exact Bnd_Box), `.wrapped`, `.is_forward` | mass properties |
-| Stdlib | `math`, `copy`, `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `os` (PATH ARITHMETIC ONLY — `os.path.join/dirname/abspath/...`, `getcwd`; no filesystem is faked, `os.path.exists` is always False), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d) | `numpy`, `sympy`, `pytest`, 2-D `ConvexHull`/`Voronoi` (raise loudly), everything else |
+| Stdlib | `math`, `copy` (incl. `copy.copy(<Builder>)` snapshots), `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `os` (PATH ARITHMETIC ONLY — `os.path.join/dirname/abspath/...`, `getcwd`; no filesystem is faked, `os.path.exists` is always False), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d), `pytest.approx` (real, documented tolerances) | `numpy`, `sympy`, the rest of `pytest`, 2-D `ConvexHull`/`Voronoi` (raise loudly), everything else |
 | Export | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS) | 3MF (no lib3mf — raises), `export_step/gltf` (no-ops), `ExportDXF`, imports |
 
 **Known honest gaps** (kept as ERRORs rather than fake geometry — see the
 defaults-audit table in report.md for per-script root causes and
-upstream-vs-lite defaults comparisons): the 1-D CONSTRAINED objects
-(`BlendCurve`, `ConstrainedArcs`/`ConstrainedLines`, `Triangle`,
-`ParabolicCenterArc`/`HyperbolicCenterArc`, `EllipticalStartArc`, `BSpline`,
-`Airfoil` — the largest remaining bucket, 10 scripts), eight
-topology-selection properties (`Face.wires`/`normal`/`is_circular_convex`,
-`Edge.center_location`, `Vertex.distance`, `sort_by(<wire>)`, iterating a
-Builder, cross-parent edge pools), `import_step` (no filesystem in the worker),
-`sympy`/`pytest`, `Wedge`, `Draft`, `topo_distance_to`, text along a path, 3MF
+upstream-vs-lite defaults comparisons): `ConstrainedArcs`/`ConstrainedLines`
+(OCCT's whole `Geom2dGcc` family is DECLARED in the .d.ts but not registered at
+runtime in this wasm build, and so is `GccEnt` — reimplementing GccAna's
+tangency solvers plus its qualifier/solution-enumeration semantics is what it
+would take, and the enumeration feeds a user `selector`), the `drafting` module
+beyond `ArrowHead` (`Draft`, `ExtensionLine`, `DimensionLine`,
+`TechnicalDrawing` — `Draft` in docs/objects_2d is the dimension-styling
+dataclass, NOT the draft-angle operation, which lite has had for rounds),
+`import_step` (STEP reading exists in FileUtils, but the worker has no
+filesystem and the harness serves the built app rather than the build123d
+source tree, so the asset never reaches MEMFS), `full_round` (needs a 2-D
+Voronoi diagram: upstream generates the largest-empty-circle CANDIDATES with
+scipy's qhull Voronoi and averages the best three, so the result depends on the
+candidate set — a Delaunay triangulation would reproduce it, and that is the
+next numerical method worth adding), `Wire.fillet_2d` (1-D corner fillets) and
+`make_brake_formed` (both needed by ttt-23-02-02-sm_hanger), `sympy`, 3MF
 export (no lib3mf in this wasm build — dual_color_3mf builds all six of its
 shapes correctly and then fails on `Mesher.write`),
-`fix_degenerate_edges`/`offset(min_edge_length=)`, `split(Keep.BOTH)`,
-`full_round`. Two scripts die on a KNOWN OCCT 8.0.1 wasm
-kernel fault with byte-identical fillet defaults to upstream
-(BRepFilletAPI_MakeFillet, ChFi3d_Rational): FilletEdges on certain hull/draft
-solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT
-error (toy_truck). The 4 MISMATCHes (joints x2, projection x2) all reduce to
-COMPROMISE(edge-orientation): sub-edge FORWARD/REVERSED flags after booleans
-differ from OCP 7.x over identical curve geometry. Canonical free edges (below)
-shrank two of joints' three residuals (pin_arm 8.16 -> 2.69 mm, slider_arm
-11.80 -> 9.11 mm) without changing any classification; closing the rest needs
-the example to opt into `sort_by(..., tie_break=True)`.
+`fix_degenerate_edges`/`offset(min_edge_length=)` and `split(Keep.BOTH)`.
+`docs/spitfire_wing_gordon` is a TIMEOUT, not a gap: it now runs (real
+`pytest.approx` shim) and spends ~390 s building the wing's Gordon surface
+before returning a null surface — the cost/robustness of
+COMPROMISE(gordon-surface-realization) at that scale. Two scripts die on KNOWN
+OCCT 8.0.1 wasm kernel faults with byte-identical defaults to upstream: the
+truck-body `FilletEdges` (toy_truck) and the coplanar-BSpline fuse operand drop
+that even the General-Fuse rebuild cannot recover (ttt-ppp0110). NOTE for the
+record: the OTHER "kernel fillet fault", cast_bearing_unit, turned out to be a
+LITE bug — a simplified convex hull handing hundreds of micro-edges to
+BRepFilletAPI — and now passes, together with docs-rst/tips/b01.
+The 8 remaining MISMATCHes are all traversal/orientation history:
+COMPROMISE(edge-orientation) for joints x2, projection x2 and
+docs-selectors/sort_axis (sub-edge FORWARD/REVERSED flags and hence `Axis(edge)`
+differ from OCP 7.x over identical curve geometry),
+COMPROMISE(traversal-order) for docs-selectors/filter_all_edges_circle (the
+script keeps the LAST of a mirror-symmetric face pair) and docs-rst/tips/b04 (a
+`sort_by(Axis.Z)` over local sketch vertices that is a COMPLETE tie, so the
+kernel's enumeration decides), and COMPROMISE(triad-labels) for
+docs/objects_1d. Canonical free edges (below) shrank two of joints' three
+residuals (pin_arm 8.16 -> 2.69 mm, slider_arm 11.80 -> 9.11 mm) without
+changing any classification; closing the rest needs the examples to opt into
+`sort_by(..., tie_break=True)` / `Axis(edge, canonical=True)`, which is opt-in
+upstream too.
 
 **Known compromises** (each marked in source with a grep-able
 `COMPROMISE(<topic>)` comment — `grep -rn "COMPROMISE(" packages/` is the
@@ -271,10 +308,11 @@ authoritative list):
 - `mesher` — STL only, written into the worker's in-memory Emscripten FS (no lib3mf, no disk).
 - `double-tangent-arc` — scan+bisection root solve over a sampled/refined curve distance; trims the over-extended target segment where upstream relies on wire fixing.
 - `kernel-guard` — fuse results smaller than the largest input are rebuilt from the (correct) General-Fuse partition; the partition keeps internal contact faces, so selectors see the contact topology.
-- `make-hull` — 2000 samples/edge; line/circle boundary runs reconstructed exactly, other curves stay simplified polylines.
 - `sweep` — trihedron/transition calls match upstream exactly; residual MakePipeShell numeric differences are kernel-version.
 - `helix` — exact interpolation through dense samples with analytic tangents (no surface-curve segment type).
-- `edge-orientation` — sub-edge FORWARD/REVERSED can differ from OCP 7.x over identical curve geometry; Axis(edge)-based measuring lands at the other end (joints x2) and closed intersection-curve paths traverse the opposite way (projection x2).
+- `edge-orientation` — sub-edge FORWARD/REVERSED can differ from OCP 7.x over identical curve geometry; Axis(edge)-based measuring lands at the other end (joints x2, sort_axis) and closed intersection-curve paths traverse the opposite way (projection x2).
+- `traversal-order` — where a script keeps whichever of two SYMMETRIC results the kernel enumerated last (filter_all_edges_circle) or resolves a completely TIED `sort_by` (tips/b04), the answer follows OCCT's traversal of lite's construction, not OCP 7.x's of upstream's. `sort_by(..., tie_break=True)` makes it deterministic, and is opt-in upstream too.
+- `curvature-sign` — `Face.is_circular_convex`/`_concave` need the surface's own reference geometry (a gp_Cylinder's axis, a gp_Sphere's centre, a gp_Torus's core circle); those three classes are unbound here, so the same sign comes from the second fundamental form (`S_dd . N < 0` is exactly upstream's `normal . (P - reference) > 0` for these quadrics), taking the parameter direction with the larger |curvature| — the circular direction of a cylinder, the tube direction of a torus.
 - `thicken` — upstream's BRepOffset_MakeOffset Thickening mode is unbound; the same offset shell is built via MakeThickSolidByJoin and the missing side walls are reconstructed as ruled lofts + sewing.
 - `project` — only the BuildPart pending-faces form; projected pending planes use the reversed projection direction (validated on maker_coin).
 - `text` — bundled FreeSans only; non-Latin glyph metrics may differ from other Arial substitutes.
@@ -340,9 +378,13 @@ See `test/python-mode.spec.js`.
 **Validation against real build123d**: `test/b123d-validation/` (see its README)
 runs the upstream build123d examples through BOTH real build123d 0.11.1 (native
 venv) and Python mode, comparing per-variable volume/bbox. Re-run it whenever
-Build123dLite.js changes. Forty-five representative passing scripts are frozen
+Build123dLite.js changes. FIFTY representative passing scripts are frozen
 as regression tests in `test/python-mode-examples.spec.js` (part of the default
-suite) with volumes hardcoded from the native run.
+suite) with volumes/bboxes hardcoded from the native run — the newest five cover
+`Wedge`/`ConvexPolyhedron`, `Triangle`, the parabolic/hyperbolic arcs,
+slide_latch (sketch-face alignment + `Select.LAST` vertices) and
+group_properties_with_keys (builder copy snapshots + the exact convex hull +
+`GroupBy.group`).
 
 ## Playwright Testing
 

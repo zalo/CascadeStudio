@@ -3,7 +3,8 @@
 // (Build123dLite.js `canonical_form` / `Curve.canonical` / `Axis(edge,
 // canonical=True)` / `Edge.make_mid_way` / the `ShapeList.sort_by` tie break),
 // a port of the upstream canonical-free-edges proposal in
-// docs/upstream-canonical-edges/.
+// the research record on zalo/build123d
+// branch canonical-research (research/).
 //
 // The rule: OPEN shapes start at the lexicographically smaller end point;
 // CLOSED shapes start at the arc-length midpoint of the extremal band

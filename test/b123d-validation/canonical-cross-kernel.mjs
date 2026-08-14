@@ -8,7 +8,8 @@
 // script runs and diffs the numbers.
 //
 //   # reference (patched build123d 0.11.1 + OCP 7.9.3), regenerate on demand:
-//   cd docs/upstream-canonical-edges/experiments && ./repatch.sh
+//   (research lives on zalo/build123d branch canonical-research, research/)
+//   cd <research>/experiments && ./repatch.sh
 //   PYTHONPATH=/tmp/b123d-0111 ~/Desktop/ocjs-deps/b123d-ref-venv/bin/python \
 //     lite_cross_kernel.py > canonical-lite-reference.json
 //
@@ -33,13 +34,16 @@ const argVal = (name, dflt) => {
 };
 const PORT = parseInt(argVal('--port', process.env.CS_TEST_PORT || '8517'), 10);
 const TOL = parseFloat(argVal('--tol', '1e-3'));
-const REFERENCE = argVal('--reference', join(
-  ROOT, 'docs', 'upstream-canonical-edges', 'experiments',
-  'canonical-lite-reference.json'));
+// The reference JSON is produced by the research repo (zalo/build123d branch
+// canonical-research, research/experiments/lite_cross_kernel.py); point
+// --reference at the checkout, or set B123D_CANONICAL_REFERENCE.
+const REFERENCE = argVal('--reference', process.env.B123D_CANONICAL_REFERENCE ||
+  join(ROOT, '..', 'build123d-canonical-research', 'research', 'experiments',
+       'canonical-lite-reference.json'));
 const OUT = argVal('--out', join(HERE, 'canonical-cross-kernel.json'));
 
 // The lite side of the comparison: the same script as
-// docs/upstream-canonical-edges/experiments/lite_cross_kernel.py, in lite's
+// the research repo's experiments/lite_cross_kernel.py, in lite's
 // dialect (build123d-lite implements the same public API).
 const SCRIPT = `
 from build123d import *

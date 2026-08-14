@@ -89,8 +89,10 @@ Env knobs: `B123D_SRC`, `B123D_REF_PY`, `B123D_REF_JOBS` (default 4),
 ## Canonical free edges (cross-kernel check)
 
 build123d-lite implements the upstream **canonical free-edge parametrization**
-proposal — research record, patch and reproduction scripts in
-`docs/upstream-canonical-edges/`. A free edge (section / projection / boolean
+proposal — research record, patch and reproduction scripts now live with the
+build123d contribution itself, on
+[zalo/build123d branch `canonical-research`](https://github.com/zalo/build123d/tree/canonical-research/research)
+(`research/`). A free edge (section / projection / boolean
 output) inherits a seam, direction and parameter range that depend on the
 *parametric frames* of the operand surfaces, so `position_at(0)` and
 `Axis(edge)` move when a geometrically identical solid is re-framed;
@@ -109,13 +111,15 @@ loop, 5 sphere frames), a sphere ∩ cylinder locus reassembled with
 `examples/joints.py`'s `make_mid_way` slider axis (3 cutter frames).
 
 ```bash
-# 1. reference side (patched build123d on OCP 7.9.3)
-cd docs/upstream-canonical-edges/experiments && ./repatch.sh
+# 1. reference side (patched build123d on OCP 7.9.3), in a checkout of the
+#    research branch: git clone -b canonical-research https://github.com/zalo/build123d
+cd <build123d-canonical-research>/research/experiments && ./repatch.sh
 PYTHONPATH=/tmp/b123d-0111 ~/Desktop/ocjs-deps/b123d-ref-venv/bin/python \
   lite_cross_kernel.py > canonical-lite-reference.json
 
-# 2. lite side + diff (needs `npm run build`)
-CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/canonical-cross-kernel.mjs
+# 2. lite side + diff (needs `npm run build`); point the harness at that JSON
+CS_TEST_HEADFUL=1 DISPLAY=:99 B123D_CANONICAL_REFERENCE=<...>/canonical-lite-reference.json \
+  node test/b123d-validation/canonical-cross-kernel.mjs
 ```
 
 Result (committed in `canonical-cross-kernel.json`): **185 canonical
@@ -148,10 +152,10 @@ real build123d fails on them natively). On the OCCT 8.0.1 wasm build:
 
 | Status | Count | Note |
 |---|---|---|
-| PASS | 177 | volume within 0.5%, bbox within 1e-3/axis, per variable |
-| MISMATCH | 11 | joints x2 + projection x2 (COMPROMISE(edge-orientation), below), slide_latch (0.11.1 does not localize `add(<global face>)` in a face-workplane BuildSketch), objects_1d (COMPROMISE(triad-labels)), ttt-ppp0107 (-1.0% on two `extrude(until=)` intermediates), heart_token / sort_axis / selectors_operators / tips-b04 (newly reached, geometry differs) |
-| ERROR | 34 | biggest bucket is the 1-D CONSTRAINED objects (BlendCurve, ConstrainedArcs, Triangle, ParabolicCenterArc, EllipticalStartArc, BSpline, Airfoil — 10 scripts); then 8 topology-selection properties, 4 kernel faults, `import_step` x2, `sympy`/`pytest` x2, and 5 single missing objects/ops |
-| TIMEOUT | 0 | |
+| PASS | 202 | volume within 0.5%, bbox within 1e-3/axis, per variable |
+| MISMATCH | 8 | joints x2 + projection x2 + sort_axis — COMPROMISE(edge-orientation); filter_all_edges_circle + tips/b04 — COMPROMISE(traversal-order) (a mirror-symmetric pair / a fully TIED sort_by); objects_1d — COMPROMISE(triad-labels) |
+| ERROR | 11 | `ConstrainedArcs`/`ConstrainedLines` x2 (OCCT's Geom2dGcc solvers are unbound in this build), the `drafting` module x1 (objects_2d), `import_step` x2, `full_round` x1 (needs a 2-D Voronoi), sm_hanger x1 (1-D wire fillet + `make_brake_formed`), `sympy` x1, 3MF export x1, and 2 kernel faults (toy_truck fillet, ttt-ppp0110 fuse) |
+| TIMEOUT | 1 | spitfire_wing_gordon: reaches the wing Gordon surface, which needs ~390 s here (harness budget 60 s) and then returns a null surface |
 | SKIP | 10 | real build123d 0.11.1 fails natively (`bd_warehouse` x3, `ImageFace`, `ColorMap`, `tcv_screenshots`, no module-level shapes) |
 
 Every non-PASS is root-caused in the **defaults-audit table** appended to
@@ -160,21 +164,23 @@ Select.LAST/NEW + `new_edges` + module-level context selectors → `os` shim →
 FilletPolyline / IntersectingLine / SlotCenterPoint / LengthMode / partial
 Sphere / `Edge.radius`/`is_interior`/`find_tangent`/`make_circle` / `Axis(
 Location)` / `Shell.extrude` / `Compound.make_triad` → builder-scoped location
-contexts → property selectors → **177**.
+contexts → property selectors → **177** → topology-selection properties
+(`Face.is_circular_convex`/`center_location`, `Mixin1D.normal`,
+`param_at_point`, `Shape.distance*`, `GroupBy.group`) + an EXACT convex hull
+→ 185 → the 1-D analytic objects (BSpline, parabolic/hyperbolic arcs,
+EllipticalStartArc, BlendCurve, Airfoil, Triangle) → 194 → Wedge,
+ConvexPolyhedron, text-on-path, `topo_distance_to`, `pytest.approx` and the
+position_at/circle-edge/copy-snapshot fidelity fixes → 199 → 2-D face offsets +
+BuildSketch's face alignment → 201 → upstream's taper-extrude branch → **202**.
 
 <details><summary>previous corpus (129 candidates / 126 scored)</summary>
 
 | Status | Count | Note |
 |---|---|---|
 | PASS | 119 | volume within 0.5%, bbox within 1e-3/axis, per variable |
-| MISMATCH | 4 | all COMPROMISE(edge-orientation): joints x2 (sub-edge FORWARD/REVERSED differs from OCP 7.x, so Axis(edge)-measured slider/pin positions land at the other end of the correct slot — canonical `Edge.make_mid_way` shrank two of the three residuals, pin_arm 8.16 -> 2.69 mm and slider_arm 11.80 -> 9.11 mm, screw_arm unchanged at 2.61 mm; the rest needs the example to opt into `sort_by(..., tie_break=True)`) and projection x2 (the closed sphere-cylinder intersection path carries the opposite orientation flag over identical geometry, so the projected text wraps the other way; everything else — make_text align, arc-length position_at, per-contour glyph faces — matches exactly) |
-| ERROR | 3 | detected kernel faults + one export gap: FilletEdges on certain hull/draft solids aborts the wasm heap (cast_bearing_unit) or raises an internal OCCT error (toy_truck) with byte-identical fillet defaults to upstream; dual_color_3mf builds all six shapes correctly and then fails on `Mesher.write("*.3mf")` — COMPROMISE(mesher), there is no lib3mf in this wasm build |
+| MISMATCH | 4 | all COMPROMISE(edge-orientation): joints x2, projection x2 |
+| ERROR | 3 | two fillet kernel faults (cast_bearing_unit — since root-caused to lite's simplified hull and now PASSING — and toy_truck) + the 3MF export gap |
 | TIMEOUT | 0 | |
-
-Every non-PASS is root-caused in the **defaults-audit table** appended to
-report.md (maintained in `defaults-audit.md`): upstream vs lite defaults
-(boolean fuzz/glue, fillet continuity, alignment modes, position_at
-parametrization) compared per script, with an honest verdict each.
 
 Iteration history: round 0 (pre-builders lite) 0 PASS / 126 ERROR → builders +
 algebra + selectors + stdlib shims 21 → 2D fillets, hole conventions, face
@@ -201,7 +207,7 @@ its 3MF write).
 
 </details>
 
-Full harness pass: ~105 s (4 pages, 232 scripts) / ~5 min single-page; a full
+Full harness pass: ~150 s (4 pages, 232 scripts) / ~5 min single-page; a full
 `reference.py` sweep of the 382 candidates is ~90 s with `--jobs 12`. ALWAYS run
 the lite stage with CS_TEST_HEADFUL=1 DISPLAY=:99 (headless Chromium has no
 WebGL here — it manifests as every script reporting "no measurement produced").
@@ -225,8 +231,12 @@ WebGL here — it manifests as every script reporting "no measurement produced")
   JSON, worker errors and the last console lines.
 - After a raw wasm kernel abort ("memory access out of bounds") the OCCT
   heap is corrupt; run-lite.mjs recycles the page before the next script.
-- **45** representative passing scripts are frozen as regression tests in
+- **50** representative passing scripts are frozen as regression tests in
   `test/python-mode-examples.spec.js` (part of the default suite) — including
   seven Too Tall Toby challenge parts (their own mass asserts run too), the
-  `new_edges` / context-selector / `is_interior` / `FilletPolyline` doc blocks
-  and the two "Locations around a builder" cases.
+  `new_edges` / context-selector / `is_interior` / `FilletPolyline` doc blocks,
+  the two "Locations around a builder" cases and, since this round, five
+  landmarks for the new machinery: `Wedge`/`ConvexPolyhedron` (objects_3d),
+  `Triangle` (tutorial_constraints/b03), the parabolic/hyperbolic arcs,
+  slide_latch (sketch-face alignment + Select.LAST vertices) and
+  group_properties_with_keys (copy snapshots + the exact hull + GroupBy.group).

@@ -825,4 +825,66 @@ test.describe('Python mode: frozen build123d example scripts', () => {
       .toBeLessThan(141.3716694115407 * 0.005);
   });
 
+
+  // docs/objects_3d — Wedge (BRepPrimAPI_MakeWedge min/max form) + ConvexPolyhedron
+  test("docs/objects_3d", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Setup]\nfrom build123d import *\n\n# [Setup]\n\n\ndef write_svg(filename: str, view_port_origin=(-100, -50, 30)):\n    \"\"\"Save an image of the BuildPart object as SVG\"\"\"\n    builder: BuildPart = BuildPart._get_context()\n\n    visible, hidden = builder.part.project_to_viewport(view_port_origin)\n    max_dimension = max(*Compound(children=visible + hidden).bounding_box().size)\n    exporter = ExportSVG(scale=100 / max_dimension)\n    exporter.add_layer(\"Visible\")\n    exporter.add_layer(\"Hidden\", line_color=(99, 99, 99), line_type=LineType.ISO_DOT)\n    exporter.add_shape(visible, layer=\"Visible\")\n    exporter.add_shape(hidden, layer=\"Hidden\")\n    exporter.write(f\"assets/{filename}.svg\")\n\n\n# [Ex. 1]\nwith BuildPart() as example_1:\n    Box(3, 2, 1)\n    # [Ex. 1]\n    pass  # [removed by collect.py] write_svg(\"box_example\")\n\n# [Ex. 2]\nwith BuildPart() as example_2:\n    Cone(2, 1, 2)\n    # [Ex. 2]\n    pass  # [removed by collect.py] write_svg(\"cone_example\")\n\n# [Ex. 3]\nwith BuildPart() as example_3:\n    Box(3, 2, 1)\n    with Locations(example_3.faces().sort_by(Axis.Z)[-1]):\n        CounterBoreHole(0.2, 0.4, 0.5, 0.9)\n    # [Ex. 3]\n    pass  # [removed by collect.py] write_svg(\"counter_bore_hole_example\")\n\n\n# [Ex. 4]\nwith BuildPart() as example_4:\n    Box(3, 2, 1)\n    with Locations(example_3.faces().sort_by(Axis.Z)[-1]):\n        CounterSinkHole(0.2, 0.4, 0.9)\n    # [Ex. 4]\n    pass  # [removed by collect.py] write_svg(\"counter_sink_hole_example\")\n\n# [Ex. 5]\nwith BuildPart() as example_5:\n    Cylinder(1, 2)\n    # [Ex. 5]\n    pass  # [removed by collect.py] write_svg(\"cylinder_example\")\n\n# [Ex. 6]\nwith BuildPart() as example_6:\n    Box(3, 2, 1)\n    Hole(0.4)\n    # [Ex. 6]\n    pass  # [removed by collect.py] write_svg(\"hole_example\")\n\n# [Ex. 7]\nwith BuildPart() as example_7:\n    Sphere(1, 0)\n    # [Ex. 7]\n    pass  # [removed by collect.py] write_svg(\"sphere_example\")\n\n# [Ex. 8]\nwith BuildPart() as example_8:\n    Torus(1, 0.2)\n    # [Ex. 8]\n    pass  # [removed by collect.py] write_svg(\"torus_example\")\n\n# [Ex. 9]\nwith BuildPart() as example_9:\n    Wedge(1, 1, 1, 0, 0, 0.5, 0.5)\n    # [Ex. 9]\n    pass  # [removed by collect.py] write_svg(\"wedge_example\")\n\n# [Ex. 10]\nwith BuildPart() as example_10:\n    Box(30, 20, 20)\n    Box(20, 30, 20)\n    Box(20, 20, 30)\n    with Locations((-10, 0, 0)):\n        Box(40, 23, 23)\n    ConvexPolyhedron(example_10.vertices())\n    # [Ex. 10]\n    pass  # [removed by collect.py] write_svg(\"convex_polyhedron_example\")\n");
+    // real build123d: example_9.volume == 0.5833333333333333
+    expect(Math.abs(measured["example_9"].volume - 0.5833333333333333))
+      .toBeLessThan(0.5833333333333333 * 0.005);
+    // real build123d: example_10.volume == 33876.666666666664
+    expect(Math.abs(measured["example_10"].volume - 33876.666666666664))
+      .toBeLessThan(33876.666666666664 * 0.005);
+  });
+
+  // docs-rst/tutorial_constraints/b03 — Triangle (the trianglesolver port)
+  test("docs-rst/tutorial_constraints/b03", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\nisosceles = Triangle(a=30, b=30, C=60)\nisosceles.c\nisosceles.A\nisosceles.B\nisosceles.vertex_A\n");
+    // real build123d: isosceles.area == 389.71143170299746
+    expect(Math.abs(measured["isosceles"].area - 389.71143170299746))
+      .toBeLessThan(389.71143170299746 * 0.005);
+  });
+
+  // docs/objects_1d_parabolic_hyperbolic — ParabolicCenterArc / HyperbolicCenterArc (gp_Parab / gp_Hypr)
+  test("docs/objects_1d_parabolic_hyperbolic", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "# [Setup]\nfrom build123d import *\n\n# from ocp_vscode import *\n\ndot = Circle(0.05)\n\nwith BuildLine() as parabolic_center_arc:\n    ParabolicCenterArc((0, 0), 0.25, -60, arc_size=120)\ns = 100 / max(*parabolic_center_arc.line.bounding_box().size)\nsvg = ExportSVG(scale=s)\nsvg.add_shape(parabolic_center_arc.line)\nsvg.add_shape(dot.moved(Location(Vector((0, 0)))))\nsvg.write(\"assets/parabolic_center_arc_example.svg\")\n\nwith BuildLine() as hyperbolic_center_arc:\n    HyperbolicCenterArc((0, 0), 0.5, 1, 0, arc_size=180)\ns = 100 / max(*hyperbolic_center_arc.line.bounding_box().size)\nsvg = ExportSVG(scale=s)\nsvg.add_shape(hyperbolic_center_arc.line)\nsvg.add_shape(dot.moved(Location(Vector((0, 0)))))\nsvg.write(\"assets/hyperbolic_center_arc_example.svg\")\n\n# show_all()\n");
+    // real build123d: parabolic_center_arc bbox == [0.0, -1.047197551, 0.0, 1.096622711, 1.047197551, 0.0]
+    const bbox_parabolic_center_arc = [0.0, -1.047197551, 0.0, 1.096622711, 1.047197551, 0.0];
+    for (let i = 0; i < 6; i++) {
+      expect(Math.abs(measured["parabolic_center_arc"].bbox[i] - bbox_parabolic_center_arc[i])).toBeLessThan(1e-3);
+    }
+    // real build123d: hyperbolic_center_arc bbox == [-1.150649451, 1.0, 0.0, 1.150649451, 2.509178479, 0.0]
+    const bbox_hyperbolic_center_arc = [-1.150649451, 1.0, 0.0, 1.150649451, 2.509178479, 0.0];
+    for (let i = 0; i < 6; i++) {
+      expect(Math.abs(measured["hyperbolic_center_arc"].bbox[i] - bbox_hyperbolic_center_arc[i])).toBeLessThan(1e-3);
+    }
+  });
+
+  // docs/slide_latch — BuildSketch's face alignment (localize + orient +Z) and Select.LAST vertices
+  test("docs/slide_latch", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\nwith BuildPart() as latch:\n    # Basic box shape to start with filleted corners\n    Box(70, 30, 14)\n    end = latch.faces().sort_by(Axis.X)[-1]  # save the end with the hole\n    fillet(latch.edges().filter_by(Axis.Z), 2)\n    fillet(latch.edges().sort_by(Axis.Z)[-1], 1)\n    # Make screw tabs\n    with BuildSketch(latch.faces().sort_by(Axis.Z)[0]) as l4:\n        with Locations((-30, 0), (30, 0)):\n            SlotOverall(50, 10, rotation=90)\n        Rectangle(50, 30)\n        fillet(l4.vertices(Select.LAST), radius=2)\n    extrude(amount=-2)\n    with GridLocations(60, 40, 2, 2):\n        Hole(2)\n    # Create the hole from the end saved previously\n    with BuildSketch(end) as slide_hole:\n        add(end)\n        offset(amount=-2)\n        fillet(slide_hole.vertices(), 1)\n    extrude(amount=-68, mode=Mode.SUBTRACT)\n    # Slot for the handle to slide in\n    with BuildSketch(latch.faces().sort_by(Axis.Z)[-1]):\n        SlotOverall(32, 8)\n    extrude(amount=-2, mode=Mode.SUBTRACT)\n    # The slider will move align the x axis 12mm in each direction\n    LinearJoint(\"latch\", axis=Axis.X, linear_range=(-12, 12))\n\nwith BuildPart() as slide:\n    # The slide will be a little smaller than the hole\n    with BuildSketch() as s1:\n        add(slide_hole.sketch)\n        offset(amount=-0.25)\n    # The extrusions aren't symmetric\n    extrude(amount=46)\n    extrude(slide.faces().sort_by(Axis.Z)[0], amount=20)\n    # Round off the ends\n    fillet(slide.edges().group_by(Axis.Z)[0], 1)\n    fillet(slide.edges().group_by(Axis.Z)[-1], 1)\n    # Create the knob\n    with BuildSketch() as s2:\n        with Locations((12, 0)):\n            SlotOverall(15, 4, rotation=90)\n        Rectangle(12, 7, align=(Align.MIN, Align.CENTER))\n        fillet(s2.vertices(Select.LAST), 1)\n        split(bisect_by=Plane.XZ)\n    revolve(axis=Axis.X)\n    # Align the joint to Plane.ZY flipped\n    RigidJoint(\"slide\", joint_location=Location(-Plane.ZY))\n\n# Position the slide in the latch: -12 >= position <= 12\nlatch.part.joints[\"latch\"].connect_to(slide.part.joints[\"slide\"], position=12)\n\n# show(latch.part, render_joints=True)\n# show(slide.part, render_joints=True)\nshow(latch.part, slide.part, render_joints=True)\n");
+    // real build123d: latch.volume == 11831.250489574682
+    expect(Math.abs(measured["latch"].volume - 11831.250489574682))
+      .toBeLessThan(11831.250489574682 * 0.005);
+    // real build123d: slide.volume == 16765.45878762745
+    expect(Math.abs(measured["slide"].volume - 16765.45878762745))
+      .toBeLessThan(16765.45878762745 * 0.005);
+  });
+
+  // docs-selectors/group_properties_with_keys — copy(builder) snapshots + exact convex hull + GroupBy.group(key)
+  test("docs-selectors/group_properties_with_keys", async ({ page }) => {
+    await gotoAndReady(page);
+    const measured = await runAndMeasure(page, "import os\nfrom copy import copy\n\nfrom build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\nworking_path = os.path.dirname(os.path.abspath(__file__))\nfiledir = os.path.join(working_path, \"..\", \"..\", \"assets\", \"topology_selection\")\n\nwith BuildPart() as part:\n    with BuildSketch(Plane.XZ) as sketch:\n        with BuildLine():\n            CenterArc((-6, 12), 10, 0, 360)\n            Line((-16, 0), (16, 0))\n        make_hull()\n        Rectangle(50, 5, align=(Align.CENTER, Align.MAX))\n\n    extrude(amount=12)\n\n    Box(38, 6, 22, align=(Align.CENTER, Align.MAX, Align.MIN), mode=Mode.SUBTRACT)\n\n    circle = part.edges().filter_by(GeomType.CIRCLE).sort_by(Axis.Y)[0]\n    with Locations(Plane(circle.arc_center, z_dir=circle.normal())):\n        CounterBoreHole(13 / 2, 16 / 2, 4)\n\n    mirror(about=Plane.XZ)\n\n    before_fillet = copy(part)\n\n    length_groups = part.edges().group_by(Edge.length)\n    fillet(length_groups.group(6) + length_groups.group(5), 4)\n\n    after_fillet = copy(part)\n\n    with BuildSketch() as pins:\n        with Locations((-21, 0)):\n            Circle(3 / 2)\n        with Locations((21, 0)):\n            SlotCenterToCenter(1, 3)\n    extrude(amount=-12, mode=Mode.SUBTRACT)\n\n    with GridLocations(42, 16, 2, 2):\n        CounterBoreHole(3.5 / 2, 3.5, 0)\n\n    after_holes = copy(part)\n\n    radius_groups = part.edges().filter_by(GeomType.CIRCLE).group_by(Edge.radius)\n    bearing_edges = radius_groups.group(8).group_by(SortBy.DISTANCE)[-1]\n    pin_edges = radius_groups.group(1.5).filter_by_position(Axis.Z, -5, -5)\n    chamfer([pin_edges, bearing_edges], .5)\n\nlocation = Location((-20, -20))\nitems = [before_fillet.part] + length_groups.group(6) + length_groups.group(5)\nbefore = Compound(items).move(location)\nshow(before, after_fillet.part.move(Location((20, 20))))\n# [removed by collect.py] save_screenshot(os.path.join(filedir, \"group_length_key.png\"))\n\nlocation = Location((-20, -20), (180, 0, 0))\nafter = Compound([after_holes.part] + pin_edges + bearing_edges).move(location)\nshow(after, part.part.move(Location((20, 20), (180, 0, 0))))\n# [removed by collect.py] save_screenshot(os.path.join(filedir, \"group_radius_key.png\"))");
+    // real build123d: before_fillet.volume == 9751.638840713076
+    expect(Math.abs(measured["before_fillet"].volume - 9751.638840713076))
+      .toBeLessThan(9751.638840713076 * 0.005);
+    // real build123d: after_fillet.volume == 9730.739028031032
+    expect(Math.abs(measured["after_fillet"].volume - 9730.739028031032))
+      .toBeLessThan(9730.739028031032 * 0.005);
+  });
+
 });
