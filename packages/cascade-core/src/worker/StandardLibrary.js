@@ -48,6 +48,19 @@ function Sphere(radius) {
   return curSphere;
 }
 
+/** Full or PARTIAL sphere (BRepPrimAPI_MakeSphere with two latitude angles
+ *  and a longitude sweep, in DEGREES — build123d's Solid.make_sphere). */
+function PartialSphere(radius, angle1, angle2, angle3) {
+  let sphere = self.CacheOp(arguments, "PartialSphere", () => {
+    let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(0, 0, 0), self.oc.gp.DZ());
+    const rad = Math.PI / 180;
+    return new self.oc.BRepPrimAPI_MakeSphere_12(
+      ax2, radius, angle1 * rad, angle2 * rad, angle3 * rad).Shape();
+  });
+  self.sceneShapes.push(sphere);
+  return sphere;
+}
+
 function Cylinder(radius, height, centered) {
   let curCylinder = self.CacheOp(arguments, "Cylinder", () => {
     let cylinderPlane = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(0, 0, centered ? -height / 2 : 0), new self.oc.gp_Dir_5(0, 0, 1));
@@ -887,6 +900,73 @@ function _edgeArcCenter(edge) {
   else if (type === CT.GeomAbs_Ellipse) { loc = curve.Ellipse().Location(); }
   if (loc === null) { return null; }
   return [loc.X(), loc.Y(), loc.Z()];
+}
+
+/** Radius of a circular edge, or null when the edge is not a circle
+ *  (build123d Edge.radius). */
+function _edgeArcRadius(edge) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  if (curve.GetType() !== self.oc.GeomAbs_CurveType.GeomAbs_Circle) { return null; }
+  return curve.Circle().Radius();
+}
+
+/** A circle or circular ARC edge on a plane given by origin/normal/x-dir,
+ *  angles in DEGREES measured from the x direction (build123d
+ *  Edge.make_circle; start == end means a full circle). */
+function CircularEdge(radius, startAngle, endAngle, origin, normal, xDir) {
+  return self.CacheOp(arguments, "CircularEdge", () => {
+    let ax2 = new self.oc.gp_Ax2_2(
+      new self.oc.gp_Pnt_3(origin[0], origin[1], origin[2]),
+      new self.oc.gp_Dir_5(normal[0], normal[1], normal[2]),
+      new self.oc.gp_Dir_5(xDir[0], xDir[1], xDir[2]));
+    let circle = new self.oc.gp_Circ_2(ax2, radius);
+    if (Math.abs(startAngle - endAngle) % 360 < 1e-9) {
+      return new self.oc.BRepBuilderAPI_MakeEdge_8(circle).Edge();
+    }
+    const rad = Math.PI / 180;
+    return new self.oc.BRepBuilderAPI_MakeEdge_9(
+      circle, startAngle * rad, endAngle * rad).Edge();
+  });
+}
+
+/** build123d's Edge.is_interior: an edge is INTERIOR when the two faces
+ *  meeting at it, each offset outward by length/100, still intersect in an
+ *  edge (an exterior/convex edge's offsets separate). Exactly upstream's
+ *  construction (topo_explore_connected_faces + offset_topods_face +
+ *  BRepAlgoAPI_Section). */
+function EdgeIsInterior(edge, parentShape) {
+  let e = _asEdge(edge);
+  let faces = [];
+  let source = parentShape || e;
+  if (parentShape) {
+    // faces of the parent that contain this edge
+    let target = self.oc.OCJS.HashCode(e, 100000000);
+    ForEachFace(parentShape, (i, face) => {
+      let found = false;
+      ForEachEdge(face, (j, fe) => {
+        if (self.oc.OCJS.HashCode(fe, 100000000) === target) { found = true; }
+      });
+      if (found) { faces.push(face); }
+    });
+  }
+  if (faces.length !== 2) { return false; }
+  let dist = _edgeLength(e) / 100;
+  let offsets = [];
+  for (let i = 0; i < 2; i++) {
+    // BRepOffset_MakeOffset (upstream's offset_topods_face) is unbound here;
+    // BRepOffsetAPI_MakeOffsetShape drives the same BRepOffset algorithm
+    let mk = new self.oc.BRepOffsetAPI_MakeOffsetShape();
+    mk.PerformByJoin(faces[i], dist, 1e-6,
+      self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false,
+      self.oc.GeomAbs_JoinType.GeomAbs_Arc, false,
+      new self.oc.Message_ProgressRange_1());
+    offsets.push(mk.Shape());
+  }
+  let section = new self.oc.BRepAlgoAPI_Section_3(offsets[0], offsets[1], false);
+  section.Build(new self.oc.Message_ProgressRange_1());
+  let found = false;
+  ForEachEdge(section.Shape(), () => { found = true; });
+  return found;
 }
 
 function Revolve(shape, degrees, direction, keepShape, copy) {
@@ -2817,6 +2897,45 @@ function Faces(shape) {
   return new FaceSelector(shape);
 }
 
+/** build123d's `new_edges(*objects, combined=)` (topology/utils.py): the edges
+ *  of `combined` that no shape in `originals` contributed — i.e. the edges the
+ *  combining operation created.
+ *
+ *  Implemented with upstream's exact algorithm rather than a geometric
+ *  comparison: a boolean CUT of the combined shape's edge list by the
+ *  originals' edge list, which also splits partially-shared edges so only the
+ *  genuinely new portion survives.
+ *
+ *  @param {TopoDS_Shape} combined - the result of the operation
+ *  @param {TopoDS_Shape[]} originals - its inputs
+ *  @returns {TopoDS_Edge[]} the new edges */
+function NewEdges(combined, originals) {
+  if (!combined || combined.IsNull()) { return []; }
+  let combinedEdges = new self.oc.TopTools_ListOfShape();
+  let combinedCount = 0;
+  let allCombined = [];
+  ForEachEdge(combined, (i, edge) => {
+    combinedEdges.Append(edge); combinedCount++; allCombined.push(edge);
+  });
+  if (combinedCount === 0) { return []; }
+  let originalEdges = new self.oc.TopTools_ListOfShape();
+  let originalCount = 0;
+  for (let i = 0; i < originals.length; i++) {
+    if (!originals[i] || originals[i].IsNull()) { continue; }
+    ForEachEdge(originals[i], (j, edge) => { originalEdges.Append(edge); originalCount++; });
+  }
+  if (originalCount === 0) { return allCombined; }
+  let cut = new self.oc.BRepAlgoAPI_Cut_1();
+  cut.SetArguments(combinedEdges);
+  cut.SetTools(originalEdges);
+  // (upstream also calls SetRunParallel(True) - a BOPAlgo_Options perf flag
+  //  that is not bound in this build; it does not affect the result)
+  cut.Build(new self.oc.Message_ProgressRange_1());
+  let out = [];
+  ForEachEdge(cut.Shape(), (i, edge) => { out.push(edge); });
+  return out;
+}
+
 // --- Measurement Functions ---
 
 function Volume(shape) {
@@ -3388,6 +3507,7 @@ class CascadeStudioStandardLibrary {
     // Assign all CAD API functions to self for eval() access
     self.Box = Box;
     self.Sphere = Sphere;
+    self.PartialSphere = PartialSphere;
     self.Cylinder = Cylinder;
     self.Cone = Cone;
     self.Polygon = Polygon;
@@ -3434,6 +3554,7 @@ class CascadeStudioStandardLibrary {
     // Selectors
     self.Edges = Edges;
     self.Faces = Faces;
+    self.NewEdges = NewEdges;
     self.EdgeSelector = EdgeSelector;
     self.FaceSelector = FaceSelector;
 
@@ -3472,6 +3593,9 @@ class CascadeStudioStandardLibrary {
     self.OrderedEdges = OrderedEdges;
     self.OffsetPlanarWire = OffsetPlanarWire;
     self._edgeArcCenter = _edgeArcCenter;
+    self._edgeArcRadius = _edgeArcRadius;
+    self.CircularEdge = CircularEdge;
+    self.EdgeIsInterior = EdgeIsInterior;
     self.HLRProject = HLRProject;
     self.SurfaceFromPoints = SurfaceFromPoints;
     self.PipeShellSweep = PipeShellSweep;

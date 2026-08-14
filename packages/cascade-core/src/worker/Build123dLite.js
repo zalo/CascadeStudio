@@ -119,6 +119,13 @@ class Transition:
     RIGHT = 'RIGHT'
 
 
+class LengthMode:
+    """How PolarLine's length argument is measured (build123d LengthMode)."""
+    DIAGONAL = 'DIAGONAL'
+    HORIZONTAL = 'HORIZONTAL'
+    VERTICAL = 'VERTICAL'
+
+
 class Side:
     LEFT = 'LEFT'
     RIGHT = 'RIGHT'
@@ -157,10 +164,23 @@ class LineType:
     DOT = 'DOT'
     HIDDEN = 'HIDDEN'
     PHANTOM = 'PHANTOM'
+    BORDER = 'BORDER'
+    DASHDOT = 'DASHDOT'
+    DIVIDE = 'DIVIDE'
     ISO_DASH = 'ISO_DASH'
-    ISO_DOT = 'ISO_DOT'
-    ISO_DASH_DOT = 'ISO_DASH_DOT'
+    ISO_DASH_SPACE = 'ISO_DASH_SPACE'
     ISO_LONG_DASH_DOT = 'ISO_LONG_DASH_DOT'
+    ISO_LONG_DASH_DOUBLE_DOT = 'ISO_LONG_DASH_DOUBLE_DOT'
+    ISO_LONG_DASH_TRIPLE_DOT = 'ISO_LONG_DASH_TRIPLE_DOT'
+    ISO_DOT = 'ISO_DOT'
+    ISO_LONG_DASH_SHORT_DASH = 'ISO_LONG_DASH_SHORT_DASH'
+    ISO_LONG_DASH_DOUBLE_SHORT_DASH = 'ISO_LONG_DASH_DOUBLE_SHORT_DASH'
+    ISO_DASH_DOT = 'ISO_DASH_DOT'
+    ISO_DOUBLE_DASH_DOT = 'ISO_DOUBLE_DASH_DOT'
+    ISO_DASH_DOUBLE_DOT = 'ISO_DASH_DOUBLE_DOT'
+    ISO_DOUBLE_DASH_DOUBLE_DOT = 'ISO_DOUBLE_DASH_DOUBLE_DOT'
+    ISO_DASH_TRIPLE_DOT = 'ISO_DASH_TRIPLE_DOT'
+    ISO_DOUBLE_DASH_TRIPLE_DOT = 'ISO_DOUBLE_DASH_TRIPLE_DOT'
 
 
 class FontStyle:
@@ -870,6 +890,18 @@ class Axis:
         # parameter (build123d's opt-in; default False keeps the pre-0.12
         # behaviour, which also disagrees with edge.position_at(0) whenever the
         # edge is REVERSED).
+        # Axis(location) / Axis(plane): the frame's origin and its z axis
+        # (build123d Axis(Location) - used to build joint axes from holes)
+        # Duck-typed: Axis.X/Y/Z are constructed at module load, BEFORE the
+        # Location and Plane classes exist, so isinstance() cannot be used.
+        if hasattr(origin, '_R') and hasattr(origin, 'position'):    # Location
+            self.position = Vector(origin.position)
+            self.direction = Vector(origin.z_axis.direction).normalized()
+            return
+        if hasattr(origin, 'z_dir') and hasattr(origin, 'origin'):   # Plane
+            self.position = Vector(origin.origin)
+            self.direction = Vector(origin.z_dir).normalized()
+            return
         if hasattr(origin, 'topo') and origin.topo is not None:
             edge = origin
             if origin.topo.ShapeType().value != 6:
@@ -1069,6 +1101,12 @@ class Plane:
 
 def _topo(obj):
     """Unwrap a Shape (or accept a raw TopoDS shape) to the JS shape object."""
+    # A Builder stands in for its result everywhere build123d takes a Shape
+    # (upstream Shape methods accept builders through the same coercion).
+    if isinstance(obj, Builder):
+        obj = obj._obj
+        if obj is None:
+            raise ValueError('this builder has no result yet')
     if isinstance(obj, Shape):
         if obj.topo is None:
             raise ValueError('this ' + type(obj).__name__ + ' is empty')
@@ -1617,6 +1655,27 @@ class Sketch(Shape):
 
 
 class Curve(Shape):
+    # A single-segment Curve (what the 1-D object constructors return) answers
+    # the circular-arc queries of its one edge, like build123d's Mixin1D.
+    @property
+    def arc_center(self):
+        return _single_edge_of(self).arc_center
+
+    @property
+    def radius(self):
+        # the 1-D constructors (JernArc) record their defining radius; other
+        # curves read it off their single circular edge
+        if getattr(self, '_radius_attr', None) is not None:
+            return self._radius_attr
+        return _single_edge_of(self).radius
+
+    @radius.setter
+    def radius(self, value):
+        self._radius_attr = value
+
+    def find_intersection_points(self, other, tolerance=1e-6):
+        return _single_edge_of(self).find_intersection_points(other, tolerance)
+
     def __init__(self, topo=None, specs=None):
         if isinstance(topo, (list, tuple, ShapeList)):
             # Wire(edges) / Curve(edges): one chained wire from the edges
@@ -1907,6 +1966,27 @@ Wire = Curve
 
 
 class Compound(Shape):
+    @classmethod
+    def make_triad(cls, axes_scale):
+        """The coordinate-system triad symbol (build123d Compound.make_triad):
+        three axis lines with spline arrow heads.
+
+        COMPROMISE(triad-labels): upstream also draws 'X'/'Y'/'Z' with the
+        'singleline' STROKE font, which this build does not ship (only the
+        outline font FreeSans), so the labels are omitted. The triad is a
+        viewer symbol, never part of a modelled part."""
+        s = float(axes_scale)
+        parts = [Edge.make_line((0, 0, 0), (s, 0, 0)),
+                 Edge.make_line((0, 0, 0), (0, s, 0)),
+                 Edge.make_line((0, 0, 0), (0, 0, s))]
+        arrow_arc = Edge.make_spline([(0, 0, 0), (-s / 20, s / 30, 0)],
+                                     [(-1, 0, 0), (-1, 1.5, 0)])
+        arrow = Curve([arrow_arc, arrow_arc.mirror(Plane.XZ)])
+        parts.append(Pos(s, 0, 0) * arrow)
+        parts.append(Pos(0, s, 0) * (arrow.rotate(Axis.Z, 90)))
+        parts.append(Pos(0, 0, s) * (arrow.rotate(Axis.Y, -90)))
+        return Curve(parts)
+
     def __init__(self, children=None, label='', **kwargs):
         topos = [_topo(c) for c in _tolist(children) if not (isinstance(c, Shape) and c.topo is None)]
         topo = None
@@ -1939,6 +2019,16 @@ class Compound(Shape):
         return res
 
 
+def _single_edge_of(curve):
+    """The one edge of a single-segment Curve (build123d's 1-D objects return
+    Curves whose circular-arc properties read through to that edge)."""
+    es = curve.edges()
+    if len(es) != 1:
+        raise ValueError('this property is only defined for a single edge, '
+                         'this curve has ' + str(len(es)))
+    return es[0]
+
+
 class Edge(Curve):
     def __init__(self, topo, parent=None, index=None):
         Curve.__init__(self, topo)
@@ -1967,6 +2057,117 @@ class Edge(Curve):
     @property
     def is_forward(self):
         return bool(w._edgeIsForward(self.topo))
+
+    def find_intersection_points(self, other, tolerance=1e-6):
+        """Points where this 2-D edge crosses an Axis or another Edge
+        (build123d Edge.find_intersection_points - the 1-D form, distinct from
+        Shape's ray/surface intersection).
+
+        Upstream lifts both curves onto their common plane and calls
+        Geom2dAPI_InterCurveCurve; that needs BRep_Tool::CurveOnPlane, which is
+        unbound here, so the crossing is solved on the signed distance to the
+        other curve's line: sample the arc-length parametrization, then bisect
+        every sign change. Exact to tolerance for the analytic line/arc cases
+        the constructors use."""
+        if hasattr(other, 'position') and hasattr(other, 'direction'):
+            base = Vector(other.position)
+            d = Vector(other.direction).normalized()
+        else:
+            o = other.edges()[0] if not isinstance(other, Edge) else other
+            base = o.position_at(0)
+            d = (o.position_at(1) - base).normalized()
+        # signed perpendicular offset of the sampled point from the line,
+        # in the plane spanned by d and the sampling normal
+        def offset(u):
+            q = Vector(tuple(w._edgePointAt(self.topo, float(u))))
+            r = q - base
+            along = r.dot(d)
+            perp = r - d * along
+            # sign from the 2-D cross product about z (planar edges)
+            sign = 1.0 if (d.X * r.Y - d.Y * r.X) >= 0 else -1.0
+            return sign * perp.length
+
+        n = 512
+        roots = []
+        prev_u, prev = 0.0, offset(0.0)
+        if abs(prev) < tolerance:
+            roots.append(0.0)
+        for i in range(1, n + 1):
+            u = i / n
+            cur = offset(u)
+            if (prev <= 0.0 <= cur) or (cur <= 0.0 <= prev):
+                lo, hi, flo = prev_u, u, prev
+                for _ in range(60):
+                    mid = (lo + hi) / 2.0
+                    fm = offset(mid)
+                    if (flo <= 0.0) == (fm <= 0.0):
+                        lo, flo = mid, fm
+                    else:
+                        hi = mid
+                root = (lo + hi) / 2.0
+                if not any(abs(root - r) < 1e-9 for r in roots):
+                    roots.append(root)
+            prev_u, prev = u, cur
+        out = ShapeList()
+        for r in roots:
+            p = Vector(tuple(w._edgePointAt(self.topo, float(r))))
+            # reject near-misses: the point must really lie on the line
+            rel = p - base
+            if (rel - d * rel.dot(d)).length <= max(tolerance, 1e-6) * 100:
+                out.append(p)
+        return out
+
+    @property
+    def radius(self):
+        """Radius of a circular edge (build123d Edge.radius)."""
+        r = w._edgeArcRadius(self.topo)
+        if r is None:
+            raise ValueError('radius is only defined for circles')
+        return r
+
+    @property
+    def is_interior(self):
+        """True when this edge lies between two faces of the SAME body rather
+        than on its outer boundary (build123d Edge.is_interior): offset both
+        adjoining faces outward by length/100 and see whether they still
+        intersect in an edge."""
+        return bool(w.EdgeIsInterior(self.topo, _topo(self.parent)
+                                    if self.parent is not None else None))
+
+    def find_tangent(self, angle):
+        """The normalized parameters at which this edge's tangent is at 'angle'
+        degrees to the local x axis (build123d Edge.find_tangent)."""
+        tangent = math.tan(math.radians(angle))
+        out = []
+        # upstream solves the 2-D tangent condition on the curve; lite scans
+        # the arc-length parametrization and bisects each sign change
+        def f(u):
+            t = w._edgeTangentAt(self.topo, float(u))
+            if abs(t[0]) < 1e-12:
+                return None
+            return t[1] / t[0] - tangent
+        n = 512
+        prev_u, prev = 0.0, f(0.0)
+        for i in range(1, n + 1):
+            u = i / n
+            cur = f(u)
+            if prev is not None and cur is not None and \
+                    ((prev <= 0.0 <= cur) or (cur <= 0.0 <= prev)):
+                lo, hi, flo = prev_u, u, prev
+                for _ in range(60):
+                    mid = (lo + hi) / 2.0
+                    fm = f(mid)
+                    if fm is None:
+                        break
+                    if (flo <= 0.0) == (fm <= 0.0):
+                        lo, flo = mid, fm
+                    else:
+                        hi = mid
+                root = (lo + hi) / 2.0
+                if not any(abs(root - r) < 1e-6 for r in out):
+                    out.append(root)
+            prev_u, prev = u, cur
+        return out
 
     @property
     def arc_center(self):
@@ -2036,6 +2237,19 @@ class Edge(Curve):
         pts = [list(_v3(p)) for p in points]
         tans = [list(_v3(t)) for t in tangents] if tangents else []
         return cls(w.InterpolatedEdge(pts, tans, bool(periodic), bool(scale)))
+
+    @classmethod
+    def make_circle(cls, radius, plane=None, start_angle=360.0,
+                    end_angle=360.0, angular_direction=None):
+        """Full circle or circular arc edge (build123d Edge.make_circle).
+        A full circle is the default (start_angle == end_angle)."""
+        if plane is None:
+            plane = Plane.XY
+        topo = w.CircularEdge(float(radius), float(start_angle),
+                              float(end_angle),
+                              list(plane.origin), list(plane.z_dir),
+                              list(plane.x_dir))
+        return cls(topo)
 
     @classmethod
     def make_line(cls, p1, p2):
@@ -2651,6 +2865,17 @@ class Shell(Shape):
 
     _face_shapes = None  # default for instances made via _wrap_like
 
+    @classmethod
+    def extrude(cls, obj, direction):
+        """A wire/edge swept along a direction into an open SHELL
+        (build123d Shell.extrude)."""
+        d = _v3(direction)
+        topo = w.Extrude(_topo(obj), [d[0], d[1], d[2]])
+        shell = cls.__new__(cls)
+        Shape.__init__(shell, topo)
+        shell._face_shapes = None
+        return shell
+
     def __init__(self, faces=None):
         if faces is None:
             Shape.__init__(self, None)
@@ -3037,10 +3262,80 @@ def _ctx_locations():
     return locs
 
 
+def _sub_shapes_of(shape, kind):
+    """The shape's vertices/edges/faces/solids for a Select bookkeeping kind."""
+    if shape is None or getattr(shape, 'topo', None) is None:
+        return []
+    if kind == 'vertex':
+        return list(shape.vertices())
+    if kind == 'edge':
+        return list(shape.edges())
+    if kind == 'face':
+        return list(shape.faces())
+    return list(shape.solids())
+
+
+def _shape_key(shape, kind):
+    """Geometric identity of a sub-shape, for 'post - pre' set arithmetic.
+
+    build123d compares TopoDS identity (which survives a boolean for untouched
+    sub-shapes); lite rewraps every shape, so identity is taken from geometry
+    instead: position for a vertex, midpoint+length for an edge,
+    center+area for a face, center+volume for a solid."""
+    topo = shape.topo
+    if kind == 'vertex':
+        p = w._vertexPoint(topo)
+        return (round(p[0], 6), round(p[1], 6), round(p[2], 6))
+    if kind == 'edge':
+        c = w._edgeMidpoint(topo)
+        return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
+                round(w._edgeLength(topo), 6))
+    c = tuple(w.CenterOfMass(topo))
+    size = w.SurfaceArea(topo) if kind == 'face' else w.SolidsVolume(topo)
+    return (round(c[0], 6), round(c[1], 6), round(c[2], 6), round(size, 6))
+
+
+def new_edges(*objects, combined=None):
+    """build123d's new_edges(): the edges of 'combined' that none of 'objects'
+    contributed - i.e. the edges the combining operation created
+    (topology/utils.py). Used by 'builder.edges(Select.NEW)'."""
+    if combined is None:
+        raise ValueError('new_edges() requires combined=')
+    topos = []
+    for o in objects:
+        if isinstance(o, Builder):
+            o = o._obj
+        if o is not None and getattr(o, 'topo', None) is not None:
+            topos.append(o.topo)
+    if isinstance(combined, Builder):
+        combined = combined._obj
+    if combined is None or combined.topo is None:
+        return ShapeList()
+    out = ShapeList()
+    for raw in w.NewEdges(combined.topo, topos):
+        out.append(Edge(raw, parent=combined))
+    return out
+
+
+def _context_selector(name):
+    """build123d's module-level selector getters (build_common's
+    __gen_context_component_getter): 'edges()' inside a builder context is
+    '<that builder>.edges()'."""
+    def getter(select=Select.ALL):
+        builder = _active_builder()
+        if builder is None:
+            raise RuntimeError(name + '() requires a Builder context to be in '
+                               'scope')
+        return getattr(builder, name)(select)
+    return getter
+
+
 def _combine(builder, obj, mode, warn_cls=None):
     """Merge obj into builder._obj per mode. Returns the CREATED object."""
     if builder is None or mode == Mode.PRIVATE:
         return obj
+    before = builder._obj
+    pre = builder._sub_shape_lists()
     if mode == Mode.REPLACE or builder._obj is None or builder._obj.topo is None:
         if mode == Mode.SUBTRACT:
             raise ValueError('Mode.SUBTRACT with nothing to subtract from')
@@ -3055,6 +3350,7 @@ def _combine(builder, obj, mode, warn_cls=None):
         builder._obj = builder._wrap((builder._obj & obj).topo)
     else:
         raise ValueError('unsupported mode ' + repr(mode))
+    builder._record_lasts(pre, obj, before)
     return obj
 
 
@@ -3129,13 +3425,80 @@ class Builder:
             raise ValueError('builder has no result to locate')
         return self._obj.locate(loc)
 
+    # ---------------------------------------------------------------- #
+    # Select.LAST / Select.NEW bookkeeping (build123d Builder.lasts)
+    #
+    # Upstream records, per operation, 'post - pre' over the builder's
+    # sub-shapes — except for the builder's OWN shape type, which is just the
+    # objects that were combined in (build_common._add_to_context). The set
+    # difference relies on TopoDS identity surviving a boolean; lite wraps
+    # every shape in a fresh handle, so the difference is taken on GEOMETRY
+    # (vertex position / edge midpoint+length / face center+area / solid
+    # center+volume, rounded to 6 digits), which answers the same question.
+    # ---------------------------------------------------------------- #
+    _SELECT_KINDS = ('vertex', 'edge', 'face', 'solid')
+    # the shape type each builder itself produces (build123d Builder._shape)
+    _core_kind = 'solid'
+
+    def _sub_shape_lists(self):
+        """Current vertices/edges/faces/solids. Topology traversal only — the
+        measurements that turn these into keys are deferred until a
+        Select.LAST/NEW query actually asks for them."""
+        o = self._obj
+        if o is None or o.topo is None:
+            return dict((k, []) for k in Builder._SELECT_KINDS)
+        return {'vertex': list(o.vertices()), 'edge': list(o.edges()),
+                'face': list(o.faces()), 'solid': list(o.solids())}
+
+    def _record_lasts(self, pre, created, before):
+        self._lasts_pre = pre
+        self._lasts_post = self._sub_shape_lists()
+        self._lasts_created = created
+        self._lasts_before = before
+        self._lasts_cache = {}
+
+    def _lasts(self, kind):
+        if not hasattr(self, '_lasts_post'):
+            return ShapeList()
+        if kind in self._lasts_cache:
+            return ShapeList(self._lasts_cache[kind])
+        if kind == self._core_kind:
+            created = self._lasts_created
+            out = ShapeList(_sub_shapes_of(created, kind)) if created is not None \
+                else ShapeList()
+        else:
+            seen = set(_shape_key(s, kind) for s in self._lasts_pre[kind])
+            out = ShapeList([s for s in self._lasts_post[kind]
+                             if _shape_key(s, kind) not in seen])
+        self._lasts_cache[kind] = list(out)
+        return out
+
+    @property
+    def new_edges(self):
+        """Edges that the last operation CREATED (build123d Builder.new_edges):
+        the combined result's edges cut by the operands' edges."""
+        if self._obj is None or not hasattr(self, '_lasts_created'):
+            return ShapeList()
+        originals = []
+        if self._lasts_before is not None and self._lasts_before.topo is not None:
+            originals.append(self._lasts_before)
+        if self._lasts_created is not None:
+            originals.append(self._lasts_created)
+        return new_edges(*originals, combined=self._obj)
+
     # selector passthroughs (builder.edges() etc.)
     def edges(self, select=Select.ALL):
-        if select in (Select.LAST, Select.NEW):
-            return ShapeList(self._last_edges) if hasattr(self, '_last_edges') else ShapeList()
+        if select == Select.LAST:
+            return self._lasts('edge')
+        if select == Select.NEW:
+            return self.new_edges
         return self._obj.edges() if self._obj else ShapeList()
 
     def wires(self, select=Select.ALL):
+        if select == Select.LAST:
+            return ShapeList(edges_to_wires(self._lasts('edge')))
+        if select == Select.NEW:
+            raise ValueError('Select.NEW only valid for edges')
         return self._obj.wires() if self._obj else ShapeList()
 
     def face(self):
@@ -3148,20 +3511,31 @@ class Builder:
         return self._obj.edge() if self._obj else None
 
     def faces(self, select=Select.ALL):
-        if select in (Select.LAST, Select.NEW):
-            return ShapeList(self._last_faces) if hasattr(self, '_last_faces') else ShapeList()
+        if select == Select.LAST:
+            return self._lasts('face')
+        if select == Select.NEW:
+            raise ValueError('Select.NEW only valid for edges')
         return self._obj.faces() if self._obj else ShapeList()
 
     def vertices(self, select=Select.ALL):
+        if select == Select.LAST:
+            return self._lasts('vertex')
+        if select == Select.NEW:
+            raise ValueError('Select.NEW only valid for edges')
         return self._obj.vertices() if self._obj else ShapeList()
 
     def solids(self, select=Select.ALL):
+        if select == Select.LAST:
+            return self._lasts('solid')
+        if select == Select.NEW:
+            raise ValueError('Select.NEW only valid for edges')
         return self._obj.solids() if self._obj else ShapeList()
 
 
 class BuildPart(Builder):
     _shape_cls = Part
     _tag = 'part'
+    _core_kind = 'solid'
 
     @property
     def part(self):
@@ -3171,29 +3545,11 @@ class BuildPart(Builder):
     def _snapshot(self):
         return self._obj
 
-    def _track_new(self, before_edges):
-        """Record Select.LAST edges/faces: those not present before the op."""
-        if self._obj is None:
-            return
-        before = set()
-        for e in before_edges:
-            c = w._edgeMidpoint(e.topo)
-            before.add((round(c[0], 6), round(c[1], 6), round(c[2], 6),
-                        round(w._edgeLength(e.topo), 6)))
-        new = ShapeList()
-        for e in self._obj.edges():
-            c = w._edgeMidpoint(e.topo)
-            key = (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-                   round(w._edgeLength(e.topo), 6))
-            if key not in before:
-                new.append(e)
-        self._last_edges = new
-        self._last_faces = self._obj.faces()
-
 
 class BuildSketch(Builder):
     _shape_cls = Sketch
     _tag = 'sketch'
+    _core_kind = 'face'
 
     @property
     def sketch(self):
@@ -3225,6 +3581,7 @@ class BuildSketch(Builder):
 class BuildLine(Builder):
     _shape_cls = Curve
     _tag = 'line'
+    _core_kind = 'edge'
 
     def __init__(self, *workplanes, mode=Mode.ADD):
         Builder.__init__(self, *workplanes, mode=mode)
@@ -3257,6 +3614,15 @@ class BuildLine(Builder):
             parent.pending_path = self._obj
         elif parent is not None and self._obj is not None:
             _combine(parent, self._obj, self.mode)
+
+
+# Selectors that read the builder in scope: 'edges()' == '<builder>.edges()'
+# (build123d exports these alongside the methods, and the docs use them).
+vertices = _context_selector('vertices')
+edges = _context_selector('edges')
+wires = _context_selector('wires')
+faces = _context_selector('faces')
+solids = _context_selector('solids')
 
 
 # ------------------------------------------------- location contexts -----
@@ -3466,10 +3832,6 @@ def _create_object(cls, topo_maker, analytic_bbox, rotation3, align, mode,
             rot = Rotation(r[0], r[1], r[2])
 
     results = []
-    before_edges = None
-    if isinstance(builder, BuildPart) and builder._obj is not None:
-        before_edges = builder._obj.edges()
-
     for pl in planes:
         for loc in ctx_locs:
             topo = topo_maker()
@@ -3491,13 +3853,8 @@ def _create_object(cls, topo_maker, analytic_bbox, rotation3, align, mode,
             results.append(shape)
 
     obj = results[0] if len(results) == 1 else results[0] + results[1:]
-    created = _combine(builder, obj, mode)
-    if isinstance(builder, BuildPart) and before_edges is not None:
-        builder._track_new(before_edges)
-    elif isinstance(builder, BuildPart):
-        builder._last_edges = builder._obj.edges() if builder._obj else ShapeList()
-        builder._last_faces = builder._obj.faces() if builder._obj else ShapeList()
-    return created
+    # Select.LAST/NEW bookkeeping happens inside _combine for every operation.
+    return _combine(builder, obj, mode)
 
 
 # ------------------------------------------------------- 3D primitives ---
@@ -3530,12 +3887,17 @@ def Cylinder(radius, height, arc_size=360, rotation=(0, 0, 0),
 def Sphere(radius, arc_size1=-90, arc_size2=90, arc_size3=360,
            rotation=(0, 0, 0),
            align=(Align.CENTER, Align.CENTER, Align.CENTER), mode=Mode.ADD):
-    if arc_size1 != -90 or arc_size2 != 90 or arc_size3 != 360:
-        raise NotImplementedError('partial spheres are not supported in build123d-lite')
     align = _norm_align(align, 3)
-    bbox = ((-radius, -radius, -radius), (radius, radius, radius))
-    return _create_object(Part, lambda: w.Sphere(radius), bbox, rotation,
-                          align, mode, BuildPart)
+    if arc_size1 == -90 and arc_size2 == 90 and arc_size3 == 360:
+        bbox = ((-radius, -radius, -radius), (radius, radius, radius))
+        return _create_object(Part, lambda: w.Sphere(radius), bbox, rotation,
+                              align, mode, BuildPart)
+    # partial sphere: BRepPrimAPI_MakeSphere's two latitude angles and the
+    # longitude sweep, exactly build123d's Solid.make_sphere arguments. The
+    # bounding box is measured (a spherical wedge has no simple analytic box).
+    def maker():
+        return w.PartialSphere(radius, arc_size1, arc_size2, arc_size3)
+    return _create_object(Part, maker, None, rotation, align, mode, BuildPart)
 
 
 def Cone(bottom_radius, top_radius, height, arc_size=360, rotation=(0, 0, 0),
@@ -3748,6 +4110,26 @@ def SlotCenterToCenter(center_separation, height, rotation=0,
                        align=(Align.CENTER, Align.CENTER), mode=Mode.ADD):
     return SlotOverall(center_separation + height, height, rotation=rotation,
                        align=align, mode=mode)
+
+
+def SlotCenterPoint(center, point, height, rotation=0,
+                    align=(Align.CENTER, Align.CENTER), mode=Mode.ADD):
+    """Slot defined by its center and the center of ONE end arc, symmetric
+    about the center (build123d SlotCenterPoint)."""
+    c = Vector(center)
+    p = Vector(point)
+    half = p - c
+    if half.length <= 0:
+        raise ValueError('Distance between center and point must be greater '
+                         'than 0 Got: distance = ' + repr(half.length))
+    # a SlotOverall of the same length/height, rotated onto the half-line and
+    # translated to the center - the identical geometry upstream sews together
+    angle = math.degrees(math.atan2(half.Y, half.X))
+    slot = SlotOverall(2 * half.length + height, height,
+                       rotation=rotation + angle, align=align,
+                       mode=Mode.PRIVATE)
+    placed = Pos(c.X, c.Y, c.Z) * slot
+    return _combine(_active_builder(BuildSketch), placed, mode)
 
 
 def Trapezoid(width, height, left_side_angle, right_side_angle=None,
@@ -4033,7 +4415,9 @@ def TangentArc(*pts, tangent, tangent_from_first=True, mode=Mode.ADD):
     if len(pts) != 2:
         raise ValueError('TangentArc requires two points')
     if not tangent_from_first:
-        raise NotImplementedError('TangentArc with tangent_from_first=False')
+        # upstream applies the tangent to the LAST point instead, which builds
+        # the same circle traversed the other way (objects_curve TangentArc)
+        pts = (pts[1], pts[0])
     p1, p2 = _v3(pts[0]), _v3(pts[1])
     t = _v3(tangent)
     tln = math.hypot(t[0], t[1])
@@ -4075,7 +4459,11 @@ def JernArc(start, tangent, radius, arc_size, mode=Mode.ADD):
 
     def at(a):
         return [cx + radius * math.cos(a), cy + radius * math.sin(a), p1[2]]
-    return _line_object([('arc3', [list(p1), at(amid), at(a2)])], mode)
+    arc = _line_object([('arc3', [list(p1), at(amid), at(a2)])], mode)
+    # upstream's JernArc records its defining parameters on the object
+    arc.radius = radius
+    arc.center_point = Vector((cx, cy, p1[2]))
+    return arc
 
 
 def _sample_curve(obj, per_edge=256):
@@ -4224,17 +4612,156 @@ def DoubleTangentArc(pnt, tangent, other, keep=Keep.TOP, mode=Mode.ADD):
     return TangentArc(tuple(arc_pt), p1, tangent=tuple(t), mode=mode)
 
 
-def PolarLine(start, length, angle=None, direction=None, mode=Mode.ADD,
-              **kwargs):
+def PolarLine(start, length, angle=None, direction=None,
+              length_mode=LengthMode.DIAGONAL, mode=Mode.ADD, **kwargs):
+    """Line from a point at an angle, ending after 'length' or AT a limit
+    shape (build123d PolarLine)."""
     p1 = _v3(start)
     if direction is not None:
         d = Vector(direction).normalized()
-        p2 = [p1[0] + length * d.X, p1[1] + length * d.Y, p1[2] + length * d.Z]
+        angle = math.degrees(math.atan2(d.Y, d.X))
     elif angle is not None:
-        p2 = [p1[0] + length * math.cos(math.radians(angle)),
-              p1[1] + length * math.sin(math.radians(angle)), p1[2]]
+        a = math.radians(angle)
+        d = Vector((math.cos(a), math.sin(a), 0.0))
     else:
         raise ValueError('PolarLine requires angle= or direction=')
+
+    if isinstance(length, (int, float)):
+        # length_mode measures the DIAGONAL (default), or the horizontal /
+        # vertical projection of the line - upstream divides by cos/sin
+        if length_mode == LengthMode.HORIZONTAL:
+            scale = abs(length / math.cos(math.radians(angle)))
+        elif length_mode == LengthMode.VERTICAL:
+            scale = abs(length / math.sin(math.radians(angle)))
+        else:
+            scale = length
+        p2 = [p1[0] + scale * d.X, p1[1] + scale * d.Y, p1[2] + scale * d.Z]
+        return _line_object([('line', [p1, p2])], mode)
+
+    # length is a LIMIT SHAPE: run the ray out and stop at the first contact
+    # in front of the start point (build123d trims a long edge to the limit)
+    target = length._obj if isinstance(length, Builder) else length
+    if not isinstance(target, Shape):
+        raise NotImplementedError(
+            'PolarLine length limits are supported for shapes only in '
+            'build123d-lite, not ' + type(length).__name__)
+    axis = Axis(p1, tuple(d))
+    best = None
+    contact = None
+    for e in target.edges():
+        for h in e.find_intersection_points(axis):
+            v = Vector(tuple(h))
+            along = (v - Vector(tuple(p1))).dot(d)
+            if along > _TOL and (best is None or along < best):
+                best, contact = along, v
+    if contact is None:
+        raise ValueError("Polar line doesn't intersect length limit " +
+                         repr(length))
+    return _line_object([('line', [p1, list(contact)])], mode)
+
+
+def _dist3(a, b):
+    return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 +
+                     (a[2] - b[2]) ** 2)
+
+
+def _unit3(v):
+    n = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    if n < 1e-15:
+        return [0.0, 0.0, 0.0]
+    return [v[0] / n, v[1] / n, v[2] / n]
+
+
+def FilletPolyline(*pts, radius, close=False, mode=Mode.ADD):
+    """Polyline whose corners are filleted to a radius (build123d
+    FilletPolyline). A radius of 0 leaves that corner sharp.
+
+    Upstream builds each corner fillet with Face.fillet_2d; a fillet between
+    two straight segments is the analytic tangent arc, so lite constructs it
+    directly (identical geometry, and it keeps the result a spec-level Curve
+    that mirror()/make_face() can still transform)."""
+    if len(pts) == 1 and hasattr(pts[0], '__len__') and \
+            hasattr(pts[0][0], '__len__'):
+        pts = tuple(pts[0])
+    points = [list(_v3(p)) for p in pts]
+    # a user-closed polyline (last == first) is treated as close=True
+    if len(points) > 1 and _dist3(points[0], points[-1]) < _TOL:
+        close = True
+        points.pop()
+    if len(points) < 2:
+        raise ValueError('FilletPolyline requires two or more pts')
+
+    n = len(points)
+    if isinstance(radius, (int, float)):
+        radius_list = [float(radius)] * n
+        radius_at = lambda i: radius_list[i]
+    else:
+        radius_list = [float(r) for r in radius]
+        expected = n - (0 if close else 2)
+        if len(radius_list) != expected:
+            raise ValueError('radius list length (' + str(len(radius_list)) +
+                             ') must match angle count (' + str(expected) + ')')
+        radius_at = lambda i: radius_list[i - (0 if close else 1)]
+    for r in radius_list:
+        if r < 0:
+            raise ValueError('radius ' + repr(r) + ' must be non-negative')
+
+    corners = range(n) if close else range(1, n - 1)
+    segs = []
+    cursor = list(points[0])
+    for i in corners:
+        p = points[i]
+        prev = points[(i - 1) % n]
+        nxt = points[(i + 1) % n]
+        r = radius_at(i)
+        u = _unit3([p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]])
+        v = _unit3([nxt[0] - p[0], nxt[1] - p[1], nxt[2] - p[2]])
+        cosang = -(u[0] * v[0] + u[1] * v[1] + u[2] * v[2])
+        cosang = max(-1.0, min(1.0, cosang))
+        interior = math.acos(cosang)
+        if r == 0 or interior < 1e-9 or abs(interior - math.pi) < 1e-9:
+            continue  # sharp corner (or collinear: nothing to fillet)
+        t = r / math.tan(interior / 2.0)
+        a = [p[k] - u[k] * t for k in range(3)]
+        b = [p[k] + v[k] * t for k in range(3)]
+        # the arc centre lies along the interior bisector
+        bis = _unit3([v[k] - u[k] for k in range(3)])
+        dist = r / math.sin(interior / 2.0)
+        centre = [p[k] + bis[k] * dist for k in range(3)]
+        chord_mid = [(a[k] + b[k]) / 2.0 for k in range(3)]
+        out = _unit3([chord_mid[k] - centre[k] for k in range(3)])
+        arc_mid = [centre[k] + out[k] * r for k in range(3)]
+        if _dist3(cursor, a) > _TOL:
+            segs.append(('line', [list(cursor), list(a)]))
+        segs.append(('arc3', [list(a), arc_mid, list(b)]))
+        cursor = b
+    end = points[0] if close else points[-1]
+    if _dist3(cursor, end) > _TOL:
+        segs.append(('line', [list(cursor), list(end)]))
+    if not segs:
+        raise ValueError('FilletPolyline produced no segments')
+    return _line_object(segs, mode)
+
+
+def IntersectingLine(start, direction, other, mode=Mode.ADD):
+    """Line from a point in a direction, ending at the NEAREST intersection
+    with another curve (build123d IntersectingLine)."""
+    p1 = _v3(start)
+    d = Vector(direction).normalized()
+    axis = Axis(p1, tuple(d))
+    target = other._obj if isinstance(other, Builder) else other
+    hits = [h for e in target.edges() for h in e.find_intersection_points(axis)]
+    if not hits:
+        raise ValueError('No intersections found')
+    # upstream takes the intersection CLOSEST to start (unsigned distance)
+    best = None
+    contact = None
+    for h in hits:
+        v = Vector(tuple(h))
+        dist = (Vector(tuple(p1)) - v).length
+        if best is None or dist < best:
+            best, contact = dist, v
+    p2 = [p1[0] + d.X * best, p1[1] + d.Y * best, p1[2] + d.Z * best]
     return _line_object([('line', [p1, p2])], mode)
 
 
@@ -4536,15 +5063,7 @@ def extrude(to_extrude=None, amount=None, dir=None, until=None, target=None,
             solid = w.Extrude(face, vec)
         results.append(Part(solid))
     obj = results[0] if len(results) == 1 else results[0] + results[1:]
-    before = builder._obj.edges() if (builder and builder._obj) else None
-    created = _combine(builder, obj, mode)
-    if isinstance(builder, BuildPart):
-        if before is not None:
-            builder._track_new(before)
-        elif builder._obj is not None:
-            builder._last_edges = builder._obj.edges()
-            builder._last_faces = builder._obj.faces()
-    return created
+    return _combine(builder, obj, mode)
 
 
 def revolve(profiles=None, axis=Axis.Z, revolution_arc=360, clean=True,
@@ -6555,6 +7074,121 @@ from _scipy_shim import minimize, minimize_scalar, OptimizeResult
 `,
   'scipy.spatial': `
 from _scipy_shim import ConvexHull, Voronoi
+`,
+  os: `
+# os shim: pure PATH ARITHMETIC only (os.path.join/dirname/abspath/... and
+# os.getcwd), which is all the build123d docs scripts use it for - they build
+# asset paths next to __file__ for SVG/screenshot output. There is no real
+# filesystem in the worker, so nothing here touches one: os.path.exists is
+# always False and open()/listdir are absent, so a script that genuinely needs
+# a file still fails loudly instead of silently doing nothing.
+sep = '/'
+extsep = '.'
+curdir = '.'
+pardir = '..'
+linesep = '\\n'
+name = 'posix'
+environ = {}
+
+
+def getcwd():
+    return '/'
+
+
+def fspath(p):
+    return p
+
+
+class _Path:
+    sep = '/'
+    extsep = '.'
+    curdir = '.'
+    pardir = '..'
+
+    @staticmethod
+    def join(*parts):
+        out = ''
+        for p in parts:
+            p = str(p)
+            if p.startswith('/'):
+                out = p
+            elif out == '' or out.endswith('/'):
+                out = out + p
+            else:
+                out = out + '/' + p
+        return out
+
+    @staticmethod
+    def split(p):
+        p = str(p)
+        i = p.rfind('/')
+        if i < 0:
+            return ('', p)
+        if i == 0:
+            return ('/', p[1:])
+        return (p[:i], p[i + 1:])
+
+    @staticmethod
+    def dirname(p):
+        return _Path.split(p)[0]
+
+    @staticmethod
+    def basename(p):
+        return _Path.split(p)[1]
+
+    @staticmethod
+    def splitext(p):
+        base = _Path.basename(p)
+        i = base.rfind('.')
+        if i <= 0:
+            return (str(p), '')
+        return (str(p)[:len(str(p)) - (len(base) - i)], base[i:])
+
+    @staticmethod
+    def isabs(p):
+        return str(p).startswith('/')
+
+    @staticmethod
+    def normpath(p):
+        p = str(p)
+        absolute = p.startswith('/')
+        out = []
+        for part in p.split('/'):
+            if part == '' or part == '.':
+                continue
+            if part == '..':
+                if out and out[-1] != '..':
+                    out.pop()
+                elif not absolute:
+                    out.append('..')
+                continue
+            out.append(part)
+        joined = '/'.join(out)
+        if absolute:
+            return '/' + joined
+        return joined if joined else '.'
+
+    @staticmethod
+    def abspath(p):
+        p = str(p)
+        if not p.startswith('/'):
+            p = getcwd() + ('' if getcwd().endswith('/') else '/') + p
+        return _Path.normpath(p)
+
+    @staticmethod
+    def exists(p):
+        return False
+
+    @staticmethod
+    def isfile(p):
+        return False
+
+    @staticmethod
+    def isdir(p):
+        return False
+
+
+path = _Path
 `,
   logging: `
 # logging shim: swallows everything (worker console is used via print)
