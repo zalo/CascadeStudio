@@ -1141,7 +1141,9 @@ def _solid_volume(t):
 def _tolist(objs):
     if objs is None:
         return []
-    if isinstance(objs, Shape):
+    if isinstance(objs, (Shape, Builder)):
+        # a Builder stands in for its result and is NOT iterable upstream
+        # either (build123d's add() coerces obj._obj per element)
         return [objs]
     return list(objs)
 
@@ -1394,6 +1396,42 @@ class Shape:
         if center_of == CenterOf.BOUNDING_BOX:
             return self.bounding_box().center()
         return Vector(tuple(w.CenterOfMass(self.topo)))
+
+    # --- minimal distance (BRepExtrema_DistShapeShape, like build123d) ---
+    def distance_to_with_closest_points(self, other):
+        """(distance, point on self, point on other) for the MINIMAL distance
+        between two shapes (build123d
+        Shape.distance_to_with_closest_points). other may be a point."""
+        if self.topo is None:
+            raise ValueError('Cannot calculate distance to or from an empty '
+                             'shape')
+        if isinstance(other, (Shape, Builder)):
+            target = _topo(other)
+        else:
+            target = w.PointVertex(list(_v3(other)))
+        res = w._distShapeShape(self.topo, target)
+        if not res:
+            raise RuntimeError('the distance between these shapes could not '
+                               'be computed')
+        r = list(res)
+        return (r[0], Vector(tuple(r[1])), Vector(tuple(r[2])))
+
+    def distance_to(self, other):
+        """Minimal distance to another shape or point (build123d
+        Shape.distance_to)."""
+        return self.distance_to_with_closest_points(other)[0]
+
+    def distance(self, other):
+        """Minimal distance between two shapes (build123d Shape.distance)."""
+        if not isinstance(other, (Shape, Builder)):
+            raise ValueError('Cannot calculate distance to or from an empty '
+                             'shape')
+        return self.distance_to_with_closest_points(other)[0]
+
+    def closest_points(self, other):
+        """The two points where the distance between the shapes is minimal
+        (build123d Shape.closest_points)."""
+        return self.distance_to_with_closest_points(other)[1:3]
 
     def bounding_box(self, tolerance=None):
         return BoundBox(list(w.BoundingBox(self.topo)))
@@ -1676,6 +1714,45 @@ class Curve(Shape):
     def find_intersection_points(self, other, tolerance=1e-6):
         return _single_edge_of(self).find_intersection_points(other, tolerance)
 
+    def normal(self):
+        """Normal of a PLANAR curve (build123d Mixin1D.normal): the conic's own
+        axis direction for a circle/ellipse, otherwise the normal of the plane
+        the curve lies in.
+
+        The general branch substitutes for BRepLib_FindSurface: its Surface()
+        comes back as an unbound handle in this build, so the plane is fitted
+        from sampled points instead (exact for a genuinely planar curve, and
+        the deviation of the samples from the fit is what decides whether the
+        curve IS planar — upstream raises the same ValueError when it is not)."""
+        edges = self.edges() if not isinstance(self, Edge) else [self]
+        if not edges:
+            raise ValueError("Can't find normal of empty edge/wire")
+        axis_dir = w._edgeArcNormal(_topo(edges[0]))
+        if axis_dir and len(edges) == 1:
+            return Vector(tuple(axis_dir)).normalized()
+        pts = []
+        for e in edges:
+            for i in range(5):
+                pts.append(Vector(tuple(w._edgePointAt(_topo(e), i / 4.0))))
+        centroid = Vector(0, 0, 0)
+        for p in pts:
+            centroid = centroid + p
+        centroid = centroid * (1.0 / len(pts))
+        normal, best = None, 0.0
+        for i in range(len(pts)):
+            for j in range(i + 1, len(pts)):
+                cross = (pts[i] - centroid).cross(pts[j] - centroid)
+                if cross.length > best:
+                    normal, best = cross, cross.length
+        if normal is None or best <= _TOL_1E6:
+            raise ValueError('Normal not defined')
+        normal = normal.normalized()
+        span = max([(p - centroid).length for p in pts])
+        for p in pts:
+            if abs((p - centroid).dot(normal)) > _TOL_1E6 * max(1.0, span):
+                raise ValueError('Normal not defined')
+        return normal
+
     def __init__(self, topo=None, specs=None):
         if isinstance(topo, (list, tuple, ShapeList)):
             # Wire(edges) / Curve(edges): one chained wire from the edges
@@ -1718,25 +1795,10 @@ class Curve(Shape):
             return list(w.OrderedEdges(self.topo))
         return list(w.Edges(self.topo).edges())
 
-    def _walk(self, u, tangent):
-        """Evaluate position/tangent at length-fraction u along the (possibly
-        multi-edge) curve, orienting each edge to chain head-to-tail."""
-        es = self._edge_chain()
-        if len(es) == 1:
-            fn = w._edgeTangentAt if tangent else w._edgePointAt
-            return Vector(tuple(fn(es[0], float(u))))
-        lens = [w._edgeLength(e) for e in es]
-        ends = [(tuple(w._edgePointAt(e, 0.0)), tuple(w._edgePointAt(e, 1.0)))
-                for e in es]
-        # orient edges into a chain (WireFromSegments adds them in order,
-        # but individual edges may run tip-to-tail reversed)
+    def _chain_flips(self, es, ends):
+        """Which of the chained edges have to be traversed BACKWARDS to run
+        head-to-tail (see _walk for why the first edge is special-cased)."""
         flips = [False] * len(es)
-        # In a real WIRE the edges above are in CONNECTION order, so the only
-        # ambiguity left is the first edge's raw parametrization direction —
-        # flip it when its start (not its end) is what touches the second edge.
-        # (For a COMPOUND of edges the order itself is arbitrary, and the
-        # greedy chaining below starting from edge 0 as-is is what matches
-        # build123d's BRepAdaptor_CompCurve there.)
         if len(es) > 1 and self.topo.ShapeType().value == 5:
             a0, a1 = ends[0]
             b0, b1 = ends[1]
@@ -1748,6 +1810,61 @@ class Curve(Shape):
             d_fwd = math.dist(prev_end, ends[i][0])
             d_rev = math.dist(prev_end, ends[i][1])
             flips[i] = d_rev < d_fwd
+        return flips
+
+    def param_at_point(self, point):
+        """Normalized position (0..1) of point along this wire: the arc
+        length from the wire's start to the point, over the wire's total length
+        (build123d Wire.param_at_point, which walks the wire in
+        BRepTools_WireExplorer order accumulating edge lengths)."""
+        es = self._edge_chain()
+        pt = list(_v3(point))
+        if len(es) == 1:
+            return Edge(es[0]).param_at_point(pt)
+        lens = [w._edgeLength(e) for e in es]
+        ends = [(tuple(w._edgePointAt(e, 0.0)), tuple(w._edgePointAt(e, 1.0)))
+                for e in es]
+        flips = self._chain_flips(es, ends)
+        total = sum(lens)
+        best, best_dist = None, None
+        acc = 0.0
+        for i, e in enumerate(es):
+            d = w._edgeDistanceToPoint(e, pt)
+            if best_dist is None or d < best_dist:
+                u = w._edgeParamAtPoint(e, pt)
+                if u < 0.0:   # not ON this edge — snap to the nearer end
+                    u = 0.0 if math.dist(tuple(w._edgePointAt(e, 0.0)),
+                                         tuple(pt)) < \
+                        math.dist(tuple(w._edgePointAt(e, 1.0)), tuple(pt)) \
+                        else 1.0
+                if flips[i]:
+                    u = 1.0 - u
+                best, best_dist = (acc + u * lens[i]), d
+            acc += lens[i]
+        if best_dist is None or best_dist > _TOL_1E6:
+            raise ValueError('point ' + repr(tuple(pt)) + ' is ' +
+                             repr(best_dist) + ' from this wire')
+        return best / total if total > 0 else 0.0
+
+    def _walk(self, u, tangent):
+        """Evaluate position/tangent at length-fraction u along the (possibly
+        multi-edge) curve, orienting each edge to chain head-to-tail."""
+        es = self._edge_chain()
+        if len(es) == 1:
+            fn = w._edgeTangentAt if tangent else w._edgePointAt
+            return Vector(tuple(fn(es[0], float(u))))
+        lens = [w._edgeLength(e) for e in es]
+        ends = [(tuple(w._edgePointAt(e, 0.0)), tuple(w._edgePointAt(e, 1.0)))
+                for e in es]
+        # orient edges into a chain (WireFromSegments adds them in order,
+        # but individual edges may run tip-to-tail reversed). In a real WIRE
+        # the edges above are in CONNECTION order, so the only ambiguity left
+        # is the first edge's raw parametrization direction — flip it when its
+        # start (not its end) is what touches the second edge. (For a COMPOUND
+        # of edges the order itself is arbitrary, and the greedy chaining
+        # starting from edge 0 as-is is what matches build123d's
+        # BRepAdaptor_CompCurve there.)
+        flips = self._chain_flips(es, ends)
         total = sum(lens)
         target = max(0.0, min(1.0, float(u))) * total
         acc = 0.0
@@ -2216,6 +2333,17 @@ class Edge(Curve):
         (build123d Edge.param_at; positions outside [0, 1] extrapolate)."""
         return w._edgeParam(self.topo, float(position))
 
+    def param_at_point(self, point):
+        """Normalized parameter (0..1) of the point on this edge closest to
+        point (build123d Edge.param_at_point: vertex snap, then
+        GeomAPI_ProjectPointOnCurve validated by re-evaluation, then a bounded
+        numeric search — all three inside _edgeParamAtPoint)."""
+        u = w._edgeParamAtPoint(self.topo, list(_v3(point)))
+        if u < 0.0:
+            raise ValueError('point ' + repr(tuple(_v3(point))) +
+                             ' is not on this edge')
+        return u
+
     def trim(self, start, end):
         """A new edge keeping only the section between two normalized
         arc-length positions (build123d Edge.trim)."""
@@ -2498,6 +2626,42 @@ class Face(Shape):
         z_dir = du.cross(dv).normalized()
         x_dir = Vector(user_x_dir) if user_x_dir is not None else du
         return Location(Plane(origin=origin, x_dir=x_dir, z_dir=z_dir))
+
+    def position_at(self, u, v):
+        """Point on the face at NORMALIZED (u, v) surface parameters
+        (build123d Face.position_at)."""
+        u_val, v_val = self._surface_params(None, u, v)
+        return Vector(tuple(w._faceD1(self.topo, u_val, v_val)[0]))
+
+    @property
+    def center_location(self):
+        """Location at the centre of the face (build123d
+        Face.center_location): the (0.5, 0.5) surface point with the surface
+        normal as z."""
+        origin = self.position_at(0.5, 0.5)
+        return Plane(origin=origin, z_dir=self.normal_at(origin)).location
+
+    @property
+    def _curvature_sign(self):
+        """Signed reference distance between the face's centre and its
+        underlying geometry's reference point — positive convex, negative
+        concave, 0.0 for surfaces that are not a cylinder/sphere/torus
+        (build123d Face._curvature_sign; see COMPROMISE(curvature-sign) in
+        StandardLibrary._faceCurvatureSign for how the reference is found in
+        this wasm build)."""
+        return w._faceCurvatureSign(self.topo)
+
+    @property
+    def is_circular_convex(self):
+        """Is this cylinder/sphere/torus face convex relative to its own
+        geometry (build123d Face.is_circular_convex)."""
+        return self._curvature_sign > _TOL_1E6
+
+    @property
+    def is_circular_concave(self):
+        """Is this cylinder/sphere/torus face concave relative to its own
+        geometry (build123d Face.is_circular_concave)."""
+        return self._curvature_sign < -_TOL_1E6
 
     def offset(self, amount):
         """The face's plane offset by amount (build123d Face.offset)."""
@@ -3043,6 +3207,14 @@ def _canonical_center_key(shape):
 def _sort_key_fn(key):
     if isinstance(key, Axis):
         return lambda s: _axis_value(s, key)
+    if isinstance(key, Curve) and getattr(key, 'topo', None) is not None:
+        # sort_by(<edge or wire>): the parameter, along that 1-D shape, of the
+        # point closest to each object's centre (build123d's
+        # u_of_closest_center -> closest_points + param_at_point)
+        def along(s):
+            pnt = key.closest_points(s.center())[0]
+            return key.param_at_point(pnt)
+        return along
     if key == SortBy.LENGTH:
         return lambda s: s.length
     if key == SortBy.AREA:
@@ -3060,6 +3232,20 @@ def _sort_key_fn(key):
         # is called on each shape (build123d's documented selector form)
         return lambda s: key.fget(s)
     raise TypeError('unsupported sort/group key: ' + repr(key))
+
+
+def _group_key_fn(key, tol_digits=6):
+    """group_by's key function: the sort key ROUNDED to tol_digits, with
+    non-numeric keys passed through unchanged (build123d's group_by wraps
+    every branch in try: round(val) / except TypeError: val)."""
+    fn = _sort_key_fn(key)
+
+    def rounded(s):
+        val = fn(s)
+        if isinstance(val, bool) or not isinstance(val, (int, float)):
+            return val
+        return round(val, tol_digits)
+    return rounded
 
 
 def _is_parallel(s, axis, tolerance=1e-5):
@@ -3137,7 +3323,8 @@ class ShapeList(list):
             hi = v <= maximum if inclusive[1] else v < maximum
             if lo and hi:
                 out.append(s)
-        return out
+        # build123d returns the survivors SORTED along the same axis
+        return out.sort_by(axis)
 
     def sort_by(self, key=Axis.Z, reverse=False, tie_break=False):
         """Sort by the given criterion (build123d ShapeList.sort_by).
@@ -3171,24 +3358,31 @@ class ShapeList(list):
         return ShapeList([s for _, s in decorated])
 
     def sort_by_distance(self, other, reverse=False):
-        o = _v3(other) if not isinstance(other, Shape) else _entity_center(other)
-        def dist(s):
-            c = _entity_center(s)
-            return ((c[0] - o[0]) ** 2 + (c[1] - o[1]) ** 2 + (c[2] - o[2]) ** 2)
-        return ShapeList(sorted(self, key=dist, reverse=reverse))
+        """Sort by the MINIMAL distance between each shape and other
+        (build123d ShapeList.sort_by_distance -> Shape.distance_to)."""
+        return ShapeList(sorted(self, key=lambda s: s.distance_to(other),
+                                reverse=reverse))
+
+    def wires(self):
+        out = ShapeList()
+        for s in self:
+            out.extend(s.wires())
+        return out
 
     def group_by(self, key=Axis.Z, reverse=False, tol_digits=6):
-        fn = _sort_key_fn(key)
+        fn = _group_key_fn(key, tol_digits)
         ordered = sorted(self, key=fn, reverse=reverse)
         groups = []
+        keys = []
         last = None
         for s in ordered:
-            v = round(fn(s), tol_digits)
+            v = fn(s)
             if last is None or v != last:
                 groups.append(ShapeList())
+                keys.append(v)
                 last = v
             groups[-1].append(s)
-        return GroupBy(groups)
+        return GroupBy(groups, keys, fn)
 
     def __sub__(self, other):
         removed = list(other)
@@ -3243,8 +3437,14 @@ class ShapeList(list):
 
 
 class GroupBy:
-    def __init__(self, groups):
+    """The result of ShapeList.group_by: groups reachable by INDEX or by KEY
+    (build123d's GroupBy — group(key) is what the topology-selection docs
+    use, e.g. length_groups.group(6))."""
+
+    def __init__(self, groups, keys=None, key_f=None):
         self.groups = groups
+        self.key_to_group_index = [(k, i) for i, k in enumerate(keys or [])]
+        self.key_f = key_f
 
     def __getitem__(self, i):
         return self.groups[i]
@@ -3254,6 +3454,20 @@ class GroupBy:
 
     def __len__(self):
         return len(self.groups)
+
+    def group(self, key):
+        """The group whose key equals key (build123d GroupBy.group)."""
+        for k, i in self.key_to_group_index:
+            if key == k:
+                return self.groups[i]
+        raise KeyError(key)
+
+    def group_for(self, shape):
+        """The group the given shape belongs to (build123d
+        GroupBy.group_for)."""
+        if self.key_f is None:
+            raise KeyError(shape)
+        return self.group(self.key_f(shape))
 
 
 # ------------------------------------------------------------- builders ---
@@ -5216,25 +5430,56 @@ def sweep(sections=None, path=None, multisection=False, is_frenet=False,
 
 
 def _edges_by_parent(objects):
+    """(target shape, per-shape edge indices) for fillet/chamfer.
+
+    build123d takes the target from the ACTIVE BUILDER (operations_generic's
+    target = context._obj) and hands the raw TopoDS edges to
+    BRepFilletAPI, which matches them by identity — so an edge pool assembled
+    from several intermediate shapes ([f.outer_wire().edges() for f in
+    faces], the topology-selection docs' group_hole_area) is perfectly legal
+    as long as every edge IS an edge of the target. Lite re-wraps shapes, so
+    the same question is answered geometrically: each edge is mapped onto the
+    target's edge with the same midpoint and length."""
     edges = []
     for o in _tolist(objects):
         if isinstance(o, Edge):
             edges.append(o)
         elif isinstance(o, (ShapeList, list, tuple)):
-            edges.extend([e for e in o if isinstance(e, Edge)])
+            for e in o:
+                if isinstance(e, Edge):
+                    edges.append(e)
+                elif isinstance(e, (ShapeList, list, tuple)):
+                    edges.extend([x for x in e if isinstance(x, Edge)])
     if not edges:
         raise ValueError('no edges given (use shape.edges() selectors)')
-    parent = edges[0].parent
+    builder = _active_builder()
+    target = builder._obj if (builder is not None and
+                              builder._obj is not None and
+                              builder._obj.topo is not None) else None
+    if target is None:
+        target = edges[0].parent
+        for e in edges:
+            if e.parent is not target:
+                raise ValueError('all edges must belong to the same shape')
+    if target is None or target.topo is None:
+        raise ValueError('these edges have no parent shape, so they cannot be '
+                         'filleted/chamfered (select them with shape.edges() '
+                         '/ builder.edges(...))')
+    keyed = {}
+    for e in target.edges():
+        keyed[_shape_key(e, 'edge')] = e.index
+    indices = []
     for e in edges:
-        if e.parent is not parent:
-            raise ValueError('all edges must belong to the same shape')
-    indices = [e.index for e in edges]
-    if any(i is None for i in indices):
-        raise ValueError('these edges are not sub-shapes of a single parent '
-                         'shape, so they cannot be filleted/chamfered '
-                         '(select them with shape.edges() / '
-                         'builder.edges(...))')
-    return parent, indices
+        if e.parent is target and e.index is not None:
+            indices.append(e.index)
+            continue
+        idx = keyed.get(_shape_key(e, 'edge'))
+        if idx is None:
+            raise ValueError('one of these edges is not an edge of the shape '
+                             'being filleted/chamfered (select them with '
+                             'shape.edges() / builder.edges(...))')
+        indices.append(idx)
+    return target, indices
 
 
 def _vertex_op_2d(objs, radius, opname):
@@ -5479,6 +5724,10 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
     if builder is None:
         raise ValueError('add() requires an active builder context')
     objs = _tolist(objects)
+    # build123d's add() replaces each Builder argument with its result and
+    # drops the ones that have none yet (operations_generic.add's object_iter)
+    objs = [(o._obj if isinstance(o, Builder) else o) for o in objs
+            if not (isinstance(o, Builder) and o._obj is None)]
     # curves added to a BuildLine contribute their segments (optionally
     # rotated) so make_face()/sweep() keep exact geometry
     if isinstance(builder, BuildLine):
@@ -5657,14 +5906,16 @@ def _simplify_polyline(pts, tol):
     return a[:-1] + b[:-1]
 
 
-def make_hull(edges=None, mode=Mode.ADD):
-    """Face from the 2D convex hull of the given edges (or the pending
-    edges + the sketch under construction, like build123d).
-    COMPROMISE(make-hull): upstream trims the source edges exactly (scipy
-    ConvexHull over 2000 samples/edge + Edge.trim); lite hulls the same
-    sample density into a POLYGON face simplified to 1e-4 — the boundary is
-    piecewise-linear, within 1e-4 of the exact hull (well under harness
-    tolerance), but arcs are not preserved as arcs."""
+def make_hull(edges=None, tolerance=1e-3, mode=Mode.ADD):
+    """Face from the 2D convex hull of the given edges (or the pending edges +
+    the sketch under construction) — a statement-for-statement port of
+    build123d's Wire.make_convex_hull: sample every edge at
+    int(2 / tolerance) parameters, take the 2-D convex hull of the cloud, then
+    read the hull back as (a) straight CONNECTING edges between the sampled
+    contact points and (b) TRIMMED pieces of the source edges between them. The
+    arcs of the hull are therefore the source arcs, exactly, and the only
+    approximation is where the tangent lines touch them (upstream's own
+    documented limitation)."""
     builder = _active_builder(BuildSketch)
     hull_edges = []
     if edges is not None:
@@ -5680,85 +5931,66 @@ def make_hull(edges=None, mode=Mode.ADD):
             hull_edges.extend(builder._obj.edges())
     if not hull_edges:
         raise ValueError('No objects to create a hull')
+    # 1) a cloud of points along all edges (upstream's fragments_per_edge)
+    fragments = int(2 / tolerance)
     pts = []
-    per_edge = 2000  # = int(2 / tolerance) like build123d's make_convex_hull
+    lookup = []          # global point index -> (edge index, edge parameter)
     for ei, e in enumerate(hull_edges):
-        for i in range(per_edge + 1):
-            q = w._edgePointAt(e.topo, i / per_edge)
-            pts.append((round(q[0], 9), round(q[1], 9), ei, i / per_edge))
-    hull = _convex_hull_2d(pts)  # metadata rides along in fields 2/3
+        for i in range(fragments):
+            param = i / (fragments - 1)
+            q = e.position_at(param)
+            pts.append((q.X, q.Y, len(lookup)))
+            lookup.append((ei, param))
+    hull = _convex_hull_2d(pts)
     if len(hull) < 3:
         raise ValueError('make_hull: degenerate hull')
-    # rotate the cyclic hull so it starts at a source-edge change
-    n = len(hull)
-    start = 0
-    for i in range(n):
-        if hull[i][2] != hull[i - 1][2]:
-            start = i
-            break
-    hull = hull[start:] + hull[:start]
-    # group consecutive hull points into runs on the same source edge
-    # (splitting on parameter jumps = hull left the edge and came back)
-    step = 1.0 / per_edge
-    runs = []
-    for p in hull:
-        if runs and runs[-1][-1][2] == p[2] and \
-                abs(p[3] - runs[-1][-1][3]) <= 3.0 * step:
-            runs[-1].append(p)
-        else:
-            runs.append([p])
-    # drop transition-noise micro-runs (a few samples near tangency points)
-    # — they would otherwise become micro-edges that break later fillets;
-    # the bridges then connect the big runs directly (deviation from the
-    # exact hull ~ the sagitta of a few sample steps, far below tolerance)
-    big = [r for r in runs if len(r) >= 4]
-    if big:
-        runs = big
-    # reconstruct: arc/line runs exactly from their source edge, plus
-    # straight bridges between runs (the hull's tangent lines)
-    segs = []
+    # 2) the hull facets, as scipy would hand them over: index pairs. A cyclic
+    # hull of N vertices has exactly N of them.
+    simplices = [(hull[i][2], hull[(i + 1) % len(hull)][2])
+                 for i in range(len(hull))]
+    # 3+4) connecting edges within one source edge and between two of them
+    connecting_edge_data = []
+    trim_points = {}
 
-    def _pt(e, u):
-        q = w._edgePointAt(e.topo, u)
-        return [q[0], q[1], q[2]]
-    if len(runs) == 1 and abs(runs[0][-1][3] - runs[0][0][3]) > 0.999:
-        # the hull IS one closed source edge (e.g. a single circle)
-        e = hull_edges[runs[0][0][2]]
-        segs = [('arc3', [_pt(e, 0.0), _pt(e, 0.25), _pt(e, 0.5)]),
-                ('arc3', [_pt(e, 0.5), _pt(e, 0.75), _pt(e, 1.0)])]
-        face = w.MakeFace(w.WireFromSegments(segs))
-        if w._faceNormal(face)[2] < -0.5:
-            face = w.ReverseFace(face)
-        return _combine(builder, Sketch(face), mode)
-    for k, run in enumerate(runs):
-        e = hull_edges[run[0][2]]
-        if len(run) >= 3:
-            t = w._edgeCurveType(e.topo)
-            u0, u1 = run[0][3], run[-1][3]
-            if t == 'Circle':
-                segs.append(('arc3', [_pt(e, u0), _pt(e, (u0 + u1) / 2.0),
-                                      _pt(e, u1)]))
-            elif t == 'Line':
-                segs.append(('line', [_pt(e, u0), _pt(e, u1)]))
-            else:
-                # COMPROMISE(make-hull): non-line/circle boundary pieces
-                # stay sampled polylines (simplified to 1e-4) instead of
-                # trimmed source curves
-                poly = _simplify_polyline([(p[0], p[1]) for p in run], 1e-4)
-                for i in range(len(poly) - 1):
-                    segs.append(('line', [[poly[i][0], poly[i][1], 0.0],
-                                          [poly[i + 1][0], poly[i + 1][1],
-                                           0.0]]))
-        elif len(run) == 2:
-            segs.append(('line', [[run[0][0], run[0][1], 0.0],
-                                  [run[1][0], run[1][1], 0.0]]))
-        # bridge to the next run (cyclic)
-        nxt = runs[(k + 1) % len(runs)][0]
-        tail = segs[-1][1][-1] if segs else [run[-1][0], run[-1][1], 0.0]
-        head = [nxt[0], nxt[1], 0.0]
-        if abs(tail[0] - head[0]) > 1e-9 or abs(tail[1] - head[1]) > 1e-9:
-            segs.append(('line', [list(tail), head]))
-    face = w.MakeFace(w.WireFromSegments(segs))
+    def _mark(edge_index, point_index):
+        if edge_index not in trim_points:
+            trim_points[edge_index] = [point_index]
+        else:
+            trim_points[edge_index].append(point_index)
+    for s0, s1 in simplices:
+        e0, u0 = lookup[s0]
+        e1, u1 = lookup[s1]
+        if e0 != e1:
+            _mark(e0, s0)
+            _mark(e1, s1)
+            connecting_edge_data.append(((e0, u0), (e1, u1)))
+        elif abs(s0 - s1) != 1:
+            lo, hi = min(s0, s1), max(s0, s1)
+            _mark(e0, lo)
+            _mark(e0, hi)
+            connecting_edge_data.append(((e0, lookup[lo][1]),
+                                         (e0, lookup[hi][1])))
+    # 5) pair the trim points up per edge
+    trim_data = {}
+    for edge_index in trim_points:
+        s_points = sorted(trim_points[edge_index])
+        pairs = []
+        for i in range(0, len(s_points) - 1, 2):
+            if s_points[i] != s_points[i + 1]:
+                pairs.append((s_points[i], s_points[i + 1]))
+        trim_data[edge_index] = pairs
+    # 6) the connecting (tangent/chord) edges
+    result_edges = [Edge.make_line(hull_edges[a[0]].position_at(a[1]),
+                                   hull_edges[b[0]].position_at(b[1]))
+                    for a, b in connecting_edge_data]
+    # 7) the surviving pieces of the source edges
+    for edge_index in trim_data:
+        for (p0, p1) in trim_data[edge_index]:
+            result_edges.append(hull_edges[edge_index].trim(
+                lookup[p0][1], lookup[p1][1]))
+    # 8) one wire, then the planar face the sketch wants
+    wire = w.WireFromEdgesFixed([e.topo for e in result_edges], _TOL_1E6)
+    face = w.MakeFace(wire)
     if w._faceNormal(face)[2] < -0.5:
         face = w.ReverseFace(face)
     return _combine(builder, Sketch(face), mode)

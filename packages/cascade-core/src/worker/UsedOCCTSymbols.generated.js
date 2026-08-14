@@ -24,6 +24,7 @@ export const USED_OCCT_SYMBOLS = [
   "BRepBuilderAPI_Sewing",
   "BRepBuilderAPI_Transform_2",
   "BRepBuilderAPI_TransitionMode",
+  "BRepExtrema_DistShapeShape_1",
   "BRepFill_TypeOfContact",
   "BRepFilletAPI_MakeChamfer",
   "BRepFilletAPI_MakeFillet",

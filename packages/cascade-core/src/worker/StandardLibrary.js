@@ -902,6 +902,20 @@ function _edgeArcCenter(edge) {
   return [loc.X(), loc.Y(), loc.Z()];
 }
 
+/** Normal of a circular/elliptical edge: its gp_Circ/gp_Elips axis direction
+ *  (build123d Mixin1D.normal's conic branch). null for any other curve type —
+ *  the caller falls back to a planarity check. */
+function _edgeArcNormal(edge) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  let CT = self.oc.GeomAbs_CurveType;
+  let type = curve.GetType();
+  let dir = null;
+  if (type === CT.GeomAbs_Circle) { dir = curve.Circle().Axis().Direction(); }
+  else if (type === CT.GeomAbs_Ellipse) { dir = curve.Ellipse().Axis().Direction(); }
+  if (dir === null) { return null; }
+  return [dir.X(), dir.Y(), dir.Z()];
+}
+
 /** Radius of a circular edge, or null when the edge is not a circle
  *  (build123d Edge.radius). */
 function _edgeArcRadius(edge) {
@@ -1771,6 +1785,71 @@ function ReverseEdgeOrWire(shape) {
   return reversed;
 }
 
+/** Minimal distance between two shapes and the closest point ON EACH
+ *  (BRepExtrema_DistShapeShape) — build123d's
+ *  Shape.distance_to_with_closest_points / closest_points / distance.
+ *  Returns [distance, [x1, y1, z1], [x2, y2, z2]], or null when the extrema
+ *  algorithm finds no solution. */
+function _distShapeShape(shapeA, shapeB) {
+  let ext = new self.oc.BRepExtrema_DistShapeShape_1();
+  ext.LoadS1(shapeA);
+  ext.LoadS2(shapeB);
+  ext.Perform(new self.oc.Message_ProgressRange_1());
+  if (!ext.IsDone() || ext.NbSolution() < 1) { return null; }
+  let p1 = ext.PointOnShape1(1), p2 = ext.PointOnShape2(1);
+  return [ext.Value(), [p1.X(), p1.Y(), p1.Z()], [p2.X(), p2.Y(), p2.Z()]];
+}
+
+/** Sign of a face's curvature relative to its OWN geometry, for the three
+ *  surface types build123d's Face.is_circular_convex/_concave support
+ *  (cylinder, sphere, torus): positive = convex, negative = concave, 0 for
+ *  every other surface type — build123d's Face._curvature_sign.
+ *
+ *  COMPROMISE(curvature-sign): upstream reads the surface's own reference
+ *  geometry (gp_Cylinder's axis, gp_Sphere's centre, the core circle of a
+ *  gp_Torus) and dots `normal_at() . (center - reference)`. gp_Cylinder /
+ *  gp_Sphere / gp_Torus are UNBOUND in this wasm build (Adaptor3d_Surface
+ *  declares the accessors, but their return types were never registered), so
+ *  the same sign is taken from the second fundamental form instead: for a
+ *  point P with oriented unit normal N, `S_dd . N < 0` exactly when the centre
+ *  of curvature along d lies opposite N, i.e. when the surface is convex — and
+ *  `normal . (P - reference)` is that same comparison for these three
+ *  quadrics. The parameter direction with the LARGER |curvature| is the one
+ *  upstream references (the circular direction of a cylinder, whose other
+ *  direction is straight; the tube/minor direction of a torus, which is
+ *  exactly upstream's core-circle reference). */
+function _faceCurvatureSign(face) {
+  let f = _asFace(face);
+  let surf = new self.oc.BRepAdaptor_Surface_2(f, true);
+  let ST = self.oc.GeomAbs_SurfaceType;
+  let type = surf.GetType();
+  if (type !== ST.GeomAbs_Cylinder && type !== ST.GeomAbs_Sphere &&
+      type !== ST.GeomAbs_Torus) { return 0.0; }
+  let u = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
+  let v = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
+  let pnt = new self.oc.gp_Pnt_1();
+  let du = new self.oc.gp_Vec_1(), dv = new self.oc.gp_Vec_1();
+  let duu = new self.oc.gp_Vec_1(), dvv = new self.oc.gp_Vec_1();
+  let duv = new self.oc.gp_Vec_1();
+  surf.D2(u, v, pnt, du, dv, duu, dvv, duv);
+  let normal = du.Crossed(dv);
+  let mag = normal.Magnitude();
+  if (mag < 1e-12) { return 0.0; }
+  let flip = f.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED ? -1 : 1;
+  let nx = flip * normal.X() / mag, ny = flip * normal.Y() / mag, nz = flip * normal.Z() / mag;
+  let curvature = (second, first) => {
+    let sq = first.SquareMagnitude();
+    if (sq < 1e-24) { return 0.0; }
+    return (second.X() * nx + second.Y() * ny + second.Z() * nz) / sq;
+  };
+  let ku = curvature(duu, du), kv = curvature(dvv, dv);
+  let k = Math.abs(ku) >= Math.abs(kv) ? ku : kv;
+  if (Math.abs(k) < 1e-12) { return 0.0; }
+  // report the reference distance (1/|k| == the radius upstream dots against),
+  // signed the way upstream signs it
+  return -Math.sign(k) / Math.abs(k);
+}
+
 /** Minimal distance from a point to an edge (build123d's Shape.distance_to for
  *  the Edge/point case), measured on the edge's own parameter range. */
 function _edgeDistanceToPoint(edge, point) {
@@ -1794,7 +1873,7 @@ function _edgeDistanceToPoint(edge, point) {
  *  curve from its first parameter) of the point on an edge closest to `point`
  *  — build123d's Edge.param_at_point, same three-stage strategy: endpoint
  *  snap, GeomAPI_ProjectPointOnCurve validated by re-evaluation, then a
- *  sampled + golden-section search. Returns null when the point is not on the
+ *  sampled + golden-section search. Returns -1 when the point is not on the
  *  edge. */
 function _edgeParamAtPoint(edge, point) {
   let e = _asEdge(edge);
@@ -1846,7 +1925,9 @@ function _edgeParamAtPoint(edge, point) {
     else { lo = x1; x1 = x2; f1 = f2; x2 = lo + invPhi * (hi - lo); f2 = distAtFraction(x2); }
   }
   let u = f1 <= f2 ? x1 : x2;
-  return distAtFraction(u) <= 1e-6 ? u : null;
+  // -1 (not null) for "not on this edge": a JS null crosses into Brython as
+  // NullType, which cannot be compared or tested with `is None`
+  return distAtFraction(u) <= 1e-6 ? u : -1.0;
 }
 
 function _bsplineDataOf(curve) {
@@ -3594,6 +3675,9 @@ class CascadeStudioStandardLibrary {
     self.OffsetPlanarWire = OffsetPlanarWire;
     self._edgeArcCenter = _edgeArcCenter;
     self._edgeArcRadius = _edgeArcRadius;
+    self._edgeArcNormal = _edgeArcNormal;
+    self._distShapeShape = _distShapeShape;
+    self._faceCurvatureSign = _faceCurvatureSign;
     self.CircularEdge = CircularEdge;
     self.EdgeIsInterior = EdgeIsInterior;
     self.HLRProject = HLRProject;
