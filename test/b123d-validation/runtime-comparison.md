@@ -141,6 +141,13 @@ classification does not, and in both cases Pyodide's message is better:
 * `toy_truck`: the same known OCCT fillet fault, reported as
   `pyodide.ffi.JsException` instead of Brython's `JavascriptError`.
 
+The harness only looks at geometry, so **line mapping was checked separately**
+— the feature that pays for the frame-walking seam. The same script produces
+the same history steps on both runtimes, down to the line numbers
+(`Box@3, Cylinder@5, Difference@7, Sphere@10`, the last one from inside a
+helper function), which is what drives the modeling timeline, Select-pick →
+editor-line flash and the Fillet tool's variable resolution.
+
 ## 6. What porting the interpreter actually took
 
 `PyodideRuntime.js` runs the SAME `Build123dLite.js` source string. The work
