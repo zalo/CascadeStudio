@@ -46,6 +46,20 @@ if (fs.existsSync(brythonSrc)) {
   fs.copyFileSync(brythonSrc, path.join(distDir, 'brython.js'));
 }
 
+// 3b. Copy the Pyodide core distribution, IF it has been vendored
+// (`node packages/cascade-core/scripts/fetch-pyodide.cjs`). Optional by
+// design: Pyodide is the experimental `?pyruntime=pyodide` alternative to
+// Brython, ~13.5 MB, off by default and absent from a plain checkout.
+const pyodideSrc = path.join(monoRoot, 'vendor', 'pyodide');
+if (fs.existsSync(pyodideSrc)) {
+  console.log('[cascade-core] Copying Pyodide (experimental runtime)...');
+  const pyodideDist = path.join(distDir, 'pyodide');
+  fs.mkdirSync(pyodideDist, { recursive: true });
+  for (const file of fs.readdirSync(pyodideSrc)) {
+    fs.copyFileSync(path.join(pyodideSrc, file), path.join(pyodideDist, file));
+  }
+}
+
 // 4. Copy fonts to dist/fonts/
 console.log('[cascade-core] Copying fonts...');
 const fontsDir = path.join(pkgRoot, 'fonts');

@@ -15,6 +15,9 @@ import http from 'node:http';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const PORT = parseInt(process.env.CS_TEST_PORT || '8517', 10);
+// CS_PY_RUNTIME=pyodide runs the script on the experimental CPython runtime
+// (needs the vendored Pyodide core — see PyodideRuntime.js).
+const PY_RUNTIME_QUERY = process.env.CS_PY_RUNTIME === 'pyodide' ? '?pyruntime=pyodide' : '';
 
 const args = process.argv.slice(2);
 let code;
@@ -47,7 +50,7 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage();
 page.on('pageerror', () => {});
-await page.goto(`http://localhost:${PORT}/`, { timeout: 60000 });
+await page.goto(`http://localhost:${PORT}/${PY_RUNTIME_QUERY}`, { timeout: 60000 });
 await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(), undefined, { timeout: 90000 });
 await page.waitForFunction(() => !window.CascadeAPI.isWorking(), undefined, { timeout: 90000 });
 await page.evaluate(() => window.CascadeAPI.setMode('python'));

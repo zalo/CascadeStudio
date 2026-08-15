@@ -2,6 +2,7 @@
 
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
+import { resolvePyRuntime } from './EditorManager.js';
 
 /** Exposes window.CascadeAPI for programmatic control of Cascade Studio.
  *  Designed for use by AI agents (via Playwright) and developer tooling. */
@@ -225,6 +226,19 @@ Revolve(profile, 360);`,
     if (modeSelect) modeSelect.value = mode;
   }
   getMode() { return this._app.editor.mode; }
+
+  /** Which Python interpreter Python mode evaluates on: 'brython' (default)
+   *  or the experimental 'pyodide'. Set with `?pyruntime=pyodide` or
+   *  setPyRuntime(); a change takes effect on the NEXT evaluation, but the
+   *  worker keeps whichever runtime it already booted for the session. */
+  getPyRuntime() { return resolvePyRuntime(); }
+  setPyRuntime(kind) {
+    try {
+      window.localStorage.setItem('cascade-py-runtime',
+        kind === 'pyodide' ? 'pyodide' : 'brython');
+    } catch (e) { console.error('setPyRuntime: ' + e.message); }
+    return this.getPyRuntime();
+  }
 
   // Debug / history inspection
   showHistoryStep(index) {

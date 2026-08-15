@@ -38,6 +38,10 @@ const OUT = argVal('--out', join(HERE, 'results.json'));
 const REPORT = argVal('--report', join(HERE, 'report.md'));
 const SCRIPT_TIMEOUT = parseInt(argVal('--timeout', '60000'), 10);
 const PAGES = parseInt(argVal('--pages', '4'), 10);
+// Which Python interpreter the app should evaluate on: 'brython' (default)
+// or the experimental 'pyodide' (CS_PY_RUNTIME=pyodide / --pyruntime).
+const PY_RUNTIME = argVal('--pyruntime', process.env.CS_PY_RUNTIME || 'brython');
+const PY_RUNTIME_QUERY = PY_RUNTIME === 'pyodide' ? '?pyruntime=pyodide' : '';
 
 const VOL_REL_TOL = 0.005;    // 0.5% relative volume tolerance
 const VOL_ZERO_ABS = 1e-6;    // "zero volume" threshold for 2D/1D shapes
@@ -114,7 +118,7 @@ async function ensureServer() {
 async function newReadyPage(browser) {
   const page = await browser.newPage();
   page.on('pageerror', () => {});
-  await page.goto(`http://localhost:${PORT}/`, { timeout: 60000 });
+  await page.goto(`http://localhost:${PORT}/${PY_RUNTIME_QUERY}`, { timeout: 60000 });
   await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(),
     undefined, { timeout: 90000 });
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(),

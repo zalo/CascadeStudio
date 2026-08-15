@@ -59,9 +59,11 @@ class CascadeEngine {
   /** Evaluate CAD code and return mesh data.
    *  Fires intermediate events (log, addSlider, etc.) in real-time.
    *  `language` selects the worker runtime ('cascadestudio' default;
-   *  'python' evaluates build123d-lite code via Brython).
+   *  'python' evaluates build123d-lite code via Brython). `pyRuntime`
+   *  ('brython' default | 'pyodide') picks the Python interpreter for that
+   *  path — see PyodideRuntime.js.
    *  Returns: { meshData: { faces, edges }, sceneOptions, logs, errors } */
-  async evaluate(code, { guiState = {}, maxDeviation, sceneOptions, language } = {}) {
+  async evaluate(code, { guiState = {}, maxDeviation, sceneOptions, language, pyRuntime } = {}) {
     if (!this._ready) throw new Error('CascadeEngine not initialized. Call init() first.');
 
     this._working = true;
@@ -70,7 +72,8 @@ class CascadeEngine {
     this._messageBus.send('Evaluate', {
       code,
       GUIState: guiState,
-      language
+      language,
+      pyRuntime
     });
 
     // Request meshing — this returns a Promise that resolves with [facesAndEdges, sceneOptions]

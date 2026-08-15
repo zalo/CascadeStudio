@@ -2,6 +2,22 @@
 
 const monaco = window.monaco;
 
+/** Which Python interpreter the worker should use for Python mode:
+ *  'brython' (default, ~300 KB gz, boots in a few hundred ms) or the
+ *  experimental 'pyodide' (real CPython on wasm — see
+ *  test/b123d-validation/runtime-comparison.md for why it is not the
+ *  default). Selected with `?pyruntime=pyodide` or, so it survives reloads,
+ *  localStorage['cascade-py-runtime']. */
+export function resolvePyRuntime() {
+  try {
+    const fromURL = new URLSearchParams(window.location.search).get('pyruntime');
+    if (fromURL) { return fromURL === 'pyodide' ? 'pyodide' : 'brython'; }
+    const stored = window.localStorage.getItem('cascade-py-runtime');
+    if (stored === 'pyodide') { return 'pyodide'; }
+  } catch (e) { /* no URL/storage access — fall through to the default */ }
+  return 'brython';
+}
+
 /** Manages the Monaco code editor instance, mode switching, and code evaluation. */
 class EditorManager {
   constructor(app) {
@@ -191,10 +207,12 @@ class EditorManager {
     }
 
     // Use CascadeEngine to evaluate and get mesh data.
-    // Python code is passed through as-is; the worker runs it via Brython.
+    // Python code is passed through as-is; the worker runs it via Brython
+    // (or Pyodide when the experimental flag is set).
     this._app.engine.evaluate(codeToEval, {
       guiState: this._app.gui.state,
       language: this.mode === 'python' ? 'python' : undefined,
+      pyRuntime: this.mode === 'python' ? resolvePyRuntime() : undefined,
     }).then((result) => {
       if (this._app.viewport && result.meshData) {
         this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);

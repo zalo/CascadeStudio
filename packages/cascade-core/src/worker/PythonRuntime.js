@@ -22,16 +22,23 @@
 //     separate module, nothing is prepended to user code).
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
+import { ensurePyodideRuntime } from './PyodideRuntime.js';
 
 /** The Brython module name user scripts execute under. */
 const PY_USER_MODULE = 'main';
 
 let _runtimePromise = null;
 
-/** Lazily bootstrap Brython + build123d-lite. Returns a Promise for a
- *  runtime object with a synchronous `run(code)` method. Safe to call on
- *  every evaluation — the bootstrap happens once (retried if it failed). */
-export function ensurePythonRuntime() {
+/** Lazily bootstrap the Python runtime + build123d-lite. Returns a Promise
+ *  for a runtime object with a synchronous `run(code)` method. Safe to call
+ *  on every evaluation — the bootstrap happens once (retried if it failed).
+ *
+ *  `kind` selects the interpreter: 'brython' (default) or the experimental
+ *  'pyodide' (CPython on wasm, `?pyruntime=pyodide`; needs the vendored core
+ *  distribution — see PyodideRuntime.js). Both run the same
+ *  Build123dLite.js source. */
+export function ensurePythonRuntime(kind) {
+  if (kind === 'pyodide') { return ensurePyodideRuntime(); }
   if (!_runtimePromise) {
     _runtimePromise = _bootstrap().catch((e) => {
       _runtimePromise = null; // allow a retry on the next evaluation
@@ -87,7 +94,7 @@ async function _bootstrap() {
     } catch (e) { return null; }
   };
 
-  self.getPythonUserLine = function () {
+  const getBrythonUserLine = function () {
     try {
       let frameObj = B.frame_obj;
       while (frameObj) {
@@ -100,6 +107,7 @@ async function _bootstrap() {
     } catch (e) { /* line mapping is best-effort */ }
     return 0;
   };
+  self.getPythonUserLine = getBrythonUserLine;
 
   // Register stdlib shims first (brython.js cannot import even its own
   // built-in `math` inside a module worker, and brython_stdlib.js is not
@@ -131,6 +139,10 @@ async function _bootstrap() {
       // evaluations have produced observably wrong booleans, and a stale
       // cache buys little in Python mode (scripts are re-run whole).
       for (const k in self.argCache) { delete self.argCache[k]; }
+      // Own the shared hooks (a worker that also booted Pyodide this session
+      // would otherwise leave ITS frame walker installed).
+      self.getPythonUserLine = getBrythonUserLine;
+      self._pythonRuntimeKind = 'brython';
       _runGuarded(B, 'import build123d\nbuild123d._reset_state()', '_b123d_reset');
       _runGuarded(B, code, PY_USER_MODULE);
     }
