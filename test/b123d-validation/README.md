@@ -96,7 +96,7 @@ needs the vendored core distribution
 
 It is an exact drop-in (204/8/9/1/10 with **zero per-script deltas** and
 byte-identical MISMATCH magnitudes) and ~5% faster over the corpus, but it
-costs 23x the download, ~3x the boot and ~2.4x the resident memory, so Brython
+costs 23x the download, ~3x the boot and ~2.2x the resident memory, so Brython
 remains the default. Numbers, method and recommendation:
 [`runtime-comparison.md`](runtime-comparison.md); startup/memory measurements
 come from `bench-runtime.mjs`.

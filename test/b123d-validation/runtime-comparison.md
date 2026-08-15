@@ -16,7 +16,7 @@ unless the difference is dramatic.
 reproduces the validation harness *exactly*, script for script, mismatch
 magnitude for mismatch magnitude — and it is marginally faster once running.
 But on the three criteria that were asked for it loses by a wide margin: **23x
-the download**, **~3x the boot**, and **~2.4x the memory** the runtime adds to
+the download**, **~3x the boot**, and **~2.2x the memory** the runtime adds to
 the worker. Nothing a user can see improves. The prototype stays in the tree
 behind `?pyruntime=pyodide`, off by default: it is cheap to keep, it is the
 only Python runtime that could ever host real build123d, and it turns "we use
@@ -41,8 +41,9 @@ runtimes are lazily loaded on the FIRST Python evaluation, so JS/OpenSCAD mode
 pays nothing either way; the comparison is what a Python-mode user downloads
 once (and re-downloads whenever the cache is evicted or the version changes).
 
-For scale: the OCCT kernel itself is a 7.6 MB wasm. Choosing Pyodide would
-nearly *double* what CascadeStudio ships.
+For scale, the app's other big download is the OCCT kernel: 25.7 MB raw /
+7.59 MB gzipped. Adding Pyodide would nearly *double* what a first-time
+Python-mode visitor pulls down; adding Brython costs 3% of it.
 
 ## 2. Startup
 
@@ -196,7 +197,7 @@ Honest ledger, since the answer is "no":
 * Better error messages (see §5) and no Brython traceback-formatter flakiness
   (`run-lite.mjs` carries a retry for Brython's `reading 'substr'` failures).
 
-Against: 23x the download, 3x the boot, 2.4x the resident memory, a second
+Against: 23x the download, 3x the boot, 2.2x the resident memory, a second
 wasm module to keep in step with the OCCT one, and a vendored 13 MB blob that
 does not belong in npm.
 
