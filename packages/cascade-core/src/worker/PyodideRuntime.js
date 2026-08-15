@@ -266,7 +266,17 @@ async function _bootstrap() {
   // A non-analyzable specifier keeps esbuild from trying to bundle Pyodide
   // (it must stay an external, lazily fetched asset).
   const moduleURL = indexURL + 'pyodide.mjs';
-  const pyodideModule = await import(/* @vite-ignore */ moduleURL);
+  let pyodideModule;
+  try {
+    pyodideModule = await import(/* @vite-ignore */ moduleURL);
+  } catch (e) {
+    // A plain checkout has no vendor/pyodide, so this is the expected way to
+    // arrive here: say so instead of leaking "failed to fetch module".
+    throw new Error('Pyodide is not available at ' + moduleURL +
+      ' — the experimental ?pyruntime=pyodide runtime needs the vendored core ' +
+      'distribution: run `node packages/cascade-core/scripts/fetch-pyodide.cjs` ' +
+      'and rebuild, or drop the flag to use Brython. (' + e.message + ')');
+  }
   const tImported = performance.now();
 
   const stderrBuffer = [];
