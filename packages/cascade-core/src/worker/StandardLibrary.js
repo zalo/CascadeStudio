@@ -1551,15 +1551,35 @@ function _faceD1(face, u, v) {
  *  surface_point overloads of normal_at/location_at. `hint` ([u, v]) seeds the
  *  search when the caller already knows roughly where the point lands.
  *
- *  COMPROMISE(point-projection): GeomAPI_ProjectPointOnSurf cannot be
- *  instantiated in this wasm build — every one of its constructors/Init
- *  overloads takes an Extrema_ExtAlgo, and that enum is unbound
- *  ("unbound types: 15Extrema_ExtAlgo"). This is a coarse UV grid search
- *  refined by Newton iterations on grad|S(u,v) - P|^2 = 0, which reaches the
- *  same parameters to machine precision for points on or near the surface.
- *  Unlike OCCT it searches only the face's own UV box (clamped), not the
- *  infinite underlying surface. */
+ *  This is upstream's call: GeomAPI_ProjectPointOnSurf over the face's own UV
+ *  box, read back through OCJS_Out.ProjectPointOnSurf_LowerDistanceParameters
+ *  (LowerDistanceParameters returns (u, v) through Standard_Real&, which
+ *  Embind passes by value). The UV-grid + Newton search below is kept as a
+ *  fallback for the cases where OCCT reports no solution — it is exact for
+ *  points on or near the surface and was the only route before
+ *  Extrema_ExtAlgo/Extrema_ExtFlag were bound. */
 function _faceParamsAtPoint(face, point, hint) {
+  let f = _asFace(face);
+  let projected = _faceParamsAtPointOCCT(f, point);
+  if (projected) { return projected; }
+  return _faceParamsAtPointSearch(f, point, hint);
+}
+
+/** GeomAPI_ProjectPointOnSurf on the face's surface, restricted to the face's
+ *  own UV bounds (build123d's Face.normal_at/location_at path). */
+function _faceParamsAtPointOCCT(f, point) {
+  let bounds = _faceUVBounds(f);
+  let surface = self.oc.BRep_Tool.Surface_2(f);
+  let projector = new self.oc.GeomAPI_ProjectPointOnSurf_5(
+    new self.oc.gp_Pnt_3(point[0], point[1], point[2]), surface,
+    bounds[0], bounds[1], bounds[2], bounds[3],
+    self.oc.Extrema_ExtAlgo.Extrema_ExtAlgo_Grad);
+  if (!projector.IsDone() || projector.NbPoints() < 1) { return null; }
+  let uv = self.oc.OCJS_Out.ProjectPointOnSurf_LowerDistanceParameters(projector);
+  return [uv.u, uv.v];
+}
+
+function _faceParamsAtPointSearch(face, point, hint) {
   let f = _asFace(face);
   let surf = new self.oc.BRepAdaptor_Surface_2(f, false);
   let bounds = _faceUVBounds(f);
@@ -1849,19 +1869,12 @@ function _distShapeShape(shapeA, shapeB) {
  *  (cylinder, sphere, torus): positive = convex, negative = concave, 0 for
  *  every other surface type — build123d's Face._curvature_sign.
  *
- *  COMPROMISE(curvature-sign): upstream reads the surface's own reference
- *  geometry (gp_Cylinder's axis, gp_Sphere's centre, the core circle of a
- *  gp_Torus) and dots `normal_at() . (center - reference)`. gp_Cylinder /
- *  gp_Sphere / gp_Torus are UNBOUND in this wasm build (Adaptor3d_Surface
- *  declares the accessors, but their return types were never registered), so
- *  the same sign is taken from the second fundamental form instead: for a
- *  point P with oriented unit normal N, `S_dd . N < 0` exactly when the centre
- *  of curvature along d lies opposite N, i.e. when the surface is convex — and
- *  `normal . (P - reference)` is that same comparison for these three
- *  quadrics. The parameter direction with the LARGER |curvature| is the one
- *  upstream references (the circular direction of a cylinder, whose other
- *  direction is straight; the tube/minor direction of a torus, which is
- *  exactly upstream's core-circle reference). */
+ *  This is upstream's own comparison: the surface's reference geometry
+ *  (gp_Cylinder's axis, gp_Sphere's centre, the core circle of a gp_Torus) is
+ *  read off the adaptor and dotted against the oriented normal at the face's
+ *  mid parameters. gp_Cylinder/gp_Sphere/gp_Torus are bound in the fork as of
+ *  this round; the second-fundamental-form substitution that stood in for them
+ *  is kept below for any other kernel where they are missing. */
 function _faceCurvatureSign(face) {
   let f = _asFace(face);
   let surf = new self.oc.BRepAdaptor_Surface_2(f, true);
@@ -1869,6 +1882,49 @@ function _faceCurvatureSign(face) {
   let type = surf.GetType();
   if (type !== ST.GeomAbs_Cylinder && type !== ST.GeomAbs_Sphere &&
       type !== ST.GeomAbs_Torus) { return 0.0; }
+  let midU = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
+  let midV = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
+  let reference = null;
+  if (type === ST.GeomAbs_Sphere) {
+    let loc = surf.Sphere().Location();
+    reference = [loc.X(), loc.Y(), loc.Z()];
+  } else if (type === ST.GeomAbs_Cylinder) {
+    // the point on the cylinder's axis nearest the sample point
+    let axis = surf.Cylinder().Axis();
+    let o = axis.Location(), d = axis.Direction();
+    let p = new self.oc.gp_Pnt_1();
+    surf.D0(midU, midV, p);
+    let t = (p.X() - o.X()) * d.X() + (p.Y() - o.Y()) * d.Y() + (p.Z() - o.Z()) * d.Z();
+    reference = [o.X() + d.X() * t, o.Y() + d.Y() * t, o.Z() + d.Z() * t];
+  } else {
+    // torus: the point on the CORE circle nearest the sample point
+    let tor = surf.Torus();
+    let pos = tor.Position();
+    let o = pos.Location(), d = pos.Direction();
+    let major = tor.MajorRadius();
+    let p = new self.oc.gp_Pnt_1();
+    surf.D0(midU, midV, p);
+    let vx = p.X() - o.X(), vy = p.Y() - o.Y(), vz = p.Z() - o.Z();
+    let along = vx * d.X() + vy * d.Y() + vz * d.Z();
+    let rx = vx - d.X() * along, ry = vy - d.Y() * along, rz = vz - d.Z() * along;
+    let rl = Math.sqrt(rx * rx + ry * ry + rz * rz);
+    if (rl > 1e-12) {
+      reference = [o.X() + rx / rl * major, o.Y() + ry / rl * major,
+                   o.Z() + rz / rl * major];
+    }
+  }
+  if (reference) {
+    let p = new self.oc.gp_Pnt_1();
+    surf.D0(midU, midV, p);
+    let n = _faceNormalAt(f, midU, midV);
+    let dx = p.X() - reference[0], dy = p.Y() - reference[1], dz = p.Z() - reference[2];
+    let dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (dist > 1e-12) {
+      // upstream: normal . (P - reference) > 0 is convex; the magnitude is the
+      // reference distance, which callers compare against _TOL_1E6
+      return (n[0] * dx + n[1] * dy + n[2] * dz) > 0 ? dist : -dist;
+    }
+  }
   let u = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
   let v = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
   let pnt = new self.oc.gp_Pnt_1();
@@ -1892,6 +1948,371 @@ function _faceCurvatureSign(face) {
   // report the reference distance (1/|k| == the radius upstream dots against),
   // signed the way upstream signs it
   return -Math.sign(k) / Math.abs(k);
+}
+
+/** 2-D corner fillet between two connected edges of an OPEN planar wire
+ *  (build123d's `_solve_wire_fillet_corner_chfi2d`, the primary solver behind
+ *  Wire.fillet_2d). `vertexPoint` is the shared corner. Returns
+ *  `{ fillet, trimmed1, trimmed2 }` TopoDS_Edges, or null when ChFi2d finds no
+ *  solution — upstream then falls back to the Geom2dGcc tangent-arc solver.
+ *
+ *  ChFi2d_FilletAlgo::Result hands the two trimmed edges back through
+ *  references; the fork registers OCJS_Out.FilletAlgo_Result for that. */
+function FilletWireCorner(edge1, edge2, vertexPoint, radius) {
+  let algo = new self.oc.ChFi2d_FilletAlgo_1();
+  algo.Init_2(_asEdge(edge1), _asEdge(edge2),
+              new self.oc.gp_Pln_3(new self.oc.gp_Pnt_3(0, 0, 0),
+                                   new self.oc.gp_Dir_5(0, 0, 1)));
+  if (!algo.Perform(radius)) { return null; }
+  let corner = new self.oc.gp_Pnt_3(vertexPoint[0], vertexPoint[1],
+                                    vertexPoint[2] || 0);
+  if (algo.NbResults(corner) === 0) { return null; }
+  let out = self.oc.OCJS_Out.FilletAlgo_Result(algo, corner);
+  return [out.fillet, out.trimmed1, out.trimmed2];
+}
+
+/** Radius of a cylindrical or spherical face (build123d Face.radius), null for
+ *  every other surface type. Reads the surface's own gp_Cylinder/gp_Sphere,
+ *  which the fork binds as of this round. */
+function _faceRadius(face) {
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
+  let ST = self.oc.GeomAbs_SurfaceType;
+  let type = surf.GetType();
+  if (type === ST.GeomAbs_Cylinder) { return surf.Cylinder().Radius(); }
+  if (type === ST.GeomAbs_Sphere) { return surf.Sphere().Radius(); }
+  return null;
+}
+
+/** Rotational axis of a cone/cylinder/sphere/torus/surface-of-revolution
+ *  face (build123d Face.axis_of_rotation) as [origin, direction], else null. */
+function _faceAxisOfRotation(face) {
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
+  let ST = self.oc.GeomAbs_SurfaceType;
+  let type = surf.GetType();
+  let ax = null;
+  if (type === ST.GeomAbs_Cone) { ax = surf.Cone().Axis(); }
+  else if (type === ST.GeomAbs_Cylinder) { ax = surf.Cylinder().Axis(); }
+  else if (type === ST.GeomAbs_Torus) { ax = surf.Torus().Axis(); }
+  else if (type === ST.GeomAbs_Sphere) { ax = surf.Sphere().Position().Axis(); }
+  else if (type === ST.GeomAbs_SurfaceOfRevolution) { ax = surf.AxeOfRevolution(); }
+  if (!ax) { return null; }
+  let o = ax.Location(), d = ax.Direction();
+  return [[o.X(), o.Y(), o.Z()], [d.X(), d.Y(), d.Z()]];
+}
+
+// ---------------------------------------------------------------------------
+// 2-D geometric constraint solvers (OCCT Geom2dGcc) — the kernel side of
+// build123d's ConstrainedArcs / ConstrainedLines.
+//
+// A statement-for-statement port of build123d 0.11.1's
+// topology/constrained_lines.py: every argument is projected onto Plane.XY
+// (GeomAPI::To2d), wrapped in a Geom2dGcc_QualifiedCurve with the script's
+// Tangency qualifier, handed to the matching Geom2dGcc solver, and each
+// solution is kept only when its tangency parameter falls inside the
+// argument's TRIMMED range (upstream's _param_in_trim).
+//
+// `Tangency1/2/3` return their two parameters through `Standard_Real&`, which
+// Embind passes by value; the fork registers OCJS_Out.<Solver>_Tangency<N>()
+// for exactly this (see builds/cascadestudio.yml).
+// ---------------------------------------------------------------------------
+
+const _GCC_TOLERANCE = 1e-6;   // build123d.geometry.TOLERANCE
+
+function _gccQualifier(name) {
+  const P = self.oc.GccEnt_Position;
+  if (name === 'ENCLOSING') { return P.GccEnt_enclosing; }
+  if (name === 'ENCLOSED') { return P.GccEnt_enclosed; }
+  if (name === 'OUTSIDE') { return P.GccEnt_outside; }
+  return P.GccEnt_unqualified;
+}
+
+function _gccXYPlane() {
+  return new self.oc.gp_Pln_3(new self.oc.gp_Pnt_3(0, 0, 0),
+                              new self.oc.gp_Dir_5(0, 0, 1));
+}
+
+/** build123d's `_edge_to_qualified_2d`: the edge's 3-D curve projected onto
+ *  Plane.XY, kept on the edge's own parameter range. */
+function _gccQualifiedCurve(edge, qualifier) {
+  let e = _asEdge(edge);
+  let adaptor = new self.oc.BRepAdaptor_Curve_2(e);
+  let first = adaptor.FirstParameter(), last = adaptor.LastParameter();
+  let curve3d = self.oc.BRep_Tool.Curve_2(e, { current: 0 }, { current: 0 });
+  let curve2d = self.oc.GeomAPI.To2d(curve3d, _gccXYPlane());
+  let adapt2d = new self.oc.Geom2dAdaptor_Curve_3(curve2d, first, last);
+  return {
+    isEdge: true,
+    q: new self.oc.Geom2dGcc_QualifiedCurve(adapt2d, _gccQualifier(qualifier)),
+    curve2d: curve2d, adapt2d: adapt2d, first: first, last: last,
+  };
+}
+
+/** One tangency/target argument: `{edge, qualifier}` or `{point: [x, y]}`. */
+function _gccArg(spec) {
+  if (spec.point) {
+    return {
+      isEdge: false,
+      q: new self.oc.Geom2d_CartesianPoint_2(spec.point[0], spec.point[1]),
+      pnt2d: new self.oc.gp_Pnt2d_3(spec.point[0], spec.point[1]),
+    };
+  }
+  return _gccQualifiedCurve(spec.edge, spec.qualifier);
+}
+
+/** upstream's `_param_in_trim`: normalize onto the period, then test the
+ *  argument's trimmed range with TOLERANCE. */
+function _gccParamInTrim(arg, u) {
+  if (!arg.isEdge) { return true; }
+  let v = u;
+  if (arg.adapt2d.IsPeriodic()) {
+    let period = arg.adapt2d.Period();
+    v = ((u - arg.first) % period + period) % period + arg.first;
+  }
+  return v >= arg.first - _GCC_TOLERANCE && v <= arg.last + _GCC_TOLERANCE;
+}
+
+/** A 3-D edge on Plane.XY from a trimmed 2-D circle span, exactly like
+ *  upstream's `_edge_from_circle` (Geom2d_TrimmedCurve on the XY surface,
+ *  then BRepLib::BuildCurves3d). */
+function _gccEdgeFromCircle2d(circ2d, u1, u2) {
+  let geomCircle = new self.oc.Geom2d_Circle_1(circ2d);
+  let handle = new self.oc.Handle_Geom2d_Curve_2(geomCircle);
+  let trimmed = new self.oc.Geom2d_TrimmedCurve(handle, u1, u2, true, true);
+  let surface = new self.oc.Handle_Geom_Surface_2(
+    new self.oc.Geom_Plane_2(_gccXYPlane()));
+  let edge = new self.oc.BRepBuilderAPI_MakeEdge_30(
+    new self.oc.Handle_Geom2d_Curve_2(trimmed), surface).Edge();
+  self.oc.BRepLib.BuildCurves3d_2(edge);
+  return edge;
+}
+
+/** Both arcs of a solution circle between two of its parameters — upstream's
+ *  `_two_arc_edges_from_params` (the forward span and its complement). */
+function _gccTwoArcs(circ2d, u1, u2) {
+  const period = 2 * Math.PI;
+  const norm = (u) => ((u % period) + period) % period;
+  let u1n = norm(u1), u2n = norm(u2);
+  let d = u2n - u1n;
+  if (d < 0) { d += period; }
+  if (d <= _GCC_TOLERANCE || Math.abs(period - d) <= _GCC_TOLERANCE) { return []; }
+  return [_gccEdgeFromCircle2d(circ2d, u1n, u1n + d),
+          _gccEdgeFromCircle2d(circ2d, u2n, u2n + (period - d))];
+}
+
+/** upstream's `_edge_from_line`: a finite segment between two 2-D points. */
+function _gccEdgeFromLine(p1, p2) {
+  let v1 = new self.oc.BRepBuilderAPI_MakeVertex(
+    new self.oc.gp_Pnt_3(p1[0], p1[1], 0)).Vertex();
+  let v2 = new self.oc.BRepBuilderAPI_MakeVertex(
+    new self.oc.gp_Pnt_3(p2[0], p2[1], 0)).Vertex();
+  let mk = new self.oc.BRepBuilderAPI_MakeEdge_2(v1, v2);
+  if (!mk.IsDone()) { return null; }
+  return mk.Edge();
+}
+
+/** Sagitta selection: BOTH keeps the pair, SHORT/LONG index the pair sorted
+ *  by arc length (upstream sorts with GCPnts_AbscissaPoint). */
+function _gccPickSagitta(arcs, sagitta, out) {
+  if (arcs.length === 0) { return; }
+  if (sagitta === 1) { for (const a of arcs) { out.push(a); } return; }
+  let sorted = arcs.slice().sort((a, b) => _edgeLength(a) - _edgeLength(b));
+  out.push(sorted[sagitta === -1 ? sorted.length - 1 : 0]);
+}
+
+/** Upstream's `_enclosed_circ_param_offset`: when a solution circle sits
+ *  INSIDE a circular tangency target and at least one argument is not a
+ *  circle, OCCT reports the tangency parameter half a turn away. */
+function _gccEnclosedOffset(specs, circ2d, params) {
+  let isCirc = specs.map((s) => {
+    if (!s.edge) { return false; }
+    return _edgeCurveType(s.edge) === 'CIRCLE';
+  });
+  if (isCirc.every((c) => c)) { return params.slice(); }
+  let center = circ2d.Location();
+  return params.map((p, i) => {
+    if (!specs[i].edge || !isCirc[i]) { return p; }
+    let c = _edgeArcCenter(specs[i].edge);
+    let dx = center.X() - c[0], dy = center.Y() - c[1], dz = 0 - c[2];
+    let dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    return dist < _edgeArcRadius(specs[i].edge) ? p + Math.PI : p;
+  });
+}
+
+/** Circular arcs constrained by tangency (build123d Edge.make_constrained_arcs
+ *  / ConstrainedArcs). `specs` is 1-3 tangency arguments; `opts` selects the
+ *  overload exactly as upstream's keyword arguments do:
+ *    {radius}              -> Geom2dGcc_Circ2d2TanRad     (2 args)
+ *    {centerOn}            -> Geom2dGcc_Circ2d2TanOn      (2 args)
+ *    {}                    -> Geom2dGcc_Circ2d3Tan        (3 args)
+ *    {center}              -> Geom2dGcc_Circ2dTanCen      (1 arg)
+ *    {radius, centerOn}    -> Geom2dGcc_Circ2dTanOnRad    (1 arg)
+ *  Returns an array of TopoDS_Edge (not added to the scene). */
+function ConstrainedArcs2D(specs, opts) {
+  const oc = self.oc;
+  const sagitta = opts.sagitta === undefined ? 0 : opts.sagitta;
+  let args = specs.map(_gccArg);
+  let out = [];
+
+  // --- fixed centre, one tangency: full circles ---------------------------
+  if (opts.center) {
+    let cx = opts.center[0], cy = opts.center[1];
+    if (!args[0].isEdge) {
+      let p = args[0].q.Pnt2d();
+      let r = Math.hypot(p.X() - cx, p.Y() - cy);
+      if (r <= _GCC_TOLERANCE) { return []; }
+      let circ = new oc.gp_Circ2d_2(new oc.gp_Ax2d_2(
+        new oc.gp_Pnt2d_3(cx, cy), new oc.gp_Dir2d_5(1, 0)), r, true);
+      return [_gccEdgeFromCircle2d(circ, 0, 2 * Math.PI)];
+    }
+    let gcc = new oc.Geom2dGcc_Circ2dTanCen(
+      args[0].q, new oc.Handle_Geom2d_Point_2(
+        new oc.Geom2d_CartesianPoint_2(cx, cy)), _GCC_TOLERANCE);
+    if (!gcc.IsDone() || gcc.NbSolutions() === 0) {
+      throw new Error('ConstrainedArcs: no tangent circle for the given centre');
+    }
+    for (let i = 1; i <= gcc.NbSolutions(); i++) {
+      let t = oc.OCJS_Out.Circ2dTanCen_Tangency1(gcc, i);
+      if (!_gccParamInTrim(args[0], t.parArg)) { continue; }
+      out.push(_gccEdgeFromCircle2d(gcc.ThisSolution(i), 0, 2 * Math.PI));
+    }
+    return out;
+  }
+
+  // --- one tangency + radius + centre locus: full circles ------------------
+  if (opts.centerOn && specs.length === 1) {
+    let on = _gccQualifiedCurve(opts.centerOn, 'UNQUALIFIED');
+    let gcc = new oc.Geom2dGcc_Circ2dTanOnRad_1(
+      args[0].q, on.adapt2d, opts.radius, _GCC_TOLERANCE);
+    if (!gcc.IsDone() || gcc.NbSolutions() === 0) {
+      throw new Error('ConstrainedArcs: no circle for the TanOnRad constraints');
+    }
+    for (let i = 1; i <= gcc.NbSolutions(); i++) {
+      let t = oc.OCJS_Out.Circ2dTanOnRad_Tangency1(gcc, i);
+      if (!_gccParamInTrim(args[0], t.parArg)) { continue; }
+      let circ = gcc.ThisSolution(i);
+      // the centre must land on the TRIMMED locus
+      let proj = new oc.Geom2dAPI_ProjectPointOnCurve_2(circ.Location(), on.curve2d);
+      if (proj.NbPoints() < 1 || !_gccParamInTrim(on, proj.Parameter_1(1))) { continue; }
+      out.push(_gccEdgeFromCircle2d(circ, 0, 2 * Math.PI));
+    }
+    return out;
+  }
+
+  // --- two/three tangencies: arcs between the first two tangency points ----
+  let gcc, tangency1, tangency2, tangency3 = null;
+  if (opts.centerOn) {
+    let on = _gccQualifiedCurve(opts.centerOn, 'UNQUALIFIED');
+    let guesses = [];
+    for (const a of args) { if (a.isEdge) { guesses.push((a.first + a.last) / 2); } }
+    if (on.isEdge) { guesses.push((on.first + on.last) / 2); }
+    gcc = guesses.length === 3
+      ? new oc.Geom2dGcc_Circ2d2TanOn_1(args[0].q, args[1].q, on.adapt2d,
+                                        _GCC_TOLERANCE, guesses[0], guesses[1], guesses[2])
+      : new oc.Geom2dGcc_Circ2d2TanOn_3(args[0].q, args[1].q, on.adapt2d, _GCC_TOLERANCE);
+    tangency1 = (i) => oc.OCJS_Out.Circ2d2TanOn_Tangency1(gcc, i);
+    tangency2 = (i) => oc.OCJS_Out.Circ2d2TanOn_Tangency2(gcc, i);
+  } else if (specs.length === 3) {
+    let guesses = args.map((a) => (a.isEdge ? (a.first + a.last) / 2 : 0));
+    gcc = new oc.Geom2dGcc_Circ2d3Tan_1(args[0].q, args[1].q, args[2].q,
+                                        _GCC_TOLERANCE, guesses[0], guesses[1], guesses[2]);
+    tangency1 = (i) => oc.OCJS_Out.Circ2d3Tan_Tangency1(gcc, i);
+    tangency2 = (i) => oc.OCJS_Out.Circ2d3Tan_Tangency2(gcc, i);
+    tangency3 = (i) => oc.OCJS_Out.Circ2d3Tan_Tangency3(gcc, i);
+  } else {
+    gcc = new oc.Geom2dGcc_Circ2d2TanRad_1(args[0].q, args[1].q,
+                                           opts.radius, _GCC_TOLERANCE);
+    tangency1 = (i) => oc.OCJS_Out.Circ2d2TanRad_Tangency1(gcc, i);
+    tangency2 = (i) => oc.OCJS_Out.Circ2d2TanRad_Tangency2(gcc, i);
+  }
+  if (!gcc.IsDone() || gcc.NbSolutions() === 0) {
+    throw new Error('ConstrainedArcs: unable to find a tangent arc');
+  }
+  for (let i = 1; i <= gcc.NbSolutions(); i++) {
+    let circ = gcc.ThisSolution(i);
+    let t1 = tangency1(i);
+    if (!_gccParamInTrim(args[0], t1.parArg)) { continue; }
+    let t2 = tangency2(i);
+    if (!_gccParamInTrim(args[1], t2.parArg)) { continue; }
+    let params = [t1.parSol, t2.parSol];
+    if (tangency3) {
+      let t3 = tangency3(i);
+      if (!_gccParamInTrim(args[2], t3.parArg)) { continue; }
+      params.push(t3.parSol);
+    }
+    if (tangency3 || opts.centerOn) { params = _gccEnclosedOffset(specs, circ, params); }
+    _gccPickSagitta(_gccTwoArcs(circ, params[0], params[1]), sagitta, out);
+  }
+  return out;
+}
+
+/** Lines constrained by tangency (build123d Edge.make_constrained_lines /
+ *  ConstrainedLines). Two forms, matching upstream:
+ *    specs = [tangency, tangency|point]        -> Geom2dGcc_Lin2d2Tan
+ *    specs = [tangency], opts = {angle, axis}  -> Geom2dGcc_Lin2dTanObl
+ *  Returns an array of TopoDS_Edge (not added to the scene). */
+function ConstrainedLines2D(specs, opts) {
+  const oc = self.oc;
+  opts = opts || {};
+  let a1 = _gccArg(specs[0]);
+  let out = [];
+
+  if (opts.axis) {
+    // tangent to one curve at a fixed orientation, trimmed between the
+    // tangency point and the reference axis
+    let pos = opts.axis.position, dir = opts.axis.direction;
+    let refLin = new oc.gp_Lin2d_3(new oc.gp_Pnt2d_3(pos[0], pos[1]),
+                                   new oc.gp_Dir2d_5(dir[0], dir[1]));
+    let thetaAbs = Math.atan2(dir[1], dir[0]) + opts.angle;
+    let gcc = new oc.Geom2dGcc_Lin2dTanObl_1(a1.q, refLin, _GCC_TOLERANCE, opts.angle);
+    for (let i = 1; i <= gcc.NbSolutions(); i++) {
+      let t = oc.OCJS_Out.Lin2dTanObl_Tangency1(gcc, i);
+      // Intersection of the solution line with the reference axis. Upstream
+      // runs IntAna2d_AnaIntersection here and notes Intersection2() is not
+      // reliable; IntAna2d_IntPoint is not registered in this build, so the
+      // same two-line solve is done in closed form (one linear system, no
+      // tolerance of its own).
+      let cx = Math.cos(thetaAbs), cy = Math.sin(thetaAbs);
+      let den = cx * dir[1] - cy * dir[0];
+      if (Math.abs(den) < 1e-15) { continue; }
+      let s = ((pos[0] - t.x) * dir[1] - (pos[1] - t.y) * dir[0]) / den;
+      let px = t.x + cx * s, py = t.y + cy * s;
+      if (!(Math.hypot(px - t.x, py - t.y) >= _GCC_TOLERANCE)) { continue; }
+      let edge = _gccEdgeFromLine([t.x, t.y], [px, py]);
+      if (edge) { out.push(edge); }
+    }
+    return out;
+  }
+
+  let a2 = _gccArg(specs[1]);
+  let gcc = a2.isEdge
+    ? new oc.Geom2dGcc_Lin2d2Tan_1(a1.q, a2.q, _GCC_TOLERANCE)
+    : new oc.Geom2dGcc_Lin2d2Tan_2(a1.q, a2.pnt2d, _GCC_TOLERANCE);
+  if (!gcc.IsDone() || gcc.NbSolutions() === 0) {
+    throw new Error('ConstrainedLines: unable to find a common tangent line');
+  }
+  for (let i = 1; i <= gcc.NbSolutions(); i++) {
+    // The two contact points come from intersecting the solution line with
+    // each argument curve (upstream: Tangency1/Tangency2 can index the same
+    // line differently, so it uses Geom2dAPI_InterCurveCurve).
+    let lin = new oc.Handle_Geom2d_Curve_2(
+      new oc.Geom2d_Line_2(gcc.ThisSolution(i)));
+    let inter1 = new oc.Geom2dAPI_InterCurveCurve_2(lin, a1.curve2d, _GCC_TOLERANCE);
+    if (inter1.NbPoints() < 1) { continue; }
+    let p1 = inter1.Point(1);
+    let p2;
+    if (a2.isEdge) {
+      let inter2 = new oc.Geom2dAPI_InterCurveCurve_2(lin, a2.curve2d, _GCC_TOLERANCE);
+      if (inter2.NbPoints() < 1) { continue; }
+      p2 = inter2.Point(1);
+    } else {
+      p2 = a2.pnt2d;
+    }
+    let sep = p1.Distance(p2);
+    if (!(sep >= _GCC_TOLERANCE)) { continue; }
+    let edge = _gccEdgeFromLine([p1.X(), p1.Y()], [p2.X(), p2.Y()]);
+    if (edge) { out.push(edge); }
+  }
+  return out;
 }
 
 /** Minimal distance from a point to an edge (build123d's Shape.distance_to for
@@ -2295,6 +2716,23 @@ function _wireIsClosed(wire) {
 
 /** A wire's edges in CONNECTION order (BRepTools_WireExplorer — build123d's
  *  Wire.order_edges); ForEachEdge follows TopExp's storage order instead. */
+/** A wire built from edges IN THE GIVEN ORDER, each keeping its own
+ *  orientation (BRepBuilderAPI_MakeWire::Add per edge). build123d's
+ *  Wire.fillet_2d rebuilds a filleted wire this way, and the traversal order
+ *  it produces matters downstream: BRepOffsetAPI_MakeOffset fails on the same
+ *  edges assembled order-agnostically. Falls back to WireFromEdgesFixed. */
+function WireFromOrderedEdges(edges) {
+  let mkWire = new self.oc.BRepBuilderAPI_MakeWire_1();
+  for (let i = 0; i < edges.length; i++) {
+    mkWire.Add_1(_asEdge(edges[i]));
+    if (!mkWire.IsDone()) { return WireFromEdgesFixed(edges); }
+  }
+  let wire = mkWire.Wire();
+  if (!wire || wire.IsNull()) { return WireFromEdgesFixed(edges); }
+  wire.hash = self.oc.OCJS.HashCode(wire, 100000000);
+  return wire;
+}
+
 function OrderedEdges(wire) {
   let out = [];
   let exp = new self.oc.BRepTools_WireExplorer_2(_asWire(wire));
@@ -2540,11 +2978,17 @@ function SurfaceFromPoints(points, tol, degMin, degMax, smoothing) {
 function PipeShellSweep(profileWires, spineWire, isFrenet, transition, binormal, auxSpine, auxCurvilinear, makeShell) {
   let result = self.CacheOp(arguments, "PipeShellSweep", () => {
     let toWire = (w) => {
-      // rebuild for exact Embind TopoDS_Wire typing (see Loft)
+      // rebuild for exact Embind TopoDS_Wire typing (see Loft). The edges are
+      // added AS A LIST: TopExp_Explorer hands them back in storage order, and
+      // adding them one at a time makes BRepBuilderAPI_MakeWire silently drop
+      // any edge that does not touch the wire built so far (which quietly cost
+      // brake-formed sections a side face).
       let mw = new self.oc.BRepBuilderAPI_MakeWire_1();
+      let list = new self.oc.TopTools_ListOfShape();
       let exp = new self.oc.TopExp_Explorer_2(w, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE,
         self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
-      while (exp.More()) { mw.Add_1(self.oc.TopoDS_Cast.Edge_1(exp.Current())); exp.Next(); }
+      while (exp.More()) { list.Append(self.oc.TopoDS_Cast.Edge_1(exp.Current())); exp.Next(); }
+      mw.Add_3(list);
       return mw.Wire();
     };
     let builder = new self.oc.BRepOffsetAPI_MakePipeShell(toWire(spineWire));
@@ -3769,6 +4213,7 @@ class CascadeStudioStandardLibrary {
     self.WireFromEdgesFixed = WireFromEdgesFixed;
     self._wireIsClosed = _wireIsClosed;
     self.OrderedEdges = OrderedEdges;
+    self.WireFromOrderedEdges = WireFromOrderedEdges;
     self.OffsetPlanarWire = OffsetPlanarWire;
     self._edgeArcCenter = _edgeArcCenter;
     self._edgeArcRadius = _edgeArcRadius;
@@ -3777,6 +4222,9 @@ class CascadeStudioStandardLibrary {
     self.BSplineEdge = BSplineEdge;
     self._distShapeShape = _distShapeShape;
     self._faceCurvatureSign = _faceCurvatureSign;
+    self.FilletWireCorner = FilletWireCorner;
+    self._faceRadius = _faceRadius;
+    self._faceAxisOfRotation = _faceAxisOfRotation;
     self.CircularEdge = CircularEdge;
     self.EdgeIsInterior = EdgeIsInterior;
     self.HLRProject = HLRProject;
@@ -3819,6 +4267,8 @@ class CascadeStudioStandardLibrary {
     self.SewSolidFromFaces = SewSolidFromFaces;
     self.IntersectLineShape = IntersectLineShape;
     self.PointVertex = PointVertex;
+    self.ConstrainedArcs2D = ConstrainedArcs2D;
+    self.ConstrainedLines2D = ConstrainedLines2D;
   }
 }
 

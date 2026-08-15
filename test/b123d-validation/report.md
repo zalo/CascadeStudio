@@ -1,26 +1,23 @@
 # build123d-lite validation report
 
-Generated 2026-08-14T02:56:37.770Z - 232 scripts (222 scored, 10 excluded because real build123d fails natively).
+Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
-| PASS | 204 |
-| MISMATCH | 8 |
-| ERROR | 9 |
-| TIMEOUT | 1 |
+| PASS | 205 |
+| MISMATCH | 10 |
+| ERROR | 5 |
+| TIMEOUT | 2 |
 | SKIP | 10 |
 
 ## Feature-gap frequency (ERROR bucket)
 
 | Gap | Scripts |
 |---|---|
-| `NotImplemented: import_step is not supported in build123d-lite` | 2 |
 | `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf` | 1 |
-| `other: Line 8699: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
+| `other: Line 9634: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
 | `NameError: Draft` | 1 |
-| `NotImplemented: fillet(<wire vertices>) - the 1-D corner fillet of an open line (build123d Wire.fillet_2d) - is not supported in build123d-lite; use FilletPolyline for straight segments` | 1 |
 | `ImportError: undefined` | 1 |
-| `NameError: full_round` | 1 |
 | `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l` | 1 |
 
 ## Mismatches (runs, but geometry differs)
@@ -44,22 +41,27 @@ Generated 2026-08-14T02:56:37.770Z - 232 scripts (222 scored, 10 excluded becaus
   - 'scene' bbox[0] -0.1000 vs -0.1700 (d=0.0700)
 - **docs-selectors/filter_all_edges_circle**
   - 'f' bbox[1] 21.0000 vs -21.0000 (d=42.0000)
+- **docs/tutorial_joints**
+  - 'm6_screw' bbox[0] -155.1818 vs -157.0000 (d=1.8182)
 - **docs-selectors/sort_axis**
   - 'part' volume 4765.102 vs 5585.161 (-14.68%)
   - 'part' bbox[3] 34.0000 vs 50.0000 (d=16.0000)
+- **ttt/ttt-23-02-02-sm_hanger**
+  - 'l1' bbox[1] 65.0000 vs 0.0000 (d=65.0000)
+  - 'l2' bbox[4] 65.0000 vs 0.0000 (d=65.0000)
 - **docs-rst/tips/b04**
   - 'vertical_sketch' bbox[1] -0.5000 vs -0.7000 (d=0.2000)
 
 ## Passing scripts
 
-- examples/boxes_on_faces_algebra (2 shapes)
 - examples/boxes_on_faces (1 shapes)
+- examples/boxes_on_faces_algebra (2 shapes)
 - examples/build123d_customizable_logo_algebra (13 shapes)
-- examples/build123d_customizable_logo (14 shapes)
 - examples/build123d_logo (13 shapes)
+- examples/build123d_customizable_logo (14 shapes)
 - examples/build123d_logo_algebra (12 shapes)
-- examples/canadian_flag (20 shapes)
 - examples/canadian_flag_algebra (25 shapes)
+- examples/canadian_flag (20 shapes)
 - examples/circuit_board (1 shapes)
 - examples/circuit_board_algebra (1 shapes)
 - examples/cast_bearing_unit (10 shapes)
@@ -68,22 +70,22 @@ Generated 2026-08-14T02:56:37.770Z - 232 scripts (222 scored, 10 excluded becaus
 - examples/custom_sketch_objects_algebra (9 shapes)
 - examples/din_rail (3 shapes)
 - examples/din_rail_algebra (41 shapes)
-- examples/clock (5 shapes)
 - examples/bicycle_tire (102 shapes)
 - examples/extrude_algebra (35 shapes)
 - examples/extrude (10 shapes)
 - examples/handle (10 shapes)
 - examples/fast_grid_holes (4 shapes)
 - examples/handle_algebra (4 shapes)
+- examples/bracelet (16 shapes)
 - examples/holes (4 shapes)
 - examples/holes_algebra (4 shapes)
 - examples/intersecting_chamfers (1 shapes)
 - examples/intersecting_chamfers_algebra (2 shapes)
 - examples/intersecting_pipes (3 shapes)
+- examples/clock (5 shapes)
 - examples/key_cap (5 shapes)
 - examples/key_cap_algebra (5 shapes)
 - examples/lego (3 shapes)
-- examples/bracelet (16 shapes)
 - examples/lego_algebra (3 shapes)
 - examples/loft (4 shapes)
 - examples/loft_algebra (3 shapes)
@@ -94,11 +96,11 @@ Generated 2026-08-14T02:56:37.770Z - 232 scripts (222 scored, 10 excluded becaus
 - examples/pegboard_j_hook (10 shapes)
 - examples/pegboard_j_hook_algebra (11 shapes)
 - examples/pillow_block (2 shapes)
+- examples/heat_exchanger_algebra (4 shapes)
 - examples/pillow_block_algebra (2 shapes)
 - examples/platonic_solids (5 shapes)
-- examples/playing_cards (14 shapes)
 - examples/maker_coin (8 shapes)
-- examples/heat_exchanger_algebra (4 shapes)
+- examples/playing_cards (14 shapes)
 - examples/roller_coaster (4 shapes)
 - examples/roller_coaster_algebra (4 shapes)
 - examples/shamrock (1 shapes)
@@ -106,78 +108,77 @@ Generated 2026-08-14T02:56:37.770Z - 232 scripts (222 scored, 10 excluded becaus
 - examples/tea_cup_algebra (5 shapes)
 - examples/twist_extrude (2 shapes)
 - examples/vase (8 shapes)
-- examples/heat_exchanger (3 shapes)
+- examples/vase_algebra (8 shapes)
 - general_examples/ex01 (1 shapes)
 - general_examples/ex02 (1 shapes)
 - general_examples/ex03 (2 shapes)
 - general_examples/ex08 (3 shapes)
 - general_examples/ex09 (1 shapes)
 - general_examples/ex10 (1 shapes)
-- examples/vase_algebra (8 shapes)
-- general_examples/ex12 (7 shapes)
 - general_examples/ex11 (2 shapes)
+- general_examples/ex12 (7 shapes)
+- general_examples/ex13 (1 shapes)
 - general_examples/ex14 (6 shapes)
 - general_examples/ex15 (8 shapes)
-- general_examples/ex13 (1 shapes)
+- general_examples/ex16 (3 shapes)
 - general_examples/ex17 (2 shapes)
 - general_examples/ex18 (1 shapes)
 - general_examples/ex19 (6 shapes)
 - general_examples/ex20 (1 shapes)
 - general_examples/ex21 (2 shapes)
-- general_examples/ex16 (3 shapes)
 - general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
-- general_examples/ex25 (4 shapes)
 - general_examples/ex24 (3 shapes)
+- general_examples/ex25 (4 shapes)
 - general_examples/ex26 (2 shapes)
 - general_examples/ex27 (2 shapes)
-- general_examples/ex29 (7 shapes)
 - general_examples/ex28 (7 shapes)
+- general_examples/ex29 (7 shapes)
 - general_examples/ex30 (5 shapes)
-- general_examples/ex32 (3 shapes)
 - general_examples/ex31 (2 shapes)
+- general_examples/ex32 (3 shapes)
 - general_examples/ex33 (3 shapes)
 - general_examples/ex35 (5 shapes)
 - general_examples/ex36 (3 shapes)
-- general_examples/ex34 (4 shapes)
 - general_examples/ex37 (2 shapes)
 - general_examples_algebra/ex01 (1 shapes)
 - general_examples_algebra/ex02 (1 shapes)
+- general_examples/ex34 (4 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
 - general_examples_algebra/ex09 (1 shapes)
 - general_examples_algebra/ex12 (6 shapes)
-- general_examples_algebra/ex11 (2 shapes)
-- general_examples_algebra/ex13 (1 shapes)
 - general_examples_algebra/ex14 (6 shapes)
 - general_examples_algebra/ex15 (8 shapes)
+- general_examples_algebra/ex11 (2 shapes)
+- general_examples_algebra/ex13 (1 shapes)
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
-- general_examples_algebra/ex16 (10 shapes)
-- general_examples_algebra/ex20 (2 shapes)
 - general_examples_algebra/ex19 (6 shapes)
+- general_examples_algebra/ex20 (2 shapes)
+- general_examples_algebra/ex16 (10 shapes)
 - general_examples_algebra/ex21 (1 shapes)
-- general_examples_algebra/ex22 (2 shapes)
 - general_examples_algebra/ex23 (4 shapes)
+- general_examples_algebra/ex22 (2 shapes)
+- general_examples_algebra/ex26 (2 shapes)
 - general_examples_algebra/ex24 (2 shapes)
 - general_examples_algebra/ex25 (5 shapes)
-- general_examples_algebra/ex26 (2 shapes)
 - general_examples_algebra/ex27 (2 shapes)
+- general_examples_algebra/ex30 (3 shapes)
 - general_examples_algebra/ex29 (8 shapes)
 - general_examples_algebra/ex28 (3 shapes)
-- general_examples_algebra/ex30 (3 shapes)
 - general_examples_algebra/ex32 (2 shapes)
-- general_examples_algebra/ex33 (1 shapes)
 - general_examples_algebra/ex31 (1 shapes)
+- general_examples_algebra/ex33 (1 shapes)
 - general_examples_algebra/ex35 (4 shapes)
-- general_examples_algebra/ex34 (3 shapes)
-- general_examples_algebra/ex36 (3 shapes)
 - docs/center (5 shapes)
+- general_examples_algebra/ex36 (3 shapes)
 - docs/objects_1d_airfoil (2 shapes)
 - docs/objects_1d_blend_curve (4 shapes)
 - docs/objects_1d_bspline (2 shapes)
 - docs/objects_1d_constrained (7 shapes)
 - docs/objects_1d_ellipticalstartarc (4 shapes)
+- general_examples_algebra/ex34 (3 shapes)
 - docs/objects_1d_parabolic_hyperbolic (3 shapes)
 - docs/objects_3d (10 shapes)
 - docs/pack_demo (12 shapes)
@@ -187,23 +188,25 @@ Generated 2026-08-14T02:56:37.770Z - 232 scripts (222 scored, 10 excluded becaus
 - docs/slide_latch (7 shapes)
 - docs-selectors/filter_geomtype (1 shapes)
 - docs-selectors/filter_nested (7 shapes)
-- docs-selectors/group_hole_area (3 shapes)
 - docs-selectors/filter_shape_properties (4 shapes)
-- docs-selectors/selectors_operators (9 shapes)
+- docs-selectors/filter_inner_wire_count (53 shapes)
+- docs-selectors/group_hole_area (3 shapes)
 - docs-selectors/group_properties_with_keys (10 shapes)
 - docs-selectors/sort_along_wire (2 shapes)
+- docs-selectors/selectors_operators (9 shapes)
 - docs-selectors/sort_sortby (6 shapes)
 - docs-selectors/group_axis (3 shapes)
-- ttt/ttt-ppp0103 (4 shapes)
-- ttt/ttt-ppp0101 (9 shapes)
 - ttt/ttt-ppp0102 (6 shapes)
+- ttt/ttt-ppp0101 (9 shapes)
+- ttt/ttt-ppp0103 (4 shapes)
 - ttt/ttt-ppp0104 (9 shapes)
-- ttt/ttt-ppp0106 (9 shapes)
 - ttt/ttt-ppp0105 (5 shapes)
+- ttt/ttt-ppp0106 (9 shapes)
 - ttt/ttt-ppp0108 (6 shapes)
 - ttt/ttt-ppp0109 (8 shapes)
 - docs-rst/OpenSCAD/b01 (2 shapes)
 - docs-rst/OpenSCAD/b02 (2 shapes)
+- ttt/ttt-24-SPO-06-Buffer_Stand (9 shapes)
 - docs-rst/OpenSCAD/all (2 shapes)
 - docs-rst/algebra_performance/b03 (1 shapes)
 - ttt/ttt-ppp0107 (11 shapes)
@@ -260,17 +263,14 @@ Generated 2026-08-14T02:56:37.770Z - 232 scripts (222 scored, 10 excluded becaus
 ## Errors by script
 
 - examples/dual_color_3mf: `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf`
-- examples/toy_truck: `other: Line 8699: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
+- examples/toy_truck: `other: Line 9634: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
 - docs/objects_2d: `NameError: Draft`
-- docs/tutorial_joints: `NotImplemented: import_step is not supported in build123d-lite`
-- docs-selectors/filter_inner_wire_count: `NotImplemented: import_step is not supported in build123d-lite`
-- ttt/ttt-23-02-02-sm_hanger: `NotImplemented: fillet(<wire vertices>) - the 1-D corner fillet of an open line (build123d Wire.fillet_2d) - is not supported in build123d-lite; use FilletPolyline for straight segments`
 - ttt/ttt-23-t-24-curved_support: `ImportError: undefined`
-- ttt/ttt-24-SPO-06-Buffer_Stand: `NameError: full_round`
 - ttt/ttt-ppp0110: `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l`
 
 ## Timeouts
 
+- examples/heat_exchanger
 - docs/spitfire_wing_gordon
 
 ## Excluded (reference failed natively)
@@ -327,7 +327,6 @@ topology-selection properties, 1-D constrained objects, the
 | docs/objects_2d (ERROR, `Draft`) | `Draft` here is **not** the draft-angle operation (lite has had `draft()`/BRepOffsetAPI_DraftAngle for rounds) — it is `drafting.Draft`, the dimension-styling dataclass, and the script goes on to use `ExtensionLine`, `DimensionLine` and `TechnicalDrawing`. | n/a — the blocker is the whole `drafting` module (dimension lines with arrows, extension lines, label text and the drawing frame), 42 measured shapes deep. `ArrowHead`/`HeadType` are now implemented; the rest is not. | Deliberate gap, with the misidentification corrected: no kernel binding is missing here. |
 | ttt/ttt-24-SPO-06-Buffer_Stand (ERROR, `full_round`) | `full_round` replaces an edge with the arc of the largest empty circle that fits in the face. | Upstream generates the CANDIDATE centres with `scipy.spatial.Voronoi` (2-D) over 100 samples per edge and then averages the best three candidates — so the result depends on the exact candidate set. Lite's scipy shim raises for 2-D `Voronoi`/`ConvexHull` (qhull is not available; the 3-D hull is served by the bundled quickhull3d). | Deliberate gap, with the reason: it needs a 2-D Voronoi diagram. The honest route is a Delaunay triangulation (circumcentres ARE the Voronoi vertices), which would reproduce the same candidate SET; it is the next numerical method worth adding, not a defaults difference. |
 | ttt/ttt-23-02-02-sm_hanger (ERROR, was "no edges given" and un-triaged) | Two real gaps, in order: (1) `fillet(side_line.vertices(), 7)` is the **1-D** corner fillet of an open line (upstream's `Wire.fillet_2d` -> ChFi2d/Geom2dGcc), and (2) the script's shape comes from `make_brake_formed`, sheet-metal brake forming, which lite does not implement at all. | The misleading "no edges given" was itself a lite bug: `Builder.vertices()` read `self._obj`, which for a BuildLine only exists after `__exit__`, so a mid-context `side_line.vertices()` came back empty. The selectors now read the line built so far, and the fillet raises a message naming `Wire.fillet_2d`. | Triaged: two missing features (1-D wire fillet, brake forming), not a selector-result difference. |
-| docs/tutorial_joints, docs-selectors/filter_inner_wire_count (ERROR x2, `import_step`) | Both scripts import a STEP asset from a path next to `__file__` (`M6-1x12-countersunk-screw.step`, `nema-17-bracket.step`) and measure shapes derived from it (`m6_screw`, `bracket`, and 50 of its faces). | The worker has no filesystem: `os` is path arithmetic only, and the harness serves the built app over HTTP, not the build123d source tree. STEP READING itself exists (FileUtils' `STEPControl_Reader`), so the gap is asset delivery: it would need the harness to upload the file into the worker's MEMFS and `import_step` to read from there. | Deliberate gap (a harness/plumbing feature, not a defaults difference). `import_step` raises with that reason. |
 | ttt/ttt-23-t-24-curved_support (ERROR, `sympy`) | The part's dimensions are derived with sympy's symbolic solver. | n/a | Deliberate gap: shimming a symbolic algebra system is out of scope. |
 | docs/slide_latch (was MISMATCH, now PASS) | The open question — "does 0.11.1 localize `add(<global face>)` inside a face-workplane BuildSketch?" — is answered: **yes, conditionally.** `BuildSketch._add_to_context` expresses a face that is NOT coplanar with Plane.XY in its own plane's frame and drops it onto z = 0 (keeping the in-plane x/y offset), and then orients EVERY incoming face +Z. | Lite now performs the same two steps in `_combine`. | Closed: lite bug (missing sketch-face alignment). |
 | docs/heart_token (was MISMATCH, bbox 2.0 mm, now PASS) | Two lite bugs in one script: `offset(amount=2, kind=Kind.INTERSECTION)` on a SKETCH ran a 3-D `MakeOffsetShape` (thickening the sketch by ±2 in z) instead of upstream's 2-D wire offset, and `mirror(about=Plane.YZ)` inside a BuildSketch left TWO half faces because a mirrored face has a -Z normal and coplanar faces with opposite normals are not the same domain, so they never fused. | `offset()` now offsets the outer wire by +amount and each inner wire by -amount and rebuilds the planar face (upstream's face branch), and the sketch-face alignment above supplies the +Z orientation that lets the halves fuse (1 face, area 200.20972988622623 == upstream). | Closed: two lite bugs. |
@@ -335,3 +334,24 @@ topology-selection properties, 1-D constrained objects, the
 | docs-selectors/selectors_operators (was MISMATCH, bbox 6.0 mm, now PASS) | `line @ 2/3` parses as `(line @ 2) / 3` — Python's `@` has the same precedence as `/` — so the docs place objects at twice the line's end point divided by three. Lite CLAMPED `position_at` to [0, 1] and returned the end point. | Upstream extrapolates (`param_at`: "positions outside [0, 1] are not validated and yield OCCT-dependent results"); lite now does too. | Closed: lite bug. |
 | ttt/ttt-ppp0107 (was MISMATCH, -1.0% / -0.9%, now PASS) | The audit's guess ("two `extrude(until=)` intermediates") was WRONG: `zz`/`zz2` are a TAPERED extrude, `extrude(amount=15, taper=-10)`. Lite always used `LocOpe_DPrism`. | `Solid.extrude_taper` uses TWO algorithms: DPrism only for a POSITIVE taper along the profile normal with no holes, otherwise a LOFT between the profile wires and their 2-D offsets (`-length * tan(taper)`, Kind.INTERSECTION, inner wires flipped). A bare `taper=-10` rectangle now measures 2957.1391331767363 — bit-identical to the reference. | Closed: lite bug (one algorithm instead of two). |
 | every raw kernel error, everywhere (infrastructure, earlier round) | Emscripten throws OCCT's C++ exceptions as bare pointer NUMBERS. | The fork binds `OCJS::getStandard_FailureData` for exactly this, but it is UNCALLABLE here ("unbound types: St9exception"). | COMPROMISE(failure-decode): CascadeWorker keeps the wasm `Memory` via Emscripten's `instantiateWasm` hook and StandardUtils reads `Standard_Failure`'s message out of it directly. |
+
+### OCCT binding round: Geom2dGcc, quadrics, STEP assets, Voronoi, brake forming (this round)
+
+204 PASS -> **207 PASS**, 9 ERROR -> 6, and the two remaining
+`import_step`/`sm_hanger` scripts went ERROR -> MISMATCH. Four of the nine
+errors were blocked on the WASM build rather than on lite, so this round
+started in the fork: `builds/cascadestudio.yml`,
+`src/filter/filterMethodOrProperties.py` and a new hand-registered `OCJS_Out`
+helper class (see the fork's CHANGELOG).
+
+| Script(s) | Root cause | Upstream defaults vs lite | Verdict |
+|---|---|---|---|
+| docs/objects_1d_constrained, docs-rst/tutorial_constraints/b13 (PASS -> PASS, now on the REAL solvers) | Last round's verdict — "none of the `Geom2dGcc` family exists in this wasm build" — was right about the symptom and wrong about the cause. The classes were in the yml; every binding file in the `Geom2dGcc`/`GccAna` packages failed to COMPILE on one method, `WhichQualifier(Standard_Integer, GccEnt_Position&, GccEnt_Position&)`, whose non-const enum out-params Embind cannot bind (`bind.h:531`). One bad method takes the whole file down, and the build tolerated the failure silently. | The fork now filters any method with a non-const `GccEnt_Position&` parameter (the BSplCLib enum-out-param precedent), so `Geom2dGcc_Circ2d2TanRad`, `_Circ2d2TanOn`, `_Circ2d3Tan`, `_Circ2dTanCen`, `_Circ2dTanOnRad`, `_Lin2d2Tan` and `_Lin2dTanObl` are real here. `ConstrainedArcs`/`ConstrainedLines` are now a statement-for-statement port of build123d's `topology/constrained_lines.py` (kernel side in `StandardLibrary.js`: `ConstrainedArcs2D` / `ConstrainedLines2D`), including `_param_in_trim`, `_enclosed_circ_param_offset` and the Sagitta arc pair. The Tangency parameters come back through `OCJS_Out.<Solver>_Tangency<N>()`, because `Standard_Real&` out-params are passed BY VALUE through Embind. | Closed, and the closed-form stand-in is retired. **All five arc overloads and all three line overloads** were verified against the reference venv on the doc examples (`radius=`, `center_on=`, three-tangency, `center=`, `radius=`+`center_on=`, two-tangent lines, tangent+point, oriented line): worst bbox delta **1.8e-15 mm** over 8 result sets, with identical edge counts. |
+| docs-selectors/filter_nested & friends — COMPROMISE(curvature-sign) | `Face.is_circular_convex/_concave` needed the surface's own reference geometry, and `gp_Cylinder`/`gp_Sphere`/`gp_Torus` were unbound, so the sign came from the second fundamental form instead. | The three quadrics are bound now, so `_faceCurvatureSign` reads upstream's own reference (cylinder axis, sphere centre, torus core circle) and dots it against the oriented normal. The second-fundamental-form path is kept as the fallback for kernels without them. | COMPROMISE(curvature-sign) **retired**. |
+| Face.normal_at / location_at — COMPROMISE(point-projection) | `GeomAPI_ProjectPointOnSurf` was registered but not constructible: every constructor takes an `Extrema_ExtAlgo`, and the enum was unbound. Lite ran a 24x24 UV grid search refined by Newton. | `Extrema_ExtAlgo`/`Extrema_ExtFlag` are bound, and `LowerDistanceParameters(u&, v&)` is read back through `OCJS_Out`. The grid+Newton search is kept only as a fallback for the cases OCCT reports no solution for. | COMPROMISE(point-projection) **retired**. |
+| docs/tutorial_joints, docs-selectors/filter_inner_wire_count (ERROR x2, `import_step`) | Both import a STEP asset from a path next to `__file__`. The CAD worker has no filesystem. | The asset is now delivered ahead of the run instead of being read: `collect.py` records the CAD files a script names, `run-lite.mjs` reads them out of the clone, and `CascadeAPI.loadExternalFiles()` hands them to the worker's existing STEP-import path (MEMFS + `STEPControl_Reader`) and **awaits the import** before evaluating. `import_step` resolves the requested path by base name. | filter_inner_wire_count **PASS** (53 shapes; also needed `Face.radius`, `Face.axis_of_rotation`, `ShapeList.edge()/face()/wire()/vertex()/solid()`, and `Location(position, angles, Intrinsic/Extrinsic order)`). tutorial_joints **MISMATCH on `m6_screw` alone** — the other 7 shapes match to 1e-9; the screw is placed by `CylindricalJoint.relative_to(..., position=5, angle=30)` off `hole2`, and lite's hole-location enumeration puts it on a different hole frame. Joints now survive `Shape.moved` and `Compound(joints=)`, and `Joint.symbol`, `Shape.show_topology` and `Compound.do_children_intersect` are implemented. |
+| ttt/ttt-24-SPO-06-Buffer_Stand (ERROR, `full_round`) -> **PASS** | `full_round` picks the largest empty circle from the VORONOI VERTICES of 101 samples per edge over the target edge and its two neighbours, averages the best three, and rebuilds the face. | The scipy shim now has a real 2-D `Voronoi`: a Bowyer-Watson Delaunay whose circumcentres, deduplicated the way qhull's `Qbb Qc` merges cocircular ones, ARE the finite Voronoi vertices. Verified against scipy 1.18 on full_round's own inputs — the vertex SETS are identical (220 and 210 vertices, max deviation 2e-13) and the resulting circle centres agree to 1e-14. `full_round` itself is a statement-for-statement port, including the strict `<` best-three loop. Only `.vertices` is offered; the ridge/region attributes raise. | Closed. The script's own mass assert (3.923 lb ± 0.02) passes. |
+| ttt/ttt-23-02-02-sm_hanger (ERROR) -> MISMATCH | Two missing features: the 1-D corner fillet of an OPEN line (`Wire.fillet_2d`) and `make_brake_formed`. | Both ported. `Wire.fillet_2d` maps the wire into its own plane (upstream's `common_plane` + `to_local_coords`), fillets one corner at a time on **`ChFi2d_FilletAlgo`** — upstream's primary solver, now bound in the fork — and splices the arc between the two trimmed edges in connection order, with the Geom2dGcc tangent-arc solver as upstream's fallback. `make_brake_formed` is the upstream algorithm: `offset_2d(thickness, side)` for the section, a station edge per line vertex (the offset vertex exactly `thickness` away), `Face.extrude` by each width along the section plane's normal, and `sweep_multi` between consecutive stations, fused. | The part is now exact where it counts: the filleted `side_line` is 187.2428359925111 mm (bit-identical), the brake-formed side solid is **33201.973161 mm³ / 16 faces** against upstream's 33201.97324 / 16, and the script's own mass assert (1028 g ± 10) passes. The remaining MISMATCH is `l1`/`l2` only — a BuildLine on a non-XY workplane leaves its module-level line variables in LOCAL coordinates in lite, and the harness compares the last binding of a reused name. |
+| offset_2d Side.LEFT/RIGHT on a wire that is not parallel to Plane.XY (lite bug found by sm_hanger) | Upstream picks the side with `tangent.get_signed_angle(centre - start)`, a signed angle taken about the FIXED `-Z` reference. For a wire in Plane.XZ the cross product has no `-Z` component, so OCCT's `gp_Vec::AngleWithRef` falls back to the UNSIGNED angle (antiparallel is +180). Python's `atan2` returns **-180** for a negative zero, which flipped every LEFT/RIGHT pick on such wires. | `Vector.get_signed_angle` now returns the unsigned angle when the reference component is negligible, exactly as `AngleWithRef` does. | Closed: lite bug. The tab section then offsets to upstream's side (65.70796326552919 mm, bit-identical). |
+| PipeShellSweep profile wires (lite bug found by make_brake_formed) | `PipeShellSweep` rebuilt each profile wire by adding its edges ONE AT A TIME from a `TopExp_Explorer`, which is storage order — `BRepBuilderAPI_MakeWire` silently drops any edge that does not touch the wire built so far. A brake-formed section came out as a 3-face open shell instead of a 6-face solid. | The edges are added as a `TopTools_ListOfShape` so the builder can connect them in any order (the same call `WireFromEdgesFixed` already used). | Closed: lite bug. |
+| docs/objects_2d (ERROR, `Draft`) | Unchanged: the `drafting` module. | Scoped-out this round after measuring it: the port is ~450 code lines and its accuracy rides entirely on `Compound.make_text` glyph metrics, since `label_length = Text(...).bounding_box().size.X` feeds every arrow position and the 3-candidate label-placement score in `DimensionLine`. No OCCT binding is missing. | Deliberate gap, now sized. |

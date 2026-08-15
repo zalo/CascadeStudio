@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import { readAssets } from './run-lite.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
@@ -21,9 +22,12 @@ const PY_RUNTIME_QUERY = process.env.CS_PY_RUNTIME === 'pyodide' ? '?pyruntime=p
 
 const args = process.argv.slice(2);
 let code;
+let assets = null;
 if (args[0] === '--id') {
   const manifest = JSON.parse(readFileSync(join(HERE, 'manifest.json'), 'utf8'));
-  code = manifest.find((e) => e.id === args[1]).code;
+  const entry = manifest.find((e) => e.id === args[1]);
+  code = entry.code;
+  assets = readAssets(entry);
 } else {
   code = readFileSync(args[0], 'utf8');
 }
@@ -54,6 +58,10 @@ await page.goto(`http://localhost:${PORT}/${PY_RUNTIME_QUERY}`, { timeout: 60000
 await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(), undefined, { timeout: 90000 });
 await page.waitForFunction(() => !window.CascadeAPI.isWorking(), undefined, { timeout: 90000 });
 await page.evaluate(() => window.CascadeAPI.setMode('python'));
+if (assets) {
+  console.log('assets loaded:', await page.evaluate(
+    (a) => window.CascadeAPI.loadExternalFiles(a), assets));
+}
 await page.evaluate(async (c) => { return await window.CascadeAPI.runCode(c); }, code);
 try {
   await page.waitForFunction(

@@ -263,6 +263,19 @@ Revolve(profile, 360);`,
     ).join('\n');
   }
 
+  /** Load STEP/IGES/STL assets into the worker's `externalShapes` dict, keyed
+   *  by file name. This is how a script that reads a file next to itself gets
+   *  its data: the worker has no filesystem, so the asset is handed over
+   *  up-front and Python mode's `import_step(path)` resolves it by base name.
+   *  `files` is `{ "part.step": "<file text>", ... }`. */
+  async loadExternalFiles(files) {
+    const dict = {};
+    for (const name of Object.keys(files || {})) {
+      dict[name] = { content: files[name] };
+    }
+    return await this._app.engine.loadExternalFilesAwaited(dict);
+  }
+
   // Export formats
   getSTEP() { return this._app.engine.exportSTEP(); }
   getSTL() {

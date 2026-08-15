@@ -249,71 +249,78 @@ via BRepExtrema, `sort_by(<Edge|Wire>)`, `topo_distance_to`,
 defaults were corrected: `position_at` EXTRAPOLATES outside [0, 1] (`line @ 2/3`
 parses as `(line @ 2) / 3`), a full `CenterArc` is ONE closed edge,
 `copy.copy(<Builder>)` snapshots, `extrude(taper=)` follows both of upstream's
-algorithms, and `BuildSketch` localizes + orients (+Z) every incoming face:
+algorithms, and `BuildSketch` localizes + orients (+Z) every incoming face.
+Since the OCCT-binding round: OCCT's whole **`Geom2dGcc` 2-D constraint-solver
+family is real here** (the fork's binding files were failing to compile on one
+enum-out-param method — see its CHANGELOG), so `ConstrainedArcs`/
+`ConstrainedLines` are a statement-for-statement port of upstream's
+`topology/constrained_lines.py` across ALL overloads; `Wire.fillet_2d` (1-D
+corner fillets on `ChFi2d_FilletAlgo`) and `make_brake_formed` landed with it;
+`full_round` works on a real pure-Python 2-D `scipy.spatial.Voronoi`
+(Bowyer-Watson circumcentres, vertex-set-identical to scipy); `import_step`
+reads assets handed to the worker up front (`CascadeAPI.loadExternalFiles`);
+`gp_Cylinder`/`gp_Sphere`/`gp_Torus` and `Extrema_ExtAlgo` retired the
+`curvature-sign` and `point-projection` compromises; and joints gained
+`symbol`, survival through `Shape.moved`/`Compound(joints=)`,
+`Shape.show_topology` and `Compound.do_children_intersect`:
 
 | Area | Supported | Not supported |
 |---|---|---|
 | Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple workplanes, pending faces/edges/path), `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `add()` (incl. Locations-context replication into BuildLine), `Select.LAST`/`Select.NEW` for vertices/edges/faces/solids (upstream's `post - pre` bookkeeping; a builder gets a FRESH location context on entry, so an enclosing `Locations` never replicates its result), `Workplanes()` (shares the Locations fanout path — a plane basis IS its Location) | — |
 | 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Wedge`, `ConvexPolyhedron`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=`; partial `Sphere(r, a1, a2, a3)`; `Solid.extrude_linear_with_rotation` | partial cones |
-| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Triangle` (ported trianglesolver), `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotCenterPoint`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning, incl. `path=`/`position_on_path=`), `ArrowHead`/`HeadType`, `BaseSketchObject`/`BasePartObject` subclassing, `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points` | `Text(font_path=)`, the rest of `drafting` (`Draft`, `ExtensionLine`, `DimensionLine`, `TechnicalDrawing`) |
-| 1D objects | `Line`, `Polyline`, `PolarLine` (incl. `length_mode=` and a limit shape as `length=`), `FilletPolyline`, `IntersectingLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc` (a full one is ONE closed edge, like upstream), `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `BSpline` (EXACT poles/knots/multiplicities/weights), `DoubleTangentArc`, `BlendCurve` (C0/C1/C2), `Helix`, `EllipticalCenterArc`, `EllipticalStartArc`, `ParabolicCenterArc`/`HyperbolicCenterArc` (incl. the LIMIT form of `arc_size`), `Airfoil` (NACA 4-digit), `ConstrainedArcs`/`ConstrainedLines` (two circle/point targets, closed form — Tangency qualifiers, trim-range rejection and Sagitta selection), `curve @ u / % u / ^ u` (incl. multi-edge curves and EXTRAPOLATION outside [0, 1]), `Edge.make_line/make_circle/make_mid_way/make_spline/make_bspline/param_at/param_at_point/trim (by point)/trim_to_other`, `derivative_at`, `curvature_comb`, `Mixin1D.normal`, `Wire(edges)`, `Wire.order_edges`/`is_closed`/`param_at_point`, `Edge.arc_center`/`radius`/`is_interior`/`find_tangent`/`find_intersection_points` | `ConstrainedArcs`/`ConstrainedLines` beyond two circle/point targets (`center=`/`center_on=`/three-tangency/oriented lines — OCCT's Geom2dGcc solvers are unbound here), `Wire.fillet_2d` (1-D corner fillets), conical `Helix` |
-| Ops | `extrude` (dir/both/`taper=` — both of upstream's algorithms: LocOpe_DPrism for a positive taper along the normal, otherwise the offset loft — /`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset` (2-D FACE offsets follow upstream's outer/inner-wire branch), `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `edges_to_wires` | `full_round` (needs a 2-D Voronoi), `make_brake_formed`, `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
+| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Triangle` (ported trianglesolver), `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotCenterPoint`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning, incl. `path=`/`position_on_path=`), `ArrowHead`/`HeadType`, `BaseSketchObject`/`BasePartObject` subclassing, `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points`, `Face.radius`/`Face.axis_of_rotation` | `Text(font_path=)`, the rest of `drafting` (`Draft`, `ExtensionLine`, `DimensionLine`, `TechnicalDrawing`) |
+| 1D objects | `Line`, `Polyline`, `PolarLine` (incl. `length_mode=` and a limit shape as `length=`), `FilletPolyline`, `IntersectingLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc` (a full one is ONE closed edge, like upstream), `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `BSpline` (EXACT poles/knots/multiplicities/weights), `DoubleTangentArc`, `BlendCurve` (C0/C1/C2), `Helix`, `EllipticalCenterArc`, `EllipticalStartArc`, `ParabolicCenterArc`/`HyperbolicCenterArc` (incl. the LIMIT form of `arc_size`), `Airfoil` (NACA 4-digit), `ConstrainedArcs`/`ConstrainedLines` (ALL upstream overloads on OCCT's real Geom2dGcc solvers: `radius=`, `center_on=`, three-tangency, `center=`, `radius=`+`center_on=`, two-tangent lines, tangent+point, oriented lines — Tangency qualifiers, trim-range rejection and Sagitta selection), `curve @ u / % u / ^ u` (incl. multi-edge curves and EXTRAPOLATION outside [0, 1]), `Edge.make_line/make_circle/make_mid_way/make_spline/make_bspline/param_at/param_at_point/trim (by point)/trim_to_other`, `derivative_at`, `curvature_comb`, `Mixin1D.normal`, `Wire(edges)`, `Wire.order_edges`/`is_closed`/`param_at_point`, `Edge.arc_center`/`radius`/`is_interior`/`find_tangent`/`find_intersection_points` | conical `Helix` |
+| Ops | `extrude` (dir/both/`taper=` — both of upstream's algorithms: LocOpe_DPrism for a positive taper along the normal, otherwise the offset loft — /`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset` (2-D FACE offsets follow upstream's outer/inner-wire branch), `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `Wire.fillet_2d` (1-D corner fillets, ChFi2d_FilletAlgo), `make_brake_formed`, `full_round`, `edges_to_wires` | `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
 | Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `.position/.orientation/.x_axis/.y_axis/.z_axis`, `Axis(Location)`/`Axis(Plane)`, `Pos`, `Rot`/`Rotation`, `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations`, `Workplanes` (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`; shapes track a composed `.location` (`locate()/located()` are absolute; `.position` settable) | `Location.orientation` edge cases |
-| Joints | `RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint` — upstream's exact relative-location algebra; `connect_to` repositions the other part; `copy.copy` rebinds joints; builder-scoped joints transfer to the part on exit | assembly structure / XCAF (roadmap), joint `symbol` rendering |
+| Joints | `RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint` — upstream's exact relative-location algebra; `connect_to` repositions the other part; `copy.copy` AND `Shape.moved` rebind joints; `Compound(joints=)` reparents them; builder-scoped joints transfer to the part on exit; `Joint.symbol`, `Shape.show_topology`, `Compound.do_children_intersect`, `shape.parent = <compound>` | assembly structure / XCAF (roadmap) |
 | Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists (a Builder's selectors read the shape built SO FAR, which matters inside a BuildLine) (plus the module-level `edges()`/`vertices()`/… context getters and `Select.ALL/LAST/NEW` on every builder, `new_edges(*objects, combined=)`) with `filter_by` (Axis with DEGREES tolerance/GeomType/Plane/callable/class property), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy/class property incl. RADIUS, opt-in geometric `tie_break=`), `sort_by(<Edge|Wire>)` (parameter along that shape), `sort_by_distance` (MINIMAL distance), `topo_distance_to`, `GroupBy.group(key)`/`group_for`, slicing, `+` keeps ShapeList; `Face.center_location`/`position_at`/`is_circular_convex`/`is_circular_concave`, `Shape.distance`/`distance_to`/`closest_points` (BRepExtrema); Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
 | Canonical edges | `canonical()`/`canonical_form()` on Edge/Wire, `canonical_form(sampler, length, closed)`, `lexicographic_key`, `loop_area_vector`, `CanonicalForm`, `CANONICAL_SAMPLES`/`CANONICAL_BAND`, `Axis(edge, canonical=True)`, `Edge.reversed()`; `Edge.make_mid_way` canonicalizes its references (default-on) and `sort_by(..., tie_break=True)` breaks ties geometrically (opt-in) — defaults exactly as in the patch | automatic merging of C0-continuous free edges (out of scope upstream too — reassemble with `edges_to_wires` first) |
 | Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy`, `Shape.__iter__` | — |
 | Measure | `volume/area/length` (volume = per-solid sum), `center()`, `bounding_box()` (exact Bnd_Box), `.wrapped`, `.is_forward` | mass properties |
-| Stdlib | `math`, `copy` (incl. `copy.copy(<Builder>)` snapshots), `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `os` (PATH ARITHMETIC ONLY — `os.path.join/dirname/abspath/...`, `getcwd`; no filesystem is faked, `os.path.exists` is always False), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d), `pytest.approx` (real, documented tolerances) | `numpy`, `sympy`, the rest of `pytest`, 2-D `ConvexHull`/`Voronoi` (raise loudly), everything else |
-| Export | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS) | 3MF (no lib3mf — raises), `export_step/gltf` (no-ops), `ExportDXF`, imports |
+| Stdlib | `math`, `copy` (incl. `copy.copy(<Builder>)` snapshots), `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `os` (PATH ARITHMETIC ONLY — `os.path.join/dirname/abspath/...`, `getcwd`; no filesystem is faked, `os.path.exists` is always False), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d), `scipy.spatial.Voronoi` (2-D, Bowyer-Watson Delaunay circumcentres — `.vertices` only, verified vertex-set-identical to scipy on full_round's inputs), `pytest.approx` (real, documented tolerances) | `numpy`, `sympy`, the rest of `pytest`, 2-D `ConvexHull`, Voronoi ridges/regions (raise loudly), everything else |
+| Export/import | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS), `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | 3MF (no lib3mf — raises), `export_step/gltf` (no-ops), `ExportDXF`, `import_stl`/`import_svg` |
 
 **Known honest gaps** (kept as ERRORs rather than fake geometry — see the
 defaults-audit table in report.md for per-script root causes and
-upstream-vs-lite defaults comparisons): the `ConstrainedArcs`/`ConstrainedLines`
-overloads beyond two circle/point targets (`center=`, `center_on=`,
-three-tangency, oriented lines — OCCT's whole `Geom2dGcc` family is DECLARED in
-the .d.ts but not registered at runtime here, and so is `GccEnt`; the two-target
-radius case IS implemented in closed form with upstream's qualifier/trim/Sagitta
-semantics, but the remaining overloads produce solution SETS that feed a user
-`selector`, so guessing an enumeration would be guessing the answer), the
-`drafting` module
-beyond `ArrowHead` (`Draft`, `ExtensionLine`, `DimensionLine`,
-`TechnicalDrawing` — `Draft` in docs/objects_2d is the dimension-styling
-dataclass, NOT the draft-angle operation, which lite has had for rounds),
-`import_step` (STEP reading exists in FileUtils, but the worker has no
-filesystem and the harness serves the built app rather than the build123d
-source tree, so the asset never reaches MEMFS), `full_round` (needs a 2-D
-Voronoi diagram: upstream generates the largest-empty-circle CANDIDATES with
-scipy's qhull Voronoi and averages the best three, so the result depends on the
-candidate set — a Delaunay triangulation would reproduce it, and that is the
-next numerical method worth adding), `Wire.fillet_2d` (1-D corner fillets) and
-`make_brake_formed` (both needed by ttt-23-02-02-sm_hanger), `sympy`, 3MF
-export (no lib3mf in this wasm build — dual_color_3mf builds all six of its
-shapes correctly and then fails on `Mesher.write`),
-`fix_degenerate_edges`/`offset(min_edge_length=)` and `split(Keep.BOTH)`.
-`docs/spitfire_wing_gordon` is a TIMEOUT, not a gap: it now runs (real
+upstream-vs-lite defaults comparisons): the `drafting` module beyond
+`ArrowHead` (`Draft`, `ExtensionLine`, `DimensionLine`, `TechnicalDrawing` —
+`Draft` in docs/objects_2d is the dimension-styling dataclass, NOT the
+draft-angle operation, which lite has had for rounds; the port is ~450 code
+lines whose accuracy rides entirely on `Compound.make_text` glyph metrics,
+since `Text(...).bounding_box().size.X` feeds every arrow position and
+`DimensionLine`'s 3-candidate label placement), `sympy`, 3MF export (no lib3mf
+in this wasm build — dual_color_3mf builds all six of its shapes correctly and
+then fails on `Mesher.write`), `fix_degenerate_edges`/`offset(min_edge_length=)`
+and `split(Keep.BOTH)`.
+`docs/spitfire_wing_gordon` is a TIMEOUT, not a gap: it runs (real
 `pytest.approx` shim) and spends ~390 s building the wing's Gordon surface
 before returning a null surface — the cost/robustness of
-COMPROMISE(gordon-surface-realization) at that scale. Two scripts die on KNOWN
-OCCT 8.0.1 wasm kernel faults with byte-identical defaults to upstream: the
-truck-body `FilletEdges` (toy_truck) and the coplanar-BSpline fuse operand drop
-that even the General-Fuse rebuild cannot recover (ttt-ppp0110). NOTE for the
-record: the OTHER "kernel fillet fault", cast_bearing_unit, turned out to be a
-LITE bug — a simplified convex hull handing hundreds of micro-edges to
-BRepFilletAPI — and now passes, together with docs-rst/tips/b01.
-The 8 remaining MISMATCHes are all traversal/orientation history:
-COMPROMISE(edge-orientation) for joints x2, projection x2 and
-docs-selectors/sort_axis (sub-edge FORWARD/REVERSED flags and hence `Axis(edge)`
-differ from OCP 7.x over identical curve geometry),
+COMPROMISE(gordon-surface-realization) at that scale. `examples/heat_exchanger`
+sits right at the 60 s harness budget (~55 s on an idle machine) and times out
+when the four harness pages contend; it passes on its own.
+Two scripts die on KNOWN OCCT 8.0.1 wasm kernel faults with byte-identical
+defaults to upstream: the truck-body `FilletEdges` (toy_truck) and the
+coplanar-BSpline fuse operand drop that even the General-Fuse rebuild cannot
+recover (ttt-ppp0110). NOTE for the record: the OTHER "kernel fillet fault",
+cast_bearing_unit, turned out to be a LITE bug — a simplified convex hull
+handing hundreds of micro-edges to BRepFilletAPI — and now passes, together
+with docs-rst/tips/b01.
+The remaining MISMATCHes are traversal/orientation history plus two
+single-shape residuals: COMPROMISE(edge-orientation) for joints x2, projection
+x2 and docs-selectors/sort_axis (sub-edge FORWARD/REVERSED flags and hence
+`Axis(edge)` differ from OCP 7.x over identical curve geometry),
 COMPROMISE(traversal-order) for docs-selectors/filter_all_edges_circle (the
 script keeps the LAST of a mirror-symmetric face pair) and docs-rst/tips/b04 (a
 `sort_by(Axis.Z)` over local sketch vertices that is a COMPLETE tie, so the
-kernel's enumeration decides), and COMPROMISE(triad-labels) for
-docs/objects_1d. Canonical free edges (below) shrank two of joints' three
-residuals (pin_arm 8.16 -> 2.69 mm, slider_arm 11.80 -> 9.11 mm) without
-changing any classification; closing the rest needs the examples to opt into
-`sort_by(..., tie_break=True)` / `Axis(edge, canonical=True)`, which is opt-in
-upstream too.
+kernel's enumeration decides), COMPROMISE(triad-labels) for docs/objects_1d,
+`m6_screw` alone in docs/tutorial_joints (a `CylindricalJoint` hole frame), and
+`l1`/`l2` alone in ttt-23-02-02-sm_hanger (a BuildLine on a non-XY workplane
+leaves its module-level line variables in LOCAL coordinates in lite, and the
+harness compares the last binding of a reused name). Canonical free edges
+(below) shrank two of joints' three residuals (pin_arm 8.16 -> 2.69 mm,
+slider_arm 11.80 -> 9.11 mm) without changing any classification; closing the
+rest needs the examples to opt into `sort_by(..., tie_break=True)` /
+`Axis(edge, canonical=True)`, which is opt-in upstream too.
 
 **Known compromises** (each marked in source with a grep-able
 `COMPROMISE(<topic>)` comment — `grep -rn "COMPROMISE(" packages/` is the
@@ -327,14 +334,12 @@ authoritative list):
 - `helix` — exact interpolation through dense samples with analytic tangents (no surface-curve segment type).
 - `edge-orientation` — sub-edge FORWARD/REVERSED can differ from OCP 7.x over identical curve geometry; Axis(edge)-based measuring lands at the other end (joints x2, sort_axis) and closed intersection-curve paths traverse the opposite way (projection x2).
 - `traversal-order` — where a script keeps whichever of two SYMMETRIC results the kernel enumerated last (filter_all_edges_circle) or resolves a completely TIED `sort_by` (tips/b04), the answer follows OCCT's traversal of lite's construction, not OCP 7.x's of upstream's. `sort_by(..., tie_break=True)` makes it deterministic, and is opt-in upstream too.
-- `curvature-sign` — `Face.is_circular_convex`/`_concave` need the surface's own reference geometry (a gp_Cylinder's axis, a gp_Sphere's centre, a gp_Torus's core circle); those three classes are unbound here, so the same sign comes from the second fundamental form (`S_dd . N < 0` is exactly upstream's `normal . (P - reference) > 0` for these quadrics), taking the parameter direction with the larger |curvature| — the circular direction of a cylinder, the tube direction of a torus.
 - `thicken` — upstream's BRepOffset_MakeOffset Thickening mode is unbound; the same offset shell is built via MakeThickSolidByJoin and the missing side walls are reconstructed as ruled lofts + sewing.
 - `project` — only the BuildPart pending-faces form; projected pending planes use the reversed projection direction (validated on maker_coin).
 - `text` — bundled FreeSans only; non-Latin glyph metrics may differ from other Arial substitutes.
 - `raw-segments` — non-line/circle edges ride through wires as opaque TopoDS edges (exact, but not transformable at spec level).
 - `volume-measure` — volume is summed per solid (8.0.1's VolumeProperties picks up stray-face contributions on mixed compounds).
 - `gordon-*` (GordonSurface.js) — the ocp_gordon port: curve/curve intersections via GeomAPI_ExtremaCurveCurve, a JS Geom2dAPI_Interpolate reimplementation, conic→non-rational approximation, and `gordon-surface-realization` (the exact tensor-product surface cannot be built as a Geom_BSplineSurface in this wasm build, so it is refit from a dense sample grid with a C2 least-squares approximation scored against the exact surface's area — bracelet's tip lands within 0.02%).
-- `point-projection` — GeomAPI_ProjectPointOnSurf cannot be instantiated (its Extrema_ExtAlgo argument is unbound), so point→UV is a coarse UV grid search refined by Newton on grad|S(u,v)-P|^2, searching the face's own UV box.
 - `projection-sort` / `projected-edge-split` — projected wires are ordered by centre of mass (upstream uses the half-arc-length point), and a projected curve that this kernel splits where it grazes the surface boundary is re-concatenated (build123d's clean() leaves the B-spline-concat flag off).
 - `edges-to-wires` — ShapeAnalysis_FreeBounds::ConnectEdgesToWires needs the unbound TopTools_HSequenceOfShape, so edges are chained on their endpoints and each group is ordered by ShapeFix_Wire.
 - `failure-decode` — OCCT's C++ exceptions arrive in JS as raw pointer numbers. The fork binds `OCJS::getStandard_FailureData` for exactly this, but it is UNCALLABLE here ("unbound types: St9exception" — `Standard_Failure` derives from `std::exception`, which the build never registers) and no runtime helpers (`HEAPU8`/`getValue`/`UTF8ToString`) are exported, so CascadeWorker keeps the wasm `Memory` via Emscripten's `instantiateWasm` hook and StandardUtils reads `Standard_Failure`'s `StringRef` message out of it directly. Users see e.g. "the OCCT kernel raised 'BRep_API: command not done'" instead of "threw '6454200'".
@@ -654,7 +659,11 @@ must evaluate with zero errors. `saveProject()` serializes `mode` alongside the 
 
 ## Key Dependencies
 
-- **opencascade.js**: Custom fork of OCCT 8.0.0 RC4 compiled with emsdk 4.0.23
+- **opencascade.js**: Custom fork of OCCT 8.0.1 compiled with emsdk 4.0.23
+  (branch `cascadestudio-v3-occt801` of the fork checkout; the build pipeline
+  and the reason each hand-registered symbol exists are in its CHANGELOG.md.
+  The worker cross-checks `USED_OCCT_SYMBOLS` against the module at startup, so
+  a renumbered overload or a silently-dropped binding fails loudly.)
   - See `node_modules/opencascade.js/CLAUDE.md` for build details
 - **Three.js r170**: 3D rendering (matcap material, OrbitControls)
   - `THREE.ColorManagement.enabled = false` for legacy rendering

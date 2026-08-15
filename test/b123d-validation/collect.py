@@ -226,6 +226,23 @@ SCRIPT_DIRS = [
 ]
 
 
+ASSET_EXTS = (".step", ".stp", ".stl", ".iges", ".igs")
+
+
+def script_assets(reldir, code):
+    """CAD files the script imports from its own directory.
+
+    The reference run gets these as symlinks; the lite run has no filesystem,
+    so run-lite.mjs reads them out of the clone and hands the content to the
+    worker (CascadeAPI.loadExternalFiles) before evaluating. Only files whose
+    name actually appears in the source are listed."""
+    absdir = os.path.join(B123D_SRC, reldir)
+    if not os.path.isdir(absdir):
+        return []
+    return sorted(f for f in os.listdir(absdir)
+                  if f.lower().endswith(ASSET_EXTS) and f in code)
+
+
 def collect_script_dirs(manifest):
     for reldir, prefix, kind in SCRIPT_DIRS:
         absdir = os.path.join(B123D_SRC, reldir)
@@ -245,6 +262,9 @@ def collect_script_dirs(manifest):
                 # (STEP assets, output directories) are symlinked next to the
                 # script by reference.py
                 "data_dir": reldir,
+                # CAD assets the script imports, delivered to the worker by
+                # run-lite.mjs (the worker has no filesystem)
+                "assets": script_assets(reldir, code),
             })
 
 

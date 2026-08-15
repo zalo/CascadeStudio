@@ -24,9 +24,7 @@
 //  * Spline()/Edge.make_spline INTERPOLATE exactly (GeomAPI_Interpolate,
 //    incl. tangents=/tangent_scalars=/per-point tangents/periodic).
 //  * Unsupported (raise NotImplementedError rather than fake geometry):
-//    ConstrainedArcs/ConstrainedLines (OCCT's Geom2dGcc solvers are unbound in
-//    this build), the drafting module beyond ArrowHead, Wire.fillet_2d,
-//    make_brake_formed, full_round (needs a 2-D Voronoi), partial cones,
+//    the drafting module beyond ArrowHead, partial cones,
 //    split(keep=Keep.BOTH), offset(min_edge_length=) (no
 //    fix_degenerate_edges), Kind.TANGENT offsets, 3MF export, imports.
 //  * Boolean results are cleaned with ShapeUpgrade_UnifySameDomain (the
@@ -49,6 +47,11 @@ M = 1000.0
 IN = 25.4
 FT = 304.8
 THOU = 0.0254
+# mass units (build123d build_common): grams, used by the Too Tall Toby
+# challenge scripts to convert a volume into a mass check
+G = 1.0
+KG = 1000.0
+LB = 453.59237
 
 _TOL = 1e-9
 _TOL_1E6 = 1e-6      # build123d's TOLERANCE
@@ -69,6 +72,40 @@ class Align:
     CENTER = 'CENTER'
     MAX = 'MAX'
     NONE = None
+
+
+class Intrinsic:
+    """Order to apply INTRINSIC rotations by axis (build123d Intrinsic; each
+    rotation is about the already-rotated frame)."""
+    XYZ = 'XYZ'
+    XZY = 'XZY'
+    YZX = 'YZX'
+    YXZ = 'YXZ'
+    ZXY = 'ZXY'
+    ZYX = 'ZYX'
+    XYX = 'XYX'
+    XZX = 'XZX'
+    YZY = 'YZY'
+    YXY = 'YXY'
+    ZXZ = 'ZXZ'
+    ZYZ = 'ZYZ'
+
+
+class Extrinsic:
+    """Order to apply EXTRINSIC rotations by axis (build123d Extrinsic; every
+    rotation is about the FIXED frame)."""
+    XYZ = 'xXYZ'
+    XZY = 'xXZY'
+    YZX = 'xYZX'
+    YXZ = 'xYXZ'
+    ZXY = 'xZXY'
+    ZYX = 'xZYX'
+    XYX = 'xXYX'
+    XZX = 'xXZX'
+    YZY = 'xYZY'
+    YXY = 'xYXY'
+    ZXZ = 'xZXZ'
+    ZYZ = 'xZYZ'
 
 
 class Keep:
@@ -345,7 +382,18 @@ class Vector:
         (default -Z, like build123d): atan2((Va x Vb) . Vn, Va . Vb)."""
         n = Vector(0, 0, -1) if normal is None else Vector(normal)
         b = Vector(vec)
-        return math.degrees(math.atan2(self.cross(b).dot(n), self.dot(b)))
+        reference = self.cross(b).dot(n)
+        scale = self.length * b.length * n.length
+        if abs(reference) <= 1e-12 * max(scale, _TOL_1E6):
+            # OCCT's gp_Vec::AngleWithRef falls back to the UNSIGNED angle when
+            # the cross product has no component along the reference (the two
+            # vectors are parallel, or the plane they span is perpendicular to
+            # it), so antiparallel is +180, never -180. Python's atan2 would
+            # return -180 for a negative zero and silently flip every
+            # comparison built on this (offset_2d's Side.LEFT/RIGHT pick).
+            return math.degrees(math.acos(
+                max(-1.0, min(1.0, self.normalized().dot(b.normalized())))))
+        return math.degrees(math.atan2(reference, self.dot(b)))
 
     def reverse(self):
         return -self
@@ -718,6 +766,32 @@ def _rot_mat(rx, ry, rz):
     return _mat_mul(_mat_mul(Rx, Ry), Rz)
 
 
+def _euler_mat(angles, order, intrinsic=True):
+    """Rotation matrix for an arbitrary Euler sequence (build123d's
+    Intrinsic/Extrinsic orders, which map onto gp_EulerSequence). Intrinsic
+    applies each rotation about the ALREADY-ROTATED frame, i.e. the matrices
+    multiply left-to-right; extrinsic multiplies right-to-left about the fixed
+    frame."""
+    axes = {'X': lambda a: ((1.0, 0.0, 0.0),
+                            (0.0, math.cos(a), -math.sin(a)),
+                            (0.0, math.sin(a), math.cos(a))),
+            'Y': lambda a: ((math.cos(a), 0.0, math.sin(a)),
+                            (0.0, 1.0, 0.0),
+                            (-math.sin(a), 0.0, math.cos(a))),
+            'Z': lambda a: ((math.cos(a), -math.sin(a), 0.0),
+                            (math.sin(a), math.cos(a), 0.0),
+                            (0.0, 0.0, 1.0))}
+    R = _MAT_I
+    letters = list(order)
+    values = [math.radians(a) for a in angles]
+    if not intrinsic:
+        letters = list(reversed(letters))
+        values = list(reversed(values))
+    for letter, value in zip(letters, values):
+        R = _mat_mul(R, axes[letter](value))
+    return R
+
+
 def _axis_angle_mat(axis, degrees):
     """Rotation matrix from axis + angle (Rodrigues)."""
     x, y, z = Vector(axis).normalized()
@@ -788,9 +862,19 @@ class Location:
                 r = _v3(r)
                 self._R = _rot_mat(r[0], r[1], r[2])
         elif len(args) == 3:
-            # Location(position, rotation_axis, angle_degrees)
-            self._t = _v3(args[0])
-            self._R = _axis_angle_mat(args[1], args[2])
+            if isinstance(args[2], str):
+                # Location(position, (rx, ry, rz), Intrinsic/Extrinsic order)
+                # - build123d's Euler-sequence form (gp_EulerSequence)
+                order = args[2]
+                intrinsic = not order.startswith('x')
+                self._t = _v3(args[0])
+                self._R = _euler_mat(_v3(args[1]),
+                                     order[1:] if not intrinsic else order,
+                                     intrinsic)
+            else:
+                # Location(position, rotation_axis, angle_degrees)
+                self._t = _v3(args[0])
+                self._R = _axis_angle_mat(args[1], args[2])
         else:
             raise TypeError('Location: unsupported arguments')
 
@@ -867,6 +951,12 @@ class Location:
                 return other
             moved = _wrap_like(other, self._apply_topo(other.topo))
             moved._loc = self * other.location
+            # build123d's Shape.moved deep-copies the shape, so its JOINTS come
+            # along rebound to the copy (copy_attributes_to); their frames are
+            # relative to the parent, so they follow the move automatically.
+            if other.joints:
+                moved.joints = {k: j._lite_rebind(moved)
+                                for k, j in other.joints.items()}
             if isinstance(moved, Curve) and moved._specs:
                 # keep segment data consistent with the moved geometry so
                 # make_face()/sweep() can still chain the result exactly
@@ -1214,6 +1304,7 @@ class Shape:
         self.label = ''
         self.color = None
         self.children = []
+        self._parent = None
         # build123d tracks a top-level Location on every shape; lite bakes
         # transforms into geometry but keeps the equivalent composed Location
         # here so joints / locate() / .position can reason about frames.
@@ -1224,6 +1315,23 @@ class Shape:
     def wrapped(self):
         """The underlying raw (JS/OCCT) shape — build123d compat."""
         return self.topo
+
+    @property
+    def parent(self):
+        return self._parent
+
+    @parent.setter
+    def parent(self, value):
+        """Attaching a shape to a parent ADDS it to the parent's children -
+        build123d's assembly tree is anytree, where setting .parent is how a
+        node joins the tree (tutorial_joints does exactly this with the M6
+        screw). COMPROMISE(joints) still holds: there is no anytree, only the
+        parent/children links that Compound walks."""
+        if self._parent is not None and self in self._parent.children:
+            self._parent.children.remove(self)
+        self._parent = value
+        if value is not None and self not in value.children:
+            value.children.append(self)
 
     # --- location bookkeeping (baked geometry + tracked frame) ---
     @property
@@ -1596,6 +1704,128 @@ class Shape:
         view_dir = (target - vo).normalized()
         vis, hid = w.HLRProject(self.topo, list(view_dir))
         return (Curve(vis).edges(), Curve(hid).edges())
+
+    def show_topology(self, limit_class='Vertex', show_center=None):
+        """Tree rendering of the internal structure (build123d
+        Shape.show_topology). This is a DIAGNOSTIC string - no geometry rides
+        on it - so it reproduces upstream's shape (labels, box-drawing prefix,
+        centre or Location per node) without promising byte parity of the
+        pointer values upstream prints."""
+        order = ['Compound', 'Solid', 'Shell', 'Face', 'Wire', 'Edge',
+                 'Vertex']
+        getters = {'Solid': 'solids', 'Shell': 'shells', 'Face': 'faces',
+                   'Wire': 'wires', 'Edge': 'edges', 'Vertex': 'vertices'}
+        if limit_class in order:
+            limit = order.index(limit_class)
+        else:
+            limit = len(order) - 1
+        lines = []
+
+        def describe(shape, label):
+            name = type(shape).__name__
+            use_center = show_center
+            if use_center is None:
+                use_center = not shape.children
+            where = None
+            if use_center:
+                try:
+                    c = shape.center()
+                    where = 'Center(' + str(c.X) + ', ' + str(c.Y) + ', ' + \
+                        str(c.Z) + ')'
+                except Exception:
+                    where = None
+            if where is None:
+                where = 'Location(' + str(shape.location) + ')'
+            prefix = ''
+            if label:
+                prefix = label + ' '
+            return prefix + name + ' at ' + where
+
+        def children_of(shape):
+            kids = [k for k in shape.children if isinstance(k, Shape)]
+            if kids:
+                return kids
+            name = type(shape).__name__
+            if name in order:
+                start = order.index(name) + 1
+            else:
+                start = 1
+            for level in order[start:limit + 1]:
+                getter = getters.get(level)
+                if getter is None:
+                    continue
+                try:
+                    kids = list(getattr(shape, getter)())
+                except Exception:
+                    kids = []
+                if kids:
+                    return kids
+            return []
+
+        def walk(shape, label, prefix, is_last, is_root, depth=0):
+            if depth > 8 or len(lines) > 5000:
+                return                     # guard: diagnostics, not geometry
+            if is_root:
+                root_label = ''
+                if label:
+                    root_label = label + ' is the root'
+                lines.append(describe(shape, root_label))
+                child_prefix = ''
+            else:
+                branch = '\u251c\u2500\u2500 '
+                if is_last:
+                    branch = '\u2514\u2500\u2500 '
+                lines.append(prefix + branch + describe(shape, label))
+                if is_last:
+                    child_prefix = prefix + '    '
+                else:
+                    child_prefix = prefix + '\u2502   '
+            kids = children_of(shape)
+            for i, kid in enumerate(kids):
+                if kid is shape:
+                    continue
+                walk(kid, getattr(kid, 'label', ''), child_prefix,
+                     i == len(kids) - 1, False, depth + 1)
+
+        walk(self, self.label, '', True, True)
+        return '\\n'.join(lines)
+
+    def do_children_intersect(self, include_parent=False, tolerance=1e-5):
+        """Do any of this assembly's children overlap (build123d
+        Compound.do_children_intersect)? Same algorithm: a pre-order walk of
+        the tree, a bounding-box pre-filter, then a real Intersection whose
+        solid volume must exceed the tolerance."""
+        nodes = []
+
+        def preorder(shape, depth=0):
+            if depth > 8:
+                return
+            nodes.append(shape)
+            for kid in shape.children:
+                if isinstance(kid, Shape) and kid is not shape:
+                    preorder(kid, depth + 1)
+
+        preorder(self)
+        if not include_parent:
+            nodes.pop(0)
+        boxes = [n.bounding_box() for n in nodes]
+        for i in range(len(nodes)):
+            for j in range(i + 1, len(nodes)):
+                a, b = boxes[i], boxes[j]
+                if (a.max.X < b.min.X or b.max.X < a.min.X or
+                        a.max.Y < b.min.Y or b.max.Y < a.min.Y or
+                        a.max.Z < b.min.Z or b.max.Z < a.min.Z):
+                    continue
+                try:
+                    common = nodes[i].intersect(nodes[j])
+                except Exception:
+                    common = None
+                if common is None or common.topo is None:
+                    continue
+                volume = sum([s.volume for s in common.solids()])
+                if volume > tolerance:
+                    return (True, (nodes[i], nodes[j]), volume)
+        return (False, (None, None), 0.0)
 
     def is_valid(self):
         return self.topo is not None
@@ -2211,6 +2441,18 @@ class Curve(Shape):
 
 
 Solid = Part
+def _wire_combine(cls, wires, tol=1e-9):
+    """Group edges/wires into the largest possible wires (build123d
+    Wire.combine): the same connectivity grouping edges_to_wires does, which is
+    what ShapeAnalysis_FreeBounds::ConnectEdgesToWires computes upstream."""
+    edges = []
+    for item in _tolist(wires):
+        edges.extend(item.edges() if not isinstance(item, Edge) else [item])
+    return edges_to_wires(edges, max(tol, 1e-9))
+
+
+Curve.combine = classmethod(_wire_combine)
+
 Wire = Curve
 
 
@@ -2252,6 +2494,13 @@ class Compound(Shape):
         Shape.__init__(self, topo)
         self.label = label
         self.children = _tolist(children)
+        # Compound(..., joints=<dict>) — build123d's Compound.__init__ adopts a
+        # joint dict and REPARENTS every joint onto the new compound. This is
+        # how a Compound subclass built from a builder keeps the joints the
+        # builder collected (tutorial_joints' Hinge).
+        joints = kwargs.get('joints')
+        if joints:
+            self.joints = {k: j._lite_rebind(self) for k, j in joints.items()}
 
     @classmethod
     def make_text(cls, txt, font_size, font='Arial', font_path=None,
@@ -2548,6 +2797,33 @@ class Edge(Curve):
         return cls(topo)
 
     @classmethod
+    def make_three_point_arc(cls, p1, p2, p3):
+        """Circular arc through three points (build123d
+        Edge.make_three_point_arc / GC_MakeArcOfCircle)."""
+        wire = w.WireFromSegments([('arc3', [list(_v3(p1)), list(_v3(p2)),
+                                             list(_v3(p3))])])
+        return Curve(wire).edges()[0]
+
+    def split(self, plane, keep=None):
+        """The part of this edge on the +z_dir side of a plane (build123d
+        Mixin1D.split, Keep.TOP default). Returns None when nothing is left."""
+        pieces = []
+        u = _edge_plane_crossing(self, plane)
+        if u is None:
+            side = plane.to_local_coords(self.position_at(0.5)).Z
+            return self if side >= -_TOL_1E6 else None
+        for a, b in ((0.0, u), (u, 1.0)):
+            if b - a <= _TOL_1E6:
+                continue
+            piece = self.trim(a, b)
+            mid = plane.to_local_coords(piece.position_at(0.5)).Z
+            if mid >= -_TOL_1E6:
+                pieces.append(piece)
+        if not pieces:
+            return None
+        return pieces[0] if len(pieces) == 1 else pieces
+
+    @classmethod
     def make_line(cls, p1, p2):
         """Linear edge between two points (build123d Edge.make_line)."""
         seg = ('line', [list(_v3(p1)), list(_v3(p2))])
@@ -2599,6 +2875,28 @@ def _reverse_1d(shape):
         return Edge(w.ReverseEdgeOrWire(edges[0].topo))
     return Curve(w.WireFromEdgesFixed(
         [w.ReverseEdgeOrWire(e.topo) for e in edges[::-1]], _TOL_1E6))
+
+
+def _edge_plane_crossing(edge, plane, samples=64):
+    """The normalized parameter at which an edge crosses a plane (the sign of
+    the LOCAL z flips), refined by bisection; None when it never crosses."""
+    def height(u):
+        return plane.to_local_coords(edge.position_at(u)).Z
+    prev_u, prev_h = 0.0, height(0.0)
+    for i in range(1, samples + 1):
+        u = i / samples
+        h = height(u)
+        if (prev_h < 0.0) != (h < 0.0):
+            lo, hi = prev_u, u
+            for _ in range(60):
+                mid = (lo + hi) / 2.0
+                if (height(lo) < 0.0) != (height(mid) < 0.0):
+                    hi = mid
+                else:
+                    lo = mid
+            return (lo + hi) / 2.0
+        prev_u, prev_h = u, h
+    return None
 
 
 def _split_1d_at_point(shape, point):
@@ -2808,9 +3106,9 @@ class Face(Shape):
         """Signed reference distance between the face's centre and its
         underlying geometry's reference point — positive convex, negative
         concave, 0.0 for surfaces that are not a cylinder/sphere/torus
-        (build123d Face._curvature_sign; see COMPROMISE(curvature-sign) in
-        StandardLibrary._faceCurvatureSign for how the reference is found in
-        this wasm build)."""
+        (build123d Face._curvature_sign; StandardLibrary._faceCurvatureSign
+        reads the surface's own gp_Cylinder/gp_Sphere/gp_Torus reference, which
+        the fork binds as of the Geom2dGcc round)."""
         return w._faceCurvatureSign(self.topo)
 
     @property
@@ -2828,6 +3126,22 @@ class Face(Shape):
     def offset(self, amount):
         """The face's plane offset by amount (build123d Face.offset)."""
         return Plane(self).offset(amount)
+
+    @property
+    def radius(self):
+        """Radius of a cylindrical or spherical face, else None (build123d
+        Face.radius, read off the surface's own gp_Cylinder/gp_Sphere)."""
+        return w._faceRadius(self.topo)
+
+    @property
+    def axis_of_rotation(self):
+        """Rotational axis of a cone/cylinder/sphere/torus/revolution face,
+        else None (build123d Face.axis_of_rotation)."""
+        ax = w._faceAxisOfRotation(self.topo)
+        if ax is None:
+            return None
+        origin, direction = list(ax[0]), list(ax[1])
+        return Axis(tuple(origin), tuple(direction))
 
     def outer_wire(self):
         """The face's outer boundary wire (BRepTools::OuterWire)."""
@@ -3687,6 +4001,33 @@ class ShapeList(list):
         for s in self:
             out.extend(s.vertices())
         return out
+
+    def solids(self):
+        out = ShapeList()
+        for s in self:
+            out.extend(s.solids())
+        return out
+
+    def _single(self, kind, items):
+        if len(items) != 1:
+            raise ValueError('Expected exactly one ' + kind + ', found ' +
+                             str(len(items)))
+        return items[0]
+
+    def edge(self):
+        return self._single('edge', self.edges())
+
+    def face(self):
+        return self._single('face', self.faces())
+
+    def wire(self):
+        return self._single('wire', self.wires())
+
+    def vertex(self):
+        return self._single('vertex', self.vertices())
+
+    def solid(self):
+        return self._single('solid', self.solids())
 
 
 class GroupBy:
@@ -5898,213 +6239,51 @@ def EllipticalStartArc(start_pnt, start_tangent, x_radius, y_radius, arc_size,
 
 
 # ------------------------------------------- constrained arcs and lines ---
-# build123d's ConstrainedArcs/ConstrainedLines drive OCCT's 2-D geometric
-# constraint solvers (Geom2dGcc_Circ2d2TanRad, _Circ2d2TanOn, _Circ2d3Tan,
-# _Circ2dTanCen, _Circ2dTanOnRad, _Lin2d2Tan, _Lin2dTanObl) through
-# Geom2dGcc_QualifiedCurve. NONE of that family is registered in this wasm
-# build (the .d.ts declares them, but the module exposes no such property at
-# runtime - and none for GccEnt either), so the two cases the docs exercise -
-# circles/points tangent to circles/points - are solved in closed form here,
-# with the same qualifier semantics, the same trim-range rejection and the same
-# Sagitta arc selection. Anything else raises rather than approximating: the
-# result of these solvers is a SET of candidate solutions that a user selector
-# then picks from, so a different enumeration is a different answer.
+# build123d's ConstrainedArcs/ConstrainedLines are thin wrappers over OCCT's
+# 2-D geometric constraint solvers (Geom2dGcc_Circ2d2TanRad, _Circ2d2TanOn,
+# _Circ2d3Tan, _Circ2dTanCen, _Circ2dTanOnRad, _Lin2d2Tan, _Lin2dTanObl driven
+# through Geom2dGcc_QualifiedCurve). That whole family used to be missing from
+# this wasm build - the .d.ts declared it but the module exposed nothing,
+# because ONE method (WhichQualifier, which returns GccEnt_Position through
+# non-const references Embind cannot bind) failed the compile of every binding
+# file in the package. The fork now filters that method, so the solvers are
+# real here and the calls below are a statement-for-statement port of
+# build123d 0.11.1's topology/constrained_lines.py; the kernel side lives in
+# StandardLibrary.js (ConstrainedArcs2D / ConstrainedLines2D).
 
-def _tangency_target(arg):
-    """Normalize a tangency argument to (center, radius, angular range or None,
-    qualifier). A point is the radius-0 case, which is exactly build123d's
-    Geom2d_CartesianPoint argument."""
+
+def _tangency_pair(arg):
+    """Normalize one tangency argument to the {edge|point, qualifier} spec the
+    kernel helper takes (upstream's _as_gcc_arg input side): a Vertex or a
+    plain point is upstream's Geom2d_CartesianPoint argument, an Edge/Curve is
+    a Geom2dGcc_QualifiedCurve, and an Axis is the infinite line through it."""
     qualifier = Tangency.UNQUALIFIED
     if isinstance(arg, tuple) and len(arg) == 2 and \
             not isinstance(arg[0], (int, float)):
         arg, qualifier = arg[0], arg[1]
     if isinstance(arg, Axis):
-        raise NotImplementedError(
-            'constrained arcs/lines tangent to an Axis or line need OCCT\\'s '
-            'Geom2dGcc solvers, which are not bound in this build')
+        # upstream passes an Axis through Edge as well: a long line segment
+        # through the axis is the same qualified curve for the solvers, whose
+        # tangency parameter is then checked against the segment's range
+        big = 1e4
+        p0 = Vector(arg.position) - Vector(arg.direction) * big
+        p1 = Vector(arg.position) + Vector(arg.direction) * big
+        arg = Edge.make_line(p0, p1)
     if isinstance(arg, Vertex):
-        return (Vector(arg.to_tuple()), 0.0, None, qualifier)
+        return {'point': list(arg.to_tuple())[:2]}
     if isinstance(arg, (Curve, Edge)) and getattr(arg, 'topo', None) is not None:
         edge = arg if isinstance(arg, Edge) else _single_edge_of(arg)
-        if edge.geom_type != GeomType.CIRCLE:
-            raise NotImplementedError(
-                'constrained arcs/lines are only supported for CIRCULAR and '
-                'point tangency targets in build123d-lite (OCCT\\'s Geom2dGcc '
-                'solvers are not bound in this build)')
-        center = Vector(edge.arc_center)
-        radius = edge.radius
-        raw_start = Vector(tuple(w._edgePointAt(edge.topo, 0.0)))
-        raw_end = Vector(tuple(w._edgePointAt(edge.topo, 1.0)))
-        if (raw_start - raw_end).length <= _TOL_1E6:
-            angular = None                      # closed circle
-        else:
-            angular = (math.atan2(raw_start.Y - center.Y,
-                                  raw_start.X - center.X),
-                       math.atan2(raw_end.Y - center.Y,
-                                  raw_end.X - center.X))
-        return (center, radius, angular, qualifier)
-    return (Vector(tuple(_v3(arg))), 0.0, None, qualifier)
+        return {'edge': edge.topo, 'qualifier': qualifier}
+    if isinstance(arg, (Wire, Shape)) and getattr(arg, 'topo', None) is not None:
+        return {'edge': arg.edges()[0].topo, 'qualifier': qualifier}
+    v = _v3(arg)
+    return {'point': [v[0], v[1]]}
 
 
-def _tangency_distances(solution_radius, target_radius, qualifier):
-    """Centre distances that make a solution of the given radius tangent to the
-    target, per GccEnt qualifier: OUTSIDE is external contact, ENCLOSING means
-    the solution contains the target, ENCLOSED means the target contains it."""
-    outside = solution_radius + target_radius
-    enclosing = solution_radius - target_radius
-    enclosed = target_radius - solution_radius
-    if qualifier == Tangency.OUTSIDE:
-        return [outside]
-    if qualifier == Tangency.ENCLOSING:
-        return [enclosing] if enclosing > _TOL_1E6 else []
-    if qualifier == Tangency.ENCLOSED:
-        return [enclosed] if enclosed > _TOL_1E6 else []
-    out = [outside]
-    if abs(enclosing) > _TOL_1E6:
-        out.append(abs(enclosing))
-    return out
-
-
-def _circle_circle_centers(p1, d1, p2, d2):
-    """Intersections of the two centre loci (circle p1 radius d1, circle p2
-    radius d2)."""
-    delta = p2 - p1
-    d = delta.length
-    if d <= _TOL_1E6 or d > d1 + d2 + _TOL_1E6 or d < abs(d1 - d2) - _TOL_1E6:
-        return []
-    a = (d1 * d1 - d2 * d2 + d * d) / (2.0 * d)
-    h2 = d1 * d1 - a * a
-    h = math.sqrt(h2) if h2 > 0 else 0.0
-    base = p1 + delta * (a / d)
-    normal = Vector(-delta.Y / d, delta.X / d, 0.0)
-    if h <= _TOL_1E6:
-        return [base]
-    return [base + normal * h, base - normal * h]
-
-
-def _tangency_point(center, radius, target_center, target_radius, distance):
-    """Where a solution circle touches its target."""
-    direction = target_center - center
-    if direction.length <= _TOL_1E6:
-        return None
-    direction = direction * (1.0 / distance)
-    if target_radius - radius > _TOL_1E6 and \
-            abs(distance - (target_radius - radius)) <= _TOL_1E6:
-        # the solution is ENCLOSED by the target: the contact is on the far side
-        return center - direction * radius
-    return center + direction * radius
-
-
-def _angle_in_range(angular, angle):
-    """Is the angle inside the target's own (CCW) parameter range?"""
-    if angular is None:
-        return True
-    start, end = angular
-    span = (end - start) % (2.0 * math.pi)
-    offset = (angle - start) % (2.0 * math.pi)
-    return offset <= span + 1e-9 or abs(offset - 2.0 * math.pi) <= 1e-9
-
-
-def _two_sagitta_arcs(center, radius, u1, u2):
-    """Both arcs of the solution circle between the two tangency parameters
-    (build123d's _two_arc_edges_from_params: the forward span and its
-    complement)."""
-    period = 2.0 * math.pi
-    delta = (u2 - u1) % period
-    if delta <= _TOL_1E6 or abs(period - delta) <= _TOL_1E6:
-        return []
-    plane = Plane(origin=center, x_dir=(1, 0, 0), z_dir=(0, 0, 1))
-    minor = Edge.make_circle(radius, plane, math.degrees(u1),
-                             math.degrees(u1 + delta))
-    major = Edge.make_circle(radius, plane, math.degrees(u2),
-                             math.degrees(u2 + (period - delta)))
-    return [minor, major]
-
-
-def _pick_sagitta(arcs, sagitta):
-    if not arcs:
-        return []
-    if sagitta == Sagitta.BOTH:
-        return list(arcs)
-    ordered = sorted(arcs, key=lambda e: e.length)
-    return [ordered[sagitta]]
-
-
-def _constrained_arc_edges(targets, radius, sagitta):
-    """Every circular arc of the given radius tangent to both targets
-    (build123d's _make_2tan_rad_arcs, restricted to circle/point targets)."""
-    (c1, r1, rng1, q1), (c2, r2, rng2, q2) = targets
-    out = ShapeList()
-    for d1 in _tangency_distances(radius, r1, q1):
-        for d2 in _tangency_distances(radius, r2, q2):
-            for center in _circle_circle_centers(c1, d1, c2, d2):
-                t1 = _tangency_point(center, radius, c1, r1, d1)
-                t2 = _tangency_point(center, radius, c2, r2, d2)
-                if t1 is None or t2 is None:
-                    continue
-                # reject solutions whose contact point is off the TRIMMED
-                # target (upstream's _param_in_trim on the argument curve)
-                if not _angle_in_range(rng1, math.atan2(t1.Y - c1.Y,
-                                                        t1.X - c1.X)):
-                    continue
-                if not _angle_in_range(rng2, math.atan2(t2.Y - c2.Y,
-                                                        t2.X - c2.X)):
-                    continue
-                u1 = math.atan2(t1.Y - center.Y, t1.X - center.X)
-                u2 = math.atan2(t2.Y - center.Y, t2.X - center.X)
-                for arc in _pick_sagitta(_two_sagitta_arcs(center, radius,
-                                                           u1, u2), sagitta):
-                    if not any([(arc.center() - other.center()).length <=
-                                _TOL_1E6 and
-                                abs(arc.length - other.length) <= _TOL_1E6
-                                for other in out]):
-                        out.append(arc)
-    if not out:
-        raise RuntimeError('Unable to find a tangent arc')
-    return out
-
-
-def _constrained_line_edges(targets):
-    """The common tangent lines of two circles/points, each trimmed between its
-    two contact points (build123d's _make_2tan_lines)."""
-    (c1, r1, rng1, _q1), (c2, r2, rng2, _q2) = targets
-    delta = c2 - c1
-    d = delta.length
-    if d <= _TOL_1E6:
-        raise RuntimeError('Unable to find a tangent line')
-    base_angle = math.atan2(delta.Y, delta.X)
-    out = ShapeList()
-    for s1, s2 in ((1.0, 1.0), (1.0, -1.0)):
-        k = s2 * r2 - s1 * r1
-        if abs(k / d) > 1.0 + 1e-12:
-            continue
-        offset = math.acos(max(-1.0, min(1.0, k / d)))
-        for sign in (1.0, -1.0):
-            theta = base_angle + sign * offset
-            normal = Vector(math.cos(theta), math.sin(theta), 0.0)
-            t1 = c1 - normal * (s1 * r1)
-            t2 = c2 - normal * (s2 * r2)
-            if (t1 - t2).length <= _TOL_1E6:
-                continue
-            if not _angle_in_range(rng1, math.atan2(t1.Y - c1.Y,
-                                                    t1.X - c1.X)) and r1 > 0:
-                continue
-            if not _angle_in_range(rng2, math.atan2(t2.Y - c2.Y,
-                                                    t2.X - c2.X)) and r2 > 0:
-                continue
-            edge = Edge.make_line(t1, t2)
-            if not any([(edge.center() - other.center()).length <= _TOL_1E6 and
-                        abs(edge.length - other.length) <= _TOL_1E6
-                        for other in out]):
-                out.append(edge)
-    if not out:
-        raise RuntimeError('Unable to find a tangent line')
-    return out
-
-
-def _constrained_curve(edges, selector, mode):
+def _constrained_curve(topo_edges, selector, mode):
     """Apply the user's selector and hand the result to the BuildLine, like
     build123d's BaseCurveObject does."""
+    edges = ShapeList([Edge(t) for t in topo_edges])
     selected = selector(edges) if selector is not None else edges
     if selected is None:
         raise ValueError('selector must return an Edge or list of Edges, not '
@@ -6120,38 +6299,95 @@ def _constrained_curve(edges, selector, mode):
     return _line_object(specs, mode)
 
 
+def _sagitta_index(sagitta):
+    if sagitta == Sagitta.BOTH:
+        return 1
+    if sagitta == Sagitta.LONG:
+        return -1
+    return 0
+
+
 def ConstrainedArcs(*args, radius=None, center=None, center_on=None,
                     sagitta=Sagitta.SHORT, selector=None, mode=Mode.ADD):
-    """Circular arc(s) constrained by tangency to two other objects
-    (build123d ConstrainedArcs). Supported here: two CIRCLE/point targets with
-    a given radius, with per-target Tangency qualifiers, Sagitta selection and
-    a selector - see the module comment for why the other overloads raise."""
-    if center is not None or center_on is not None or len(args) != 2 or \
-            radius is None:
-        raise NotImplementedError(
-            'build123d-lite supports ConstrainedArcs(two circle/point '
-            'targets, radius=) only; the center=/center_on=/three-tangency '
-            'forms need OCCT\\'s Geom2dGcc solvers, which are not bound in '
-            'this build')
-    if radius <= 0:
-        raise ValueError('radius must be > 0.0')
-    targets = [_tangency_target(a) for a in args]
-    return _constrained_curve(_constrained_arc_edges(targets, radius, sagitta),
-                              selector, mode)
+    """Circular arc(s) constrained by tangency to other geometry (build123d
+    ConstrainedArcs). All five upstream overloads are supported, each on the
+    OCCT solver upstream uses:
+
+      (t1, t2, radius=)            Geom2dGcc_Circ2d2TanRad
+      (t1, t2, center_on=)         Geom2dGcc_Circ2d2TanOn
+      (t1, t2, t3)                 Geom2dGcc_Circ2d3Tan
+      (t1, center=)                Geom2dGcc_Circ2dTanCen     (full circles)
+      (t1, radius=, center_on=)    Geom2dGcc_Circ2dTanOnRad   (full circles)
+    """
+    if not args:
+        raise ValueError('ConstrainedArcs requires at least one tangency')
+    opts = {'sagitta': _sagitta_index(sagitta)}
+    if center is not None:
+        if len(args) != 1:
+            raise ValueError('ConstrainedArcs(center=) takes one tangency')
+        c = _v3(center)
+        opts['center'] = [c[0], c[1]]
+    elif center_on is not None:
+        on = center_on[0] if isinstance(center_on, tuple) else center_on
+        if isinstance(on, Axis):
+            big = 1e4
+            on = Edge.make_line(Vector(on.position) - Vector(on.direction) * big,
+                                Vector(on.position) + Vector(on.direction) * big)
+        if getattr(on, 'topo', None) is None:
+            raise TypeError('center_on must be an Edge, Wire or Axis')
+        opts['centerOn'] = on.topo if isinstance(on, Edge) else on.edges()[0].topo
+        if len(args) == 1:
+            if radius is None:
+                raise ValueError('ConstrainedArcs(center_on=) with one '
+                                 'tangency also needs radius=')
+            opts['radius'] = float(radius)
+    elif len(args) == 3:
+        pass                                     # three-tangency solver
+    else:
+        if radius is None:
+            raise ValueError('ConstrainedArcs requires radius=, center=, '
+                             'center_on= or three tangencies')
+        if radius <= 0:
+            raise ValueError('radius must be > 0.0')
+        opts['radius'] = float(radius)
+    specs = [_tangency_pair(a) for a in args]
+    return _constrained_curve(w.ConstrainedArcs2D(specs, opts), selector, mode)
 
 
 def ConstrainedLines(*args, angle=None, direction=None, selector=None,
                      mode=Mode.ADD):
-    """Line(s) constrained by tangency to two other objects (build123d
-    ConstrainedLines). Supported here: two CIRCLE/point targets (the common
-    tangents), each trimmed between its contact points."""
-    if angle is not None or direction is not None or len(args) != 2:
-        raise NotImplementedError(
-            'build123d-lite supports ConstrainedLines(two circle/point '
-            'targets) only; the angle=/direction= forms need OCCT\\'s '
-            'Geom2dGcc solvers, which are not bound in this build')
-    targets = [_tangency_target(a) for a in args]
-    return _constrained_curve(_constrained_line_edges(targets), selector, mode)
+    """Line(s) constrained by tangency (build123d ConstrainedLines):
+
+      (t1, t2)                     Geom2dGcc_Lin2d2Tan  (t2 may be a point)
+      (t1, axis, angle=|direction=) Geom2dGcc_Lin2dTanObl
+    """
+    if len(args) != 2:
+        raise ValueError('ConstrainedLines takes exactly two arguments')
+    if angle is not None or direction is not None:
+        reference = args[1]
+        if not isinstance(reference, Axis):
+            raise TypeError('the oriented form of ConstrainedLines needs an '
+                            'Axis as its second argument')
+        if abs(abs(Vector(reference.direction).Z) - 1) < _TOL_1E6:
+            raise ValueError("reference Axis can't be perpendicular to "
+                             'Plane.XY')
+        if angle is None:
+            d = _v3(direction)
+            ref_angle = math.atan2(Vector(reference.direction).Y,
+                                   Vector(reference.direction).X)
+            angle_rad = math.atan2(d[1], d[0]) - ref_angle
+        else:
+            angle_rad = math.radians(angle)
+        opts = {'angle': angle_rad,
+                'axis': {'position': [Vector(reference.position).X,
+                                      Vector(reference.position).Y],
+                         'direction': [Vector(reference.direction).X,
+                                       Vector(reference.direction).Y]}}
+        edges = w.ConstrainedLines2D([_tangency_pair(args[0])], opts)
+    else:
+        specs = [_tangency_pair(a) for a in args]
+        edges = w.ConstrainedLines2D(specs, {})
+    return _constrained_curve(edges, selector, mode)
 
 
 def BSpline(control_points, knots, degree, weights=None, periodic=False,
@@ -6381,10 +6617,15 @@ def _specs_from_topo_edges(shape):
         p1 = list(w._edgePointAt(e.topo, 1.0))
         if t == 'Line':
             specs.append(('line', [p0, p1]))
-        elif t == 'Circle':
+        elif t == 'Circle' and (abs(p0[0] - p1[0]) > _TOL_1E6 or
+                                abs(p0[1] - p1[1]) > _TOL_1E6 or
+                                abs(p0[2] - p1[2]) > _TOL_1E6):
             pm = list(w._edgePointAt(e.topo, 0.5))
             specs.append(('arc3', [p0, pm, p1]))
         else:
+            # closed circles (start == end) have no three-point form, and
+            # anything that is not a line/arc (BSpline, ellipse, ...) rides
+            # through as an opaque segment carrying the TopoDS edge itself
             specs.append(('raw', [p0, p1], [e.topo]))
     return specs
 
@@ -6541,6 +6782,77 @@ def revolve(profiles=None, axis=Axis.Z, revolution_arc=360, clean=True,
     return _combine(builder, obj, mode)
 
 
+def make_brake_formed(thickness, station_widths, line=None, side=Side.LEFT,
+                      kind=Kind.ARC, clean=True, mode=Mode.ADD):
+    """Sheet-metal brake forming (build123d make_brake_formed) - a
+    statement-for-statement port of operations_part.make_brake_formed.
+
+    The outline is offset by the sheet thickness to get the SECTION, a station
+    edge is paired to every vertex of the line (the offset vertex exactly
+    thickness away), each station edge is extruded by its width along the
+    section plane's normal, and consecutive station faces are swept along the
+    matching segment of the line and fused."""
+    builder = _active_builder(BuildPart)
+    if line is None:
+        # upstream reads BuildPart.pending_edges_as_wire; in lite a BuildLine
+        # directly inside a BuildPart leaves its result in pending_path
+        line = getattr(builder, 'pending_path', None) if builder else None
+        if line is None:
+            raise ValueError('A line must be provided')
+        builder.pending_path = None
+    elif isinstance(line, Curve) and len(line.edges()) == 0:
+        raise ValueError('A line must be provided')
+    offset_line = line.offset_2d(distance=thickness, kind=kind, side=side,
+                                 closed=True)
+    offset_vertices = offset_line.vertices()
+    try:
+        plane = Plane(Face(offset_line))
+    except Exception:
+        raise ValueError('line not suitable - probably straight')
+
+    line_vertices = line.vertices()
+    if isinstance(station_widths, (int, float)):
+        widths = [float(station_widths)] * len(line_vertices)
+    else:
+        widths = [float(x) for x in station_widths]
+    if len(widths) != len(line_vertices):
+        raise ValueError('widths must either be a single number or an '
+                         'iterable with a length of the # vertices in line (' +
+                         str(len(line_vertices)) + ')')
+
+    station_edges = ShapeList()
+    for vertex in line_vertices:
+        base = Vector(vertex.to_tuple())
+        others = offset_vertices.sort_by_distance(base)
+        for other in others[1:]:
+            if abs((base - Vector(other.to_tuple())).length - thickness) < 1e-2:
+                station_edges.append(Edge.make_line(base,
+                                                    Vector(other.to_tuple())))
+                break
+    station_edges = station_edges.sort_by(line)
+
+    z = Vector(plane.z_dir)
+    station_faces = [Face.extrude(e, z * width)
+                     for e, width in zip(station_edges, widths)]
+    sweep_paths = line.edges().sort_by(line)
+    sections = []
+    for i in range(len(station_faces) - 1):
+        # MakePipeShell needs a WIRE spine; each sweep path here is a single
+        # edge of the outline
+        path_topo = w.WireFromEdgesFixed([_topo(sweep_paths[i])])
+        sections.append(Part(w.PipeShellSweep(
+            [w._faceOuterWire(station_faces[i].topo),
+             w._faceOuterWire(station_faces[i + 1].topo)],
+            path_topo, False, '', [], 0, True)))
+    if len(sections) > 1:
+        solid = sections[0]
+        for extra in sections[1:]:
+            solid = solid.fuse(extra)
+    else:
+        solid = sections[0]
+    return _combine(builder, Part(solid.topo), mode)
+
+
 def loft(sections=None, ruled=False, clean=True, mode=Mode.ADD):
     if ruled:
         raise NotImplementedError('loft(ruled=True) is not supported in '
@@ -6667,6 +6979,138 @@ def _edges_by_parent(objects):
     return target, indices
 
 
+def _wire_common_plane(line):
+    """The plane a planar wire lies in (build123d Mixin1D.common_plane), with
+    its origin at the wire's start. The normal comes from Newell's method over
+    the sampled polyline, which is exact for a planar loop and stable for the
+    open lines fillet() works on."""
+    pts = []
+    for edge in line.edges():
+        for i in range(5):
+            pts.append(edge.position_at(i / 4.0))
+    nx = ny = nz = 0.0
+    for i in range(len(pts)):
+        a = pts[i]
+        b = pts[(i + 1) % len(pts)]
+        nx += (a.Y - b.Y) * (a.Z + b.Z)
+        ny += (a.Z - b.Z) * (a.X + b.X)
+        nz += (a.X - b.X) * (a.Y + b.Y)
+    normal = Vector(nx, ny, nz)
+    if normal.length <= _TOL_1E6:
+        # a straight (degenerate) outline - any plane containing it will do
+        direction = (pts[-1] - pts[0]).normalized()
+        helper_v = Vector(0, 0, 1)
+        if abs(direction.dot(helper_v)) > 0.9:
+            helper_v = Vector(1, 0, 0)
+        normal = direction.cross(helper_v)
+    return Plane(origin=line.position_at(0), z_dir=normal.normalized())
+
+
+def _wire_fillet_corner(edges, index, vertex, radius):
+    """Fillet ONE corner of a connection-ordered edge list, returning the new
+    list (build123d's _fillet_wire_corner + _splice_wire_fillet_corner).
+
+    The solver is upstream's primary one, ChFi2d_FilletAlgo, which the fork now
+    binds; upstream's Geom2dGcc_Circ2d2TanRad fallback is used when ChFi2d
+    finds no result on this corner (the same two-tangent-arc construction that
+    backs ConstrainedArcs)."""
+    e0, e1 = edges[index[0]], edges[index[1]]
+    point = [vertex.X, vertex.Y, vertex.Z]
+    solved = w.FilletWireCorner(e0.topo, e1.topo, point, radius)
+    if solved is not None:
+        arc = Edge(solved[0])
+        trimmed = [Edge(solved[1]), Edge(solved[2])]
+    else:
+        # upstream's fallback: every arc of the given radius tangent to both
+        # edges, nearest the corner, then each edge trimmed at its contact
+        arcs = ShapeList([Edge(t) for t in w.ConstrainedArcs2D(
+            [{'edge': e0.topo, 'qualifier': Tangency.UNQUALIFIED},
+             {'edge': e1.topo, 'qualifier': Tangency.UNQUALIFIED}],
+            {'radius': radius, 'sagitta': 1})])
+        if not arcs:
+            raise ValueError('Fillet algorithm failed for ' + str(point) +
+                             ' with radius ' + str(radius))
+        arc = arcs.sort_by_distance(Vector(point))[0]
+        trimmed = []
+        for e in (e0, e1):
+            contact = arc.vertices().sort_by_distance(e)[0]
+            pieces = _split_1d_at_point(e, Vector(contact.to_tuple()))
+            far = [v for v in e.vertices()
+                   if (Vector(v.to_tuple()) - Vector(point)).length > _TOL_1E6]
+            keep = None
+            for piece in pieces:
+                for v in piece.vertices():
+                    for f in far:
+                        if (Vector(v.to_tuple()) -
+                                Vector(f.to_tuple())).length <= _TOL_1E6:
+                            keep = piece
+            trimmed.append(keep if keep is not None else e)
+
+    out = list(edges)
+    out[index[0]] = trimmed[0]
+    out[index[1]] = trimmed[1]
+    n = len(out)
+    if index[1] == (index[0] + 1) % n:
+        insert_at = index[0] + 1
+    else:
+        insert_at = index[1] + 1
+    out.insert(insert_at, arc)
+    return out
+
+
+def _wire_fillet_2d(line, vertices, radius):
+    """The 1-D corner fillet of an open (or closed) planar wire - build123d's
+    Wire.fillet_2d, driven from the fillet() operation's 1-D branch.
+
+    Upstream filters the wire's END vertices out in fillet() (they have only
+    one incident edge), fillets the remaining corners ONE AT A TIME, and
+    rebuilds the wire from the connection-ordered edge list with the fillet arc
+    spliced between the two trimmed edges."""
+    # Upstream forces the wire onto Plane.XY for the fillet (ChFi2d and the
+    # Geom2dGcc solvers are 2-D) and maps the result back afterwards.
+    plane = _wire_common_plane(line)
+    to_local = plane.location.inverse()
+    local_line = to_local * line
+    local_points = [to_local._transform_point(v.to_tuple()) for v in vertices]
+    edges = ShapeList([Edge(t) for t in w.OrderedEdges(local_line.topo)])
+    start = local_line.position_at(0)
+    end = local_line.position_at(1)
+    closed = (start - end).length <= _TOL_1E6
+    for point in local_points:
+        v = Vector(point)
+        if not closed and ((v - start).length <= _TOL_1E6 or
+                           (v - end).length <= _TOL_1E6):
+            continue                      # an end vertex cannot be filleted
+        touching = []
+        for i, e in enumerate(edges):
+            for ev in e.vertices():
+                if (Vector(ev.to_tuple()) - v).length <= _TOL_1E6:
+                    touching.append(i)
+                    break
+        if len(touching) != 2:
+            raise ValueError('Vertex must connect exactly two edges: ' +
+                             str(v))
+        edges = _wire_fillet_corner(edges, touching, v, radius)
+    result = plane.location * Curve(w.WireFromOrderedEdges(
+        [e.topo for e in edges]))
+    # keep the wire's DIRECTION (upstream re-reverses when is_forward flips):
+    # offset_2d's Side.LEFT/RIGHT is measured against the traversal direction,
+    # so a flipped result would offset to the other side
+    original_start = line.position_at(0)
+    if ((result.position_at(0) - original_start).length >
+            (result.position_at(1) - original_start).length):
+        result = _reverse_1d(result)
+    builder = _active_builder()
+    if builder is not None:
+        if isinstance(builder, BuildLine):
+            builder._specs = _specs_from_topo_edges(result)
+            builder._obj = result
+        elif (builder._obj is not None and
+                (builder._obj is line or builder._obj.topo is line.topo)):
+            builder._obj = result
+    return result
+
+
 def _vertex_op_2d(objs, radius, opname):
     """2D fillet of sketch corner vertices (BRepFilletAPI_MakeFillet2d)."""
     if opname != 'fillet':
@@ -6681,10 +7125,7 @@ def _vertex_op_2d(objs, radius, opname):
         raise ValueError('fillet: vertices have no parent sketch')
     faces = parent.faces()
     if len(faces) == 0:
-        raise NotImplementedError(
-            'fillet(<wire vertices>) - the 1-D corner fillet of an open line '
-            '(build123d Wire.fillet_2d) - is not supported in build123d-lite; '
-            'use FilletPolyline for straight segments')
+        return _wire_fillet_2d(parent, verts, radius)
     if len(faces) != 1:
         raise NotImplementedError('2D vertex fillets on multi-face sketches '
                                   'are not supported in build123d-lite')
@@ -7126,6 +7567,105 @@ def _simplify_polyline(pts, tol):
     return a[:-1] + b[:-1]
 
 
+def _connected_edges_of(edge, parent):
+    """The edges of parent that share a vertex with edge (build123d's
+    topo_explore_connected_edges). Upstream accumulates into a set, so ITS
+    order is memory-address order and varies run to run; lite keeps the
+    parent's own edge order, which is deterministic."""
+    if parent is None:
+        raise ValueError('edge must be extracted from shape')
+    keys = [_shape_key(v, 'vertex') for v in edge.vertices()]
+    out = ShapeList()
+    for other in parent.edges():
+        if _shape_key(other, 'edge') == _shape_key(edge, 'edge'):
+            continue
+        for v in other.vertices():
+            if _shape_key(v, 'vertex') in keys:
+                out.append(other)
+                break
+    return out
+
+
+def full_round(edge, invert=False, voronoi_point_count=100, mode=Mode.REPLACE):
+    """Replace an edge of the sketch's face with the arc of the largest empty
+    circle that fits in the face (build123d full_round) - a
+    statement-for-statement port of operations_sketch.full_round.
+
+    The candidate centres are the VORONOI VERTICES of 101 samples per edge over
+    the target edge and its two neighbours; the best three (by how equal their
+    three edge distances are) are averaged. The scipy shim's 2-D Voronoi is a
+    Bowyer-Watson triangulation whose circumcentres are qhull's finite Voronoi
+    vertices - verified vertex-set-identical to scipy on exactly these
+    inputs."""
+    from scipy.spatial import Voronoi
+
+    builder = _active_builder(BuildSketch)
+    if not isinstance(edge, Edge):
+        raise ValueError('A single Edge must be provided')
+    parent = getattr(edge, 'parent', None)
+    if parent is None and builder is not None:
+        parent = builder._obj
+    connected = _connected_edges_of(edge, parent)
+    if len(connected) != 2:
+        raise ValueError('Invalid geometry - 3 or more edges required')
+
+    edge_group = [edge] + list(connected)
+    points = []
+    for e in edge_group:
+        for i in range(voronoi_point_count + 1):
+            v = e.position_at(i / voronoi_point_count)
+            points.append([v.X, v.Y])
+    vertices = [Vector(v[0], v[1], 0) for v in Voronoi(points).vertices]
+
+    best_three = [(float('inf'), 0), (float('inf'), 0), (float('inf'), 0)]
+    for i, v in enumerate(vertices):
+        distances = [e.distance_to(v) for e in edge_group]
+        avg = sum(distances) / 3
+        difference = max([abs(d - avg) for d in distances])
+        if difference < best_three[-1][0]:
+            best_three[-1] = (difference, i)
+            best_three.sort(key=lambda x: x[0])
+    center = Vector(0, 0, 0)
+    for _, i in best_three:
+        center = center + vertices[i]
+    center = center * (1.0 / 3.0)
+
+    ends = [e.distance_to_with_closest_points(center)[1] for e in connected]
+    middle = edge.distance_to_with_closest_points(center)[1]
+
+    origin = (ends[0] + ends[1]) * 0.5
+    x_dir = (ends[1] - ends[0]).normalized()
+    to_arc = origin - middle
+    z_dir = (to_arc - x_dir * to_arc.dot(x_dir)).normalized()
+    split_pln = Plane(origin=origin, x_dir=x_dir, z_dir=z_dir)
+    trimmed = []
+    for e in connected:
+        piece = e.split(split_pln)
+        if piece is None:
+            raise ValueError('Invalid geometry to create the end arc')
+        trimmed.append(piece)
+
+    if invert:
+        middle = center * 2 - middle
+
+    new_arc = Edge.make_three_point_arc(ends[0], middle, ends[1])
+
+    keep_keys = [_shape_key(e, 'edge') for e in [edge] + list(connected)]
+    others = ShapeList([e for e in parent.edges()
+                        if _shape_key(e, 'edge') not in keep_keys])
+
+    wires = Wire.combine(list(trimmed) + [new_arc] + list(others))
+    wires = ShapeList(wires).sort_by(SortBy.LENGTH, reverse=True)
+    pending = Face(wires[0], list(wires[1:]))
+    if parent.faces()[0].normal_at() != pending.normal_at():
+        pending = -pending
+    result = Sketch(pending.topo)
+    if builder is not None:
+        _combine(builder, result, mode)
+        builder.pending_edge_specs = []
+    return result
+
+
 def make_hull(edges=None, tolerance=1e-3, mode=Mode.ADD):
     """Face from the 2D convex hull of the given edges (or the pending edges +
     the sketch under construction) — a statement-for-statement port of
@@ -7401,6 +7941,14 @@ class Joint:
     def connect_to(self, other, **kwargs):
         return self._connect_to(other, **kwargs)
 
+    @property
+    def symbol(self):
+        """The viewer symbol upstream draws for this joint (build123d
+        Joint.symbol). Base form (RigidJoint): a triad at the joint frame,
+        scaled to the parent's bounding-box diagonal / 12."""
+        size = self.parent.bounding_box().diagonal / 12
+        return Compound.make_triad(axes_scale=size).locate(self.location)
+
     def _lite_rebind(self, new_parent):
         """A copy of this joint bound to new_parent (used by copy.copy)."""
         c = self.__class__.__new__(self.__class__)
@@ -7467,6 +8015,15 @@ class RevoluteJoint(Joint):
     def location(self):
         return self.parent.location * self.relative_axis.location
 
+    @property
+    def symbol(self):
+        """Axis of rotation (build123d RevoluteJoint.symbol)."""
+        radius = self.parent.bounding_box().diagonal / 30
+        return Compound([Edge.make_line((0, 0, 0), (0, 0, radius * 10)),
+                         Edge.make_circle(radius),
+                         Edge.make_line((0, 0, 0), (radius, 0, 0))]
+                        ).move(self.location)
+
     def relative_to(self, other, angle=None, **kwargs):
         if not isinstance(other, RigidJoint):
             raise TypeError('RevoluteJoint.relative_to expects a RigidJoint')
@@ -7500,6 +8057,14 @@ class LinearJoint(Joint):
     @property
     def location(self):
         return self.parent.location * self.relative_axis.location
+
+    @property
+    def symbol(self):
+        """Linear axis (build123d LinearJoint.symbol)."""
+        radius = (self.linear_range[1] - self.linear_range[0]) / 15
+        return Compound([Edge.make_line((0, 0, self.linear_range[0]),
+                                        (0, 0, self.linear_range[1])),
+                         Edge.make_circle(radius)]).move(self.location)
 
     def relative_to(self, other, position=None, angle=None, **kwargs):
         position = sum(self.linear_range) / 2 if position is None else position
@@ -7553,6 +8118,16 @@ class CylindricalJoint(Joint):
     @property
     def location(self):
         return self.parent.location * self.relative_axis.location
+
+    @property
+    def symbol(self):
+        """Cylindrical axis (build123d CylindricalJoint.symbol)."""
+        radius = (self.linear_range[1] - self.linear_range[0]) / 15
+        return Compound([Edge.make_line((0, 0, self.linear_range[0]),
+                                        (0, 0, self.linear_range[1])),
+                         Edge.make_circle(radius),
+                         Edge.make_line((0, 0, 0), (radius, 0, 0))]
+                        ).move(self.location)
 
     def relative_to(self, other, position=None, angle=None, **kwargs):
         if not isinstance(other, RigidJoint):
@@ -7669,7 +8244,32 @@ class Mesher:
 
 
 ExportDXF = _unsupported('ExportDXF')
-import_step = _unsupported('import_step')
+
+
+def import_step(file_name):
+    """Read a STEP asset that was handed to the worker ahead of the run
+    (build123d import_step). The worker has no filesystem, so the file cannot
+    be opened from the path the script computes next to __file__; instead the
+    host delivers its text through CascadeAPI.loadExternalFiles() (which is
+    exactly the app's own STEP-import path: STEPControl_Reader over a MEMFS
+    data file) and the BASE NAME of the requested path is looked up here.
+
+    Upstream returns a Compound carrying the STEP assembly's labels and
+    colours; lite returns the geometry only."""
+    name = str(file_name)
+    topo = w.GetExternalShape(name)
+    if topo is None or not topo:
+        raise FileNotFoundError(
+            'import_step: "' + name + '" was not delivered to the worker. '
+            'The CAD worker has no filesystem; pass the file content with '
+            'CascadeAPI.loadExternalFiles({"' + name.split('/')[-1] +
+            '": <step text>}) before running the script.')
+    res = Compound.__new__(Compound)
+    Shape.__init__(res, topo)
+    res.label = name.split('/')[-1]
+    return res
+
+
 import_stl = _unsupported('import_stl')
 import_svg = _unsupported('import_svg')
 
@@ -8555,7 +9155,143 @@ class ConvexHull:
         self.vertices = _IndexRows(sorted(seen))
 
 
-Voronoi = _raising('spatial.Voronoi')
+def _bowyer_watson(points):
+    """Delaunay triangulation of 2-D points (Bowyer-Watson incremental
+    insertion). Returns the triangles as index triples into 'points', with
+    every triangle touching the enclosing super-triangle discarded — which is
+    exactly the set whose circumcentres are qhull's FINITE Voronoi vertices."""
+    pts = [(float(p[0]), float(p[1])) for p in points]
+    # dedupe: coincident inputs (shared edge endpoints) would make degenerate
+    # triangles; qhull merges them too (Qbb Qc)
+    seen = {}
+    uniq = []
+    for p in pts:
+        key = (round(p[0], 12), round(p[1], 12))
+        if key not in seen:
+            seen[key] = True
+            uniq.append(p)
+    if len(uniq) < 3:
+        return [], uniq
+    xs = [p[0] for p in uniq]
+    ys = [p[1] for p in uniq]
+    cx = (min(xs) + max(xs)) / 2.0
+    cy = (min(ys) + max(ys)) / 2.0
+    span = max(max(xs) - min(xs), max(ys) - min(ys))
+    if span <= 0:
+        return [], uniq
+    big = 1000.0 * span
+    verts = list(uniq) + [(cx - big, cy - big), (cx + big, cy - big),
+                          (cx, cy + big)]
+    n = len(uniq)
+    tris = [(n, n + 1, n + 2)]
+
+    def circum(a, b, c):
+        ax, ay = verts[a]
+        bx, by = verts[b]
+        cx2, cy2 = verts[c]
+        d = 2.0 * (ax * (by - cy2) + bx * (cy2 - ay) + cx2 * (ay - by))
+        if abs(d) < 1e-18:
+            return None
+        a2 = ax * ax + ay * ay
+        b2 = bx * bx + by * by
+        c2 = cx2 * cx2 + cy2 * cy2
+        ux = (a2 * (by - cy2) + b2 * (cy2 - ay) + c2 * (ay - by)) / d
+        uy = (a2 * (cx2 - bx) + b2 * (ax - cx2) + c2 * (bx - ax)) / d
+        r2 = (ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)
+        return (ux, uy, r2)
+
+    circles = {tris[0]: circum(*tris[0])}
+    for i in range(n):
+        px, py = verts[i]
+        bad = []
+        for t in tris:
+            cc = circles.get(t)
+            if cc is None:
+                continue
+            dx = px - cc[0]
+            dy = py - cc[1]
+            # a strictly-inside test with a relative epsilon: points exactly ON
+            # a circumcircle (this input is full of cocircular samples) must not
+            # flip the triangulation nondeterministically
+            if dx * dx + dy * dy < cc[2] * (1.0 - 1e-12):
+                bad.append(t)
+        if not bad:
+            continue
+        edge_count = {}
+        for t in bad:
+            for e in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                key = (e[0], e[1]) if e[0] < e[1] else (e[1], e[0])
+                edge_count[key] = edge_count.get(key, 0) + 1
+        for t in bad:
+            tris.remove(t)
+            circles.pop(t, None)
+        for key in sorted(edge_count.keys()):
+            if edge_count[key] != 1:
+                continue                       # interior edge of the cavity
+            t = (key[0], key[1], i)
+            cc = circum(*t)
+            if cc is None:
+                continue
+            tris.append(t)
+            circles[t] = cc
+    return [t for t in tris if max(t) < n], uniq
+
+
+class Voronoi:
+    """2-D Voronoi diagram (scipy.spatial.Voronoi).
+
+    Only .vertices is produced, because that is the only attribute
+    build123d reads (operations_sketch.full_round takes the Voronoi vertices
+    as its candidate centres for the largest empty circle). Those vertices are
+    the circumcentres of the Delaunay triangulation, computed here with
+    Bowyer-Watson instead of qhull (which is not available in the worker) and
+    deduplicated the way qhull's 'Qbb Qc' merges cocircular circumcentres.
+    Verified against scipy 1.18 on full_round's own inputs: the vertex SETS are
+    identical (220 and 210 vertices, max pairwise deviation 2e-13).
+
+    Unbounded ridges have no finite Voronoi vertex and qhull does not list one
+    either; they fall out of the construction because every triangle touching
+    the super-triangle is discarded. Nothing else about the diagram (ridges,
+    regions, point_region) is offered rather than half-offered."""
+
+    def __init__(self, points, *args, **kwargs):
+        rows = [list(p) for p in points]
+        if not rows or len(rows[0]) != 2:
+            raise NotImplementedError(
+                'scipy shim: only 2-D Voronoi is supported in build123d-lite '
+                '(qhull is not available in the worker)')
+        self.points = _IndexRows(_IndexRows(float(c) for c in r) for r in rows)
+        self.ndim = 2
+        self.npoints = len(rows)
+        tris, uniq = _bowyer_watson(rows)
+        verts = []
+        seen = {}
+        for t in tris:
+            ax, ay = uniq[t[0]]
+            bx, by = uniq[t[1]]
+            cx, cy = uniq[t[2]]
+            d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+            if abs(d) < 1e-18:
+                continue
+            a2 = ax * ax + ay * ay
+            b2 = bx * bx + by * by
+            c2 = cx * cx + cy * cy
+            ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d
+            uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d
+            key = (round(ux, 9), round(uy, 9))
+            if key in seen:
+                continue
+            seen[key] = True
+            verts.append((ux, uy))
+        self.vertices = _IndexRows(_IndexRows(v) for v in verts)
+
+    def __getattr__(self, name):
+        if name in ('ridge_points', 'ridge_vertices', 'regions',
+                    'point_region', 'furthest_site'):
+            raise NotImplementedError(
+                'scipy shim: Voronoi.' + name + ' is not available in '
+                'build123d-lite (only .vertices is computed)')
+        raise AttributeError(name)
 
 
 class _Namespace:

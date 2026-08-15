@@ -19,13 +19,29 @@
 
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
+const B123D_SRC = process.env.B123D_SRC || '/tmp/b123d';
+
+/** CAD assets a script imports from its own directory (manifest `assets`),
+ *  read out of the build123d clone. The CAD worker has no filesystem, so they
+ *  are handed over before the run and `import_step()` resolves them by base
+ *  name — see CascadeAPI.loadExternalFiles. */
+export function readAssets(entry) {
+  const names = entry.assets || [];
+  if (names.length === 0) { return null; }
+  const files = {};
+  for (const name of names) {
+    const path = join(B123D_SRC, entry.data_dir || '', name);
+    if (existsSync(path)) { files[name] = readFileSync(path, 'utf8'); }
+  }
+  return Object.keys(files).length > 0 ? files : null;
+}
 
 const args = process.argv.slice(2);
 const argVal = (name, dflt) => {
@@ -127,7 +143,26 @@ async function newReadyPage(browser) {
   return page;
 }
 
-async function runScript(page, code) {
+/** Hand a script's CAD assets to the worker and WAIT for the import to
+ *  finish (CascadeAPI.loadExternalFiles resolves with the names it imported).
+ *  A worker that has already run many scripts sometimes stops answering — the
+ *  OCCT heap is shared with every previous evaluation — so the caller recycles
+ *  the page and retries when this rejects or times out. */
+async function deliverAssets(page, assets) {
+  const wanted = Object.keys(assets);
+  const loaded = await Promise.race([
+    page.evaluate((a) => window.CascadeAPI.loadExternalFiles(a), assets),
+    new Promise((_, rej) => setTimeout(
+      () => rej(new Error('asset delivery timed out')), 30000)),
+  ]);
+  if (!loaded || loaded.length !== wanted.length) {
+    throw new Error('asset delivery failed: wanted ' + wanted.join(',') +
+      ' got ' + JSON.stringify(loaded));
+  }
+}
+
+async function runScript(page, code, assets) {
+  if (assets) { await deliverAssets(page, assets); }
   // runCode + wait for the async console flush that carries B123D_MEASURE
   const result = await page.evaluate(async (c) => {
     return await window.CascadeAPI.runCode(c);
@@ -215,9 +250,19 @@ async function main() {
       if (!entry) break;
       const ref = reference[entry.id];
       let out;
+      const assets = readAssets(entry);
+      // A script with assets needs a worker that still answers messages; give
+      // it a fresh page rather than losing the script to a stale heap.
+      if (assets) {
+        try {
+          await deliverAssets(page, assets);
+        } catch (e) {
+          await freshPage();
+        }
+      }
       try {
         out = await Promise.race([
-          runScript(page, entry.code + MEASURE_FOOTER),
+          runScript(page, entry.code + MEASURE_FOOTER, assets),
           new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SCRIPT_TIMEOUT)),
         ]);
         // Don't let a still-busy worker poison this page's next script.
@@ -229,7 +274,7 @@ async function main() {
             out.errors.some((e) => e.includes("reading 'substr'"))) {
           await freshPage();
           out = await Promise.race([
-            runScript(page, entry.code + MEASURE_FOOTER),
+            runScript(page, entry.code + MEASURE_FOOTER, assets),
             new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SCRIPT_TIMEOUT)),
           ]);
           await workerIdle(page, 20000);
@@ -335,4 +380,8 @@ function writeReport(results, path) {
   writeFileSync(path, md);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// Only sweep the corpus when invoked directly — probe.mjs imports readAssets
+// from here.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

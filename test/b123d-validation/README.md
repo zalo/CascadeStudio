@@ -48,7 +48,13 @@ Not part of the default playwright suite — run it manually when extending
    placeholders, prose pseudo-code, snippets that only print — are dropped,
    because they were never runnable code. 382 candidates → **232 scripts**.
 3. **`run-lite.mjs`** (playwright) serves the built app, switches to Python
-   mode and runs every script with a measurement footer appended. The footer
+   mode and runs every script with a measurement footer appended. A script that
+   imports a CAD file from its own directory (manifest `assets`, recorded by
+   `collect.py`) gets it handed to the worker first, via
+   `CascadeAPI.loadExternalFiles({name: text})`, which AWAITS the worker's STEP
+   import; `import_step()` then resolves the path by base name. (A worker that
+   has already evaluated many scripts sometimes stops answering, so the harness
+   recycles the page and retries the delivery.) The footer
    calls `build123d._measure_globals_json(globals())`, which measures the
    same module-level-variable convention through the worker's
    `MeasureShape`/`BoundingBox` hooks (StandardLibrary.js; bbox comes from a
@@ -167,10 +173,10 @@ real build123d fails on them natively). On the OCCT 8.0.1 wasm build:
 
 | Status | Count | Note |
 |---|---|---|
-| PASS | 204 | volume within 0.5%, bbox within 1e-3/axis, per variable |
-| MISMATCH | 8 | joints x2 + projection x2 + sort_axis — COMPROMISE(edge-orientation); filter_all_edges_circle + tips/b04 — COMPROMISE(traversal-order) (a mirror-symmetric pair / a fully TIED sort_by); objects_1d — COMPROMISE(triad-labels) |
-| ERROR | 9 | the `drafting` module x1 (objects_2d), `import_step` x2, `full_round` x1 (needs a 2-D Voronoi), sm_hanger x1 (1-D wire fillet + `make_brake_formed`), `sympy` x1, 3MF export x1, and 2 kernel faults (toy_truck fillet, ttt-ppp0110 fuse) |
-| TIMEOUT | 1 | spitfire_wing_gordon: reaches the wing Gordon surface, which needs ~390 s here (harness budget 60 s) and then returns a null surface |
+| PASS | 205 | volume within 0.5%, bbox within 1e-3/axis, per variable |
+| MISMATCH | 10 | joints x2 + projection x2 + sort_axis — COMPROMISE(edge-orientation); filter_all_edges_circle + tips/b04 — COMPROMISE(traversal-order); objects_1d — COMPROMISE(triad-labels); tutorial_joints (`m6_screw` alone, a CylindricalJoint hole frame) and sm_hanger (`l1`/`l2` alone, BuildLine locals on a non-XY workplane) |
+| ERROR | 5 | the `drafting` module x1 (objects_2d), `sympy` x1, 3MF export x1, and 2 kernel faults (toy_truck fillet, ttt-ppp0110 fuse) |
+| TIMEOUT | 2 | spitfire_wing_gordon: reaches the wing Gordon surface, which needs ~390 s here (harness budget 60 s); heat_exchanger sits AT the budget (~55 s idle) and only times out when the four pages contend |
 | SKIP | 10 | real build123d 0.11.1 fails natively (`bd_warehouse` x3, `ImageFace`, `ColorMap`, `tcv_screenshots`, no module-level shapes) |
 
 Every non-PASS is root-caused in the **defaults-audit table** appended to
@@ -187,7 +193,30 @@ EllipticalStartArc, BlendCurve, Airfoil, Triangle) → 194 → Wedge,
 ConvexPolyhedron, text-on-path, `topo_distance_to`, `pytest.approx` and the
 position_at/circle-edge/copy-snapshot fidelity fixes → 199 → 2-D face offsets +
 BuildSketch's face alignment → 201 → upstream's taper-extrude branch → 202 →
-closed-form ConstrainedArcs/ConstrainedLines for circle/point targets → **204**.
+closed-form ConstrainedArcs/ConstrainedLines for circle/point targets → 204 →
+**the OCCT-binding round** (the real Geom2dGcc solvers, STEP-asset delivery,
+a pure-Python 2-D Voronoi behind `full_round`, `Wire.fillet_2d` on
+ChFi2d_FilletAlgo + `make_brake_formed`) → **205**, with two of the remaining
+errors demoted to single-shape MISMATCHes.
+
+### What the OCCT-binding round changed in the fork
+
+Four of the nine remaining errors were blocked on the WASM build, not on lite.
+`~/Desktop/ocjs-fork` (branch `cascadestudio-v3-occt801`) now binds:
+
+- the whole **`Geom2dGcc` / `GccAna`** family — every binding file in those
+  packages had been failing to compile on ONE method,
+  `WhichQualifier(Standard_Integer, GccEnt_Position&, GccEnt_Position&)`, whose
+  non-const enum out-params Embind cannot bind;
+- **`Extrema_ExtAlgo`/`Extrema_ExtFlag`** (makes `GeomAPI_ProjectPointOnSurf`
+  constructible), **`gp_Cylinder`/`gp_Sphere`/`gp_Torus`**,
+  **`ChFi2d_FilletAlgo`** and **`IntAna2d_IntPoint`**;
+- a hand-registered **`OCJS_Out`** helper for methods that return through
+  `Standard_Real&` (Embind passes primitives by value): the Geom2dGcc
+  `Tangency` accessors, `ChFi2d_FilletAlgo::Result` and
+  `GeomAPI_ProjectPointOnSurf`'s `(u, v)`.
+
+That retired COMPROMISE(curvature-sign) and COMPROMISE(point-projection).
 
 <details><summary>previous corpus (129 candidates / 126 scored)</summary>
 

@@ -121,6 +121,13 @@ class CascadeEngine {
     this._messageBus.send('loadFiles', files);
   }
 
+  /** Import external files and RESOLVE once the worker has done so, with the
+   *  names it actually imported. Python mode's `import_step()` needs the
+   *  asset to be in the worker BEFORE the evaluation runs. */
+  loadExternalFilesAwaited(dict) {
+    return this._messageBus.request('loadPrexistingExternalFiles', dict, 120000);
+  }
+
   /** Load pre-existing external files (from saved project state). */
   loadPrexistingExternalFiles(dict) {
     this._messageBus.send('loadPrexistingExternalFiles', dict);
