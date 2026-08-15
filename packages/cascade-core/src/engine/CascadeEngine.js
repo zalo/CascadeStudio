@@ -104,6 +104,13 @@ class CascadeEngine {
     });
   }
 
+  /** Worker-side memory footprint: { pyRuntime, jsHeapUsed, jsHeapTotal,
+   *  occtWasm, pythonWasm, bootTiming }. Everything Python costs lives in
+   *  the worker, so the page's own numbers say nothing about it. */
+  async memoryStats() {
+    return this._messageBus.request('memoryStats', {}, 15000);
+  }
+
   /** Export the current shape as STEP text. */
   async exportSTEP() {
     return this._messageBus.request('saveShapeSTEP');

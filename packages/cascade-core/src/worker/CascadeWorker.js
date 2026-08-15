@@ -37,6 +37,36 @@ class CascadeStudioWorker {
     self.messageHandlers["Evaluate"] = this.evaluate.bind(this);
     self.messageHandlers["combineAndRenderShapes"] = this.combineAndRenderShapes.bind(this);
     self.messageHandlers["meshHistoryStep"] = this.meshHistoryStep.bind(this);
+    self.messageHandlers["memoryStats"] = this.memoryStats.bind(this);
+  }
+
+  /** Worker-side memory footprint, split by owner. Used by the Python
+   *  runtime comparison (test/b123d-validation/runtime-comparison.md) — the
+   *  page cannot see any of this, since it all lives in the worker.
+   *
+   *  `occtWasm`/`pythonWasm` are exact wasm linear-memory sizes (they only
+   *  ever grow). `jsHeap*` comes from `performance.memory`, which Chromium
+   *  does NOT expose in workers — expect zeros there, and read renderer RSS
+   *  instead (bench-runtime.mjs does). A GC is forced first when the browser
+   *  was started with --js-flags=--expose-gc. */
+  memoryStats() {
+    if (typeof globalThis.gc === 'function') {
+      try { globalThis.gc(); globalThis.gc(); } catch (e) { /* best effort */ }
+    }
+    const mem = (typeof performance !== 'undefined' && performance.memory) || {};
+    let pythonWasm = 0;
+    try {
+      const py = self._pyodideRuntime;
+      if (py && py._module && py._module.HEAPU8) { pythonWasm = py._module.HEAPU8.length; }
+    } catch (e) { /* no Pyodide in this session */ }
+    return {
+      pyRuntime: self._pythonRuntimeKind || null,
+      jsHeapUsed: mem.usedJSHeapSize || 0,
+      jsHeapTotal: mem.totalJSHeapSize || 0,
+      occtWasm: self.ocMemory ? self.ocMemory.buffer.byteLength : 0,
+      pythonWasm,
+      bootTiming: self._pythonBootTiming || null,
+    };
   }
 
   /** Override console.log/error to forward messages to the main thread. */

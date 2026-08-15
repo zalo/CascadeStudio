@@ -227,6 +227,10 @@ Revolve(profile, 360);`,
   }
   getMode() { return this._app.editor.mode; }
 
+  /** Worker memory footprint (JS heap + the OCCT and Python wasm heaps) and
+   *  the Python runtime's boot timing. Used by the runtime comparison. */
+  async _memoryStats() { return this._app.engine.memoryStats(); }
+
   /** Which Python interpreter Python mode evaluates on: 'brython' (default)
    *  or the experimental 'pyodide'. Set with `?pyruntime=pyodide` or
    *  setPyRuntime(); a change takes effect on the NEXT evaluation, but the

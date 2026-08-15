@@ -49,6 +49,7 @@ export function ensurePythonRuntime(kind) {
 }
 
 async function _bootstrap() {
+  const t0 = performance.now();
   // Dual-path like the WASM locateFile: the build copies brython.js next to
   // the worker bundle; unbuilt workers load it from node_modules.
   const brythonURL = typeof ESBUILD !== 'undefined'
@@ -59,6 +60,7 @@ async function _bootstrap() {
     throw new Error('Failed to fetch Brython (' + response.status + ') from ' + brythonURL);
   }
   const source = await response.text();
+  const tFetched = performance.now();
 
   // Indirect eval as an importScripts substitute. brython.js begins with
   // "use strict", so its top-level `var __BRYTHON__` stays local to the
@@ -77,6 +79,7 @@ async function _bootstrap() {
   if (!self.document.addEventListener) { self.document.addEventListener = function () {}; }
 
   const B = self.__BRYTHON__;
+  const tInitialized = performance.now();
 
   // Expose a resolver so CacheOp (StandardUtils.js) can tag shapes with the
   // *Python* source line that produced them: walk Brython's frame chain to
@@ -126,6 +129,20 @@ async function _bootstrap() {
     }
   }
   _runGuarded(B, BUILD123D_LITE_PY, 'build123d');
+
+  // Boot budget, split the same way PyodideRuntime reports it (fetching the
+  // interpreter / bringing it up / compiling build123d-lite) so the two are
+  // directly comparable — see test/b123d-validation/runtime-comparison.md.
+  const tDone = performance.now();
+  self._pythonBootTiming = {
+    runtime: 'brython',
+    fetchMs: +(tFetched - t0).toFixed(1),
+    initMs: +(tInitialized - tFetched).toFixed(1),
+    libMs: +(tDone - tInitialized).toFixed(1),
+    totalMs: +(tDone - t0).toFixed(1),
+    bytes: source.length,
+  };
+  console.log('[pyruntime] brython boot ' + JSON.stringify(self._pythonBootTiming));
 
   return {
     /** Execute user Python source synchronously. Throws a JS Error whose

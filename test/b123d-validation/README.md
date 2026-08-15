@@ -86,6 +86,21 @@ CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/run-lite.mjs \
 Env knobs: `B123D_SRC`, `B123D_REF_PY`, `B123D_REF_JOBS` (default 4),
 `CS_TEST_PORT` (default 8517), `CS_TEST_HEADFUL`/`DISPLAY`.
 
+## Which Python interpreter? (Brython vs Pyodide)
+
+`run-lite.mjs --pyruntime pyodide` (or `CS_PY_RUNTIME=pyodide`, same for
+`probe.mjs`) runs the identical corpus on **Pyodide** — real CPython 3.14 on
+wasm — instead of Brython, executing the same `Build123dLite.js` source. It
+needs the vendored core distribution
+(`node packages/cascade-core/scripts/fetch-pyodide.cjs`).
+
+It is an exact drop-in (204/8/9/1/10 with **zero per-script deltas** and
+byte-identical MISMATCH magnitudes) and ~5% faster over the corpus, but it
+costs 23x the download, ~3x the boot and ~2.4x the resident memory, so Brython
+remains the default. Numbers, method and recommendation:
+[`runtime-comparison.md`](runtime-comparison.md); startup/memory measurements
+come from `bench-runtime.mjs`.
+
 ## Canonical free edges (cross-kernel check)
 
 build123d-lite implements the upstream **canonical free-edge parametrization**

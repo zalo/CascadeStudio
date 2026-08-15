@@ -227,6 +227,11 @@ def run_user(source):
     module = types.ModuleType(_USER_MODULE)
     module.__name__ = _USER_MODULE
     module.__builtins__ = builtins
+    # Brython gives the user module a __file__ and a dozen upstream doc
+    # scripts derive an asset directory from it
+    # (os.path.dirname(os.path.abspath(__file__))). Same string on both
+    # runtimes so the scripts take the same branch.
+    module.__file__ = 'cascade-worker.js#main'
     sys.modules[_USER_MODULE] = module
     try:
         code = compile(source, '<main>', 'exec')
@@ -251,6 +256,7 @@ def reset_state():
 `;
 
 async function _bootstrap() {
+  const t0 = performance.now();
   // Dual-path like brython.js: the build copies the vendored core
   // distribution next to the worker bundle.
   const indexURL = typeof ESBUILD !== 'undefined'
@@ -261,6 +267,7 @@ async function _bootstrap() {
   // (it must stay an external, lazily fetched asset).
   const moduleURL = indexURL + 'pyodide.mjs';
   const pyodideModule = await import(/* @vite-ignore */ moduleURL);
+  const tImported = performance.now();
 
   const stderrBuffer = [];
   const pyodide = await pyodideModule.loadPyodide({
@@ -272,6 +279,9 @@ async function _bootstrap() {
     stderr: (line) => { stderrBuffer.push(line); },
   });
 
+  const tInitialized = performance.now();
+  self._pyodideRuntime = pyodide; // memoryStats() reads its wasm heap
+
   const bridge = pyodide.runPython(BRIDGE_PY + '\nglobals()');
   const registerModule = bridge.get('register_module');
   const runUser = bridge.get('run_user');
@@ -282,6 +292,21 @@ async function _bootstrap() {
     if (PY_SHIM_MODULES[name]) { registerModule(name, PY_SHIM_MODULES[name]); }
   }
   registerModule('build123d', BUILD123D_LITE_PY);
+
+  // Same split as the Brython path: fetching the interpreter, bringing it
+  // up, compiling build123d-lite. `initMs` covers loadPyodide, which does
+  // its own fetching of pyodide.asm.wasm + python_stdlib.zip — so on a cold
+  // cache it carries the download too.
+  const tDone = performance.now();
+  self._pythonBootTiming = {
+    runtime: 'pyodide',
+    version: pyodide.version,
+    fetchMs: +(tImported - t0).toFixed(1),
+    initMs: +(tInitialized - tImported).toFixed(1),
+    libMs: +(tDone - tInitialized).toFixed(1),
+    totalMs: +(tDone - t0).toFixed(1),
+  };
+  console.log('[pyruntime] pyodide boot ' + JSON.stringify(self._pythonBootTiming));
 
   return {
     /** Execute user Python source. Throws a JS Error whose message starts

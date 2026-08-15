@@ -147,7 +147,8 @@ A parameter-less load opens `PYTHON_STARTER_CODE` (a parametric flanged bearing 
 `Rot`'d set screw, `group_by(Axis.Z)[-1]` rim fillet) — see "URL Encoding & Mode
 Defaults" for how each entry point picks its mode.
 
-**Architecture — Brython in the worker (NOT Pyodide, deliberate to stay lean)**:
+**Architecture — Brython in the worker (NOT Pyodide — now a measured choice,
+see `test/b123d-validation/runtime-comparison.md`)**:
 - `packages/cascade-core/src/worker/PythonRuntime.js` lazily bootstraps Brython on the
   FIRST Python evaluation: brython.js (~1.38 MB raw / ~300 KB gz, copied to dist by the
   cascade-core build) is fetched as text and indirect-eval'd in the worker global scope
@@ -174,6 +175,17 @@ Defaults" for how each entry point picks its mode.
   (walks Brython's frame chain to the innermost `'main'` frame, `frame.$lineno`) instead
   of parsing JS eval stack frames. History steps, Select-pick → line flash, and the
   Fillet tool's variable resolution all work on Python lines.
+- **`?pyruntime=pyodide`** (or `localStorage['cascade-py-runtime']`) swaps the
+  interpreter for real CPython 3.14 on wasm — same Build123dLite.js source,
+  `packages/cascade-core/src/worker/PyodideRuntime.js`, needs
+  `node packages/cascade-core/scripts/fetch-pyodide.cjs` (gitignored `vendor/pyodide/`,
+  copied to dist only when present). It is a validated drop-in (identical 204/222
+  classification, identical mismatch magnitudes) and is NOT the default: it costs 23x
+  the download and ~3x the boot for no user-visible win. Numbers, the interop-seam
+  notes and the recommendation live in `test/b123d-validation/runtime-comparison.md`;
+  the flag is covered by `test/py-runtime.spec.js` and benchmarked by
+  `test/b123d-validation/bench-runtime.mjs`. `CS_PY_RUNTIME=pyodide` switches
+  run-lite.mjs/probe.mjs over.
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,
