@@ -976,6 +976,11 @@ class Location:
             rz = 0.0
         return Vector(math.degrees(rx), math.degrees(ry), math.degrees(rz))
 
+    def to_tuple(self):
+        """((x, y, z), (rx, ry, rz)) — translation plus intrinsic-XYZ Euler
+        DEGREES (build123d Location.to_tuple)."""
+        return tuple(self.position), tuple(self.orientation)
+
     @property
     def x_axis(self):
         """Axis along this location's local X (build123d Location.x_axis)."""
@@ -1082,6 +1087,138 @@ class Rotation(Location):
 
 
 Rot = Rotation
+
+
+class Matrix:
+    """A 3D, 4x4 transformation matrix, used to move geometry in space
+    (build123d geometry.Matrix). Upstream wraps gp_GTrsf; lite's Location
+    algebra is already pure Python, so the matrix is stored as three rows of
+    four floats with the implied last row [0, 0, 0, 1] — same accessors,
+    same validation, same repr."""
+
+    def __init__(self, matrix=None):
+        rows = [[1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0]]
+        if matrix is not None:
+            if isinstance(matrix, Matrix):
+                rows = [list(r) for r in matrix._rows]
+            elif isinstance(matrix, (list, tuple)):
+                matrix = [list(row) for row in matrix]
+                valid_sizes = all(len(row) == 4 for row in matrix) and \
+                    len(matrix) in (3, 4)
+                if not valid_sizes:
+                    raise TypeError('Matrix constructor requires 2d list of '
+                                    '4x3 or 4x4, but got: ' + repr(matrix))
+                if len(matrix) == 4 and tuple(matrix[3]) != (0, 0, 0, 1):
+                    raise ValueError('Expected the last row to be [0,0,0,1], '
+                                     'but got: ' + repr(matrix[3]))
+                for row in matrix[:3]:
+                    for element in row:
+                        if not isinstance(element, (int, float)):
+                            raise TypeError('Only float or int are valid in '
+                                            'the matrix')
+                rows = [[float(v) for v in row] for row in matrix[:3]]
+            else:
+                raise TypeError(repr(matrix) + ' is of an unexpected type')
+        self._rows = rows
+
+    @property
+    def wrapped(self):
+        """The raw 3x4 rows (upstream exposes the gp_GTrsf here)."""
+        return self._rows
+
+    @staticmethod
+    def _mul_rows(a, b):
+        """Product of two 3x4 affine matrices (implied [0,0,0,1] last row)."""
+        out = []
+        for i in range(3):
+            row = []
+            for j in range(4):
+                v = sum(a[i][k] * b[k][j] for k in range(3))
+                if j == 3:
+                    v += a[i][3]
+                row.append(v)
+            out.append(row)
+        return out
+
+    def rotate(self, axis, angle):
+        """General rotate about axis by angle in degrees (upstream
+        gp_Trsf::SetRotation about the FULL axis, position included)."""
+        R = _axis_angle_mat(tuple(Vector(axis.direction).normalized()), angle)
+        p = tuple(Vector(axis.position))
+        Rp = _mat_vec(R, p)
+        rot_rows = [[R[i][0], R[i][1], R[i][2], p[i] - Rp[i]]
+                    for i in range(3)]
+        self._rows = Matrix._mul_rows(self._rows, rot_rows)
+
+    def inverse(self):
+        """Invert Matrix (raises ValueError when singular)."""
+        m = self._rows
+        det = (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+               m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+               m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
+        if abs(det) < 1e-14:
+            raise ValueError('Matrix is singular and cannot be inverted')
+        inv = [[(m[1][1] * m[2][2] - m[1][2] * m[2][1]) / det,
+                (m[0][2] * m[2][1] - m[0][1] * m[2][2]) / det,
+                (m[0][1] * m[1][2] - m[0][2] * m[1][1]) / det],
+               [(m[1][2] * m[2][0] - m[1][0] * m[2][2]) / det,
+                (m[0][0] * m[2][2] - m[0][2] * m[2][0]) / det,
+                (m[0][2] * m[1][0] - m[0][0] * m[1][2]) / det],
+               [(m[1][0] * m[2][1] - m[1][1] * m[2][0]) / det,
+                (m[0][1] * m[2][0] - m[0][0] * m[2][1]) / det,
+                (m[0][0] * m[1][1] - m[0][1] * m[1][0]) / det]]
+        t = [m[0][3], m[1][3], m[2][3]]
+        rows = [[inv[i][0], inv[i][1], inv[i][2],
+                 -sum(inv[i][k] * t[k] for k in range(3))] for i in range(3)]
+        result = Matrix()
+        result._rows = rows
+        return result
+
+    def multiply(self, other):
+        """Matrix multiplication — a Vector is transformed (point transform,
+        translation included), a Matrix returns the product."""
+        if isinstance(other, Vector):
+            m = self._rows
+            x, y, z = tuple(other)
+            return Vector(m[0][0] * x + m[0][1] * y + m[0][2] * z + m[0][3],
+                          m[1][0] * x + m[1][1] * y + m[1][2] * z + m[1][3],
+                          m[2][0] * x + m[2][1] * y + m[2][2] * z + m[2][3])
+        result = Matrix()
+        result._rows = Matrix._mul_rows(self._rows, other._rows)
+        return result
+
+    def transposed_list(self):
+        """Needed by the cqparts gltf exporter (column-major flatten)."""
+        data = [list(r) for r in self._rows] + [[0.0, 0.0, 0.0, 1.0]]
+        return [data[j][i] for i in range(4) for j in range(4)]
+
+    def __copy__(self):
+        result = Matrix()
+        result._rows = [list(r) for r in self._rows]
+        return result
+
+    def __deepcopy__(self, _memo):
+        return self.__copy__()
+
+    def __getitem__(self, row_col):
+        """Matrix[r, c] — zero-indexed, the implied 4th row included."""
+        if not isinstance(row_col, tuple) or len(row_col) != 2:
+            raise IndexError('Matrix subscript must provide (row, column)')
+        row, col = row_col
+        if not (0 <= row <= 3 and 0 <= col <= 3):
+            raise IndexError('Out of bounds access into 4x4 matrix: ' +
+                             repr(row_col))
+        if row < 3:
+            return self._rows[row][col]
+        return [0.0, 0.0, 0.0, 1.0][col]
+
+    def __repr__(self):
+        transposed = self.transposed_list()
+        matrix_str = (',' + chr(10) + '        ').join(
+            str(transposed[i::4]) for i in range(4))
+        return 'Matrix([' + matrix_str + '])'
 
 
 # ----------------------------------------------------------------- Axis ---
@@ -3665,6 +3802,112 @@ class BoundBox:
         return 'BoundBox(' + repr(tuple(self.min)) + ', ' + repr(tuple(self.max)) + ')'
 
 
+class OrientedBoundBox:
+    """An Oriented Bounding Box (build123d geometry.OrientedBoundBox on
+    OCCT's Bnd_OBB via BRepBndLib::AddOBB with upstream's arguments).
+
+    Note: like upstream, the axes of the oriented bounding box are arbitrary
+    and may not be consistent across platforms or time."""
+
+    def __init__(self, shape):
+        if isinstance(shape, Shape):
+            if shape.topo is None:
+                raise TypeError('cannot compute the OBB of an empty shape')
+            obb = w._shapeOBB(shape.topo)
+        elif shape is not None and hasattr(shape, 'XHSize'):
+            obb = shape  # a precomputed (JS) Bnd_OBB
+        else:
+            raise TypeError('Expected Bnd_OBB or Shape, got ' +
+                            type(shape).__name__)
+        self._wrapped = obb
+
+    @property
+    def wrapped(self):
+        """The raw Bnd_OBB object."""
+        return self._wrapped
+
+    @property
+    def corners(self):
+        """The unique corner points of the box, in the OBB's frame order —
+        degenerate (line/planar) shapes return only the unique points, and
+        planar corners come back polygon-ordered, like upstream."""
+        orders = {
+            # Straight line cases
+            (True, True, False): [(1, 1, 1), (1, 1, -1)],
+            (True, False, True): [(1, 1, 1), (1, -1, 1)],
+            (False, True, True): [(1, 1, 1), (-1, 1, 1)],
+            # Planar face cases
+            (True, False, False): [(1, 1, 1), (1, 1, -1), (1, -1, -1),
+                                   (1, -1, 1)],
+            (False, True, False): [(1, 1, 1), (1, 1, -1), (-1, 1, -1),
+                                   (-1, 1, 1)],
+            (False, False, True): [(1, 1, 1), (1, -1, 1), (-1, -1, 1),
+                                   (-1, 1, 1)],
+            # 3D object case (itertools.product((-1, 1), repeat=3) order)
+            (False, False, False): [(-1, -1, -1), (-1, -1, 1), (-1, 1, -1),
+                                    (-1, 1, 1), (1, -1, -1), (1, -1, 1),
+                                    (1, 1, -1), (1, 1, 1)],
+        }
+        hs = self.size * 0.5
+        order = orders[(hs.X < _TOL_1E6, hs.Y < _TOL_1E6, hs.Z < _TOL_1E6)]
+        local_corners = [Vector(sx * hs.X, sy * hs.Y, sz * hs.Z)
+                         for sx, sy, sz in order]
+        return [self.plane.from_local_coords(c) for c in local_corners]
+
+    @property
+    def diagonal(self):
+        """Full length of the body diagonal — the maximum object size."""
+        return self.wrapped.SquareExtent() ** 0.5
+
+    @property
+    def location(self):
+        """The Location of the center of the oriented bounding box."""
+        return Location(self.plane)
+
+    @property
+    def plane(self):
+        """The oriented coordinate system of the bounding box."""
+        return Plane(origin=self.center(), x_dir=self.x_direction,
+                     z_dir=self.z_direction)
+
+    @property
+    def size(self):
+        """The full extents of the box along its primary axes."""
+        return Vector(self.wrapped.XHSize(), self.wrapped.YHSize(),
+                      self.wrapped.ZHSize()) * 2.0
+
+    @property
+    def x_direction(self):
+        """The primary (X) direction, as a unit vector."""
+        d = self.wrapped.XDirection()
+        return Vector(d.X(), d.Y(), d.Z())
+
+    @property
+    def y_direction(self):
+        """The secondary (Y) direction, as a unit vector."""
+        d = self.wrapped.YDirection()
+        return Vector(d.X(), d.Y(), d.Z())
+
+    @property
+    def z_direction(self):
+        """The tertiary (Z) direction, as a unit vector."""
+        d = self.wrapped.ZDirection()
+        return Vector(d.X(), d.Y(), d.Z())
+
+    def center(self):
+        """The center point of the oriented bounding box."""
+        c = self.wrapped.Center()
+        return Vector(c.X(), c.Y(), c.Z())
+
+    def is_completely_inside(self, other):
+        """Is 'other' entirely contained within this bounding box."""
+        return bool(self.wrapped.IsCompletelyInside(other.wrapped))
+
+    def is_outside(self, point):
+        """Is the given point entirely outside this oriented bounding box."""
+        return bool(w._obbIsOut(self.wrapped, list(Vector(point))))
+
+
 Plane.XY = Plane((0, 0, 0), (1, 0, 0), (0, 0, 1))
 Plane.XZ = Plane((0, 0, 0), (1, 0, 0), (0, -1, 0))
 Plane.YZ = Plane((0, 0, 0), (0, 1, 0), (1, 0, 0))
@@ -5491,6 +5734,83 @@ def Text(txt, font_size, font='Arial', font_path=None,
     return _combine(builder, result, mode) if builder is not None else result
 
 
+class FontInfo:
+    """Representation for a registered font: family name + available styles
+    (build123d text.FontInfo; styles print as their names, like upstream)."""
+
+    def __init__(self, name, styles):
+        self.name = name
+        self.styles = tuple(styles)
+
+    def __eq__(self, other):
+        return isinstance(other, FontInfo) and self.name == other.name and \
+            self.styles == other.styles
+
+    def __repr__(self):
+        return ('Font(name=' + repr(self.name) + ', styles=' +
+                repr(tuple(self.styles)) + ')')
+
+
+class FontManager:
+    """Font registry (build123d text.FontManager wraps OCCT's Font_FontMgr).
+    COMPROMISE(text): this browser build has no system fonts, no filesystem
+    and no Font_FontMgr — only the four bundled FreeSans faces exist (the
+    ones Text() renders with), so the manager reports exactly those,
+    find_font resolves to the bundled face name (a string, not a
+    Font_SystemFont), and registering files/folders raises."""
+
+    # (family, style, bundled face name) — what Text()'s font_style resolves
+    bundled_fonts = [
+        ('FreeSans', FontStyle.REGULAR, 'FreeSans'),
+        ('FreeSans', FontStyle.BOLD, 'FreeSansBold'),
+        ('FreeSans', FontStyle.ITALIC, 'FreeSansOblique'),
+        ('FreeSans', FontStyle.BOLDITALIC, 'FreeSansBoldOblique'),
+    ]
+
+    def available_fonts(self):
+        """List of available fonts by name and available styles (aspects) —
+        upstream's aspect enumeration order: REGULAR, BOLD, BOLDITALIC,
+        ITALIC."""
+        styles = (FontStyle.REGULAR, FontStyle.BOLD, FontStyle.BOLDITALIC,
+                  FontStyle.ITALIC)
+        return [FontInfo('FreeSans', styles)]
+
+    def check_font(self, path):
+        """Font at path, or None — there is no filesystem here, so always
+        None."""
+        return None
+
+    def find_font(self, name, style=FontStyle.REGULAR):
+        """Resolve a font name + style to the bundled face that Text() would
+        use. 'Arial' resolves to FreeSans exactly like Text() does."""
+        for family, sty, face in self.bundled_fonts:
+            if sty == style and str(name) in (family, face, 'Arial'):
+                return face
+        raise ValueError('font ' + repr(name) + ' with style ' + repr(style) +
+                         ' is not bundled in build123d-lite (only the '
+                         'FreeSans family exists)')
+
+    def register_font(self, path, override=False, single_stroke=False):
+        raise NotImplementedError('FontManager.register_font is not '
+                                  'supported in build123d-lite (fonts are '
+                                  'bundled; there is no filesystem)')
+
+    def register_folder(self, path, override=False, single_stroke=False):
+        raise NotImplementedError('FontManager.register_folder is not '
+                                  'supported in build123d-lite (fonts are '
+                                  'bundled; there is no filesystem)')
+
+    def register_system_fonts(self):
+        raise NotImplementedError('FontManager.register_system_fonts is not '
+                                  'supported in build123d-lite (the browser '
+                                  'exposes no system fonts)')
+
+
+# module-level bound method, exactly like upstream text.py's
+# 'available_fonts = FontManager().available_fonts'
+available_fonts = FontManager().available_fonts
+
+
 # ---------------------------------------------------------- 1D objects ---
 
 def _seg_pts(seg):
@@ -5655,6 +5975,30 @@ def _line_object(specs, mode=Mode.ADD):
     if builder is not None and mode != Mode.PRIVATE:
         builder._specs.extend(specs)
     return curve
+
+
+class BaseLineObject(Curve):
+    """Wrap an already-built wire/curve as a BuildLine object (build123d
+    objects_curve.BaseLineObject): registers the curve with the active
+    BuildLine per mode and becomes that wire. Lite's stock 1-D objects are
+    spec-emitting functions, so this class is the exported subclassing hook —
+    a custom line object builds a Wire/Curve and calls
+    super().__init__(wire, mode)."""
+
+    def __init__(self, curve, mode=Mode.ADD):
+        if isinstance(curve, Curve) and curve._specs:
+            specs = curve._specs
+        elif isinstance(curve, Shape) and curve.topo is not None:
+            specs = _specs_from_topo_edges(curve)
+        else:
+            specs = []
+        specs = [_seg_make(s[0], [tuple(p) for p in _seg_pts(s)],
+                           _seg_params(s)) for s in specs]
+        topo = curve.topo if isinstance(curve, Shape) else curve
+        Curve.__init__(self, topo, specs)
+        builder = _active_builder(BuildLine)
+        if builder is not None and mode != Mode.PRIVATE and specs:
+            builder._specs.extend(specs)
 
 
 def Line(*pts, mode=Mode.ADD):
@@ -7954,6 +8298,15 @@ def make_hull(edges=None, tolerance=1e-3, mode=Mode.ADD):
     return _combine(builder, Sketch(face), mode)
 
 
+class DraftAngleError(RuntimeError):
+    """Solid.draft custom exception (build123d topology.three_d)."""
+
+    def __init__(self, message, face=None, problematic_shape=None):
+        RuntimeError.__init__(self, message)
+        self.face = face
+        self.problematic_shape = problematic_shape
+
+
 def draft(faces, neutral_plane, angle):
     """Apply a draft angle to faces of the active part
     (BRepOffsetAPI_DraftAngle — build123d's Solid.draft conventions)."""
@@ -8496,6 +8849,62 @@ def export_gltf(*args, **kwargs):
 class Color:
     def __init__(self, *args, **kwargs):
         self.args = args
+
+
+class GeomEncoder(json.JSONEncoder):
+    """A JSON encoder for build123d geometry objects (build123d
+    geometry.GeomEncoder): Axis, Color, Location, Plane and Vector become a
+    single-key dict {"TypeName": values}; decode with json.loads(...,
+    object_hook=GeomEncoder.geometry_hook)."""
+
+    def default(self, o):
+        """Return a JSON-serializable representation of a known geometry
+        object."""
+        if isinstance(o, Axis):
+            return {'Axis': (tuple(o.position), tuple(o.direction))}
+        if isinstance(o, Color):
+            # lite's Color is a stub keeping its constructor args
+            return {'Color': tuple(getattr(o, 'args', ()))}
+        if isinstance(o, Location):
+            tup = o.to_tuple()
+            return {'Location': (tuple(tup[0]), tuple(tup[1]))}
+        if isinstance(o, Plane):
+            return {'Plane': (tuple(o.origin), tuple(o.x_dir),
+                              tuple(o.z_dir))}
+        if isinstance(o, Vector):
+            return {'Vector': tuple(o)}
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, o)
+
+    @staticmethod
+    def geometry_hook(json_dict):
+        """Convert dictionaries back into geometry objects for decoding."""
+        if len(json_dict) != 1:
+            raise ValueError('Invalid geometry json object ' +
+                             repr(json_dict))
+        registry = {'Axis': Axis, 'Color': Color, 'Location': Location,
+                    'Plane': Plane, 'Vector': Vector}
+        for key, value in json_dict.items():
+            return registry[key](*value)
+
+
+class LocationEncoder(json.JSONEncoder):
+    """Custom JSON Encoder for Location values (build123d
+    geometry.LocationEncoder — deprecated upstream in favour of
+    GeomEncoder, kept for compatibility)."""
+
+    def default(self, o):
+        """Return a serializable object"""
+        if not isinstance(o, Location):
+            raise TypeError('Only applies to Location objects')
+        return {'Location': o.to_tuple()}
+
+    @staticmethod
+    def location_hook(obj):
+        """Convert Locations loaded from json to Location objects."""
+        if 'Location' in obj:
+            obj = Location(*[[float(f) for f in v] for v in obj['Location']])
+        return obj
 
 
 def _pack2d(objects, width_fn, length_fn):
