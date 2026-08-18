@@ -1697,6 +1697,35 @@ function _sameShape(a, b) {
   return a.IsSame(b);
 }
 
+/** GeomAbs_Shape continuity (as its integer enum value) of the junction
+ *  between two edges at a shared vertex — BRep_Tool::Parameter +
+ *  BRepAdaptor_Curve + BRepLProp::Continuity, exactly the calls build123d's
+ *  topo_explore_connected_edges makes. */
+function _edgePairContinuity(edge1, edge2, vertex, tolerance) {
+  const oc = self.oc;
+  let e1 = _asEdge(edge1); let e2 = _asEdge(edge2);
+  let u1 = oc.BRep_Tool.Parameter_2(vertex, e1);
+  let u2 = oc.BRep_Tool.Parameter_2(vertex, e2);
+  let c1 = new oc.BRepAdaptor_Curve_2(e1);
+  let c2 = new oc.BRepAdaptor_Curve_2(e2);
+  return oc.BRepLProp.Continuity_1(c1, c2, u1, u2, tolerance, tolerance).value;
+}
+
+/** Oriented bounding box of a shape (Bnd_OBB via BRepBndLib::AddOBB with
+ *  upstream build123d's arguments: triangulation used, not optimal, no shape
+ *  tolerance) — the engine behind build123d-lite's OrientedBoundBox. */
+function _shapeOBB(shape) {
+  let obb = new self.oc.Bnd_OBB_1();
+  self.oc.BRepBndLib.AddOBB(shape, obb, true, false, false);
+  return obb;
+}
+
+/** Bnd_OBB::IsOut for a plain [x, y, z] point (gp_Pnt cannot be constructed
+ *  from Brython). */
+function _obbIsOut(obb, p) {
+  return obb.IsOut_2(new self.oc.gp_Pnt_3(p[0], p[1], p[2]));
+}
+
 function _vertexPoint(vertex) {
   let p = self.oc.BRep_Tool.Pnt(vertex);
   return [p.X(), p.Y(), p.Z()];
@@ -3090,6 +3119,36 @@ function ExportSTL(shape, filename, linearDeflection, angularDeflection, asciiFo
   return text;
 }
 
+/** Write the shape as a BREP file into the worker's Emscripten MEMFS and
+ *  return the file's text content (BRepTools::Write) — the engine behind
+ *  build123d-lite's export_brep. */
+function ExportBREP(shape, filename) {
+  if (!shape || shape.IsNull()) { console.error("ExportBREP: input shape is null!"); return null; }
+  let done = self.oc.BRepTools.Write_3(shape, "/" + filename, new self.oc.Message_ProgressRange_1());
+  if (!done) { console.error("ExportBREP: BREP write failed"); return null; }
+  return self.oc.FS.readFile("/" + filename, { encoding: "utf8" });
+}
+
+/** Read a shape from a BREP file in the worker's MEMFS (BRepTools::Read with
+ *  a BRep_Builder). fileText, when given, (re)creates the MEMFS file first.
+ *  Returns null when the file is missing or unreadable — the engine behind
+ *  build123d-lite's import_brep. */
+function ImportBREP(filename, fileText) {
+  const oc = self.oc;
+  if (fileText !== undefined && fileText !== null) {
+    try { oc.FS.unlink("/" + filename); } catch (e) { /* file was absent */ }
+    oc.FS.createDataFile("/", filename, fileText, true, true);
+  }
+  let shape = new oc.TopoDS_Shape();
+  let builder = new oc.BRep_Builder();
+  let ok = false;
+  try {
+    ok = oc.BRepTools.Read_2(shape, "/" + filename, builder, new oc.Message_ProgressRange_1());
+  } catch (e) { ok = false; }
+  if (!ok || shape.IsNull()) { return null; }
+  return shape;
+}
+
 /** Group shapes into a single TopoDS_Compound (no boolean fusion). */
 function MakeCompound(shapes, keepInputs) {
   let builder = new self.oc.BRep_Builder();
@@ -4231,6 +4290,8 @@ class CascadeStudioStandardLibrary {
     self.SurfaceFromPoints = SurfaceFromPoints;
     self.PipeShellSweep = PipeShellSweep;
     self.ExportSTL = ExportSTL;
+    self.ExportBREP = ExportBREP;
+    self.ImportBREP = ImportBREP;
     self.DraftAngleFaces = DraftAngleFaces;
     self.FaceWithHoles = FaceWithHoles;
 
@@ -4252,6 +4313,9 @@ class CascadeStudioStandardLibrary {
     self._faceSurfaceType = _faceSurfaceType;
     self._faceOuterWire = _faceOuterWire;
     self._sameShape = _sameShape;
+    self._edgePairContinuity = _edgePairContinuity;
+    self._shapeOBB = _shapeOBB;
+    self._obbIsOut = _obbIsOut;
     self._edgeIsForward = _edgeIsForward;
     self._vertexPoint = _vertexPoint;
     self._edgePointAt = _edgePointAt;

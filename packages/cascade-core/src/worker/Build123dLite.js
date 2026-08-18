@@ -40,7 +40,9 @@ export const BUILD123D_LITE_PY = `
 # Those JS functions own all sceneShapes bookkeeping.
 from browser import self as w
 import math
+import json
 
+MC = 0.001
 MM = 1.0
 CM = 10.0
 M = 1000.0
@@ -125,6 +127,76 @@ class Unit:
     M = 'M'
     IN = 'IN'
     FT = 'FT'
+
+
+# build123d build_common's unit conversions (UNITS_PER_METER[Unit.MM] = 1000)
+UNITS_PER_METER = {
+    Unit.IN: M / IN,
+    Unit.FT: M / FT,
+    Unit.MC: M / MC,
+    Unit.MM: M / MM,
+    Unit.CM: M / CM,
+    Unit.M: 1,
+}
+
+
+class ApproxOption:
+    """DXF export spline approximation strategy (build123d ApproxOption)."""
+    ARC = 'ARC'
+    NONE = 'NONE'
+    SPLINE = 'SPLINE'
+
+
+class FrameMethod:
+    """Moving frame calculation method (build123d FrameMethod)."""
+    FRENET = 'FRENET'
+    CORRECTED = 'CORRECTED'
+
+
+class MeshType:
+    """3MF mesh types, typically for 3D printing (build123d MeshType)."""
+    OTHER = 'OTHER'
+    MODEL = 'MODEL'
+    SUPPORT = 'SUPPORT'
+    SOLIDSUPPORT = 'SOLIDSUPPORT'
+
+
+class NumberDisplay:
+    """Methods for displaying numbers (build123d NumberDisplay)."""
+    DECIMAL = 'DECIMAL'
+    FRACTION = 'FRACTION'
+
+
+class PageSize:
+    """Drawing page sizes (build123d PageSize)."""
+    A0 = 'A0'
+    A1 = 'A1'
+    A2 = 'A2'
+    A3 = 'A3'
+    A4 = 'A4'
+    A5 = 'A5'
+    A6 = 'A6'
+    A7 = 'A7'
+    A8 = 'A8'
+    A9 = 'A9'
+    A10 = 'A10'
+    LETTER = 'LETTER'
+    LEGAL = 'LEGAL'
+    LEDGER = 'LEDGER'
+
+
+class PositionMode:
+    """Position along curve mode (build123d PositionMode)."""
+    LENGTH = 'LENGTH'
+    PARAMETER = 'PARAMETER'
+
+
+class PrecisionMode:
+    """STEP export geometric-data precision. The member VALUES are
+    upstream's exact ints (they map to STEP write.precision.mode)."""
+    SESSION = 2
+    GREATEST = 1
+    AVERAGE = 0
 
 
 class Until:
@@ -6572,6 +6644,92 @@ def Helix(pitch, height, radius, center=(0, 0, 0), direction=(0, 0, 1),
     return _line_object([spec], mode)
 
 
+def polar(length, angle):
+    """Convert polar coordinates into cartesian coordinates (build123d
+    topology.utils.polar)."""
+    return (length * math.cos(math.radians(angle)),
+            length * math.sin(math.radians(angle)))
+
+
+def delta(shapes_one, shapes_two):
+    """Compare the OCCT objects of each list and return the differences
+    (build123d topology.utils.delta). Upstream takes a set difference of the
+    .wrapped objects; Brython wrappers defeat set/hash identity on the
+    underlying JS objects, so membership is tested with 'is' loops instead
+    (Python 'is' compares the underlying JS objects across wrappers)."""
+    shapes_one = list(shapes_one)
+    shapes_two = list(shapes_two)
+    occt_two = [shape.wrapped for shape in shapes_two]
+    shape_delta = []
+    for shape in shapes_one:
+        if not any(shape.wrapped is other for other in occt_two):
+            shape_delta.append(shape)
+    return shape_delta
+
+
+def topo_explore_common_vertex(edge1, edge2):
+    """Given two edges, find the common vertex, or None (build123d
+    topology.zero_d.topo_explore_common_vertex). Accepts Edge wrappers or
+    raw TopoDS edges."""
+    topods_edge1 = edge1.wrapped if isinstance(edge1, Shape) else edge1
+    topods_edge2 = edge2.wrapped if isinstance(edge2, Shape) else edge2
+    if topods_edge1 is None or topods_edge2 is None:
+        raise ValueError('edge is empty')
+    verts1 = []
+    verts2 = []
+    w.ForEachVertex(topods_edge1, verts1.append)
+    w.ForEachVertex(topods_edge2, verts2.append)
+    for vertex1 in verts1:
+        for vertex2 in verts2:
+            if w._sameShape(vertex1, vertex2):
+                return Vertex(vertex1)  # Common vertex found
+    return None  # No common vertex found
+
+
+def topo_explore_connected_edges(edge, parent=None,
+                                 continuity=ContinuityLevel.C0):
+    """Find edges connected to the given edge with at least the requested
+    continuity (build123d topology.one_d.topo_explore_connected_edges).
+    The junction continuity comes from BRepLProp::Continuity over the two
+    BRepAdaptor curves at the shared vertex, exactly like upstream."""
+    # GeomAbs_Shape enum value -> ContinuityLevel (C0=0, G1=1, C1=2, G2=3,
+    # C2=4; anything smoother counts as C2, like upstream's default)
+    continuity_map = {0: ContinuityLevel.C0, 1: ContinuityLevel.C1,
+                      2: ContinuityLevel.C1, 3: ContinuityLevel.C2,
+                      4: ContinuityLevel.C2}
+    parent = parent if parent is not None else \
+        getattr(edge, 'topo_parent', None) or edge.parent
+    if parent is None:
+        raise ValueError('edge has no valid parent')
+    if edge.wrapped is None:
+        raise ValueError('edge is empty')
+    given_topods_edge = edge.wrapped
+    connected_edges = []
+
+    # Find all the TopoDS_Edges for this Shape
+    topods_edges = [e.wrapped for e in parent.edges() if e.wrapped is not None]
+
+    for topods_edge in topods_edges:
+        # Don't match with the given edge
+        if w._sameShape(given_topods_edge, topods_edge):
+            continue
+        # If the edge shares a vertex with the given edge they are connected
+        common_vertex = topo_explore_common_vertex(given_topods_edge,
+                                                   topods_edge)
+        if common_vertex is not None and common_vertex.wrapped is not None:
+            actual = w._edgePairContinuity(given_topods_edge, topods_edge,
+                                           common_vertex.wrapped, _TOL_1E6)
+            actual_level = continuity_map.get(int(actual), ContinuityLevel.C2)
+            if actual_level >= continuity:
+                # upstream dedupes with a set of TopoDS_Edge; sets are
+                # unreliable on Brython-wrapped JS objects, so IsSame loops
+                if not any(w._sameShape(topods_edge, c)
+                           for c in connected_edges):
+                    connected_edges.append(topods_edge)
+
+    return ShapeList(Edge(e) for e in connected_edges)
+
+
 def edges_to_wires(edges, tol=1e-6):
     """Group connected edges into wires (build123d's edges_to_wires).
     COMPROMISE(edges-to-wires): ShapeAnalysis_FreeBounds::ConnectEdgesToWires
@@ -9488,6 +9646,282 @@ class _Path:
 
 
 path = _Path
+`,
+  json: `
+# json shim: the pure-Python subset build123d-lite needs — dumps() with
+# cls=/default=/indent=/sort_keys=/separators= and loads() with object_hook=
+# (GeomEncoder/LocationEncoder subclass json.JSONEncoder). brython.js cannot
+# load its bundled json machinery inside a module worker, exactly like math.
+# NOTE: written without backslash escapes (chr(92) etc.) because this source
+# is embedded in a JS template string that consumes one level of escaping.
+
+_BS = chr(92)
+_WS = ' ' + chr(9) + chr(10) + chr(13)
+_ESCAPES = {
+    '"': _BS + '"',
+    _BS: _BS + _BS,
+    chr(10): _BS + 'n',
+    chr(9): _BS + 't',
+    chr(13): _BS + 'r',
+    chr(8): _BS + 'b',
+    chr(12): _BS + 'f',
+}
+_UNESCAPES = {'"': '"', _BS: _BS, '/': '/', 'n': chr(10), 't': chr(9),
+              'r': chr(13), 'b': chr(8), 'f': chr(12)}
+
+
+class JSONDecodeError(ValueError):
+    def __init__(self, msg, doc='', pos=0):
+        ValueError.__init__(self, str(msg) + ': char ' + str(pos))
+        self.msg = msg
+        self.doc = doc
+        self.pos = pos
+
+
+def _encode_string(s, ensure_ascii):
+    out = ['"']
+    for ch in s:
+        esc = _ESCAPES.get(ch)
+        if esc is not None:
+            out.append(esc)
+            continue
+        code = ord(ch)
+        if code < 32 or (ensure_ascii and code > 126):
+            out.append(_BS + 'u' + format(code, '04x'))
+        else:
+            out.append(ch)
+    out.append('"')
+    return ''.join(out)
+
+
+def _encode_float(x):
+    if x != x:
+        return 'NaN'
+    if x == float('inf'):
+        return 'Infinity'
+    if x == float('-inf'):
+        return '-Infinity'
+    return repr(x)
+
+
+class JSONEncoder:
+    def __init__(self, skipkeys=False, ensure_ascii=True, check_circular=True,
+                 allow_nan=True, sort_keys=False, indent=None,
+                 separators=None, default=None):
+        self.skipkeys = skipkeys
+        self.ensure_ascii = ensure_ascii
+        self.check_circular = check_circular
+        self.allow_nan = allow_nan
+        self.sort_keys = sort_keys
+        if indent is not None and not isinstance(indent, str):
+            indent = ' ' * int(indent)
+        self.indent = indent
+        if separators is not None:
+            self.item_separator, self.key_separator = separators
+        elif indent is not None:
+            self.item_separator, self.key_separator = ',', ': '
+        else:
+            self.item_separator, self.key_separator = ', ', ': '
+        if default is not None:
+            self.default = default
+
+    def default(self, o):
+        raise TypeError('Object of type ' + type(o).__name__ +
+                        ' is not JSON serializable')
+
+    def encode(self, o):
+        return self._emit(o, 0)
+
+    def _json_key(self, k):
+        if isinstance(k, str):
+            return _encode_string(k, self.ensure_ascii)
+        if k is True:
+            return '"true"'
+        if k is False:
+            return '"false"'
+        if k is None:
+            return '"null"'
+        if isinstance(k, (int, float)):
+            return _encode_string(self._emit(k, 0), self.ensure_ascii)
+        if self.skipkeys:
+            return None
+        raise TypeError('keys must be str, int, float, bool or None, not ' +
+                        type(k).__name__)
+
+    def _nl(self, depth):
+        if self.indent is None:
+            return ''
+        return chr(10) + self.indent * depth
+
+    def _emit(self, o, depth):
+        if o is True:
+            return 'true'
+        if o is False:
+            return 'false'
+        if o is None:
+            return 'null'
+        if isinstance(o, str):
+            return _encode_string(o, self.ensure_ascii)
+        if isinstance(o, float):
+            return _encode_float(o)
+        if isinstance(o, int):
+            return str(o)
+        if isinstance(o, dict):
+            items = list(o.items())
+            if self.sort_keys:
+                items.sort(key=lambda kv: kv[0])
+            parts = []
+            for k, v in items:
+                key = self._json_key(k)
+                if key is None:
+                    continue
+                parts.append(key + self.key_separator +
+                             self._emit(v, depth + 1))
+            if not parts:
+                return '{}'
+            sep = self.item_separator + self._nl(depth + 1)
+            return ('{' + self._nl(depth + 1) + sep.join(parts) +
+                    self._nl(depth) + '}')
+        if isinstance(o, (list, tuple)):
+            parts = [self._emit(v, depth + 1) for v in o]
+            if not parts:
+                return '[]'
+            sep = self.item_separator + self._nl(depth + 1)
+            return ('[' + self._nl(depth + 1) + sep.join(parts) +
+                    self._nl(depth) + ']')
+        return self._emit(self.default(o), depth)
+
+
+def dumps(obj, cls=None, skipkeys=False, ensure_ascii=True,
+          check_circular=True, allow_nan=True, indent=None, separators=None,
+          default=None, sort_keys=False, **kw):
+    enc_cls = cls if cls is not None else JSONEncoder
+    enc = enc_cls(skipkeys=skipkeys, ensure_ascii=ensure_ascii,
+                  check_circular=check_circular, allow_nan=allow_nan,
+                  indent=indent, separators=separators, default=default,
+                  sort_keys=sort_keys)
+    return enc.encode(obj)
+
+
+def _parse_string(s, i):
+    i += 1  # skip the opening quote
+    out = []
+    while True:
+        if i >= len(s):
+            raise JSONDecodeError('Unterminated string', s, i)
+        ch = s[i]
+        if ch == '"':
+            return ''.join(out), i + 1
+        if ch == _BS:
+            nxt = s[i + 1] if i + 1 < len(s) else ''
+            if nxt == 'u':
+                out.append(chr(int(s[i + 2:i + 6], 16)))
+                i += 6
+                continue
+            rep = _UNESCAPES.get(nxt)
+            if rep is None:
+                raise JSONDecodeError('Invalid escape', s, i)
+            out.append(rep)
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+
+
+def _parse_value(s, i, object_hook):
+    while i < len(s) and s[i] in _WS:
+        i += 1
+    if i >= len(s):
+        raise JSONDecodeError('Expecting value', s, i)
+    ch = s[i]
+    if ch == '{':
+        i += 1
+        obj = {}
+        while True:
+            while i < len(s) and s[i] in _WS:
+                i += 1
+            if i < len(s) and s[i] == '}':
+                i += 1
+                break
+            key, i = _parse_string(s, i)
+            while i < len(s) and s[i] in _WS:
+                i += 1
+            if i >= len(s) or s[i] != ':':
+                raise JSONDecodeError('Expecting colon', s, i)
+            value, i = _parse_value(s, i + 1, object_hook)
+            obj[key] = value
+            while i < len(s) and s[i] in _WS:
+                i += 1
+            if i < len(s) and s[i] == ',':
+                i += 1
+                continue
+            if i < len(s) and s[i] == '}':
+                i += 1
+                break
+            raise JSONDecodeError('Expecting comma or brace', s, i)
+        if object_hook is not None:
+            obj = object_hook(obj)
+        return obj, i
+    if ch == '[':
+        i += 1
+        arr = []
+        while True:
+            while i < len(s) and s[i] in _WS:
+                i += 1
+            if i < len(s) and s[i] == ']':
+                i += 1
+                break
+            value, i = _parse_value(s, i, object_hook)
+            arr.append(value)
+            while i < len(s) and s[i] in _WS:
+                i += 1
+            if i < len(s) and s[i] == ',':
+                i += 1
+                continue
+            if i < len(s) and s[i] == ']':
+                i += 1
+                break
+            raise JSONDecodeError('Expecting comma or bracket', s, i)
+        return arr, i
+    if ch == '"':
+        return _parse_string(s, i)
+    for word, value in (('true', True), ('false', False), ('null', None),
+                        ('NaN', float('nan')), ('Infinity', float('inf')),
+                        ('-Infinity', float('-inf'))):
+        if s.startswith(word, i):
+            return value, i + len(word)
+    j = i
+    if s[j] == '-':
+        j += 1
+    is_float = False
+    while j < len(s) and (s[j].isdigit() or s[j] in '.eE+-'):
+        if s[j] in '.eE':
+            is_float = True
+        j += 1
+    text = s[i:j]
+    try:
+        return (float(text) if is_float else int(text)), j
+    except ValueError:
+        raise JSONDecodeError('Expecting value', s, i)
+
+
+def loads(s, object_hook=None, **kw):
+    if isinstance(s, (bytes, bytearray)):
+        s = s.decode('utf-8')
+    value, i = _parse_value(s, 0, object_hook)
+    while i < len(s) and s[i] in _WS:
+        i += 1
+    if i != len(s):
+        raise JSONDecodeError('Extra data', s, i)
+    return value
+
+
+def dump(obj, fp, **kw):
+    fp.write(dumps(obj, **kw))
+
+
+def load(fp, **kw):
+    return loads(fp.read(), **kw)
 `,
   logging: `
 # logging shim: swallows everything (worker console is used via print)
