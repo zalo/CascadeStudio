@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 85 tests (incl. 50 frozen build123d example scripts)
+npx playwright test    # 91 tests (incl. 50 frozen build123d example scripts)
 ```
 
 ## Architecture (Monorepo)
@@ -206,8 +206,8 @@ see `test/b123d-validation/runtime-comparison.md`)**:
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,
 see `test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
 Too Tall Toby challenge parts (mass asserts kept) and every docs `.rst`
-code-block; currently **204/222 scripts PASS** (volume within 0.5%, bbox within
-1e-3/axis), 8 MISMATCH, 9 ERROR, 1 TIMEOUT, 10 SKIP (real build123d fails
+code-block; currently **205/222 scripts PASS** (volume within 0.5%, bbox within
+1e-3/axis), 10 MISMATCH, 5 ERROR, 2 TIMEOUT, 10 SKIP (real build123d fails
 natively) — full breakdown with per-script reasons AND a hand-maintained
 root-cause/defaults audit of every non-PASS in the committed
 `test/b123d-validation/report.md`. A full 232-script harness pass takes ~150 s
@@ -277,7 +277,22 @@ reads assets handed to the worker up front (`CascadeAPI.loadExternalFiles`);
 `gp_Cylinder`/`gp_Sphere`/`gp_Torus` and `Extrema_ExtAlgo` retired the
 `curvature-sign` and `point-projection` compromises; and joints gained
 `symbol`, survival through `Shape.moved`/`Compound(joints=)`,
-`Shape.show_topology` and `Compound.do_children_intersect`:
+`Shape.show_topology` and `Compound.do_children_intersect`. Since the
+upstream-exports round: lite exposes 204 of upstream's effective 200-name
+`__all__` surface (only the 12 deliberate skips are absent — drafting beyond
+`ArrowHead`, `Export2D`/`DotLength`, `import_dxf`,
+`import_svg_as_buildline_code`, `detect_primitives`, `export_to_pcbway`) —
+newly: `MC`/`UNITS_PER_METER`, the seven remaining enums, `polar`/`delta`/
+`topo_explore_common_vertex`/`topo_explore_connected_edges`, singular
+`Builder.vertex/edge/wire/face/solid` + module-level getters, `Matrix`
+(pure-Python affine), `OrientedBoundBox` (real `Bnd_OBB`),
+`GeomEncoder`/`LocationEncoder` (on a pure-Python `json` shim — Brython's
+json can't load in a module worker), `DraftAngleError`, `BaseLineObject`,
+the four deprecated tangent objects (`PointArcTangentLine`/`Arc`,
+`ArcArcTangentLine`/`Arc` — native-parity to 6 decimals),
+`project_workplane`, `import_brep`/`export_brep` (BRepTools via MEMFS), and
+an honest `FontManager`/`available_fonts` (bundled FreeSans family only);
+frozen in `test/python-mode-upstream-exports.spec.js`:
 
 | Area | Supported | Not supported |
 |---|---|---|
