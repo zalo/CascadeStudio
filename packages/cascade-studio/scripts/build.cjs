@@ -75,6 +75,27 @@ fs.copyFileSync(
   path.join(typedefsDir, 'StandardLibraryIntellisense.ts')
 );
 
+// 4b. Copy the basedpyright language-server worker (Python IntelliSense) and
+// bundle the build123d-lite Python stubs into a single JSON (one fetch).
+console.log('[cascade-studio] Copying pyright worker + Python stubs...');
+const pyrightDir = path.join(distDir, 'pyright');
+fs.mkdirSync(pyrightDir, { recursive: true });
+fs.copyFileSync(
+  path.join(monoRoot, 'node_modules', 'browser-basedpyright', 'dist', 'pyright.worker.js'),
+  path.join(pyrightDir, 'pyright.worker.js')
+);
+const stubsRoot = path.join(coreRoot, 'types', 'python-stubs');
+const stubs = {};
+(function collectStubs(dir, rel) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const abs = path.join(dir, entry.name);
+    const relPath = rel ? rel + '/' + entry.name : entry.name;
+    if (entry.isDirectory()) { collectStubs(abs, relPath); }
+    else if (entry.name.endsWith('.pyi')) { stubs[relPath] = fs.readFileSync(abs, 'utf8'); }
+  }
+})(stubsRoot, '');
+fs.writeFileSync(path.join(typedefsDir, 'python-stubs.json'), JSON.stringify(stubs));
+
 // 5. Copy static assets (css, textures, icon, lib)
 console.log('[cascade-studio] Copying static assets...');
 for (const dir of ['css', 'textures', 'icon', 'lib']) {

@@ -171,6 +171,21 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   (extracted via `$B.error_trace(exc)`); it surfaces through the usual worker →
   `window.onerror` → `CascadeAPI.getErrors()` path. NOTE: worker logs/errors post
   asynchronously — tests must poll for console content, not sample right after runCode.
+- **Python IntelliSense is basedpyright in a browser worker**:
+  `packages/cascade-studio/src/PythonLanguage.js` is a minimal LSP client
+  (vscode-jsonrpc over postMessage, the micro:bit-fork `browser/boot` /
+  `browser/newWorker` protocol) around `browser-basedpyright`'s self-contained
+  `pyright.worker.js` (copied to `dist/pyright/`, ~3.2 MB gz, lazy-booted
+  ~1.5 s after a Python-mode load — JS/OpenSCAD loads pay zero). It
+  typechecks against stubs generated from REAL build123d 0.11.1 and modified
+  to lite's surface (pruned `__all__`, removed unsupported params, lite-only
+  APIs added, compromise notes in hover docstrings) — see
+  `packages/cascade-core/types/python-stubs/README.md` for regeneration.
+  The build bundles the stub tree into `dist/typedefs/python-stubs.json`;
+  diagnostics land as Monaco markers under owner `'basedpyright'`
+  (`test/python-lsp.spec.js` freezes the contract). Hover, completion and
+  signature help are registered for language `'python'`; leaving Python mode
+  clears the markers.
 - **Line mapping works in Python mode**: `CacheOp` calls `self.getPythonUserLine()`
   (walks Brython's frame chain to the innermost `'main'` frame, `frame.$lineno`) instead
   of parsing JS eval stack frames. History steps, Select-pick → line flash, and the

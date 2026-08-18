@@ -1,5 +1,7 @@
 // EditorManager.js - Monaco editor management
 
+import { PythonLanguageProvider } from './PythonLanguage.js';
+
 const monaco = window.monaco;
 
 /** Which Python interpreter the worker should use for Python mode:
@@ -28,6 +30,17 @@ class EditorManager {
     this._typedefsPromise = null;
     this._codeContainer = null;
     this._openscadProviders = [];
+    this._pythonLsp = null;
+  }
+
+  /** Lazily boot the in-browser basedpyright language server (Python
+   *  IntelliSense). Deferred a beat so the first model render wins the
+   *  bandwidth race; idempotent after that. */
+  _ensurePythonLsp(delayMs = 0) {
+    if (typeof ESBUILD === 'undefined') { return; } // dev tree has no dist/pyright
+    if (!this._pythonLsp) { this._pythonLsp = new PythonLanguageProvider(this._app); }
+    const boot = () => { this._pythonLsp.init().catch(() => { /* logged inside */ }); };
+    if (delayMs > 0) { setTimeout(boot, delayMs); } else { boot(); }
   }
 
   /** Initialize the editor panel inside a DockviewContainer. */
@@ -49,6 +62,7 @@ class EditorManager {
     // user actually switches to JS (setMode triggers it).
     const initialMode = (this._app && this._app._resolvedMode) || this.mode;
     if (initialMode === 'cascadestudio') { this._loadTypedefs(); }
+    if (initialMode === 'python') { this._ensurePythonLsp(1500); }
 
     // Check for code serialization as an array
     this._codeContainer = container;
@@ -288,6 +302,7 @@ class EditorManager {
     this._openscadProviders = [];
 
     const model = this.editor.getModel();
+    if (this._pythonLsp && newMode !== 'python') { this._pythonLsp.clearMarkers(); }
     if (newMode === 'openscad') {
       // Switch to OpenSCAD language
       monaco.editor.setModelLanguage(model, 'openscad');
@@ -299,6 +314,8 @@ class EditorManager {
     } else if (newMode === 'python') {
       // Monaco ships a built-in Python tokenizer — no custom language needed
       monaco.editor.setModelLanguage(model, 'python');
+      this._ensurePythonLsp();
+      if (this._pythonLsp) { this._pythonLsp.sync(); }
     } else {
       // Switch back to TypeScript
       monaco.editor.setModelLanguage(model, 'typescript');

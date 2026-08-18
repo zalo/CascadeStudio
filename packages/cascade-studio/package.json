@@ -6,13 +6,18 @@
 	"description": "Browser-based parametric CAD IDE powered by cascade-core.",
 	"license": "MIT",
 	"dependencies": {
-		"cascade-core": "*",
 		"@types/three": "0.170.0",
-		"three": "^0.170.0",
-		"monaco-editor": "^0.52.0",
+		"cascade-core": "*",
 		"dockview-core": "^4.13.1",
-		"tweakpane": "^4.0.5",
+		"fflate": "^0.8.2",
+		"monaco-editor": "^0.52.0",
 		"openscad-parser": "^0.6.3",
-		"fflate": "^0.8.2"
+		"three": "^0.170.0",
+		"tweakpane": "^4.0.5",
+		"vscode-jsonrpc": "^9.0.1",
+		"vscode-languageserver-protocol": "^3.18.2"
+	},
+	"devDependencies": {
+		"browser-basedpyright": "^1.39.10"
 	}
 }
