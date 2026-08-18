@@ -4504,14 +4504,47 @@ class Builder:
         shape = self._selection_shape()
         return shape.wires() if shape is not None else ShapeList()
 
-    def face(self):
-        return self._obj.face() if self._obj else None
+    # singular getters (build_common Builder.vertex/edge/wire/face/solid):
+    # exactly one sub-shape must be selected, like upstream
+    def vertex(self, select=Select.ALL):
+        all_vertices = self.vertices(select)
+        vertex_count = len(all_vertices)
+        if vertex_count != 1:
+            raise ValueError('Expected exactly one vertex, found ' +
+                             str(vertex_count))
+        return all_vertices[0]
 
-    def wire(self):
-        return self._obj.wire() if self._obj else None
+    def edge(self, select=Select.ALL):
+        all_edges = self.edges(select)
+        edge_count = len(all_edges)
+        if edge_count != 1:
+            raise ValueError('Expected exactly one edge, found ' +
+                             str(edge_count))
+        return all_edges[0]
 
-    def edge(self):
-        return self._obj.edge() if self._obj else None
+    def wire(self, select=Select.ALL):
+        all_wires = self.wires(select)
+        wire_count = len(all_wires)
+        if wire_count != 1:
+            raise ValueError('Expected exactly one wire, found ' +
+                             str(wire_count))
+        return all_wires[0]
+
+    def face(self, select=Select.ALL):
+        all_faces = self.faces(select)
+        face_count = len(all_faces)
+        if face_count != 1:
+            raise ValueError('Expected exactly one face, found ' +
+                             str(face_count))
+        return all_faces[0]
+
+    def solid(self, select=Select.ALL):
+        all_solids = self.solids(select)
+        solid_count = len(all_solids)
+        if solid_count != 1:
+            raise ValueError('Expected exactly one solid, found ' +
+                             str(solid_count))
+        return all_solids[0]
 
     def faces(self, select=Select.ALL):
         if select == Select.LAST:
@@ -4632,6 +4665,13 @@ edges = _context_selector('edges')
 wires = _context_selector('wires')
 faces = _context_selector('faces')
 solids = _context_selector('solids')
+# ... and the singular forms (vertex() == '<builder>.vertex()', which raises
+# unless exactly one is selected — build_common's singular getters)
+vertex = _context_selector('vertex')
+edge = _context_selector('edge')
+wire = _context_selector('wire')
+face = _context_selector('face')
+solid = _context_selector('solid')
 
 
 # ------------------------------------------------- location contexts -----
