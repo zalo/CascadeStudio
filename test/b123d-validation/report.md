@@ -1,6 +1,6 @@
 # build123d-lite validation report
 
-Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded because real build123d fails natively).
+Generated 2026-08-18T19:44:10.230Z - 232 scripts (222 scored, 10 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
@@ -15,7 +15,7 @@ Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded becaus
 | Gap | Scripts |
 |---|---|
 | `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf` | 1 |
-| `other: Line 9634: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC` | 1 |
+| `other: Line 10964: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O` | 1 |
 | `NameError: Draft` | 1 |
 | `ImportError: undefined` | 1 |
 | `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l` | 1 |
@@ -60,8 +60,8 @@ Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded becaus
 - examples/build123d_logo (13 shapes)
 - examples/build123d_customizable_logo (14 shapes)
 - examples/build123d_logo_algebra (12 shapes)
-- examples/canadian_flag_algebra (25 shapes)
 - examples/canadian_flag (20 shapes)
+- examples/canadian_flag_algebra (25 shapes)
 - examples/circuit_board (1 shapes)
 - examples/circuit_board_algebra (1 shapes)
 - examples/cast_bearing_unit (10 shapes)
@@ -84,8 +84,8 @@ Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded becaus
 - examples/intersecting_pipes (3 shapes)
 - examples/clock (5 shapes)
 - examples/key_cap (5 shapes)
-- examples/key_cap_algebra (5 shapes)
 - examples/lego (3 shapes)
+- examples/key_cap_algebra (5 shapes)
 - examples/lego_algebra (3 shapes)
 - examples/loft (4 shapes)
 - examples/loft_algebra (3 shapes)
@@ -96,11 +96,11 @@ Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded becaus
 - examples/pegboard_j_hook (10 shapes)
 - examples/pegboard_j_hook_algebra (11 shapes)
 - examples/pillow_block (2 shapes)
-- examples/heat_exchanger_algebra (4 shapes)
 - examples/pillow_block_algebra (2 shapes)
 - examples/platonic_solids (5 shapes)
-- examples/maker_coin (8 shapes)
+- examples/heat_exchanger_algebra (4 shapes)
 - examples/playing_cards (14 shapes)
+- examples/maker_coin (8 shapes)
 - examples/roller_coaster (4 shapes)
 - examples/roller_coaster_algebra (4 shapes)
 - examples/shamrock (1 shapes)
@@ -136,33 +136,33 @@ Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded becaus
 - general_examples/ex29 (7 shapes)
 - general_examples/ex30 (5 shapes)
 - general_examples/ex31 (2 shapes)
-- general_examples/ex32 (3 shapes)
 - general_examples/ex33 (3 shapes)
+- general_examples/ex32 (3 shapes)
 - general_examples/ex35 (5 shapes)
-- general_examples/ex36 (3 shapes)
 - general_examples/ex37 (2 shapes)
 - general_examples_algebra/ex01 (1 shapes)
+- general_examples/ex36 (3 shapes)
 - general_examples_algebra/ex02 (1 shapes)
-- general_examples/ex34 (4 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
 - general_examples_algebra/ex09 (1 shapes)
 - general_examples_algebra/ex12 (6 shapes)
-- general_examples_algebra/ex14 (6 shapes)
-- general_examples_algebra/ex15 (8 shapes)
 - general_examples_algebra/ex11 (2 shapes)
 - general_examples_algebra/ex13 (1 shapes)
+- general_examples_algebra/ex14 (6 shapes)
+- general_examples_algebra/ex15 (8 shapes)
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
+- general_examples_algebra/ex16 (10 shapes)
 - general_examples_algebra/ex19 (6 shapes)
 - general_examples_algebra/ex20 (2 shapes)
-- general_examples_algebra/ex16 (10 shapes)
 - general_examples_algebra/ex21 (1 shapes)
-- general_examples_algebra/ex23 (4 shapes)
+- general_examples/ex34 (4 shapes)
 - general_examples_algebra/ex22 (2 shapes)
-- general_examples_algebra/ex26 (2 shapes)
+- general_examples_algebra/ex23 (4 shapes)
 - general_examples_algebra/ex24 (2 shapes)
 - general_examples_algebra/ex25 (5 shapes)
+- general_examples_algebra/ex26 (2 shapes)
 - general_examples_algebra/ex27 (2 shapes)
 - general_examples_algebra/ex30 (3 shapes)
 - general_examples_algebra/ex29 (8 shapes)
@@ -173,41 +173,41 @@ Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded becaus
 - general_examples_algebra/ex35 (4 shapes)
 - docs/center (5 shapes)
 - general_examples_algebra/ex36 (3 shapes)
+- general_examples_algebra/ex34 (3 shapes)
 - docs/objects_1d_airfoil (2 shapes)
 - docs/objects_1d_blend_curve (4 shapes)
 - docs/objects_1d_bspline (2 shapes)
 - docs/objects_1d_constrained (7 shapes)
 - docs/objects_1d_ellipticalstartarc (4 shapes)
-- general_examples_algebra/ex34 (3 shapes)
 - docs/objects_1d_parabolic_hyperbolic (3 shapes)
-- docs/objects_3d (10 shapes)
-- docs/pack_demo (12 shapes)
-- docs/selector_example (1 shapes)
 - docs/heart_token (16 shapes)
+- docs/pack_demo (12 shapes)
+- docs/objects_3d (10 shapes)
+- docs/selector_example (1 shapes)
 - docs-selectors/filter_axisplane (13 shapes)
-- docs/slide_latch (7 shapes)
 - docs-selectors/filter_geomtype (1 shapes)
+- docs/slide_latch (7 shapes)
 - docs-selectors/filter_nested (7 shapes)
 - docs-selectors/filter_shape_properties (4 shapes)
 - docs-selectors/filter_inner_wire_count (53 shapes)
 - docs-selectors/group_hole_area (3 shapes)
-- docs-selectors/group_properties_with_keys (10 shapes)
-- docs-selectors/sort_along_wire (2 shapes)
 - docs-selectors/selectors_operators (9 shapes)
+- docs-selectors/sort_along_wire (2 shapes)
 - docs-selectors/sort_sortby (6 shapes)
-- docs-selectors/group_axis (3 shapes)
-- ttt/ttt-ppp0102 (6 shapes)
+- docs-selectors/group_properties_with_keys (10 shapes)
 - ttt/ttt-ppp0101 (9 shapes)
+- docs-selectors/group_axis (3 shapes)
 - ttt/ttt-ppp0103 (4 shapes)
+- ttt/ttt-ppp0102 (6 shapes)
 - ttt/ttt-ppp0104 (9 shapes)
-- ttt/ttt-ppp0105 (5 shapes)
 - ttt/ttt-ppp0106 (9 shapes)
+- ttt/ttt-ppp0105 (5 shapes)
 - ttt/ttt-ppp0108 (6 shapes)
 - ttt/ttt-ppp0109 (8 shapes)
 - docs-rst/OpenSCAD/b01 (2 shapes)
 - docs-rst/OpenSCAD/b02 (2 shapes)
-- ttt/ttt-24-SPO-06-Buffer_Stand (9 shapes)
 - docs-rst/OpenSCAD/all (2 shapes)
+- ttt/ttt-24-SPO-06-Buffer_Stand (9 shapes)
 - docs-rst/algebra_performance/b03 (1 shapes)
 - ttt/ttt-ppp0107 (11 shapes)
 - docs-rst/build_sketch/b03 (1 shapes)
@@ -263,7 +263,7 @@ Generated 2026-08-15T13:48:59.315Z - 232 scripts (222 scored, 10 excluded becaus
 ## Errors by script
 
 - examples/dual_color_3mf: `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf`
-- examples/toy_truck: `other: Line 9634: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the OC`
+- examples/toy_truck: `other: Line 10964: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O`
 - docs/objects_2d: `NameError: Draft`
 - ttt/ttt-23-t-24-curved_support: `ImportError: undefined`
 - ttt/ttt-ppp0110: `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l`
