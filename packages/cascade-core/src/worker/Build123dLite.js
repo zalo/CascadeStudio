@@ -9257,7 +9257,9 @@ def import_brep(file_name):
     FS, where export_brep wrote it earlier in the run (round-trip)."""
     name = str(file_name).replace('/', '_')
     topo = w.ImportBREP(name)
-    if topo is None:
+    # a JS null arrives as a falsy proxy, not Python None (same guard as
+    # import_step)
+    if topo is None or not topo:
         raise ValueError('Could not import ' + str(file_name))
     res = Compound.__new__(Compound)
     Shape.__init__(res, topo)
@@ -9287,7 +9289,8 @@ def export_brep(to_export, file_path):
     where import_brep reads it back. Returns the write status like
     upstream."""
     text = w.ExportBREP(_topo(to_export), str(file_path).replace('/', '_'))
-    return text is not None
+    # bool() rather than 'is not None': a JS null arrives as a falsy proxy
+    return bool(text)
 
 
 def export_step(*args, **kwargs):
