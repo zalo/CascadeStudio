@@ -6846,6 +6846,401 @@ def ConstrainedLines(*args, angle=None, direction=None, selector=None,
     return _constrained_curve(edges, selector, mode)
 
 
+# ------------------------------------------- deprecated tangent objects ---
+# build123d 0.11's PointArcTangentLine / PointArcTangentArc /
+# ArcArcTangentLine / ArcArcTangentArc (all deprecated upstream in favour of
+# ConstrainedLines/ConstrainedArcs, which lite has on the real Geom2dGcc
+# solvers). Ported statement-for-statement in the workplane's LOCAL frame:
+# inside a BuildLine lite keeps every spec local until __exit__, which is
+# exactly upstream's math evaluated on Plane.XY.
+
+def _tangent_object_plane(name, arcs, points):
+    """The plane the tangent-object math runs in. Inside a BuildLine
+    everything is local, so it is Plane.XY; in algebra mode it is built from
+    the first arc like upstream (origin at its center, z along its normal)
+    and every input is validated coplanar (upstream's common_plane check).
+    Lite's 1-D emitters work in the XY plane, so a non-XY-parallel algebra
+    plane raises instead of emitting wrong geometry."""
+    if _active_builder(BuildLine) is not None:
+        return Plane((0, 0, 0), (1, 0, 0), (0, 0, 1))
+    plane = Plane(arcs[0].arc_center, z_dir=arcs[0].normal())
+    for p in list(points) + [a.arc_center for a in arcs]:
+        if abs(plane.to_local_coords(p).Z) > 1e-4:
+            raise ValueError(name + ' only works on a single plane.')
+    if abs(plane.z_dir.X) > 1e-9 or abs(plane.z_dir.Y) > 1e-9:
+        raise NotImplementedError(
+            name + ': build123d-lite 1-D objects work in the XY plane or a '
+            'BuildLine workplane')
+    return plane
+
+
+def _wp_dir_in(plane, d):
+    """A world direction expressed in the plane's frame (no origin shift)."""
+    d = Vector(d)
+    return Vector(d.dot(plane.x_dir), d.dot(plane.y_dir), d.dot(plane.z_dir))
+
+
+def _wp_dir_out(plane, d):
+    """A plane-frame direction expressed in world coordinates."""
+    d = Vector(d)
+    return plane.x_dir * d.X + plane.y_dir * d.Y + plane.z_dir * d.Z
+
+
+def _tangent_arc_geom_check(arc, message):
+    if _single_edge_of(arc).geom_type != GeomType.CIRCLE:
+        raise ValueError(message)
+
+
+def PointArcTangentLine(point, arc, side=Side.LEFT, mode=Mode.ADD):
+    """Create a straight tangent line from a point to a circular arc
+    (build123d objects_curve.PointArcTangentLine). side picks which of the
+    two tangents to keep."""
+    side_sign = {Side.LEFT: -1, Side.RIGHT: 1}
+    _tangent_arc_geom_check(arc, 'Arc must have GeomType.CIRCLE.')
+    workplane = _tangent_object_plane('PointArcTangentLine', [arc],
+                                      [Vector(point)])
+    tangent_point = workplane.to_local_coords(Vector(point))
+    arc_center = workplane.to_local_coords(arc.arc_center)
+    radius = arc.radius
+    midline = tangent_point - arc_center
+
+    if midline.length <= radius:
+        raise ValueError('Cannot find tangent for point on or inside arc.')
+
+    # Find angle phi between midline and x and angle theta between midline
+    # length and radius; add them with a sign on theta to pick a direction.
+    # This angle is the tangent location around the circle from x.
+    x_dir = Vector(1, 0, 0)
+    phi = midline.get_signed_angle(x_dir)
+    other_leg = math.sqrt(midline.length ** 2 - radius ** 2)
+    theta = Vector(radius, other_leg).get_signed_angle(x_dir)
+    angle = side_sign[side] * theta + phi
+    intersect = Vector(radius * math.cos(math.radians(angle)),
+                       radius * math.sin(math.radians(angle))) + arc_center
+
+    return Line(workplane.from_local_coords(tangent_point),
+                workplane.from_local_coords(intersect), mode=mode)
+
+
+def ArcArcTangentLine(start_arc, end_arc, side=Side.LEFT, keep=Keep.INSIDE,
+                      mode=Mode.ADD):
+    """Create a straight line tangent to two circular arcs (build123d
+    objects_curve.ArcArcTangentLine). side places the tangent, keep picks
+    the INSIDE (crossing) or OUTSIDE tangent pair member."""
+    _tangent_arc_geom_check(start_arc, 'Start arc must have GeomType.CIRCLE.')
+    _tangent_arc_geom_check(end_arc, 'End arc must have GeomType.CIRCLE.')
+    workplane = _tangent_object_plane('ArcArcTangentLine',
+                                      [start_arc, end_arc], [])
+
+    side_sign = 1 if side == Side.LEFT else -1
+    arcs = [start_arc, end_arc]
+    points = [workplane.to_local_coords(a.arc_center) for a in arcs]
+    radii = [a.radius for a in arcs]
+    midline = points[1] - points[0]
+
+    if midline.length <= abs(radii[1] - radii[0]):
+        raise ValueError('Cannot find tangent when one arc contains the '
+                         'other.')
+    if keep == Keep.INSIDE:
+        if midline.length < sum(radii):
+            raise ValueError('Cannot find INSIDE tangent for overlapping '
+                             'arcs.')
+        if midline.length == sum(radii):
+            raise ValueError('Cannot find INSIDE tangent for tangent arcs.')
+
+    # Method: Wikipedia "Tangent lines to two circles" — theta is the angle
+    # formed by the triangle legs midline.length and r0 -+ r1; INSIDE theta
+    # for arc1 is 180 degrees from theta for arc0.
+    x_dir = Vector(1, 0, 0)
+    phi = midline.get_signed_angle(x_dir)
+    radius = radii[0] + radii[1] if keep == Keep.INSIDE else \
+        radii[0] - radii[1]
+    other_leg = math.sqrt(midline.length ** 2 - radius ** 2)
+    theta = Vector(radius, other_leg).get_signed_angle(x_dir)
+    angle = side_sign * theta + phi
+
+    intersect = []
+    for i in range(len(arcs)):
+        angle = i * 180 + angle if keep == Keep.INSIDE else angle
+        intersect.append(Vector(radii[i] * math.cos(math.radians(angle)),
+                                radii[i] * math.sin(math.radians(angle))) +
+                         points[i])
+
+    return Line(workplane.from_local_coords(intersect[0]),
+                workplane.from_local_coords(intersect[1]), mode=mode)
+
+
+def PointArcTangentArc(point, direction, arc, side=Side.LEFT, mode=Mode.ADD):
+    """Create an arc from a point/tangent pair whose other end is tangent to
+    a circular arc (build123d objects_curve.PointArcTangentArc — the tangent
+    radius is found with the same Nelder-Mead minimization, on the scipy
+    shim)."""
+    from scipy.optimize import minimize
+    _tangent_arc_geom_check(arc, 'Arc must have GeomType.CIRCLE')
+    workplane = _tangent_object_plane('PointArcTangentArc', [arc],
+                                      [Vector(point)])
+    arc_point = workplane.to_local_coords(Vector(point))
+    arc_tangent = _wp_dir_in(workplane, direction).normalized()
+    arc_center = workplane.to_local_coords(arc.arc_center)
+    arc_radius = arc.radius
+    z_dir = Vector(0, 0, 1)
+
+    midline = arc_point - arc_center
+    if midline.length == arc_radius:
+        raise ValueError('Cannot find tangent for point on arc.')
+    if midline.length <= arc_radius:
+        raise NotImplementedError('Point inside arc not yet implemented.')
+
+    # Determine where arc_point is located relative to arc: ref forms a
+    # bisecting line parallel to arc tangent with the same distance from the
+    # arc center as arc point in the direction of the arc tangent.
+    tangent_perp = arc_tangent.cross(z_dir)
+    ref_scale = (arc_center - arc_point).dot(-arc_tangent)
+    ref = arc_tangent * ref_scale + arc_center
+    ref_to_point = (arc_point - ref).dot(tangent_perp)
+
+    keep_sign = -1 if side == Side.LEFT else 1
+    # Tangent radius to infinity (and beyond)
+    if keep_sign * ref_to_point == arc_radius:
+        raise ValueError('Point is already tangent to arc, use tangent line.')
+
+    # Use magnitude and sign of ref to arc point along with keep to determine
+    # which "side" angle the arc center will be on.
+    side_sign = 1 if ref_to_point < 0 else -1
+    if abs(ref_to_point) < arc_radius:
+        # point/tangent pointing inside arc, both arcs near
+        arc_type = 1
+        angle = keep_sign * -90
+        if ref_scale > 1:
+            angle = -angle
+    else:
+        # point/tangent pointing outside arc, one near arc one far
+        angle = side_sign * -90
+        if side == Side.LEFT:
+            arc_type = -side_sign
+        else:
+            arc_type = side_sign
+
+    # Protect against massive circles that are effectively straight lines
+    # (upstream: 1000 * the arc+point bounding box diagonal; the full circle
+    # bbox covers any partial arc and stays deterministic in local coords)
+    min_x = min(arc_center.X - arc_radius, arc_point.X)
+    max_x = max(arc_center.X + arc_radius, arc_point.X)
+    min_y = min(arc_center.Y - arc_radius, arc_point.Y)
+    max_y = max(arc_center.Y + arc_radius, arc_point.Y)
+    max_size = 1000 * math.hypot(max_x - min_x, max_y - min_y)
+
+    # Function to be minimized
+    def func(radius_arr, perpendicular_bisector, minimize_type):
+        rr = radius_arr[0]
+        center = arc_point + perpendicular_bisector * rr
+        separation = (arc_center - center).length - arc_radius
+        if minimize_type == 1:
+            # near side arc
+            return abs(separation - rr)
+        # far side arc
+        return abs(separation - rr + arc_radius * 2)
+
+    # Find arc center by minimizing func result
+    rotation_axis = Axis((0, 0, 0), (0, 0, 1))
+    perpendicular_bisector = arc_tangent.rotate(rotation_axis, angle)
+    result = minimize(func, x0=0, args=(perpendicular_bisector, arc_type),
+                      method='Nelder-Mead', bounds=[(0.0, max_size)],
+                      tol=_TOL_1E6)
+    tangent_radius = result.x[0]
+    tangent_center = arc_point + perpendicular_bisector * tangent_radius
+
+    # Check if minimizer hit max size
+    if tangent_radius == max_size:
+        raise RuntimeError('Arc radius very large. Can tangent line be used?')
+
+    # dir needs to be flipped for far arc
+    tangent_normal = (arc_center - tangent_center).normalized()
+    tangent_dir = tangent_normal.cross(z_dir) * arc_type
+    tangent_point = tangent_normal * tangent_radius + tangent_center
+
+    # Sanity checks: the tangent point must be on the arc, and the new
+    # tangent direction colinear with the arc's tangent there (a circle's
+    # tangent is perpendicular to its radius)
+    if abs(arc_radius - (tangent_point - arc_center).length) > _TOL_1E6:
+        raise RuntimeError('No tangent arc found, no tangent point found.')
+    arc_dir = (tangent_point - arc_center).normalized().cross(z_dir)
+    if tangent_dir.cross(arc_dir).length > _TOL_1E6:
+        raise RuntimeError('No tangent arc found, found tangent out of '
+                           'tolerance.')
+
+    return TangentArc(workplane.from_local_coords(arc_point),
+                      workplane.from_local_coords(tangent_point),
+                      tangent=_wp_dir_out(workplane, arc_tangent), mode=mode)
+
+
+def _circle_intersections_2d(c0, r0, c1, r1):
+    """Intersection points of two circles in the local XY plane — the
+    analytic form of the sympy.intersection upstream's ArcArcTangentArc
+    leans on (lite has no sympy; the algebra is exact either way)."""
+    d = (c1 - c0).length
+    if d < 1e-12:
+        return []
+    a = (d * d + r0 * r0 - r1 * r1) / (2.0 * d)
+    h2 = r0 * r0 - a * a
+    if h2 < -1e-9 * max(r0 * r0, 1.0):
+        return []
+    h = math.sqrt(max(h2, 0.0))
+    ex = (c1 - c0) / d
+    ey = Vector(-ex.Y, ex.X, 0.0)
+    base = c0 + ex * a
+    if h < 1e-12:
+        return [base]
+    return [base + ey * h, base - ey * h]
+
+
+def ArcArcTangentArc(start_arc, end_arc, radius, side=Side.LEFT,
+                     keep=(Keep.INSIDE, Keep.INSIDE), short_sagitta=True,
+                     mode=Mode.ADD):
+    """Create an arc of the given radius tangent to two circular arcs
+    (build123d objects_curve.ArcArcTangentArc). keep is a (placement, type)
+    pair: placement is start_arc tangent INSIDE or OUTSIDE the tangent arc
+    (BOTH for overlapping arcs with type INSIDE); type is the tangent arc
+    INSIDE or OUTSIDE start/end arc."""
+    keep_placement, keep_type = (keep, keep) if isinstance(keep, str) \
+        else keep
+
+    if keep_placement == Keep.BOTH and keep_type != Keep.INSIDE:
+        raise ValueError('Keep.BOTH can only be used in configuration: '
+                         '(Keep.BOTH, Keep.INSIDE)')
+    _tangent_arc_geom_check(start_arc, 'Start arc must have GeomType.CIRCLE.')
+    _tangent_arc_geom_check(end_arc, 'End arc must have GeomType.CIRCLE.')
+    workplane = _tangent_object_plane('ArcArcTangentArc',
+                                      [start_arc, end_arc], [])
+
+    arcs = [start_arc, end_arc]
+    points = [workplane.to_local_coords(a.arc_center) for a in arcs]
+    radii = [a.radius for a in arcs]
+    side_sign = 1 if side == Side.LEFT else -1
+    keep_sign = 1 if keep_placement == Keep.OUTSIDE else -1
+    r_sign = 1 if radii[0] < radii[1] else -1
+
+    # Normal vector for sorting intersections
+    z_dir = Vector(0, 0, 1)
+    midline = points[1] - points[0]
+    normal = midline.cross(z_dir) * side_sign
+
+    if midline.length < _TOL_1E6:
+        raise ValueError('Cannot find tangent for concentric arcs.')
+    if abs(midline.length - sum(radii)) < _TOL_1E6 and \
+            keep_type == Keep.INSIDE:
+        raise ValueError('Cannot find tangent type Keep.INSIDE for '
+                         'non-overlapping arcs already tangent.')
+    if abs(midline.length - abs(radii[0] - radii[1])) < _TOL_1E6 and \
+            keep_placement == Keep.INSIDE:
+        raise ValueError('Cannot find tangent placement Keep.INSIDE for '
+                         'completely overlapping arcs already tangent.')
+
+    # Set parameters based on overlap condition and keep configuration
+    min_radius = 0.0
+    max_radius = None
+    x_sign = [1, 1]
+    pick_index = 0
+    if midline.length > abs(radii[0] - radii[1]) and \
+            keep_type == Keep.OUTSIDE:
+        # No full overlap, placed externally
+        ref_radii = [keep_sign * radii[0] + radius,
+                     keep_sign * radii[1] + radius]
+        x_sign = [keep_sign, keep_sign]
+        min_radius = (midline.length - keep_sign * (radii[0] + radii[1])) / 2
+        min_radius = 0 if min_radius < 0 else min_radius
+    elif midline.length > radii[0] + radii[1] and keep_type == Keep.INSIDE:
+        # No overlap, placed inside
+        ref_radii = [abs(radii[0] + keep_sign * radius),
+                     abs(radii[1] - keep_sign * radius)]
+        x_sign = [1, -1] if keep_placement == Keep.OUTSIDE else [-1, 1]
+        min_radius = (midline.length - keep_sign * (radii[0] - radii[1])) / 2
+    elif midline.length <= abs(radii[0] - radii[1]):
+        # Full overlap
+        pick_index = -1
+        if keep_placement == Keep.OUTSIDE:
+            # External tangent to start
+            ref_radii = [radii[0] + r_sign * radius,
+                         radii[1] - r_sign * radius]
+            min_radius = (-midline.length - r_sign * radii[0] +
+                          r_sign * radii[1]) / 2
+            max_radius = (midline.length - r_sign * radii[0] +
+                          r_sign * radii[1]) / 2
+        elif keep_placement == Keep.INSIDE:
+            # Internal tangent to start
+            ref_radii = [abs(radii[0] - radius), abs(radii[1] - radius)]
+            min_radius = (-midline.length + radii[0] + radii[1]) / 2
+            max_radius = (midline.length + radii[0] + radii[1]) / 2
+            if radii[0] < radii[1]:
+                x_sign = [-1, 1]
+            else:
+                x_sign = [1, -1]
+        else:
+            raise ValueError('Keep.BOTH requires partially overlapping arcs.')
+    else:
+        # Partial overlap
+        pick_index = -1
+        if keep_placement == Keep.BOTH:
+            # Internal tangent to both
+            ref_radii = [abs(radii[0] - radius), abs(radii[1] - radius)]
+            max_radius = (-midline.length + radii[0] + radii[1]) / 2
+        elif keep_placement == Keep.OUTSIDE:
+            # External tangent to start
+            ref_radii = [radii[0] + r_sign * radius,
+                         radii[1] - r_sign * radius]
+            max_radius = (midline.length - r_sign * radii[0] +
+                          r_sign * radii[1]) / 2
+        else:
+            # Internal tangent to start
+            ref_radii = [radii[0] - r_sign * radius,
+                         radii[1] + r_sign * radius]
+            max_radius = (midline.length + r_sign * radii[0] -
+                          r_sign * radii[1]) / 2
+
+    if min_radius >= radius:
+        raise ValueError('The arc radius is too small. Should be greater '
+                         'than ' + str(min_radius) + '.')
+    if max_radius is not None and max_radius <= radius:
+        raise ValueError('The arc radius is too large. Should be less than ' +
+                         str(max_radius) + '.')
+
+    # The tangent arc's center is an intersection of the circles offset by
+    # the construction radii (upstream does this with sympy.Circle;
+    # _circle_intersections_2d is the same algebra in closed form)
+    ref_intersections = _circle_intersections_2d(points[0], ref_radii[0],
+                                                 points[1], ref_radii[1])
+    if not ref_intersections:
+        raise ValueError('The arc radius does not produce a tangent arc '
+                         'center (no intersection of the construction '
+                         'circles).')
+    # sort_by(Axis(points[0], normal)): distance along that axis
+    ref_intersections.sort(key=lambda p: (p - points[0]).dot(normal))
+    arc_center = ref_intersections[pick_index]
+
+    # x_sign determines if tangent is near side or far side of circle
+    intersect = [points[i] + (arc_center - points[i]).normalized() *
+                 (x_sign[i] * radii[i]) for i in range(len(arcs))]
+    if side == Side.LEFT:
+        intersect.reverse()
+
+    p0 = workplane.from_local_coords(intersect[0])
+    p1 = workplane.from_local_coords(intersect[1])
+    arc = RadiusArc(p0, p1, radius=radius, short_sagitta=short_sagitta,
+                    mode=Mode.PRIVATE)
+
+    # Check and flip arc if not tangent
+    start_circle = CenterArc(workplane.from_local_coords(points[0]),
+                             radii[0], 0, 360, mode=Mode.PRIVATE)
+    _, _, point = start_circle.distance_to_with_closest_points(arc)
+    circle_tan = start_circle.tangent_at(start_circle.param_at_point(point))
+    arc_tan = arc.tangent_at(arc.param_at_point(point))
+    if circle_tan.cross(arc_tan).length > _TOL_1E6:
+        arc = RadiusArc(p0, p1, radius=-radius, short_sagitta=short_sagitta,
+                        mode=Mode.PRIVATE)
+
+    return BaseLineObject(arc, mode)
+
+
 def BSpline(control_points, knots, degree, weights=None, periodic=False,
             mode=Mode.ADD):
     """An EXACT B-spline edge from poles, a knot sequence and a degree
@@ -8327,6 +8722,40 @@ def draft(faces, neutral_plane, angle):
     return result
 
 
+def project_workplane(origin, x_dir, projection_dir, distance):
+    """Return a plane to be used as a BuildSketch or BuildLine workplane with
+    a known origin and x direction (build123d operations_part
+    project_workplane): the plane's origin and x_dir are the projections of
+    the provided 3D origin/x_dir along projection_dir at the given
+    distance."""
+    builder = _active_builder()
+    if builder is not None and not isinstance(builder, BuildPart):
+        raise RuntimeError('projection_workplane can only be used from a '
+                           'BuildPart context or algebra')
+
+    origin = Vector(origin.center()) if isinstance(origin, Vertex) \
+        else Vector(origin)
+    x_dir = (Vector(x_dir.center()) if isinstance(x_dir, Vertex)
+             else Vector(x_dir)).normalized()
+    projection_dir = Vector(projection_dir).normalized()
+
+    # Create a preliminary workplane without x direction set
+    workplane_origin = origin + projection_dir * distance
+    workplane = Plane(workplane_origin, z_dir=projection_dir)
+
+    # Project a point off the origin to find the projected x direction
+    screen = Face.make_rect(1e9, 1e9, plane=workplane)
+    x_dir_point_axis = Axis(origin + x_dir, projection_dir)
+    projection = screen.find_intersection_points(x_dir_point_axis)
+    if not projection:
+        raise ValueError('x_dir perpendicular to projection_dir')
+
+    # Set the workplane's x direction
+    workplane_x_dir = projection[0][0] - workplane_origin
+    return Plane(workplane_origin, x_dir=workplane_x_dir,
+                 z_dir=projection_dir)
+
+
 def project(objects=None, workplane=None, target=None, mode=Mode.ADD):
     """Project objects along a workplane's normal onto a target.
     COMPROMISE(project): only the BuildPart form used by the examples is
@@ -8821,6 +9250,21 @@ def import_step(file_name):
     return res
 
 
+def import_brep(file_name):
+    """Import a shape from a BREP file (build123d importers.import_brep,
+    BRepTools::Read into a BRep_Builder). COMPROMISE(mesher): the worker has
+    no real filesystem — the file is looked up in the in-memory Emscripten
+    FS, where export_brep wrote it earlier in the run (round-trip)."""
+    name = str(file_name).replace('/', '_')
+    topo = w.ImportBREP(name)
+    if topo is None:
+        raise ValueError('Could not import ' + str(file_name))
+    res = Compound.__new__(Compound)
+    Shape.__init__(res, topo)
+    res.label = str(file_name).split('/')[-1]
+    return res
+
+
 import_stl = _unsupported('import_stl')
 import_svg = _unsupported('import_svg')
 
@@ -8833,6 +9277,16 @@ def export_stl(to_export, file_path, tolerance=1e-3, angular_tolerance=0.1,
     workers have no filesystem access); ascii_format is always True."""
     text = w.ExportSTL(_topo(to_export), str(file_path).replace('/', '_'),
                        tolerance, angular_tolerance)
+    return text is not None
+
+
+def export_brep(to_export, file_path):
+    """Export the shape to a BREP file (build123d exporters3d.export_brep,
+    BRepTools::Write). COMPROMISE(mesher): browser workers have no
+    filesystem — the file lands in the worker's in-memory Emscripten FS,
+    where import_brep reads it back. Returns the write status like
+    upstream."""
+    text = w.ExportBREP(_topo(to_export), str(file_path).replace('/', '_'))
     return text is not None
 
 
