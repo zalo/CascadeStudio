@@ -25,6 +25,7 @@ class EditorManager {
     this.editor = null;
     this.mode = 'cascadestudio';
     this._extraLibs = [];
+    this._typedefsPromise = null;
     this._codeContainer = null;
     this._openscadProviders = [];
   }
@@ -43,25 +44,11 @@ class EditorManager {
     });
     monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
 
-    // Import Typescript Intellisense Definitions
-    const isBuilt = typeof ESBUILD !== 'undefined';
-    let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
-    const ocDtsPath = isBuilt ? 'typedefs/cascadestudio.d.ts' : prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts';
-    const threeDtsPath = isBuilt ? 'typedefs/three.d.ts' : prefix + 'node_modules/@types/three/index.d.ts';
-    const libDtsPath = isBuilt ? 'typedefs/StandardLibraryIntellisense.ts' : prefix + 'js/StandardLibraryIntellisense.ts';
-    Promise.all([
-      fetch(ocDtsPath).then(r => r.text()),
-      fetch(threeDtsPath).then(r => r.text()),
-      fetch(libDtsPath).then(r => r.text()),
-    ]).then(([ocDts, threeDts, libDts]) => {
-      this._extraLibs = [
-        { content: ocDts, filePath: 'file://' + ocDtsPath },
-        { content: threeDts, filePath: 'file://' + threeDtsPath },
-        { content: libDts, filePath: 'file://' + libDtsPath },
-      ];
-      monaco.editor.createModel("", "typescript");
-      monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
-    }).catch(error => console.log("Error loading type definitions: " + error.message));
+    // The TypeScript IntelliSense typedefs (~600 KB) only matter in
+    // CascadeStudio JS mode; Python/OpenSCAD loads skip the fetch until the
+    // user actually switches to JS (setMode triggers it).
+    const initialMode = (this._app && this._app._resolvedMode) || this.mode;
+    if (initialMode === 'cascadestudio') { this._loadTypedefs(); }
 
     // Check for code serialization as an array
     this._codeContainer = container;
@@ -75,11 +62,13 @@ class EditorManager {
       container.setState({ code: codeString });
     }
 
-    // Initialize the Monaco Code Editor
+    // Initialize the Monaco Code Editor. Creating the model in the resolved
+    // language up front keeps Python loads from spinning up Monaco's
+    // TypeScript language worker at all.
     const isMobile = window.innerHeight > window.innerWidth;
     this.editor = monaco.editor.create(container.element, {
       value: state.code,
-      language: "typescript",
+      language: initialMode === 'python' ? 'python' : 'typescript',
       theme: "vs-dark",
       automaticLayout: true,
       minimap: { enabled: false },
@@ -243,6 +232,34 @@ class EditorManager {
     console.log("Generating Model");
   }
 
+  /** Fetch the TypeScript IntelliSense typedefs once and register them with
+   *  Monaco. Memoized — safe to call on every switch into JS mode. */
+  _loadTypedefs() {
+    if (this._typedefsPromise) { return this._typedefsPromise; }
+    const isBuilt = typeof ESBUILD !== 'undefined';
+    let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
+    const ocDtsPath = isBuilt ? 'typedefs/cascadestudio.d.ts' : prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts';
+    const threeDtsPath = isBuilt ? 'typedefs/three.d.ts' : prefix + 'node_modules/@types/three/index.d.ts';
+    const libDtsPath = isBuilt ? 'typedefs/StandardLibraryIntellisense.ts' : prefix + 'js/StandardLibraryIntellisense.ts';
+    this._typedefsPromise = Promise.all([
+      fetch(ocDtsPath).then(r => r.text()),
+      fetch(threeDtsPath).then(r => r.text()),
+      fetch(libDtsPath).then(r => r.text()),
+    ]).then(([ocDts, threeDts, libDts]) => {
+      this._extraLibs = [
+        { content: ocDts, filePath: 'file://' + ocDtsPath },
+        { content: threeDts, filePath: 'file://' + threeDtsPath },
+        { content: libDts, filePath: 'file://' + libDtsPath },
+      ];
+      monaco.editor.createModel("", "typescript");
+      monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
+    }).catch(error => {
+      this._typedefsPromise = null; // allow a retry on the next JS-mode switch
+      console.log("Error loading type definitions: " + error.message);
+    });
+    return this._typedefsPromise;
+  }
+
   /** Set editor mode: 'cascadestudio', 'openscad', or 'python'. */
   setMode(newMode) {
     if (newMode === this.mode) return;
@@ -285,6 +302,7 @@ class EditorManager {
     } else {
       // Switch back to TypeScript
       monaco.editor.setModelLanguage(model, 'typescript');
+      this._loadTypedefs();
       monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
     }
 

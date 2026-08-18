@@ -232,6 +232,11 @@ class CascadeStudioApp {
       }
     }
 
+    // The editor panel is created before _applyMode runs, so it needs the
+    // resolved mode up front (to pick its initial language and decide
+    // whether the TypeScript IntelliSense typedefs are worth fetching).
+    this._resolvedMode = mode;
+
     // Dispose previous layout
     if (this._dockviewApi) {
       this._dockviewApi.dispose();
