@@ -104,6 +104,59 @@ class _CsBuilderCurve(_lt.Curve, _lt.Compound):
         self.label = label or ''
 
 
+# ---- result-class remapping ------------------------------------------------
+# lite's _wrap_like (rebound here — Python resolves module globals at call
+# time, so every lite-internal call goes through this) re-wraps operation
+# results: transformed Faces/Edges become lite Sketch/Curve. Those base-class
+# instances carry NO upstream classification identity (not Compound), so a
+# builder transfer of e.g. a moved sketch raises "BuildSketch doesn't accept
+# ...". Remap the two base classes onto their upstream-identity subclasses.
+_orig_wrap_like = _lt._wrap_like
+
+
+def _cs_wrap_like(obj, topo):
+    res = _orig_wrap_like(obj, topo)
+    cls = type(res)
+    if cls is _lt.Sketch:
+        out = object.__new__(Sketch)
+        _lt.Shape.__init__(out, res.topo)
+        out._loc = res._loc
+        out.label = res.label
+        return out
+    if cls is _lt.Curve:
+        out = object.__new__(_CsBuilderCurve)
+        _lt.Shape.__init__(out, res.topo)
+        out._specs = list(getattr(res, '_specs', []) or [])
+        out._loc = res._loc
+        out.label = res.label
+        return out
+    return res
+
+
+if _lt._wrap_like is _orig_wrap_like:
+    _lt._wrap_like = _cs_wrap_like
+
+
+def _cs_remap_result(res):
+    """Give a lite base-class result upstream classification identity
+    (constructions that do NOT go through _wrap_like, e.g. offset_2d's
+    `Curve(offset_topo)`)."""
+    if type(res) is _lt.Curve or type(res) is _lt.Sketch:
+        return _cs_wrap_like(res, res.topo)
+    return res
+
+
+_orig_offset_2d = _lt.Curve.offset_2d
+
+
+def _cs_offset_2d(self, *a, **k):
+    return _cs_remap_result(_orig_offset_2d(self, *a, **k))
+
+
+if _lt.Curve.offset_2d is _orig_offset_2d:
+    _lt.Curve.offset_2d = _cs_offset_2d
+
+
 # ---- ported upstream helpers ----------------------------------------------
 def tuplify(obj, dim):
     """Create a size tuple (upstream topology.utils.tuplify, verbatim port)."""
@@ -139,19 +192,38 @@ if not hasattr(_lt.Shape, 'material'):
     _lt.Shape.material = ''
 
 
+def _cs_not_owned(items, owners, kind):
+    """items of `kind` that do NOT belong to any of the owner shapes
+    (upstream's get_type only returns a compound's DIRECT children; lite has
+    no direct-children iterator, so ownership is subtracted through lite's
+    geometric _shape_key)."""
+    if not owners:
+        return ShapeList(items)
+    owned = set()
+    for s in owners:
+        for x in _lt._sub_shapes_of(s, kind):
+            owned.add(_lt._shape_key(x, kind))
+    return ShapeList([x for x in items
+                      if _lt._shape_key(x, kind) not in owned])
+
+
 def _compound_get_type(self, obj_type):
-    """upstream Compound.get_type(Edge|Wire|Face|Solid): sub-shapes of that
-    class. Wire maps to lite's wire grouping of the compound's edges."""
-    if obj_type is Edge:
-        return ShapeList(self.edges())
-    if obj_type is Face:
-        return ShapeList(self.faces())
+    """upstream Compound.get_type(Edge|Wire|Face|Solid): the compound's OWN
+    children of that type — faces inside solids (or edges inside faces) are
+    NOT returned, unlike faces()/edges()."""
+    solids = self.solids()
     if obj_type is Solid:
-        return ShapeList(self.solids())
+        return ShapeList(solids)
+    if obj_type is Face:
+        return _cs_not_owned(self.faces(), solids, 'face')
     if obj_type is Wire or obj_type is Curve:
+        if len(self.faces()) > 0:
+            return ShapeList()  # wires inside faces are not free
         return ShapeList(self.wires())
+    if obj_type is Edge:
+        return _cs_not_owned(self.edges(), list(self.faces()), 'edge')
     if obj_type is Vertex:
-        return ShapeList(self.vertices())
+        return _cs_not_owned(self.vertices(), list(self.edges()), 'vertex')
     return ShapeList()
 
 
@@ -262,6 +334,43 @@ def _vertex_hash(self):
     return hash((round(self.X, 6), round(self.Y, 6), round(self.Z, 6)))
 
 
+def _cs_geom_eq(kind):
+    def eq(self, other):
+        if self is other:
+            return True
+        if not isinstance(other, type(self)) and \
+                not isinstance(self, type(other)):
+            return NotImplemented
+        if self.topo is None or other.topo is None:
+            return self.topo is other.topo
+        try:
+            return _lt._shape_key(self, kind) == _lt._shape_key(other, kind)
+        except Exception:
+            return self is other
+    return eq
+
+
+def _cs_geom_hash(kind):
+    def h(self):
+        if self.topo is None:
+            return 0
+        try:
+            return hash(_lt._shape_key(self, kind))
+        except Exception:
+            return 0
+    return h
+
+
+if '__eq__' not in _lt.Face.__dict__:
+    # upstream Shape.__eq__ is topological same-ness; lite compares identity,
+    # and every selector call makes FRESH wrappers, so upstream patterns like
+    # `face in solid.faces()` (offset's openings filter) silently miss.
+    _lt.Face.__eq__ = _cs_geom_eq('face')
+    _lt.Face.__hash__ = _cs_geom_hash('face')
+    _lt.Edge.__eq__ = _cs_geom_eq('edge')
+    _lt.Edge.__hash__ = _cs_geom_hash('edge')
+
+
 if '__eq__' not in _lt.Vertex.__dict__:
     # upstream Shape.__eq__ is geometric same-ness; lite compares identity.
     # operations_generic's 2-D fillet/chamfer do `v in vertices_of_face`
@@ -296,6 +405,16 @@ if not hasattr(_lt.Face, 'is_coplanar'):
 import enum as _enum_shim
 
 
+def _cs_lite_enum_lookup(cls_name, member_name):
+    lite_cls = getattr(_lt, cls_name, None)
+    if lite_cls is None:
+        return None
+    return getattr(lite_cls, member_name, None)
+
+
+_enum_shim._cs_set_lite_lookup(_cs_lite_enum_lookup)
+
+
 def _cs_enum_to_lite(v):
     if isinstance(v, _enum_shim._Member):
         lite_cls = getattr(_lt, v._cls_name_, None)
@@ -304,10 +423,15 @@ def _cs_enum_to_lite(v):
     return v
 
 
+_NO_KEY = object()
+
+
 def _wrap_shapelist_method(name):
     orig = getattr(_lt.ShapeList, name)
 
-    def wrapped(self, key=None, *a, **k):
+    def wrapped(self, key=_NO_KEY, *a, **k):
+        if key is _NO_KEY:
+            return orig(self, *a, **k)  # keep lite's own default key
         return orig(self, _cs_enum_to_lite(key), *a, **k)
     return wrapped, orig
 
@@ -330,5 +454,201 @@ def _solid_make_box(cls, length, width, height, plane=None):
     return s
 
 
+def _solid_make_cone(cls, base_radius, top_radius, height, plane=None,
+                     angle=360):
+    """upstream Solid.make_cone: base on the plane origin, extending along
+    the plane normal."""
+    if angle != 360:
+        raise NotImplementedError(
+            'partial cones are not supported in build123d-lite')
+    s = _lt.Part(_w.Cone(base_radius, top_radius, height))
+    if plane is not None:
+        s = plane.location * s
+    return s
+
+
+def _solid_make_torus(cls, major_radius, minor_radius, plane=None,
+                      start_angle=0, end_angle=360, major_angle=360):
+    """upstream Solid.make_torus: torus centred at the plane origin."""
+    if start_angle != 0 or end_angle != 360 or major_angle != 360:
+        raise NotImplementedError(
+            'partial tori are not supported in build123d-lite')
+    prof = _w.Circle(minor_radius, False)
+    prof = _w.Rotate([1, 0, 0], 90, prof)
+    prof = _w.Translate([major_radius, 0, 0], prof)
+    s = _lt.Part(_w.Revolve(prof, 360, [0, 0, 1]))
+    if plane is not None:
+        s = plane.location * s
+    return s
+
+
+def _wire_make_circle(cls, radius, plane=None):
+    """upstream Wire.make_circle: a closed circular wire (the worker's
+    Circle(r, wire=True) is a TopoDS_Wire in the XY plane)."""
+    res = object.__new__(cls)
+    _lt.Curve.__init__(res, _w.Circle(radius, True))
+    if plane is not None:
+        res = plane.location * res
+    return res
+
+
+def _solid_extrude_taper(cls, section, direction, taper, flip_inner=True):
+    """upstream Solid.extrude_taper(section, direction, taper): port of
+    lite's own two-algorithm taper (LocOpe_DPrism for a positive taper along
+    the profile normal, otherwise the offset loft)."""
+    import math
+    dvec = Vector(direction)
+    amount = dvec.length
+    profile = _lt.Face(_lt._topo(section))
+    inner = profile.inner_wires()
+    base = Plane(profile)
+    along_normal = (dvec.normalized() - base.z_dir).length < 1e-9
+    if taper > 0 and not inner and along_normal:
+        return _lt.Part(_w.TaperExtrude(_lt._topo(profile), amount, taper))
+    offset_amt = -abs(amount) * math.tan(math.radians(taper))
+    shift = _lt.Pos(dvec.X, dvec.Y, dvec.Z)
+    solids = []
+    for i, wire in enumerate([profile.outer_wire()] + list(inner)):
+        flip = (-1.0 if flip_inner else 1.0) if i > 0 else 1.0
+        local = base.location.inverse() * wire
+        local_taper = _lt.Curve(_lt._topo(local)).offset_2d(
+            flip * offset_amt, kind=_lt.Kind.INTERSECTION)
+        taper_wire = shift * (base.location * _lt.Curve(_lt._topo(local_taper)))
+        solids.append(_lt.Part(_w.Loft([_lt._topo(wire),
+                                        _lt._topo(taper_wire)], False)))
+    solid = solids[0] if len(solids) == 1 else (solids[0] - solids[1:])
+    return _lt.Part(_lt._topo(solid))
+
+
+def _cs_path_wire_topo(path):
+    """ONE chained TopoDS_Wire from a path Curve/Wire/Edge (lite sweep's
+    exact logic: multi-segment curves rebuild through their specs because
+    their topo may be a compound of separate wires)."""
+    if isinstance(path, _lt.Curve) and getattr(path, '_specs', None):
+        return _w.WireFromSegments(_lt._chain_segments(path._specs))
+    t = _lt._topo(path)
+    if not hasattr(t, 'ShapeType') or t.ShapeType().value != 5:
+        t = _w.GetWire(t, 0, True)
+    return t
+
+
+def _cs_section_wire_topo(section):
+    t = _lt._topo(section)
+    st = t.ShapeType().value if hasattr(t, 'ShapeType') else -1
+    if st == 4:  # face -> outer wire
+        return _w._faceOuterWire(t)
+    if st != 5:
+        return _w.GetWire(t, 0, True)
+    return t
+
+
+def _solid_sweep(cls, section, path, inner_wires=None, make_solid=True,
+                 is_frenet=False, mode=None, transition=None):
+    """upstream Solid.sweep over lite's MakePipeShell binding."""
+    tname = getattr(transition, 'name', None) or 'TRANSFORMED'
+    tmap = {'TRANSFORMED': 'transformed', 'ROUND': 'round', 'RIGHT': 'right'}
+    binormal_vec = []
+    aux = 0
+    if isinstance(mode, _lt.Vector):
+        binormal_vec = list(mode)
+    elif mode is not None:
+        aux = _cs_path_wire_topo(mode)
+    solid = _w.PipeShellSweep([_cs_section_wire_topo(section)],
+                              _cs_path_wire_topo(path), is_frenet,
+                              tmap.get(tname, 'transformed'),
+                              binormal_vec, aux, bool(make_solid))
+    return _lt.Part(solid)
+
+
+def _solid_sweep_multi(cls, profiles, path, make_solid=True, is_frenet=False,
+                       binormal=None):
+    """upstream Solid.sweep_multi over lite's MakePipeShell binding
+    (multisection never sets a transition mode, like lite's sweep)."""
+    binormal_vec = []
+    aux = 0
+    if isinstance(binormal, _lt.Vector):
+        binormal_vec = list(binormal)
+    elif binormal is not None:
+        aux = _cs_path_wire_topo(binormal)
+    wires = [_cs_section_wire_topo(p) for p in profiles]
+    solid = _w.PipeShellSweep(wires, _cs_path_wire_topo(path), is_frenet, '',
+                              binormal_vec, aux, bool(make_solid))
+    return _lt.Part(solid)
+
+
+def _solid_offset_3d(self, openings, thickness, tolerance=0.0001,
+                     kind=None):
+    """upstream Solid.offset_3d over lite's MakeThickSolid binding."""
+    faces = [_lt._topo(o) for o in (openings or [])]
+    return _lt.Part(_w.ThickSolidOffset(_lt._topo(self), faces, thickness,
+                                        tolerance))
+
+
+def _shape_fix(self):
+    """upstream Shape.fix (ShapeFix_Shape): lite's JS ops fix internally."""
+    return self
+
+
+if not hasattr(_lt.Shape, 'offset_3d'):
+    _lt.Shape.offset_3d = _solid_offset_3d
+    _lt.Shape.fix = _shape_fix
+
+
+_orig_bounding_box = _lt.Shape.bounding_box
+
+
+def _cs_bounding_box(self, tolerance=None, optimal=True):
+    # upstream signature has optimal=; lite's exact Bnd_Box ignores it
+    return _orig_bounding_box(self, tolerance)
+
+
+if _lt.Shape.bounding_box is _orig_bounding_box:
+    _lt.Shape.bounding_box = _cs_bounding_box
+
+
+def _shape_unwrap(self, fully=True):
+    """upstream Shape.unwrap: strip redundant single-child Compound layers.
+    Lite compounds are built flat, so this is the identity."""
+    return self
+
+
+if not hasattr(_lt.Shape, 'unwrap'):
+    _lt.Shape.unwrap = _shape_unwrap
+
+
+def _solid_extrude_until(cls, section, target, direction, until=None):
+    """upstream Solid.extrude_until (port of lite's Until.NEXT/LAST logic:
+    extrude far, subtract the target, keep the pieces the mode asks for)."""
+    d = Vector(direction).normalized()
+    body = target
+    bb = list(_w.BoundingBox(_lt._topo(body), 0.01))
+    ln = 3.0 * max(bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2])
+    face = _lt._topo(section)
+    candidate = _lt.Part(_w.Extrude(face, [d.X * ln, d.Y * ln, d.Z * ln],
+                                    True))
+    outside = _lt.Part(_w.Difference(candidate.topo, [_lt._topo(body)],
+                                     True, 1e-7, True))
+    pieces = outside.solids()
+
+    def proj(s):
+        sb = list(_w.BoundingBox(s.topo, 0.01))
+        return (min(sb[0] * d.X, sb[3] * d.X) +
+                min(sb[1] * d.Y, sb[4] * d.Y) +
+                min(sb[2] * d.Z, sb[5] * d.Z))
+    pieces = _lt._stable_sorted(pieces, key=proj)
+    if not pieces:
+        return candidate
+    if getattr(until, 'name', '') == 'NEXT':
+        return pieces[0]
+    return candidate - pieces[-1]
+
+
 if not hasattr(_lt.Part, 'make_box'):
     _lt.Part.make_box = classmethod(_solid_make_box)
+    _lt.Part.extrude_until = classmethod(_solid_extrude_until)
+    _lt.Part.sweep = classmethod(_solid_sweep)
+    _lt.Part.sweep_multi = classmethod(_solid_sweep_multi)
+    _lt.Part.make_cone = classmethod(_solid_make_cone)
+    _lt.Part.make_torus = classmethod(_solid_make_torus)
+    _lt.Part.extrude_taper = classmethod(_solid_extrude_taper)
+    Wire.make_circle = classmethod(_wire_make_circle)

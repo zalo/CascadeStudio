@@ -1,5 +1,13 @@
 # Running UPSTREAM build123d source on MicroPython — feasibility screen
 
+> **Superseded by the working proof of concept** (this branch):
+> `?pyruntime=micropython&pysrc=upstream` runs upstream 0.11.1 Level-A
+> (builders + objects + operations + joints/pack) over lite's seam classes —
+> see `INVENTORY.md` (the seam-gap ledger and integration-cost estimate),
+> `packages/cascade-core/src/worker/UpstreamB123d.js` (loader + transforms),
+> `upstream-poc.mjs` (node inner loop) and `compare-examples.mjs`
+> (lite-vs-upstream measurement diff on the real example scripts).
+
 Goal: shrink build123d-lite's surface by running as much verbatim upstream
 build123d 0.11.1 Python as possible on the MicroPython runtime
 (`?pyruntime=micropython`), so tracking new build123d releases stops meaning

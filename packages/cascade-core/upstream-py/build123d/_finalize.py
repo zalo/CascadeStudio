@@ -52,9 +52,11 @@ for _name in _OPTIONAL:
     if _mod is not None:
         _copy_module(_mod)
 
-# lite's viewer + measurement hooks (worker/harness contract)
+# lite's viewer + measurement + export hooks (worker/harness contract)
 for _name in ('show', 'show_object', 'show_all', 'volume',
-              '_measure_globals_json'):
+              '_measure_globals_json', 'export_stl', 'export_step',
+              'export_gltf', 'export_brep', 'import_brep', 'import_step',
+              'Mesher'):
     if hasattr(_lt, _name):
         setattr(_pkg, _name, getattr(_lt, _name))
 

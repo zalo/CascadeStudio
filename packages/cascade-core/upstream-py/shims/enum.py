@@ -15,6 +15,19 @@
 #       to_align_offset, which lite's adapter geometry module reimplements.
 
 
+# Bridge to build123d-lite's plain-class "enums": the seam (lite methods)
+# compares enum kwargs against ITS values (strings/tuples), while upstream
+# code passes THESE members. _Member.__eq__ resolves the lite value of the
+# same Class.NAME through a lookup the topology adapter installs, so e.g.
+# upstream Kind.INTERSECTION == lite Kind.INTERSECTION is True on both sides
+# (Python falls back to the reflected __eq__ for lite_value == member).
+_LITE_LOOKUP = [None]
+
+
+def _cs_set_lite_lookup(fn):
+    _LITE_LOOKUP[0] = fn
+
+
 class _Member:
     _auto_counter = [0]
 
@@ -23,6 +36,21 @@ class _Member:
         self._value_ = _Member._auto_counter[0]
         self._name_ = '?'
         self._cls_name_ = '?'
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        if isinstance(other, _Member):
+            return False  # members are singletons
+        look = _LITE_LOOKUP[0]
+        if look is not None:
+            lite_value = look(self._cls_name_, self._name_)
+            if lite_value is not None:
+                return lite_value == other
+        return NotImplemented
+
+    def __hash__(self):
+        return hash(self._cls_name_ + '.' + self._name_)
 
     @property
     def name(self):
