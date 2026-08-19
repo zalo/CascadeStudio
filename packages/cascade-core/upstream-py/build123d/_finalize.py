@@ -17,8 +17,9 @@ from build123d import build_sketch as _sketch
 from build123d import geometry as _geometry
 from build123d import topology as _topology
 
-_OPTIONAL = ('objects_part', 'objects_curve', 'joints', 'pack',
-             'operations_sketch', 'operations_generic', 'operations_part')
+_OPTIONAL = ('objects_part', 'objects_curve', 'objects_sketch', 'joints',
+             'pack', 'operations_sketch', 'operations_generic',
+             'operations_part')
 
 
 def _public_names(mod):
@@ -56,6 +57,37 @@ for _name in ('show', 'show_object', 'show_all', 'volume',
               '_measure_globals_json'):
     if hasattr(_lt, _name):
         setattr(_pkg, _name, getattr(_lt, _name))
+
+
+# BuildLine's results must carry BOTH upstream identities (Curve for
+# objects_curve, Compound for parent-builder classification); topology.Curve
+# itself stays lite's Curve — see topology._CsBuilderCurve.
+_line.BuildLine._sub_class = _topology._CsBuilderCurve
+
+
+# Algebra placement: `GridLocations(...) * shape` works upstream because its
+# topology Shape.__rmul__ accepts Location iterables; the seam's lite
+# Shape.__rmul__ only accepts list/tuple, so give upstream's LocationList the
+# products lite's own LocationList has (same semantics).
+def _loclist_mul(self, other):
+    if isinstance(other, _topology.Shape):
+        return _topology.ShapeList([loc * other for loc in self.locations])
+    if isinstance(other, (list, tuple)):
+        return _topology.ShapeList(
+            [loc * s for loc in self.locations for s in other])
+    return NotImplemented
+
+
+def _loclist_rmul(self, other):
+    if isinstance(other, _geometry.Location):
+        return [other * loc for loc in self.locations]
+    if isinstance(other, _geometry.Plane):
+        return [other.location * loc for loc in self.locations]
+    return NotImplemented
+
+
+_common.LocationList.__mul__ = _loclist_mul
+_common.LocationList.__rmul__ = _loclist_rmul
 
 
 def _reset_state():

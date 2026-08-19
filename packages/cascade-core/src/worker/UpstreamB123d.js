@@ -142,6 +142,10 @@ export function transformUpstreamSource(name, src) {
   out = cleanClassBases(out);
   out = rewriteMatchStatements(out, name);
   out = rewriteListSplats(out);
+  // this MicroPython build has no sys.exc_info and sys is read-only; the
+  // loader installs a builtins._cs_exc_info that reports "not handling an
+  // exception" (build123d only uses it to soften errors during unwinding)
+  out = out.replace(/sys\.exc_info\(\)/g, '_cs_exc_info()');
   return out;
 }
 
@@ -207,8 +211,11 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText) {
     registerAlias(entry.name, await fetchText(entry.file));
   }
 
-  // 2. logging shim patch (lite's logging has no NullHandler)
+  // 2. logging shim patch (lite's logging has no NullHandler) + the
+  //    sys.exc_info stand-in (see transformUpstreamSource)
   runPy(LOGGING_PATCH_PY);
+  runPy('import builtins as _cs_bi\n'
+    + '_cs_bi._cs_exc_info = lambda: (None, None, None)');
 
   // 3. OCP stubs: exact-name placeholders for every OCP module build123d
   //    imports. OCP.Standard exports must be real Exception subclasses

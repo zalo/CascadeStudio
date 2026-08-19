@@ -20,7 +20,8 @@ const FILES = [
   'build_enums.py', 'build_common.py', 'build_line.py', 'build_part.py',
   'build_sketch.py', 'objects_part.py', 'objects_curve.py',
   // stretch modules (loaded best-effort at runtime)
-  'operations_generic.py', 'operations_sketch.py', 'joints.py', 'pack.py',
+  'objects_sketch.py', 'operations_generic.py', 'operations_part.py',
+  'operations_sketch.py', 'joints.py', 'pack.py',
 ];
 
 const CANDIDATES = [

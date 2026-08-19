@@ -143,6 +143,42 @@ if not hasattr(BoundBox, 'to_align_offset'):
     BoundBox.to_align_offset = _bbox_to_align_offset
 
 
+# upstream Plane.from/to_local_coords also accept SHAPES (BuildSketch's
+# .sketch property, BuildPart's pending-face globalization); lite's handle
+# points only. Superset wrappers: Shape -> rigid transform by the plane's
+# location, everything else -> lite's point math.
+_orig_from_local = Plane.from_local_coords
+_orig_to_local = Plane.to_local_coords
+
+
+def _keep_shape_class(obj, moved):
+    # lite's _wrap_like re-wraps a transformed Face as a Sketch (transforms
+    # produce sketches in lite's model); the upstream seam needs the class
+    # preserved (BuildPart's pending_faces filters isinstance(o, Face))
+    if isinstance(obj, _lt.Face) and not isinstance(moved, _lt.Face):
+        return _lt.Face(moved.topo)
+    if isinstance(obj, _lt.Vertex) and not isinstance(moved, _lt.Vertex):
+        return _lt.Vertex(moved.topo)
+    return moved
+
+
+def _plane_from_local_coords(self, obj):
+    if isinstance(obj, _lt.Shape):
+        return _keep_shape_class(obj, self.location * obj)
+    return _orig_from_local(self, obj)
+
+
+def _plane_to_local_coords(self, obj):
+    if isinstance(obj, _lt.Shape):
+        return _keep_shape_class(obj, self.location.inverse() * obj)
+    return _orig_to_local(self, obj)
+
+
+if Plane.from_local_coords is _orig_from_local:
+    Plane.from_local_coords = _plane_from_local_coords
+    Plane.to_local_coords = _plane_to_local_coords
+
+
 def _bbox_add(self, other):
     """BoundBox.add(point-or-bbox) — upstream returns an ENLARGED copy."""
     pts = [tuple(self.min), tuple(self.max)]
