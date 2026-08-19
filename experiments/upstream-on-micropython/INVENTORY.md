@@ -65,6 +65,8 @@ capability differently — usually as a module-level builder-aware function)
 | B16 | `BoundBox.to_align_offset`, `BoundBox.add` | absent | adapter (ported from upstream geometry) | S |
 | B17 | `LocationList.__mul__/__rmul__` algebra products (`GridLocations(...) * shape`) — upstream's own topology provides this via `Shape.__rmul__` over Location iterables | lite's LocationList has them, but upstream's build_common LocationList (now in charge) didn't | adapter patches upstream's class post-import | S |
 | B18 | `Compound.get_type` see A5 | | | |
+| B19 | `Edge.make_tangent_arc` (canadian_flag) | lite `TangentArc` object | adapter classmethod (not yet written) | open, S |
+| B20 | `Compound.make_text(single_line_width=, ...)` — upstream Text passes kwargs lite's text seam lacks (examples/extrude) | lite `Text`/`make_text` (narrower signature) | open (needs a kwargs audit of the text seam) | open, S–M |
 
 ## C. Enum identity across the seam
 
@@ -127,11 +129,16 @@ Upstream EXAMPLE scripts, lite-vs-upstream measurement diff
 (`compare-examples.mjs`; MATCH = every module variable within 0.5% volume):
 `holes`, `holes_algebra`, `intersecting_chamfers`, `circuit_board`,
 `din_rail`, `lego`, `handle` (multisection sweep!), `loft`, `key_cap`
-(extrude until=NEXT/LAST + taper) all **MATCH**. `tea_cup` runs end-to-end
-but the swept handle differs ~0.3% (upstream path chains `Wire(edges)` where
-lite sweeps its recorded pending path — same MakePipeShell numeric family as
-COMPROMISE(sweep)). Heavy text/Airfoil examples stay out of reach
-(numpy/glyph parity, same as lite's own gaps).
+(extrude until=NEXT/LAST + taper) and `boxes_on_faces` (workplanes on faces)
+all **MATCH** — 10 of the ~19 example ids attempted. `tea_cup` runs
+end-to-end but the swept handle differs ~0.3% (upstream path chains
+`Wire(edges)` where lite sweeps its recorded pending path — same
+MakePipeShell numeric family as COMPROMISE(sweep)). Remaining errors in the
+sample: B19/B20 above (`make_tangent_arc`, text kwargs), and
+`clock`/`joints`/`key_cap_algebra` produced no measurement inside the
+sweep's 120 s per-script budget (uninvestigated — clock is slow in lite
+too). Heavy text/Airfoil examples stay out of reach (numpy/glyph parity,
+same family as lite's own gaps).
 
 ## G. Judgment: cost of the full Level-A integration
 
@@ -149,6 +156,6 @@ themselves demonstrably run verbatim).
 
 Boot cost: the upstream layer adds ~180 ms to MicroPython's boot
 (lite 123 ms → upstream 305 ms libMs in-browser) and ~300 KB of fetched
-Python source (uncompressed; the vendored Level-A files total ~250 KB).
+Python source (uncompressed; the vendored Level-A files total ~340 KB, the committed shims + adapters ~60 KB).
 Model-evaluation speed is indistinguishable in these examples (time lives in
 OCCT, not the interpreter).

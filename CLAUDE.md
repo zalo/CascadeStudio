@@ -223,6 +223,20 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   `_list_getitem`/`_property_getter`/`_bit_length` helpers, setattr loops
   instead of `__dict__.update`, and the scipy shim only sets `__path__ = []`
   when missing (MicroPython needs its native STRING `__path__`).
+- **`?pyruntime=micropython&pysrc=upstream`** (experimental PoC, localStorage
+  `cascade-py-src`) additionally swaps the SOURCE layer: the `build123d`
+  package becomes UPSTREAM build123d 0.11.1 Level-A source (builders,
+  build_common, objects_*, operations_*, joints, pack — vendored via
+  `node packages/cascade-core/scripts/fetch-upstream-b123d.cjs`, gitignored
+  `vendor/build123d-0.11.1/`, transformed at load by
+  `packages/cascade-core/src/worker/UpstreamB123d.js`) running over lite's
+  classes re-exported as `build123d.geometry`/`build123d.topology[.*]`
+  (adapters in `packages/cascade-core/upstream-py/`); lite registers as
+  `build123d_lite`. Requires MicroPython; other runtimes reject the flag
+  loudly. Frozen by `test/py-src-upstream.spec.js` (skips when not
+  vendored). The seam-gap ledger + integration-cost estimate live in
+  `experiments/upstream-on-micropython/INVENTORY.md`; compare against lite
+  with `experiments/upstream-on-micropython/compare-examples.mjs`.
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,
