@@ -39,9 +39,14 @@ let _runtimePromise = null;
  *  distribution — see PyodideRuntime.js), or 'micropython' (smallest +
  *  lowest-memory, `?pyruntime=micropython` — see MicroPythonRuntime.js).
  *  All three run the same Build123dLite.js source. */
-export function ensurePythonRuntime(kind) {
+export function ensurePythonRuntime(kind, pySrc) {
+  if (pySrc === 'upstream' && kind !== 'micropython') {
+    return Promise.reject(new Error(
+      'pysrc=upstream (upstream build123d source) requires '
+      + '?pyruntime=micropython — the other runtimes run build123d-lite only'));
+  }
   if (kind === 'pyodide') { return ensurePyodideRuntime(); }
-  if (kind === 'micropython') { return ensureMicroPythonRuntime(); }
+  if (kind === 'micropython') { return ensureMicroPythonRuntime(pySrc); }
   if (!_runtimePromise) {
     _runtimePromise = _bootstrap().catch((e) => {
       _runtimePromise = null; // allow a retry on the next evaluation

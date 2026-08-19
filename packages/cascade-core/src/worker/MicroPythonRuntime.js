@@ -33,6 +33,7 @@
 //    and remapped via sys.modules; the rest import normally from /lib.
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
+import { bootstrapUpstreamB123d } from './UpstreamB123d.js';
 
 /** MicroPython GC heap. Fixed at boot (it does not grow); build123d-lite +
  *  a typical model's Python-side bookkeeping fit comfortably — shapes
@@ -195,27 +196,46 @@ def _cs_run_user(src):
 `;
 
 let _runtimePromise = null;
+let _bootedPySrc = null;
 
 /** Lazily bootstrap MicroPython + build123d-lite. Same contract as the
- *  Brython/Pyodide runtimes: resolves to an object with `run(code)`. */
-export function ensureMicroPythonRuntime() {
+ *  Brython/Pyodide runtimes: resolves to an object with `run(code)`.
+ *
+ *  `pySrc === 'upstream'` (opt-in, `?pysrc=upstream`) registers lite as
+ *  `build123d_lite` and layers UPSTREAM build123d 0.11.1 Level-A source on
+ *  top as the `build123d` package (see UpstreamB123d.js). One worker
+ *  session boots ONE source mode; switching requires a reload. */
+export function ensureMicroPythonRuntime(pySrc) {
+  const srcKind = pySrc === 'upstream' ? 'upstream' : 'lite';
+  if (_runtimePromise && _bootedPySrc !== srcKind) {
+    return Promise.reject(new Error(
+      'the MicroPython runtime is already booted with pysrc=' + _bootedPySrc +
+      '; reload the page to switch to pysrc=' + srcKind));
+  }
   if (!_runtimePromise) {
-    _runtimePromise = _bootstrap().catch((e) => {
+    _bootedPySrc = srcKind;
+    _runtimePromise = _bootstrap(srcKind).catch((e) => {
       _runtimePromise = null; // allow a retry on the next evaluation
+      _bootedPySrc = null;
       throw e;
     });
   }
   return _runtimePromise;
 }
 
-async function _bootstrap() {
+async function _bootstrap(srcKind) {
   const t0 = performance.now();
   const isBuilt = typeof ESBUILD !== 'undefined';
+  // Node harnesses (experiments/upstream-on-micropython) run this module
+  // outside a worker: they pre-set the interpreter locations explicitly.
+  const locate = self._csMicroPythonLocate || null;
   const base = isBuilt
     ? './'
     : '../../node_modules/@micropython/micropython-webassembly-pyscript/';
-  const mjsURL = new URL(base + 'micropython.mjs', import.meta.url).href;
-  const wasmURL = new URL(base + 'micropython-settrace.wasm', import.meta.url).href;
+  const mjsURL = locate ? locate.mjsURL
+    : new URL(base + 'micropython.mjs', import.meta.url).href;
+  const wasmURL = locate ? locate.wasmURL
+    : new URL(base + 'micropython-settrace.wasm', import.meta.url).href;
   const mod = await import(/* webpackIgnore: true */ mjsURL);
   const load = (mod && mod.loadMicroPython) || self.loadMicroPython;
   if (!load) {
@@ -285,7 +305,34 @@ async function _bootstrap() {
         + ((e && e.message) || e));
     }
   }
-  br._cs_register_module('build123d', BUILD123D_LITE_PY, false);
+  if (srcKind === 'upstream') {
+    // UPSTREAM-source mode: lite becomes the seam library `build123d_lite`;
+    // the `build123d` package is upstream 0.11.1 Level-A source layered on
+    // top by UpstreamB123d.js (fetched from dist/upstream-b123d/).
+    br._cs_register_module('build123d_lite', BUILD123D_LITE_PY, false);
+    const fetchText = self._csUpstreamFetchText || (async (rel) => {
+      let url;
+      if (isBuilt) {
+        url = new URL('./upstream-b123d/' + rel, import.meta.url).href;
+      } else if (rel.indexOf('upstream/') === 0) {
+        url = new URL('../../vendor/build123d-0.11.1/' + rel.slice(9),
+          import.meta.url).href;
+      } else {
+        url = new URL('../../upstream-py/' + rel, import.meta.url).href;
+      }
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error('pysrc=upstream: could not load ' + rel + ' (' +
+          resp.status + '). Vendored upstream sources missing? Run ' +
+          'node packages/cascade-core/scripts/fetch-upstream-b123d.cjs ' +
+          'and rebuild.');
+      }
+      return resp.text();
+    });
+    await bootstrapUpstreamB123d(mp, br, fetchText);
+  } else {
+    br._cs_register_module('build123d', BUILD123D_LITE_PY, false);
+  }
 
   const getMpUserLine = () => {
     try { return Number(br._cs_user_line()) || 0; } catch (e) { return 0; }
@@ -294,6 +341,7 @@ async function _bootstrap() {
   const tDone = performance.now();
   self._pythonBootTiming = {
     runtime: 'micropython',
+    pySrc: srcKind,
     fetchMs: +(tFetched - t0).toFixed(1),
     initMs: +(tInitialized - tFetched).toFixed(1),
     libMs: +(tDone - tInitialized).toFixed(1),
@@ -311,6 +359,7 @@ async function _bootstrap() {
       for (const k in self.argCache) { delete self.argCache[k]; }
       self.getPythonUserLine = getMpUserLine;
       self._pythonRuntimeKind = 'micropython';
+      self._pythonSrcKind = srcKind;
       self._b123dSceneDefined = false;
       const err = br._cs_run_user(code);
       if (err) { throw new Error(String(err)); }

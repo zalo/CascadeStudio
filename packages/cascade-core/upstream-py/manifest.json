@@ -1,0 +1,17 @@
+{
+  "shims": [
+    { "name": "typing", "file": "shims/typing.py" },
+    { "name": "typing_extensions", "file": "shims/typing_extensions.py" },
+    { "name": "__future__", "file": "shims/future.py" },
+    { "name": "collections.abc", "file": "shims/collections_abc.py" },
+    { "name": "abc", "file": "shims/abc.py" },
+    { "name": "warnings", "file": "shims/warnings.py" },
+    { "name": "contextvars", "file": "shims/contextvars.py" },
+    { "name": "inspect", "file": "shims/inspect.py" },
+    { "name": "dataclasses", "file": "shims/dataclasses.py" },
+    { "name": "enum", "file": "shims/enum.py" },
+    { "name": "trianglesolver", "file": "shims/trianglesolver.py" },
+    { "name": "numpy", "file": "shims/numpy.py" },
+    { "name": "sympy", "file": "shims/sympy.py" }
+  ]
+}

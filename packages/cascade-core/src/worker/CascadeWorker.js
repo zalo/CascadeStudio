@@ -351,7 +351,7 @@ class CascadeStudioWorker {
    *  the main thread exactly like JS-mode evaluation errors. */
   async _evaluatePython(payload) {
     try {
-      const runtime = await ensurePythonRuntime(payload.pyRuntime);
+      const runtime = await ensurePythonRuntime(payload.pyRuntime, payload.pySrc);
       runtime.run(payload.code);
     } catch (e) {
       setTimeout(() => { throw e; }, 0);

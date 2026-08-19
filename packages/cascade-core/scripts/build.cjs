@@ -72,6 +72,23 @@ if (fs.existsSync(pyodideSrc)) {
   }
 }
 
+// 3c. Copy the upstream-build123d layer (experimental `?pysrc=upstream` on
+// the MicroPython runtime): the committed seam adapters + stdlib shims from
+// upstream-py/, plus the VENDORED upstream 0.11.1 sources IF fetched
+// (`node packages/cascade-core/scripts/fetch-upstream-b123d.cjs`).
+const upstreamPySrc = path.join(pkgRoot, 'upstream-py');
+if (fs.existsSync(upstreamPySrc)) {
+  console.log('[cascade-core] Copying upstream-b123d layer...');
+  const upstreamDist = path.join(distDir, 'upstream-b123d');
+  fs.cpSync(upstreamPySrc, upstreamDist, { recursive: true });
+  const vendored = path.join(monoRoot, 'vendor', 'build123d-0.11.1');
+  if (fs.existsSync(vendored)) {
+    fs.cpSync(vendored, path.join(upstreamDist, 'upstream'), { recursive: true });
+  } else {
+    console.log('[cascade-core]   (no vendor/build123d-0.11.1 — pysrc=upstream disabled)');
+  }
+}
+
 // 4. Copy fonts to dist/fonts/
 console.log('[cascade-core] Copying fonts...');
 const fontsDir = path.join(pkgRoot, 'fonts');

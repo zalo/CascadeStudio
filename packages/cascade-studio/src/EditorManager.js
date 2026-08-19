@@ -21,6 +21,22 @@ export function resolvePyRuntime() {
   return 'brython';
 }
 
+/** Resolve the Python SOURCE layer: 'lite' (default — Build123dLite.js) or
+ *  the experimental 'upstream' (UPSTREAM build123d 0.11.1 Level-A source on
+ *  the MicroPython runtime — requires `?pyruntime=micropython` and vendored
+ *  sources, see UpstreamB123d.js). `?pysrc=upstream` or, so it survives
+ *  reloads, localStorage['cascade-py-src']. */
+export function resolvePySrc() {
+  const KNOWN = ['lite', 'upstream'];
+  try {
+    const fromURL = new URLSearchParams(window.location.search).get('pysrc');
+    if (fromURL) { return KNOWN.includes(fromURL) ? fromURL : 'lite'; }
+    const stored = window.localStorage.getItem('cascade-py-src');
+    if (KNOWN.includes(stored)) { return stored; }
+  } catch (e) { /* no URL/storage access — fall through to the default */ }
+  return 'lite';
+}
+
 /** Manages the Monaco code editor instance, mode switching, and code evaluation. */
 class EditorManager {
   constructor(app) {
@@ -217,6 +233,7 @@ class EditorManager {
       guiState: this._app.gui.state,
       language: this.mode === 'python' ? 'python' : undefined,
       pyRuntime: this.mode === 'python' ? resolvePyRuntime() : undefined,
+      pySrc: this.mode === 'python' ? resolvePySrc() : undefined,
     }).then((result) => {
       if (this._app.viewport && result.meshData) {
         this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);
