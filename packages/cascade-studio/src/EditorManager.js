@@ -11,11 +11,12 @@ const monaco = window.monaco;
  *  default). Selected with `?pyruntime=pyodide` or, so it survives reloads,
  *  localStorage['cascade-py-runtime']. */
 export function resolvePyRuntime() {
+  const KNOWN = ['brython', 'pyodide', 'micropython'];
   try {
     const fromURL = new URLSearchParams(window.location.search).get('pyruntime');
-    if (fromURL) { return fromURL === 'pyodide' ? 'pyodide' : 'brython'; }
+    if (fromURL) { return KNOWN.includes(fromURL) ? fromURL : 'brython'; }
     const stored = window.localStorage.getItem('cascade-py-runtime');
-    if (stored === 'pyodide') { return 'pyodide'; }
+    if (KNOWN.includes(stored)) { return stored; }
   } catch (e) { /* no URL/storage access — fall through to the default */ }
   return 'brython';
 }

@@ -59,6 +59,10 @@ class CascadeStudioWorker {
       const py = self._pyodideRuntime;
       if (py && py._module && py._module.HEAPU8) { pythonWasm = py._module.HEAPU8.length; }
     } catch (e) { /* no Pyodide in this session */ }
+    try {
+      const mp = self._csMpInterpreter;
+      if (mp && mp._module && mp._module.HEAPU8) { pythonWasm = mp._module.HEAPU8.length; }
+    } catch (e) { /* no MicroPython in this session */ }
     return {
       pyRuntime: self._pythonRuntimeKind || null,
       jsHeapUsed: mem.usedJSHeapSize || 0,

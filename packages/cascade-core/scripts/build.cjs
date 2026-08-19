@@ -46,6 +46,18 @@ if (fs.existsSync(brythonSrc)) {
   fs.copyFileSync(brythonSrc, path.join(distDir, 'brython.js'));
 }
 
+// 3a. Copy MicroPython (the `?pyruntime=micropython` low-memory runtime;
+// the settrace wasm variant is required for the line-mapping and
+// caller-frame hooks — see MicroPythonRuntime.js).
+console.log('[cascade-core] Copying MicroPython...');
+const mpDir = path.join(monoRoot, 'node_modules', '@micropython', 'micropython-webassembly-pyscript');
+for (const f of ['micropython.mjs', 'micropython-settrace.wasm']) {
+  const src = path.join(mpDir, f);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, path.join(distDir, f));
+  }
+}
+
 // 3b. Copy the Pyodide core distribution, IF it has been vendored
 // (`node packages/cascade-core/scripts/fetch-pyodide.cjs`). Optional by
 // design: Pyodide is the experimental `?pyruntime=pyodide` alternative to

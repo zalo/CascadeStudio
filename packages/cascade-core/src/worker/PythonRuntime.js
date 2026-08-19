@@ -23,6 +23,7 @@
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
 import { ensurePyodideRuntime } from './PyodideRuntime.js';
+import { ensureMicroPythonRuntime } from './MicroPythonRuntime.js';
 
 /** The Brython module name user scripts execute under. */
 const PY_USER_MODULE = 'main';
@@ -33,12 +34,14 @@ let _runtimePromise = null;
  *  for a runtime object with a synchronous `run(code)` method. Safe to call
  *  on every evaluation — the bootstrap happens once (retried if it failed).
  *
- *  `kind` selects the interpreter: 'brython' (default) or the experimental
+ *  `kind` selects the interpreter: 'brython' (default), the experimental
  *  'pyodide' (CPython on wasm, `?pyruntime=pyodide`; needs the vendored core
- *  distribution — see PyodideRuntime.js). Both run the same
- *  Build123dLite.js source. */
+ *  distribution — see PyodideRuntime.js), or 'micropython' (smallest +
+ *  lowest-memory, `?pyruntime=micropython` — see MicroPythonRuntime.js).
+ *  All three run the same Build123dLite.js source. */
 export function ensurePythonRuntime(kind) {
   if (kind === 'pyodide') { return ensurePyodideRuntime(); }
+  if (kind === 'micropython') { return ensureMicroPythonRuntime(); }
   if (!_runtimePromise) {
     _runtimePromise = _bootstrap().catch((e) => {
       _runtimePromise = null; // allow a retry on the next evaluation

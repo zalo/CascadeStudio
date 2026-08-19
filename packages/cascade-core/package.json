@@ -35,6 +35,7 @@
 		"types/"
 	],
 	"dependencies": {
+		"@micropython/micropython-webassembly-pyscript": "^1.28.0-6",
 		"brython": "^3.14.3",
 		"opencascade.js": "github:zalo/opencascade.js#6e0eba7aa0dff0456e41eae2d58a90458640c542",
 		"openscad-parser": "^0.6.3",
