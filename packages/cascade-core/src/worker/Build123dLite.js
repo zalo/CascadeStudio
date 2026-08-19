@@ -345,6 +345,38 @@ def _num(x):
     return float(x)
 
 
+# MicroPython's list sort is NOT stable; build123d's selector semantics
+# (chained sort_by, group_by tie order) require CPython stability, so probe
+# once and decorate with the original index when the native sort scrambles
+_SORT_PROBE = sorted([(i % 2, i) for i in range(32)], key=lambda t: t[0])
+_SORT_IS_STABLE = [t[1] for t in _SORT_PROBE] == \
+    [i for i in range(32) if i % 2 == 0] + [i for i in range(32) if i % 2 == 1]
+
+
+def _stable_sorted(seq, key=None, reverse=False):
+    """_stable_sorted() with guaranteed CPython stability on every runtime."""
+    if _SORT_IS_STABLE:
+        if key is None:
+            return sorted(seq, reverse=reverse)
+        return sorted(seq, key=key, reverse=reverse)
+    items = list(seq)
+    kf = key if key is not None else (lambda x: x)
+    dec = [(kf(v), (-i if reverse else i), v) for i, v in enumerate(items)]
+    dec.sort(reverse=reverse)
+    return [t[2] for t in dec]
+
+
+def _is_nested_seq(x):
+    """True when x is a non-empty sequence whose first element is itself a
+    sequence — the points-list-vs-*points overload check. Portable: hasattr
+    (x, '__len' + '__') is always False on MicroPython builtins, so probe
+    with len() instead."""
+    try:
+        return len(x) > 0 and len(x[0]) >= 0
+    except TypeError:
+        return False
+
+
 class Vector:
     """3D vector with build123d-style .X/.Y/.Z properties."""
 
@@ -952,7 +984,7 @@ class Location:
 
     @classmethod
     def _make(cls, R, t):
-        loc = cls.__new__(cls)
+        loc = object.__new__(cls)
         loc._R = R
         loc._t = tuple(t)
         return loc
@@ -1467,7 +1499,7 @@ def _wrap_like(obj, topo):
         cls = Sketch
     elif cls is Vertex:
         cls = Part
-    res = cls.__new__(cls)
+    res = object.__new__(cls)
     Shape.__init__(res, topo)
     if isinstance(res, Curve):
         res._specs = list(getattr(obj, '_specs', []) or [])
@@ -2727,7 +2759,7 @@ class Compound(Shape):
                  font_style=font_style if font_style is not None
                  else FontStyle.REGULAR,
                  text_align=text_align, align=align, mode=Mode.PRIVATE)
-        res = cls.__new__(cls)
+        res = object.__new__(cls)
         Shape.__init__(res, t.topo)
         return res
 
@@ -3400,7 +3432,7 @@ class Face(Shape):
             c = w._faceCentroid(f.topo)
             return ((c[0] - origin.X) * d[0] + (c[1] - origin.Y) * d[1] +
                     (c[2] - origin.Z) * d[2])
-        return ShapeList(sorted([Face(f.topo) for f in pieces], key=_dist))
+        return ShapeList(_stable_sorted([Face(f.topo) for f in pieces], key=_dist))
 
     @classmethod
     def make_surface(cls, exterior, surface_points=None, interior_wires=None):
@@ -3726,7 +3758,7 @@ class Shell(Shape):
         (build123d Shell.extrude)."""
         d = _v3(direction)
         topo = w.Extrude(_topo(obj), [d[0], d[1], d[2]])
-        shell = cls.__new__(cls)
+        shell = object.__new__(cls)
         Shape.__init__(shell, topo)
         shell._face_shapes = None
         return shell
@@ -3976,7 +4008,7 @@ def _canonical_sort_key(shape):
         return tuple(round(c, _TOL_DIGITS) for c in (shape.X, shape.Y, shape.Z))
     if shape.topo is None:
         return ()
-    points = sorted([(round(v.X, _TOL_DIGITS), round(v.Y, _TOL_DIGITS),
+    points = _stable_sorted([(round(v.X, _TOL_DIGITS), round(v.Y, _TOL_DIGITS),
                       round(v.Z, _TOL_DIGITS)) for v in shape.vertices()])
     return tuple(c for point in points for c in point)
 
@@ -4021,8 +4053,35 @@ def _sort_key_fn(key):
     if isinstance(key, property):
         # sort_by(Face.area) / group_by(Edge.length): a class PROPERTY object
         # is called on each shape (build123d's documented selector form)
-        return lambda s: key.fget(s)
+        return _property_getter(key)
     raise TypeError('unsupported sort/group key: ' + repr(key))
+
+
+def _property_getter(p):
+    """Portable class-property selector access: MicroPython property objects
+    expose neither .fget nor .__get__, so resolve the attribute NAME from the
+    receiver's class on first use and cache it."""
+    try:
+        return p.fget
+    except AttributeError:
+        pass
+    state = [None]
+    def get(s):
+        name = state[0]
+        if name is None:
+            klass = type(s)
+            for cand in dir(klass):
+                try:
+                    if getattr(klass, cand) is p:
+                        name = cand
+                        break
+                except Exception:
+                    pass
+            if name is None:
+                raise TypeError('unsupported property key: ' + repr(p))
+            state[0] = name
+        return getattr(s, name)
+    return get
 
 
 def topo_distance_to(other):
@@ -4146,6 +4205,17 @@ def _is_parallel(s, axis, tolerance=1e-5):
     return math.acos(dot) <= math.radians(tolerance) or dot > (1.0 - 1e-4)
 
 
+try:
+    # CPython/Pyodide/Brython: O(1) base indexing for list subclasses
+    _list_getitem = list.__getitem__
+except AttributeError:
+    # MicroPython exposes no unbound specials on builtins (and its super()
+    # can't reach a builtin base's __getitem__ either) — snapshot-and-index
+    # is the portable fallback; ShapeLists are small
+    def _list_getitem(seq, i):
+        return list(seq)[i]
+
+
 class ShapeList(list):
     def __add__(self, other):
         # plain list.__add__ would decay to a list, losing the selectors
@@ -4186,7 +4256,8 @@ class ShapeList(list):
             pred = f
         elif isinstance(f, property):
             # filter_by(Face.is_planar): a class PROPERTY used as a predicate
-            pred = lambda s: bool(f.fget(s))
+            _g = _property_getter(f)
+            pred = lambda s: bool(_g(s))
         else:
             raise TypeError('filter_by: unsupported filter ' + repr(f))
         out = ShapeList([s for s in self if bool(pred(s)) != bool(reverse)])
@@ -4236,13 +4307,13 @@ class ShapeList(list):
                     break
                 decorated = [((k, tie_break_key(s) if tied[k] > 1 else ()), s)
                              for k, s in decorated]
-        decorated = sorted(decorated, key=lambda pair: pair[0], reverse=reverse)
+        decorated = _stable_sorted(decorated, key=lambda pair: pair[0], reverse=reverse)
         return ShapeList([s for _, s in decorated])
 
     def sort_by_distance(self, other, reverse=False):
         """Sort by the MINIMAL distance between each shape and other
         (build123d ShapeList.sort_by_distance -> Shape.distance_to)."""
-        return ShapeList(sorted(self, key=lambda s: s.distance_to(other),
+        return ShapeList(_stable_sorted(self, key=lambda s: s.distance_to(other),
                                 reverse=reverse))
 
     def wires(self):
@@ -4253,7 +4324,7 @@ class ShapeList(list):
 
     def group_by(self, key=Axis.Z, reverse=False, tol_digits=6):
         fn = _group_key_fn(key, tol_digits)
-        ordered = sorted(self, key=fn, reverse=reverse)
+        ordered = _stable_sorted(self, key=fn, reverse=reverse)
         groups = []
         keys = []
         last = None
@@ -4282,7 +4353,7 @@ class ShapeList(list):
         return self[-1]
 
     def __getitem__(self, i):
-        r = list.__getitem__(self, i)
+        r = _list_getitem(self, i)
         if isinstance(i, slice):
             return ShapeList(r)
         return r
@@ -4613,9 +4684,11 @@ class Builder:
         upstream's: the copy keeps a reference to the result object as it is
         NOW, and every later operation rebinds the original's _obj, so the copy
         is the snapshot the docs use it as (before_fillet = copy(part))."""
-        clone = self.__class__.__new__(self.__class__)
+        clone = object.__new__(self.__class__)
         for key in list(self.__dict__.keys()):
-            clone.__dict__[key] = self.__dict__[key]
+            # setattr, not clone.__dict__[key] = ...: MicroPython instance
+            # __dict__ is a read-only view
+            setattr(clone, key, self.__dict__[key])
         return clone
 
     def __enter__(self):
@@ -5136,7 +5209,7 @@ def _create_object(cls, topo_maker, analytic_bbox, rotation3, align, mode,
                 sh = _align_shift(align, bmin, bmax)
                 if sh[0] or sh[1] or sh[2]:
                     topo = w.Translate(sh, topo)
-            shape = cls.__new__(cls)
+            shape = object.__new__(cls)
             Shape.__init__(shape, topo)
             if rot is not None:
                 shape = rot * shape
@@ -5366,8 +5439,7 @@ def Ellipse(*args, **kwargs):
 
 def Polygon(*pts, rotation=0, align=None, mode=Mode.ADD):
     if len(pts) == 1 and not isinstance(pts[0], (Vector,)) and \
-            hasattr(pts[0], '__len__') and len(pts[0]) > 0 and \
-            hasattr(pts[0][0], '__len__'):
+            _is_nested_seq(pts[0]):
         pts = tuple(pts[0])
     p3 = [_v3(p) for p in pts]
     xs = [p[0] for p in p3]
@@ -6010,8 +6082,7 @@ def Line(*pts, mode=Mode.ADD):
 
 
 def Polyline(*pts, close=False, mode=Mode.ADD):
-    if len(pts) == 1 and hasattr(pts[0], '__len__') and \
-            hasattr(pts[0][0], '__len__'):
+    if len(pts) == 1 and _is_nested_seq(pts[0]):
         pts = tuple(pts[0])
     p3 = [_v3(p) for p in pts]
     if close and p3[0] != p3[-1]:
@@ -6348,8 +6419,7 @@ def FilletPolyline(*pts, radius, close=False, mode=Mode.ADD):
     two straight segments is the analytic tangent arc, so lite constructs it
     directly (identical geometry, and it keeps the result a spec-level Curve
     that mirror()/make_face() can still transform)."""
-    if len(pts) == 1 and hasattr(pts[0], '__len__') and \
-            hasattr(pts[0][0], '__len__'):
+    if len(pts) == 1 and _is_nested_seq(pts[0]):
         pts = tuple(pts[0])
     points = [list(_v3(p)) for p in pts]
     # a user-closed polyline (last == first) is treated as close=True
@@ -6434,8 +6504,7 @@ def IntersectingLine(start, direction, other, mode=Mode.ADD):
 
 
 def Bezier(*cpts, weights=None, mode=Mode.ADD):
-    if len(cpts) == 1 and hasattr(cpts[0], '__len__') and \
-            hasattr(cpts[0][0], '__len__'):
+    if len(cpts) == 1 and _is_nested_seq(cpts[0]):
         cpts = tuple(cpts[0])
     pts = [_v3(p) for p in cpts]
     if weights is None:
@@ -6468,8 +6537,7 @@ def Spline(*pts, tangents=None, tangent_scalars=None, periodic=False,
     'interp' segment kind, replicating build123d's Spline/Edge.make_spline:
     tangents are unit-normalized then multiplied by their scalar (default
     1.0); OCC's Scale flag is True exactly when tangent_scalars is None."""
-    if len(pts) == 1 and hasattr(pts[0], '__len__') and \
-            hasattr(pts[0][0], '__len__'):
+    if len(pts) == 1 and _is_nested_seq(pts[0]):
         pts = tuple(pts[0])
     p3 = [list(_v3(p)) for p in pts]
     # NOTE: [] (not None) encodes "no tangents" — Brython None objects break
@@ -7214,7 +7282,7 @@ def ArcArcTangentArc(start_arc, end_arc, radius, side=Side.LEFT,
                          'center (no intersection of the construction '
                          'circles).')
     # sort_by(Axis(points[0], normal)): distance along that axis
-    ref_intersections.sort(key=lambda p: (p - points[0]).dot(normal))
+    ref_intersections = _stable_sorted(ref_intersections, key=lambda p: (p - points[0]).dot(normal))
     arc_center = ref_intersections[pick_index]
 
     # x_sign determines if tangent is near side or far side of circle
@@ -7636,7 +7704,7 @@ def extrude(to_extrude=None, amount=None, dir=None, until=None, target=None,
                 return (min(sb[0] * d[0], sb[3] * d[0]) +
                         min(sb[1] * d[1], sb[4] * d[1]) +
                         min(sb[2] * d[2], sb[5] * d[2]))
-            pieces = sorted(pieces, key=proj)
+            pieces = _stable_sorted(pieces, key=proj)
             if until == Until.NEXT:
                 # first void between the sketch plane and the body
                 results.append(pieces[0])
@@ -8459,7 +8527,7 @@ def bounding_box(objects=None, mode=Mode.PRIVATE):
 def _convex_hull_2d(pts):
     """Andrew monotone chain over (x, y) tuples -> CCW hull without the
     closing point."""
-    pts = sorted(set(pts))
+    pts = _stable_sorted(set(pts))
     if len(pts) <= 2:
         return list(pts)
 
@@ -8561,7 +8629,7 @@ def full_round(edge, invert=False, voronoi_point_count=100, mode=Mode.REPLACE):
         difference = max([abs(d - avg) for d in distances])
         if difference < best_three[-1][0]:
             best_three[-1] = (difference, i)
-            best_three.sort(key=lambda x: x[0])
+            best_three = _stable_sorted(best_three, key=lambda x: x[0])
     center = Vector(0, 0, 0)
     for _, i in best_three:
         center = center + vertices[i]
@@ -8670,7 +8738,7 @@ def make_hull(edges=None, tolerance=1e-3, mode=Mode.ADD):
     # 5) pair the trim points up per edge
     trim_data = {}
     for edge_index in trim_points:
-        s_points = sorted(trim_points[edge_index])
+        s_points = _stable_sorted(trim_points[edge_index])
         pairs = []
         for i in range(0, len(s_points) - 1, 2):
             if s_points[i] != s_points[i + 1]:
@@ -8931,8 +8999,9 @@ class Joint:
 
     def _lite_rebind(self, new_parent):
         """A copy of this joint bound to new_parent (used by copy.copy)."""
-        c = self.__class__.__new__(self.__class__)
-        c.__dict__.update(self.__dict__)
+        c = object.__new__(self.__class__)
+        for k in self.__dict__:
+            setattr(c, k, self.__dict__[k])  # __dict__ is read-only on MicroPython
         c.parent = new_parent
         c.connected_to = None
         return c
@@ -9244,7 +9313,7 @@ def import_step(file_name):
             'The CAD worker has no filesystem; pass the file content with '
             'CascadeAPI.loadExternalFiles({"' + name.split('/')[-1] +
             '": <step text>}) before running the script.')
-    res = Compound.__new__(Compound)
+    res = object.__new__(Compound)
     Shape.__init__(res, topo)
     res.label = name.split('/')[-1]
     return res
@@ -9261,7 +9330,7 @@ def import_brep(file_name):
     # import_step)
     if topo is None or not topo:
         raise ValueError('Could not import ' + str(file_name))
-    res = Compound.__new__(Compound)
+    res = object.__new__(Compound)
     Shape.__init__(res, topo)
     res.label = str(file_name).split('/')[-1]
     return res
@@ -9374,9 +9443,9 @@ def _pack2d(objects, width_fn, length_fn):
             self.down = None
             self.right = None
 
-    sizes = sorted(((o, width_fn(o), length_fn(o)) for o in objects),
+    sizes = _stable_sorted(((o, width_fn(o), length_fn(o)) for o in objects),
                    key=lambda t: min(t[1], t[2]), reverse=True)
-    sizes = sorted(sizes, key=lambda t: max(t[1], t[2]), reverse=True)
+    sizes = _stable_sorted(sizes, key=lambda t: max(t[1], t[2]), reverse=True)
     root = _Node(w=sizes[0][1], h=sizes[0][2])
 
     def find_node(start, ww, hh):
@@ -9473,7 +9542,15 @@ def show(*shapes, **kwargs):
     Membership is tested with 'is' — Brython compares the underlying JS
     objects, so it works across wrapper instances."""
     if not getattr(w, '_b123dSceneDefined', False):
-        while len(w.sceneShapes) > 0:
+        # len() works on Brython/Pyodide array views but MicroPython's
+        # JsProxy has no __len__ (its .length attribute works instead —
+        # which Pyodide's JsList in turn does NOT expose).
+        def _scene_len():
+            try:
+                return len(w.sceneShapes)
+            except TypeError:
+                return int(w.sceneShapes.length)
+        while _scene_len() > 0:
             w.sceneShapes.pop()
         w._b123dSceneDefined = True
     flat = []
@@ -9563,7 +9640,7 @@ def _measure_globals_json(g):
                 return (round((bb[0] + bb[3]) / 2, 3),
                         round((bb[1] + bb[4]) / 2, 3),
                         round((bb[2] + bb[5]) / 2, 3))
-            solids = sorted(solids[:64], key=_bbkey)
+            solids = _stable_sorted(solids[:64], key=_bbkey)
             for i, x in enumerate(solids):
                 measure(name + '[' + str(i) + ']', x)
     return '{' + ','.join(entries) + '}'
@@ -10005,10 +10082,21 @@ def getrandbits(k):
     return out
 
 
+def _bit_length(n):
+    try:
+        return n.bit_length()
+    except AttributeError:  # MicroPython ints have no bit_length
+        k = 0
+        while n > 0:
+            n >>= 1
+            k += 1
+        return k
+
+
 def _randbelow(n):
     if n <= 0:
         return 0
-    k = n.bit_length()
+    k = _bit_length(n)
     r = getrandbits(k)
     while r >= n:
         r = getrandbits(k)
@@ -10044,6 +10132,26 @@ def shuffle(x):
 `,
   _scipy_shim: `
 # scipy shim implementation module (imported by the 'scipy' package shims).
+# Stable sort helper mirroring build123d-lite's: MicroPython's sort is
+# unstable, and Nelder-Mead's simplex ordering on tied objective values must
+# match the CPython-validated behavior on every runtime.
+_SORT_PROBE = sorted([(i % 2, i) for i in range(32)], key=lambda t: t[0])
+_SORT_IS_STABLE = [t[1] for t in _SORT_PROBE] == \\
+    [i for i in range(32) if i % 2 == 0] + [i for i in range(32) if i % 2 == 1]
+
+
+def _stable_sorted(seq, key=None, reverse=False):
+    if _SORT_IS_STABLE:
+        if key is None:
+            return sorted(seq, reverse=reverse)
+        return sorted(seq, key=key, reverse=reverse)
+    items = list(seq)
+    kf = key if key is not None else (lambda x: x)
+    dec = [(kf(v), (-i if reverse else i), v) for i, v in enumerate(items)]
+    dec.sort(reverse=reverse)
+    return [t[2] for t in dec]
+
+
 # COMPROMISE(scipy-shim): pure-Python Nelder-Mead stands in for
 # scipy.optimize.minimize (same simplex init/reflect/expand/contract/shrink
 # rules and convergence thresholds as scipy's implementation, but float
@@ -10114,7 +10222,7 @@ def minimize(fun, x0, args=(), method='Nelder-Mead', bounds=None, tol=None,
     fsim = [f(x) for x in sim]
     it = 0
     for it in range(int(maxiter)):
-        order = sorted(range(n + 1), key=lambda j: fsim[j])
+        order = _stable_sorted(range(n + 1), key=lambda j: fsim[j])
         sim = [sim[j] for j in order]
         fsim = [fsim[j] for j in order]
         if max(abs(sim[j][i] - sim[0][i])
@@ -10148,7 +10256,7 @@ def minimize(fun, x0, args=(), method='Nelder-Mead', bounds=None, tol=None,
                     sim[j] = clip([sim[0][i] + 0.5 * (sim[j][i] - sim[0][i])
                                    for i in range(n)])
                     fsim[j] = f(sim[j])
-    order = sorted(range(n + 1), key=lambda j: fsim[j])
+    order = _stable_sorted(range(n + 1), key=lambda j: fsim[j])
     return OptimizeResult(x=list(sim[order[0]]), fun=fsim[order[0]],
                           success=True, nit=it + 1)
 
@@ -10216,7 +10324,7 @@ class ConvexHull:
         seen = set()
         for t in self.simplices:
             seen.update(t)
-        self.vertices = _IndexRows(sorted(seen))
+        self.vertices = _IndexRows(_stable_sorted(seen))
 
 
 def _bowyer_watson(points):
@@ -10289,7 +10397,7 @@ def _bowyer_watson(points):
         for t in bad:
             tris.remove(t)
             circles.pop(t, None)
-        for key in sorted(edge_count.keys()):
+        for key in _stable_sorted(edge_count.keys()):
             if edge_count[key] != 1:
                 continue                       # interior edge of the cavity
             t = (key[0], key[1], i)
@@ -10379,8 +10487,11 @@ spatial = _Namespace('spatial', ConvexHull=ConvexHull, Voronoi=Voronoi)
 `,
   scipy: `
 # __path__ marks this as a package so Brython's importer resolves the
-# pre-registered 'scipy.optimize' / 'scipy.spatial' submodules from cache
-__path__ = []
+# pre-registered 'scipy.optimize' / 'scipy.spatial' submodules from cache.
+# Only when missing: MicroPython imports this as a real package and its
+# native __path__ is a STRING that must survive (a list breaks its importer).
+if '__path__' not in globals():
+    __path__ = []
 from _scipy_shim import optimize, spatial
 `,
   'scipy.optimize': `
