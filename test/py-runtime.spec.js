@@ -1,8 +1,9 @@
 // @ts-check
-// The Python-interpreter flag: Python mode runs on Brython by default and on
-// Pyodide (real CPython on wasm) with ?pyruntime=pyodide. Both execute the
-// same Build123dLite.js source — see test/b123d-validation/runtime-comparison.md
-// for the measurements behind keeping Brython as the default.
+// The Python-interpreter flag: Python mode runs on Brython by default, on
+// Pyodide (real CPython on wasm) with ?pyruntime=pyodide, and on MicroPython
+// (smallest + lowest memory) with ?pyruntime=micropython. All three execute
+// the same Build123dLite.js source — see
+// test/b123d-validation/runtime-comparison.md for the measurements.
 const { test, expect } = require('@playwright/test');
 
 async function gotoAndReady(page, query = '') {
@@ -39,6 +40,55 @@ test('Python runtime defaults to Brython and the flag selects Pyodide', async ({
   expect(stats.pyRuntime).toBe('brython');
   expect(stats.pythonWasm).toBe(0);
   expect(stats.bootTiming.runtime).toBe('brython');
+});
+
+test('?pyruntime=micropython evaluates build123d-lite on MicroPython', async ({ page }) => {
+  await gotoAndReady(page, '?pyruntime=micropython');
+  expect(await page.evaluate(() => window.CascadeAPI.getPyRuntime())).toBe('micropython');
+
+  const result = await page.evaluate((code) => window.CascadeAPI.runCode(code), `
+from build123d import *
+import sys
+part = Box(10, 10, 10) - Cylinder(2, 20)
+print("impl", sys.implementation.name, "volume", round(part.volume, 3))
+show(part)
+`);
+  expect(result.errors).toEqual([]);
+  await page.waitForFunction(
+    () => window.CascadeAPI.getConsoleLog().some((l) => l.startsWith('impl ')),
+    { timeout: 90000 });
+  const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
+  // Same geometry as Brython/Pyodide, through the same worker CAD calls.
+  expect(logs.find((l) => l.startsWith('impl '))).toContain('impl micropython volume 874.336');
+
+  const stats = await page.evaluate(() => window.CascadeAPI._memoryStats());
+  expect(stats.pyRuntime).toBe('micropython');
+  expect(stats.bootTiming.runtime).toBe('micropython');
+  // The whole interpreter (GC heap included) stays a fraction of Pyodide's:
+  // ~20 MB wasm heap vs Pyodide's ~45 MB (and Brython's JS-heap footprint).
+  expect(stats.pythonWasm).toBeGreaterThan(8 * 1024 * 1024);
+  expect(stats.pythonWasm).toBeLessThan(32 * 1024 * 1024);
+
+  // History steps carry user line numbers (the settrace frame hooks).
+  const historyResult = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
+    'from build123d import *',
+    'b = Box(3, 3, 3)',
+    'c = Cylinder(1, 5)',
+    'show(b, c)',
+  ].join('\n'));
+  expect(historyResult.errors).toEqual([]);
+  const steps = await page.evaluate(() => window.CascadeAPI.getHistorySteps());
+  const boxStep = steps.find((s) => s.fnName === 'Box');
+  expect(boxStep && boxStep.lineNumber).toBe(2);
+
+  // Python errors carry the traceback with the user's editor line.
+  await page.evaluate((code) => window.CascadeAPI.runCode(code),
+    'from build123d import *\nboom_undefined\n');
+  await page.waitForFunction(
+    () => window.CascadeAPI.getErrors().length > 0, { timeout: 30000 });
+  const errText = (await page.evaluate(() => window.CascadeAPI.getErrors())).join('\n');
+  expect(errText).toContain("NameError");
+  expect(errText).toContain('line 2');
 });
 
 test('?pyruntime=pyodide evaluates build123d-lite on CPython', async ({ page }) => {

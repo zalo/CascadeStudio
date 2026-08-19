@@ -16,9 +16,9 @@ import { readAssets } from './run-lite.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const PORT = parseInt(process.env.CS_TEST_PORT || '8517', 10);
-// CS_PY_RUNTIME=pyodide runs the script on the experimental CPython runtime
+// CS_PY_RUNTIME=pyodide|micropython runs the script on that runtime
 // (needs the vendored Pyodide core — see PyodideRuntime.js).
-const PY_RUNTIME_QUERY = process.env.CS_PY_RUNTIME === 'pyodide' ? '?pyruntime=pyodide' : '';
+const PY_RUNTIME_QUERY = ['pyodide', 'micropython'].includes(process.env.CS_PY_RUNTIME) ? '?pyruntime=' + process.env.CS_PY_RUNTIME : '';
 
 const args = process.argv.slice(2);
 let code;

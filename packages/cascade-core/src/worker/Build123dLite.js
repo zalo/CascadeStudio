@@ -299,6 +299,14 @@ class GeomType:
     OTHER = ('Other',)
 
 
+try:
+    FileNotFoundError
+except NameError:
+    # MicroPython ships only OSError; alias so lite's own raises (import_step)
+    # and user 'except FileNotFoundError:' clauses work everywhere
+    FileNotFoundError = OSError
+
+
 class LineType:
     CONTINUOUS = 'CONTINUOUS'
     CENTER = 'CENTER'

@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 93 tests (incl. 50 frozen build123d example scripts)
+npx playwright test    # 94 tests (incl. 50 frozen build123d example scripts)
 ```
 
 ## Architecture (Monorepo)
@@ -199,8 +199,30 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   the download and ~3x the boot for no user-visible win. Numbers, the interop-seam
   notes and the recommendation live in `test/b123d-validation/runtime-comparison.md`;
   the flag is covered by `test/py-runtime.spec.js` and benchmarked by
-  `test/b123d-validation/bench-runtime.mjs`. `CS_PY_RUNTIME=pyodide` switches
-  run-lite.mjs/probe.mjs over.
+  `test/b123d-validation/bench-runtime.mjs`. `CS_PY_RUNTIME=pyodide|micropython`
+  switches run-lite.mjs/probe.mjs over.
+- **`?pyruntime=micropython`** swaps the interpreter for MicroPython 1.28 wasm
+  (`packages/cascade-core/src/worker/MicroPythonRuntime.js`; micropython.mjs +
+  the settrace wasm variant, ~228 KB gz combined, copied to dist by the
+  cascade-core build) — the smallest and lowest-memory runtime: ~150 ms boot,
+  ~20 MB interpreter wasm heap after the starter (vs Pyodide's ~45 MB), aimed
+  at memory-budgeted headless execution. The settrace variant powers the two
+  runtime hooks (`getPythonUserLine`, `_pythonCallerFrame`) via a
+  current-frame tracker + live `f_back` walking (no frame stack — MicroPython
+  fires no 'return' event on exception unwind; tracing costs ~3.5x on
+  pure-Python loops, nothing on OCCT time). ALL worker-library calls go
+  through a guarded JS bridge (`_csMpCall`) because a JS exception crossing
+  the FFI unwinds the VM uncatchably; the Python-side `browser` shim converts
+  container args with jsffi.to_js (identity-preserving both ways — better
+  than Brython). Same Build123dLite.js source + PY_SHIM_MODULES (registered
+  via MEMFS files; builtin-conflicting names via alias + sys.modules).
+  Portability idioms the shared Python source must keep to (MicroPython has
+  no `type.__new__`, exposes no dunder ATTRIBUTES on builtins, and instance
+  `__dict__` is read-only): `object.__new__(cls)` for allocation,
+  `_is_nested_seq()` instead of hasattr-`__len__` duck checks,
+  `_list_getitem`/`_property_getter`/`_bit_length` helpers, setattr loops
+  instead of `__dict__.update`, and the scipy shim only sets `__path__ = []`
+  when missing (MicroPython needs its native STRING `__path__`).
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,

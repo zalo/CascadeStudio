@@ -3,7 +3,7 @@
 // each runtime has to download. Backs test/b123d-validation/runtime-comparison.md.
 //
 //   CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/bench-runtime.mjs \
-//     --runtime brython|pyodide [--repeat 3] [--corpus] [--out /tmp/bench.json]
+//     --runtime brython|pyodide|micropython [--repeat 3] [--corpus] [--out /tmp/bench.json]
 //
 // Env: CS_TEST_PORT (default 8517). Requires `npm run build` first; the
 // pyodide runtime additionally needs the vendored core distribution
@@ -53,6 +53,7 @@ const RUNTIME_ASSETS = {
   pyodide: ['pyodide/pyodide.mjs', 'pyodide/pyodide.asm.mjs',
     'pyodide/pyodide.asm.wasm', 'pyodide/python_stdlib.zip',
     'pyodide/pyodide-lock.json'],
+  micropython: ['micropython.mjs', 'micropython-settrace.wasm'],
 };
 
 const TRIVIAL = `from build123d import *
@@ -78,7 +79,7 @@ async function ensureServer() {
 async function newJsModePage(context) {
   const page = await context.newPage();
   page.on('pageerror', () => {});
-  const query = `?mode=cascadestudio${RUNTIME === 'pyodide' ? '&pyruntime=pyodide' : ''}`;
+  const query = `?mode=cascadestudio${RUNTIME !== 'brython' ? '&pyruntime=' + RUNTIME : ''}`;
   await page.goto(`http://localhost:${PORT}/${query}`, { timeout: 60000 });
   await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(),
     undefined, { timeout: 90000 });

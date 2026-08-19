@@ -244,3 +244,66 @@ CS_TEST_HEADFUL=1 DISPLAY=:99 \
 honest: Brython is the default, an unknown value falls back to Brython, and —
 when `vendor/pyodide` is present — a build123d script really does evaluate on
 CPython.
+
+## 9. MicroPython (added 2026-08-19 — the memory-minimizing third runtime)
+
+`?pyruntime=micropython` runs the same Build123dLite.js source on MicroPython
+1.28 wasm (`MicroPythonRuntime.js`; micropython.mjs + the **settrace** wasm
+variant, needed for the line-mapping and Builder caller-frame hooks). It was
+added with a hard target in mind: **executing basic models inside a 128 MB
+memory budget** (Cloudflare Workers class environments).
+
+Measured on this machine (bench-runtime.mjs --runtime micropython --repeat 3,
+numbers stable across runs; harness = full 232-script corpus, --pages 4):
+
+| Criterion | Brython (default) | MicroPython | Pyodide |
+|---|---|---|---|
+| Assets (raw) | 1.38 MB | 108 KB mjs + 489 KB wasm | 13.5 MB |
+| Assets (gz) | ~268 KB | **~228 KB** | ~6.2 MB |
+| Boot (fetch+init+lib) | ~420-540 ms | **~154 ms** | ~1280 ms |
+| Cold first eval | ~600 ms | **~220 ms** | ~1500 ms |
+| Interpreter memory after starter | JS-heap resident (not separately measurable in a worker) | **20.4 MB wasm heap** (16 MB GC heap, fixed) | 45.3 MB wasm heap |
+| Validation (222 scored scripts) | 205 PASS / 10 MISMATCH / 5 ERROR / 2 TIMEOUT | **206 PASS / 10 MISMATCH / 5 ERROR / 1 TIMEOUT** — the identical mismatch set and expected-ERROR set; heat_exchanger converts Brython's TIMEOUT into a PASS | 205 PASS (identical to Brython) |
+| Throughput | baseline | ~3.5x slower on pure-Python loops (settrace); OCCT time unaffected — heat_exchanger, a Brython TIMEOUT, PASSES here | fastest |
+
+The mismatch set is exactly Brython's residual set (joints x2, projection x2,
+objects_1d, filter_all_edges_circle, sort_axis, sm_hanger, tips/b04) — the
+documented COMPROMISE(edge-orientation)/(traversal-order)/(triad-labels)
+items, not MicroPython artifacts.
+
+### The 128 MB question
+
+The worker's memory after evaluating the starter model is, exactly:
+
+- OCCT wasm linear memory: **100.0 MB** — and that is the module's
+  *declared initial memory* (1600 wasm pages; growable to 4 GB). The starter
+  never grows it, so the actual OCCT working set of a basic model is well
+  below 100 MB.
+- MicroPython interpreter: **20.4 MB** (vs Pyodide's 45.3 MB; Brython's
+  footprint lives in the JS heap and is not separately measurable, but its
+  1.38 MB of compiled-Python JS plus per-object overhead is believed larger).
+- Everything else (worker JS, mesh buffers): single-digit MB for basic models.
+
+So today's artifacts land at **~120 MB + JS overhead — borderline** for a
+128 MB budget. The decisive lever is NOT the interpreter (already minimized):
+it is OCCT's `INITIAL_MEMORY=100MB` build setting on the opencascade.js fork.
+Memory growth is already enabled, so rebuilding the fork with e.g.
+INITIAL_MEMORY=32MB would keep every current workload working (it grows on
+demand) and put a MicroPython basic-model worker at **~55-60 MB total** —
+comfortably inside 128 MB. That is a fork-rebuild knob, recorded here as the
+follow-up.
+
+### Porting notes (what the shared Python source must avoid)
+
+MicroPython has no `type.__new__`/unbound builtin dunders, exposes no `.fget`
+on properties, instance `__dict__` is read-only, `int.bit_length` is missing,
+package `__path__` is a string, **its list sort is UNSTABLE**, and a JS
+exception crossing the FFI unwinds the VM uncatchably. Build123dLite.js now
+uses `object.__new__(cls)`, `_is_nested_seq()`, `_list_getitem`,
+`_property_getter`, `_bit_length`, setattr loops, a conditional `__path__`,
+and `_stable_sorted()` (probe + index-decoration — build123d's chained
+sort_by semantics REQUIRE CPython stability); MicroPythonRuntime.js routes
+every worker call through a JS-side try/catch bridge (`_csMpCall`) and
+converts container arguments with `jsffi.to_js`. All of these are
+behavior-preserving on Brython/Pyodide (the full Brython suite and frozen
+examples stayed green throughout).
