@@ -123,6 +123,45 @@ MISMATCH the 0.11.1 reference but PASS against the dev reference:
   one native-dev probe (`'Curve' object has no attribute 'length'`) — not
   corpus-relevant, unverified against upstream HEAD.
 
+## J. Final numbers (2026-08-20 evening)
+
+Harness, 222 scored scripts, vs the NATIVE 0.11.1 reference
+(`CS_PY_RUNTIME=micropython`, pysrc=upstream default, dev vendor active,
+`B123D_SRC=~/Desktop/build123d` for import_step assets):
+
+| Config | PASS | MISMATCH | ERROR | TIMEOUT |
+|---|---|---|---|---|
+| dev@44a8d7c1 upstream (this branch) | **202** | 14 | 4 | 2 |
+| — counting the 4 confirmed intentional dev changes as dev-correct | **206** | 10 | 4 | 2 |
+| 0.11.1 upstream (previous state) | 205 | 10 | 5 | 2 |
+| lite (Brython) re-verified this session | 206 | 10 | 5 | 1 |
+| lite (MicroPython) re-verified this session | (§ below) | | | |
+
+Dev-config non-PASS, fully classified:
+
+- **Intentional dev changes** (PASS against a NATIVE dev reference):
+  maker_coin, ttt-ppp0102, key_concepts_builder/b13, sm_hanger.
+  sm_hanger is a strict IMPROVEMENT: 0.11.1-upstream ERRORs on it and lite
+  MISMATCHes; on dev it matches native dev on all 14 shapes.
+- **Lite-family/compromise residuals** (same script + magnitude as the
+  documented baselines): joints×2, projection×2 (edge-orientation),
+  objects_1d (DTA trim + triad), filter_all_edges_circle, tips/b04
+  (traversal/tie — b04 matches native dev in some runs and not others),
+  tutorial_joints m6_screw, bicycle_tire +0.84% (thicken band),
+  ex08_algebra (face-winding).
+- **Honest gaps** (baseline-identical): dual_color_3mf (no lib3mf),
+  objects_2d (Draft), curved_support (sympy).
+- **Kernel**: Buffer_Stand (fuse-drop on its rib construction; native dev
+  passes; 0.11.1-upstream also ERRORs — dev surfaces it as the script's own
+  mass assert instead of a raise).
+- **TIMEOUT**: spitfire_wing_gordon (gordon-surface realization cost),
+  heat_exchanger (4-page contention flap, passes solo — same note as the
+  committed baselines).
+
+Gates: fast spec gate (python-mode / py-runtime / py-src-upstream) —
+8 passed, 1 skipped. Brython baseline re-run: 206/10/5/1, per-script
+IDENTICAL to the committed report.md sets.
+
 ## Milestones
 
 - 12:45 PDT: PoC goals (BuildLine length 20; BuildPart Box volume 125) pass
@@ -133,3 +172,38 @@ MISMATCH the 0.11.1 reference but PASS against the dev reference:
 - 15:30 PDT: harness run 2 — 201 PASS (target 190 crossed).
 - 16:20 PDT: every remaining mismatch classified against a NATIVE dev
   reference; sm_hanger (0.11.1-upstream: ERROR, lite: MISMATCH) runs clean.
+- 17:15 PDT: harness run 3 (final) — 202 PASS / 14 MISMATCH / 4 ERROR /
+  2 TIMEOUT; fast spec gate green; Brython baseline re-verified per-script
+  identical (206/10/5/1).
+
+## K. Verdict on "a bump costs days"
+
+**Confirmed cheap — one working day, not weeks.** Total wall-clock from
+empty branch to lite-parity-with-classification: ~6 h, of which:
+
+- ~40 min vendoring mechanics (one-time tooling; the NEXT bump reuses it —
+  a re-vendor is now `fetch --src <tree> --out <name>` + one constant flip
+  + module-list entry).
+- ~2 h load-time friction (transforms/shims). Dominated by ONE structural
+  surprise: dev rebuilt build_common around a METACLASS construction
+  firewall, which MicroPython cannot express — the emulation (scope push in
+  __new__, publish on terminal __init__) is ~120 lines of seam and carries
+  two documented edge-case compromises. Everything else was mechanical
+  (PEP 570 markers, dataclass field scan bounds, contextlib/itertools shims,
+  nested-isinstance-tuple rewrite).
+- ~2.5 h harness grind — SIX seam fills total (copy_attributes_to,
+  resolve_font, wrapped-setter/_wrapped, show-builder coercion, combine
+  tolerance, edge sweep paths), each S-sized once diagnosed; the
+  class-DAG unification from the 0.11.1 round meant ZERO structural
+  topology work this time.
+- ~1 h classification (native dev venv + per-script dev reference), which
+  is exactly the work that keeps the result honest.
+
+The prediction in FINDINGS.md ("update the sources, re-run the transforms,
+re-run the harness") held, with the caveat that a release that introduces a
+NEW CPython-only language/runtime construct (this one: metaclass +
+contextlib + PEP 570 + nested classinfo tuples) costs a focused
+emulation/shim session on MicroPython. The seam surface itself — lite's
+geometry/topology under upstream's Level A — absorbed a 4,500-changed-line
+upstream refactor with six small method fills and no lite-source changes at
+all (both lite baselines re-verified untouched).
