@@ -70,15 +70,66 @@ to its captured Builder. MicroPython has no metaclasses. Emulation
   that raises before reaching the terminal super() leaks the pushed scope
   until the worker's between-runs `_cs_reset_all`.
 
-## G. Intentional dev behavior changes (vs the 0.11.1 native reference)
+## G. Harness grind (browser, full corpus) — ~2.5 h
 
-(filled during the harness pass)
+Run 1 (after §A–F): **120 PASS / 97 ERROR / 4 MISMATCH / 1 TIMEOUT**.
+Clusters closed, in order:
 
-## H. Dev bugs found
+| Fix | Scripts recovered | Layer | Effort |
+|---|---|---|---|
+| `Shape.copy_attributes_to` (dev `_PublicationService.place` carries user metadata onto every placed result; lite internals `topo`/`_loc`/`_parent` excluded — `_loc` is None-for-identity and upstream's falsy-target guard would overwrite placements) | ~80 | seam | 20 min |
+| `Compound.resolve_font` (dev Text resolves the font up front) over lite's honest FontManager | 8 (all Text scripts) | seam | 15 min |
+| collections.abc tuples + `rewriteNestedTypeTuples` transform: MicroPython `isinstance` does NOT flatten nested classinfo tuples — dev's `flatten_sequence` checks `(list, tuple, set, Iterator)` with the shim's tuple-valued `Iterator`, so a `filter` of edges silently didn't flatten (`fillet(filter(...))` in din_rail; `.topo_parent` on a filter in din_rail_algebra) | 2 + latent | shim + transform | 45 min (diagnosis: the silent-False took a browser bisect) |
+| `show()`/`show_object()` unwrap UPSTREAM builders (viewport stayed empty — harness-invisible, user-visible) | 0 (product fix) | seam | 10 min |
+| `Mixin1D.combine` chains at 1e-7 in upstream mode (dev `pending_edges_as_wire` rides Wire.combine; a 1-D fillet arc endpoint sits ~7e-8 off the trimmed line, 1e-9 chaining split the wire — surfaced as make_brake_formed's widths ValueError) | sm_hanger | seam | 40 min (diagnosis-heavy) |
+| `_cs_path_wire_topo` accepts bare EDGE sweep paths (dev make_brake_formed sweeps per line edge; GetWire refuses edges) | sm_hanger | seam | 10 min |
+| harness-config, not code: run-lite/probe need `B123D_SRC=~/Desktop/build123d` for `import_step` ASSETS (2 false ERRORs in runs 1–2) | 2 | — | 15 min lost |
 
-(filled during the harness pass)
+Run 2 (before the last three rows): **201 PASS / 12 MISMATCH / 7 ERROR /
+2 TIMEOUT**.
+
+## H. Intentional dev behavior changes (vs the 0.11.1 native reference)
+
+Verified by building a NATIVE dev venv (cp of b123d-ref-venv + source copy —
+pip needs setuptools it doesn't have; version reports 0.0.0 without
+setuptools_scm) and regenerating the reference for every mismatching script
+(`reference.py --manifest`; all 14 run natively on dev). Scripts that
+MISMATCH the 0.11.1 reference but PASS against the dev reference:
+
+- **docs-rst/key_concepts_builder/b13** — builder results now REPLICATE under
+  an enclosing `Locations` (dev's BuildScope captures publication_locations
+  at builder entry): volume 141.37 → 282.74, native-dev-exact.
+- **ttt/ttt-ppp0102** — `BuildLine(Plane.XZ)`: 0.11.1 localized POINTS into
+  the workplane during construction (module variables global); dev builds on
+  LOCAL Plane.XY and publishes to the placement (`workplane=` kwarg renamed
+  `placement=`). l1 is now local — and 'p' itself differs (42847.4 native-dev
+  = ours, 1.42% off 0.11.1).
+- **examples/maker_coin** — volume 12998.909 (native-dev-exact) vs 13160.218
+  on 0.11.1: dev changed geometry in the JernArc/DTA/fillet region.
+- **docs-rst/tips/b04** — the completely-TIED sort_by that made this a
+  traversal-order compromise on 0.11.1 is not tied the same way on dev: ours
+  now matches native dev exactly.
+- API surface: `Workplanes`/`WorkplaneList` REMOVED upstream (no corpus
+  script uses them); builders take `*placements`; `BuildPart.part` returns
+  the PLACED part (`part_local` added); `Unit` became a StrEnum;
+  `MC`/`UNITS_PER_METER` etc. moved to build_constants (compat re-import
+  kept); loft supports multiple holes per section; fillet/chamfer got the
+  "did you intend <keyword>=" validation.
+
+## I. Dev bugs found
+
+- None conclusively (native dev ran every corpus script we pointed it at).
+  Note `BuildLine.line_local` returns a Curve on which `.length` raised in
+  one native-dev probe (`'Curve' object has no attribute 'length'`) — not
+  corpus-relevant, unverified against upstream HEAD.
 
 ## Milestones
 
 - 12:45 PDT: PoC goals (BuildLine length 20; BuildPart Box volume 125) pass
   on dev sources in the node inner loop.
+- 14:00 PDT: full starter (flanged bearing mount) EXACT in the browser
+  (48603.5 mm³).
+- 14:30 PDT: harness run 1 — 120 PASS.
+- 15:30 PDT: harness run 2 — 201 PASS (target 190 crossed).
+- 16:20 PDT: every remaining mismatch classified against a NATIVE dev
+  reference; sm_hanger (0.11.1-upstream: ERROR, lite: MISMATCH) runs clean.
