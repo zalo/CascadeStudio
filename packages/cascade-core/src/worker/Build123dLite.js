@@ -1796,12 +1796,12 @@ class Shape:
         if self.topo is None:
             return ShapeList()
         out = ShapeList()
-        seen = []
+        seen = set()   # a list made this O(n^2) on solid-heavy builders
         def _cb(vtx):
             p = w._vertexPoint(vtx)
             key = (round(p[0], 9), round(p[1], 9), round(p[2], 9))
             if key not in seen:
-                seen.append(key)
+                seen.add(key)
                 out.append(Vertex(vtx, parent=self))
         w.ForEachVertex(self.topo, _cb)
         return out
@@ -2167,15 +2167,16 @@ class Shape:
         return bool(w._sameShape(self.topo, other.topo))
 
     def __hash__(self):
-        """Consistent with __eq__: IsSame-equal shapes have identical
-        geometry, so a rounded bounding-box key hashes them equally (distinct
-        shapes may collide, which only costs an extra comparison). Not cached:
-        move()/locate() mutate self.topo in place."""
+        """Consistent with __eq__: TopoDS_Shape::HashCode hashes the
+        TShape + Location exactly like IsSame compares them (orientation
+        excluded from both). Cheap — the previous rounded-bounding-box key
+        computed a kernel Bnd_Box per hash, which made upstream's per-op
+        Select.LAST set bookkeeping (thousands of sub-shape hashes) dominate
+        whole scripts. Not cached: move()/locate() mutate self.topo in
+        place."""
         if self.topo is None:
             return 0
-        bb = list(w.BoundingBox(self.topo))
-        return hash((round(bb[0], 4), round(bb[1], 4), round(bb[2], 4),
-                     round(bb[3], 4), round(bb[4], 4), round(bb[5], 4)))
+        return int(w._shapeHashCode(self.topo))
 
     def _lite_copy(self):
         c = _wrap_like(self, self.topo)
@@ -4123,7 +4124,9 @@ class Vertex(Shape):
         Shape.__init__(self, topo)
         self.parent = parent
         p = w._vertexPoint(topo)
-        self.X, self.Y, self.Z = p[0], p[1], p[2]
+        # float() NOW: on MicroPython the elements arrive as JS number
+        # proxies and every later arithmetic op would cross the FFI
+        self.X, self.Y, self.Z = float(p[0]), float(p[1]), float(p[2])
 
     def center(self, center_of=CenterOf.GEOMETRY):
         return Vector(self.X, self.Y, self.Z)
@@ -4133,6 +4136,27 @@ class Vertex(Shape):
 
     def __iter__(self):
         return iter((self.X, self.Y, self.Z))
+
+    def _pos_key(self):
+        # INTEGER key tuple: micron-rounded position. Ints, not floats —
+        # MicroPython set probing over float-tuple keys degrades ~100x
+        # (a 512-vertex set() took 35 s with float keys, 0.4 s with ints).
+        return (int(round(self.X * 1e6)), int(round(self.Y * 1e6)),
+                int(round(self.Z * 1e6)))
+
+    def __eq__(self, other):
+        """POSITIONAL equality for vertices (micron-rounded, matching the
+        canonical tie-break keys): builder code dedups vertices with set()
+        and 'v in face.vertices()', which upstream can serve with TopoDS
+        IsSame because its builders FUSE lines (shared corners become one
+        vertex); lite keeps free-edge compounds, where each corner exists
+        once per incident edge and IsSame keeps the duplicates."""
+        if not isinstance(other, Vertex):
+            return Shape.__eq__(self, other)
+        return self._pos_key() == other._pos_key()
+
+    def __hash__(self):
+        return hash(self._pos_key())
 
 
 class BoundBox:

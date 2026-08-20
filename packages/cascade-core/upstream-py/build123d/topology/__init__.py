@@ -401,28 +401,11 @@ def _vertex_sub(self, other):
     return _lt.Vertex(self.X - ox, self.Y - oy, self.Z - oz)
 
 
-def _vertex_eq(self, other):
-    """POSITIONAL vertex equality: upstream dedups vertices with set() /
-    `v in face.vertices()`, which relies on shared corners being the SAME
-    TopoDS vertex after the builder's fuse — lite keeps free-edge compounds,
-    so each corner exists once per incident edge and TopoDS-IsSame equality
-    keeps duplicates (group_by buckets then split and 2-D fillets hit the
-    same corner twice)."""
-    if not isinstance(other, _lt.Vertex):
-        return NotImplemented
-    return (abs(self.X - other.X) + abs(self.Y - other.Y) +
-            abs(self.Z - other.Z)) <= 1e-9
-
-
-def _vertex_hash(self):
-    return hash((round(self.X, 6), round(self.Y, 6), round(self.Z, 6)))
-
-
+# (positional Vertex __eq__/__hash__ live IN lite's Vertex class body —
+#  monkeypatched dunders take a degraded path in MicroPython's set probing)
 if _lt.Vertex.__sub__ is _lt.Shape.__sub__:
     _lt.Vertex.__add__ = _vertex_add
     _lt.Vertex.__sub__ = _vertex_sub
-    _lt.Vertex.__eq__ = _vertex_eq
-    _lt.Vertex.__hash__ = _vertex_hash
 
 
 def _curve_wires(self):

@@ -4407,6 +4407,7 @@ class CascadeStudioStandardLibrary {
     self._faceSurfaceType = _faceSurfaceType;
     self._faceOuterWire = _faceOuterWire;
     self._sameShape = _sameShape;
+    self._shapeHashCode = (shape) => self.oc.OCJS.HashCode(shape, 2147483647);
     self._edgePairContinuity = _edgePairContinuity;
     self._shapeOBB = _shapeOBB;
     self._obbIsOut = _obbIsOut;
