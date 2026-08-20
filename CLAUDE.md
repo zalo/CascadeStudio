@@ -201,7 +201,8 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   the flag is covered by `test/py-runtime.spec.js` and benchmarked by
   `test/b123d-validation/bench-runtime.mjs`. `CS_PY_RUNTIME=pyodide|micropython`
   switches run-lite.mjs/probe.mjs over.
-- **`?pyruntime=micropython`** swaps the interpreter for MicroPython 1.28 wasm
+- **`?pyruntime=micropython`** (source layer: UPSTREAM build123d by default —
+  see the next bullet) swaps the interpreter for MicroPython 1.28 wasm
   (`packages/cascade-core/src/worker/MicroPythonRuntime.js`; micropython.mjs +
   the settrace wasm variant, ~228 KB gz combined, copied to dist by the
   cascade-core build) — the smallest and lowest-memory runtime: ~150 ms boot,
@@ -223,20 +224,50 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   `_list_getitem`/`_property_getter`/`_bit_length` helpers, setattr loops
   instead of `__dict__.update`, and the scipy shim only sets `__path__ = []`
   when missing (MicroPython needs its native STRING `__path__`).
-- **`?pyruntime=micropython&pysrc=upstream`** (experimental PoC, localStorage
-  `cascade-py-src`) additionally swaps the SOURCE layer: the `build123d`
-  package becomes UPSTREAM build123d 0.11.1 Level-A source (builders,
-  build_common, objects_*, operations_*, joints, pack — vendored via
-  `node packages/cascade-core/scripts/fetch-upstream-b123d.cjs`, gitignored
-  `vendor/build123d-0.11.1/`, transformed at load by
-  `packages/cascade-core/src/worker/UpstreamB123d.js`) running over lite's
-  classes re-exported as `build123d.geometry`/`build123d.topology[.*]`
-  (adapters in `packages/cascade-core/upstream-py/`); lite registers as
-  `build123d_lite`. Requires MicroPython; other runtimes reject the flag
-  loudly. Frozen by `test/py-src-upstream.spec.js` (skips when not
-  vendored). The seam-gap ledger + integration-cost estimate live in
-  `experiments/upstream-on-micropython/INVENTORY.md`; compare against lite
-  with `experiments/upstream-on-micropython/compare-examples.mjs`.
+- **On MicroPython the DEFAULT SOURCE LAYER is upstream** (`pysrc` resolution,
+  localStorage `cascade-py-src`): `?pyruntime=micropython` runs UPSTREAM
+  build123d 0.11.1 Level-A source (builders, build_common, objects_*,
+  operations_*, joints, pack — VENDORED and COMMITTED in
+  `vendor/build123d-0.11.1/` with upstream's Apache-2.0 LICENSE;
+  `node packages/cascade-core/scripts/fetch-upstream-b123d.cjs` is the
+  version-bump tool; transformed at load by
+  `packages/cascade-core/src/worker/UpstreamB123d.js`) as the `build123d`
+  package, over lite's classes re-exported as
+  `build123d.geometry`/`build123d.topology[.*]` (seam in
+  `packages/cascade-core/upstream-py/` — since the class-DAG unification it
+  is genuine re-exports + S-sized method fills + the enum bridge); lite
+  registers as `build123d_lite`. `&pysrc=lite` opts back into lite; if the
+  upstream payload is missing at runtime the no-flag default falls back to
+  lite with a console warning (explicit `pysrc=upstream` stays a hard
+  error, and non-MicroPython runtimes reject it loudly). Frozen by
+  `test/py-src-upstream.spec.js`; `CS_PY_SRC=lite|upstream` switches
+  run-lite.mjs/probe.mjs (and when harness results look implausibly clean,
+  run with `CS_DEBUG_PYSRC=1` and check the '[debug] page booted pySrc='
+  lines — a stale http-server on the harness port once masked the whole
+  upstream leg). Harness (2026-08-19, 32MB kernel): micropython+upstream
+  classifies **162 PASS / 31 MISMATCH / 25 ERROR / 4 TIMEOUT** of the 222
+  scored scripts (borderline scripts flap ±3 under 4-page contention) vs
+  lite's 206 PASS — the honest shortfall list (per-script, with causes)
+  lives in `experiments/upstream-on-micropython/INVENTORY.md` §H, whose
+  A-section (class-DAG) is CLOSED by the unification; the remainder is
+  seam-method coverage and per-script semantics, not architecture. Compare
+  against lite with
+  `experiments/upstream-on-micropython/compare-examples.mjs`.
+- **Lite's topology class DAG IS upstream's** (class-DAG unification,
+  2026-08-19): `Wire` is a real class (distinct from `Edge` and `Curve`;
+  all three subclass `Mixin1D`, lite's "any 1-D shape" isinstance target,
+  which carries the shared behaviors + `_specs` bookkeeping);
+  `Part`/`Sketch`/`Curve` subclass `Compound` (with upstream's kwargs ctor:
+  `obj=`, `label=`, `material=`, `joints=`, `parent=`, `children=`);
+  `Solid` is a separate single-solid class carrying the `make_*` /
+  `extrude` / `revolve` / `thicken` classmethods (`.solids()` returns
+  Solids, `.wires()`/`outer_wire()`/`edges_to_wires` return Wires);
+  `Compound.get_type(T)` extracts DIRECT children (StandardLibrary's
+  `DirectChildren` over TopoDS_Iterator); `Shape.__eq__`/`__hash__` are
+  upstream's topological same-ness (TopoDS `IsSame` — the JS seam preserves
+  TShape identity across selector calls; hash = rounded-bbox key).
+  Bookkeeping that MEANS identity (parent/children links, sceneShapes)
+  uses explicit `is` scans — keep it that way when touching those paths.
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,

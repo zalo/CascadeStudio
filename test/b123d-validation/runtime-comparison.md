@@ -291,6 +291,35 @@ byte-identical bindings/d.ts). Measured on the rebuilt kernel:
   the full 232-script harness classifies identically
   (205/10/5/2 with 4-page contention; heat_exchanger passes solo).
 
+### Upstream-source memory cost (2026-08-19 — pysrc default flip round)
+
+`?pyruntime=micropython` now DEFAULTS to running UPSTREAM build123d 0.11.1
+Level-A source over lite's seam (`&pysrc=lite` opts back). Measured on the
+32MB-INITIAL_MEMORY kernel via `CascadeAPI._memoryStats()` in the browser
+(idle machine; starter = PYTHON_STARTER_CODE; mid-weight = a 150x100x10
+plate with a 9x6 `GridLocations` of 54 `Hole`s + vertical-edge fillets):
+
+| | micropython + lite (`pysrc=lite`) | micropython + upstream (default) |
+|---|---|---|
+| Boot (fetch/init/lib) | 4.2 / 7.3 / 132.9 = **144 ms** | 4.3 / 7.3 / 321.9 = **334 ms** |
+| Starter eval | 316 ms | 326 ms |
+| Interpreter wasm heap after starter | 20.4 MB | 20.4 MB |
+| OCCT wasm heap after starter | 33.6 MB (32 MiB floor) | 33.6 MB (32 MiB floor) |
+| **Basic-model wasm total** | **54.0 MB** | **54.0 MB** |
+| Mid-weight (54-hole grid) eval | 721 ms | 1445 ms |
+| Interpreter heap after mid-weight | 20.4 MB | 34.6 MB (GC heap grew once) |
+| OCCT heap after mid-weight | 33.6 MB | 33.6 MB |
+| Added dist payload (upstream-b123d/) | — | 420 KB raw / **103 KB gz** (vendored upstream 79.5 KB gz + seam adapters 13.3 + shims 6.4 + manifests 3.5) |
+
+**The 128 MB budget question is UNCHANGED by the flip**: the basic-model
+total stays ~54 MB wasm (2.4x headroom); the upstream layer costs +190 ms of
+boot (Python-source registration), ~2x on the mid-weight model's
+interpreter-side time (validation layers + settrace) and one 14 MB GC-heap
+growth step under sustained upstream bookkeeping — 68.2 MB total for the
+grid model, still comfortably inside the budget. Correctness state of the
+upstream layer (162/222 vs lite's 206/222) is recorded in
+`experiments/upstream-on-micropython/INVENTORY.md` §H.
+
 ### Porting notes (what the shared Python source must avoid)
 
 MicroPython has no `type.__new__`/unbound builtin dunders, exposes no `.fget`

@@ -10,9 +10,11 @@ Where things live:
 - Loader + source transforms: `packages/cascade-core/src/worker/UpstreamB123d.js`
 - Stdlib shims: `packages/cascade-core/upstream-py/shims/*.py`
 - Seam adapters: `packages/cascade-core/upstream-py/build123d/{geometry.py,topology/__init__.py,_finalize.py}`
-- Vendored upstream sources: `vendor/build123d-0.11.1/` (gitignored;
-  `node packages/cascade-core/scripts/fetch-upstream-b123d.cjs`)
-- Opt-in: `?pyruntime=micropython&pysrc=upstream` (localStorage `cascade-py-src`)
+- Vendored upstream sources: `vendor/build123d-0.11.1/` (COMMITTED since
+  4fdc7c3, Apache-2.0 LICENSE included;
+  `node packages/cascade-core/scripts/fetch-upstream-b123d.cjs` re-vendors)
+- Selection: `?pyruntime=micropython` DEFAULTS to upstream since 4fdc7c3;
+  `&pysrc=lite` (localStorage `cascade-py-src`) opts back into lite
 - Node inner loop: `experiments/upstream-on-micropython/upstream-poc.mjs`
 - lite-vs-upstream example diff: `experiments/upstream-on-micropython/compare-examples.mjs`
 
@@ -25,22 +27,32 @@ mechanical source rewrite of the upstream file, `open` = not fixed (honest gap).
 
 ## A. Class-identity mismatches (the structural findings)
 
-These are the expensive ones: upstream Level-A dispatches on the topology
-class DAG, and lite's DAG is flatter. The proper fix is to give lite
-upstream's exact hierarchy (`Wire` ≠ `Curve`, `Solid` ≠ `Part`,
-`Part/Sketch/Curve ⊂ Compound`); everything in this section is a workaround
-for not doing that yet.
+> **SECTION CLOSED (commit b384dcd + 0626d97, 2026-08-19).** Lite's topology
+> DAG now IS upstream's: `Wire` is a real class (Mixin1D subclass, distinct
+> from Edge and Curve), `Part`/`Sketch`/`Curve` subclass `Compound`, `Solid`
+> is a separate single-solid class, `Shape.__eq__`/`__hash__` are TopoDS
+> IsSame-based topological same-ness, `Compound.get_type` extracts DIRECT
+> children over a real TopoDS_Iterator JS helper, `Shape._dim`/`topo_parent`/
+> `material` are native, and `_wrap_like` yields upstream-identity classes
+> with no seam remapping. The seam adapter (topology/__init__.py) shrank to
+> re-exports + the B-section method fills; A1–A8 rows below are kept for the
+> record with their closing state.
+
+These were the expensive ones: upstream Level-A dispatches on the topology
+class DAG, and lite's DAG was flatter. The proper fix — give lite upstream's
+exact hierarchy (`Wire` ≠ `Curve`, `Solid` ≠ `Part`,
+`Part/Sketch/Curve ⊂ Compound`) — is DONE; every row is CLOSED.
 
 | # | Upstream call site | What lite had | What was needed | Fix | Cost to close properly |
 |---|---|---|---|---|---|
-| A1 | `build_common._add_to_context` typed-classification `{Edge, Wire, Face, Solid, Compound}` | `Wire = Curve` alias, and `Edge ⊂ Curve`, so an Edge classified as BOTH Edge and Wire → `ValueError` on the very first `Line()` | `Wire` as a class DISTINCT from both Edge and Curve | adapter: `class Wire(_lt.Curve)` exported as `topology.Wire`; `topology.Curve` stays lite's Curve | L (lite hierarchy change, touches every 1-D construction) |
-| A2 | same classification: builder transfer of a child builder's result (`Sketch`/`Part`/`Curve`) relies on `isinstance(obj, Compound)` + `Compound.get_type` extraction | lite `Part/Sketch/Curve ⊂ Shape` only — transferred results classified as NOTHING → `ValueError: BuildSketch doesn't accept ...` | upstream's `Part/Sketch/Curve ⊂ Compound` | adapter: `Part`/`Sketch` re-implemented as `_lt.Compound` subclasses with upstream's kwargs ctor; `_CsBuilderCurve(_lt.Curve, _lt.Compound)` rebound as `BuildLine._sub_class` (MicroPython multiple inheritance works) | L (same hierarchy change) |
-| A3 | `Solid` must catch lite-PRODUCED solids (`Box`→`BasePartObject(part=Solid.make_box(...))`, `.solids()`) but must NOT catch `Part` | lite `Solid = Part` alias | keep `Solid = _lt.Part` and take `Part` OUT of that branch (A2) | adapter | included in A2 |
-| A4 | every lite operation RETURN re-enters upstream code; lite's `_wrap_like` maps transformed `Face→Sketch`, `Edge→Curve` and yields BASE-class instances with no upstream identity | e.g. `Locations * face` products / `offset_2d` results couldn't be transferred into builders | results re-mapped onto the upstream-identity classes | lite-patch: rebind module global `_lt._wrap_like` (lite resolves it at call time); plus targeted wraps (`Curve.offset_2d`). KNOWN HOLE: direct constructions (`Curve.__add__` returns `Curve(topo, specs)`) still yield base-class instances | included in A2 (disappears entirely once lite's classes ARE upstream's) |
-| A5 | `Compound.get_type(T)` must return DIRECT children only (upstream: `TopoDS_Iterator`), not descendants — `offset(openings=...)` 2-D-offsets every face of a solid otherwise | no `get_type` at all; lite selectors flatten | direct-children extraction | lite-patch: ownership subtraction via lite's geometric `_shape_key` (approximate but validated on loft/lego/din_rail) | S once a direct-children iterator is bound (JS helper) |
-| A6 | `Shape.__eq__/__hash__` are topological same-ness upstream; used by `v in face.vertices()` (2-D fillet), `face in solid.faces()` (offset openings), `set(post) - set(pre)` (Select.LAST/NEW) | identity equality + fresh wrappers from every selector call → **silent wrong geometry** (fillet no-op; openings filter empty → tea-cup/loft offset thickened instead of hollowed) | value equality | lite-patch: `Vertex/Edge/Face.__eq__+__hash__` over lite's `_shape_key`. Solid/Compound still identity; `Select.LAST` post−pre set math still over-approximates for non-core types | M (decide a canonical shape-identity story for lite; upstream uses TShape identity which lite's JS seam doesn't preserve) |
-| A7 | `Shape._dim` (operations dispatch 1/2/3-D) | absent | per-class dims + content-based for Compound | lite-patch: class attrs + a Compound property | S |
-| A8 | `Shape.topo_parent` (algebra-mode fillet/chamfer find the owner of a selected edge) | lite tracks the same link as `.parent` | alias | lite-patch: property | S |
+| A1 | `build_common._add_to_context` typed-classification `{Edge, Wire, Face, Solid, Compound}` | `Wire = Curve` alias, and `Edge ⊂ Curve`, so an Edge classified as BOTH Edge and Wire → `ValueError` on the very first `Line()` | `Wire` as a class DISTINCT from both Edge and Curve | adapter: `class Wire(_lt.Curve)` exported as `topology.Wire`; `topology.Curve` stays lite's Curve | CLOSED b384dcd (lite Wire class; seam re-export) |
+| A2 | same classification: builder transfer of a child builder's result (`Sketch`/`Part`/`Curve`) relies on `isinstance(obj, Compound)` + `Compound.get_type` extraction | lite `Part/Sketch/Curve ⊂ Shape` only — transferred results classified as NOTHING → `ValueError: BuildSketch doesn't accept ...` | upstream's `Part/Sketch/Curve ⊂ Compound` | adapter: `Part`/`Sketch` re-implemented as `_lt.Compound` subclasses with upstream's kwargs ctor; `_CsBuilderCurve(_lt.Curve, _lt.Compound)` rebound as `BuildLine._sub_class` (MicroPython multiple inheritance works) | CLOSED b384dcd (Part/Sketch/Curve subclass lite Compound; kwargs ctor native) |
+| A3 | `Solid` must catch lite-PRODUCED solids (`Box`→`BasePartObject(part=Solid.make_box(...))`, `.solids()`) but must NOT catch `Part` | lite `Solid = Part` alias | keep `Solid = _lt.Part` and take `Part` OUT of that branch (A2) | adapter | CLOSED b384dcd (real lite Solid class; .solids() returns Solids) |
+| A4 | every lite operation RETURN re-enters upstream code; lite's `_wrap_like` maps transformed `Face→Sketch`, `Edge→Curve` and yields BASE-class instances with no upstream identity | e.g. `Locations * face` products / `offset_2d` results couldn't be transferred into builders | results re-mapped onto the upstream-identity classes | lite-patch: rebind module global `_lt._wrap_like` (lite resolves it at call time); plus targeted wraps (`Curve.offset_2d`). KNOWN HOLE: direct constructions (`Curve.__add__` returns `Curve(topo, specs)`) still yield base-class instances | CLOSED b384dcd (_wrap_like yields upstream-identity classes natively; seam rebind deleted in 0626d97) |
+| A5 | `Compound.get_type(T)` must return DIRECT children only (upstream: `TopoDS_Iterator`), not descendants — `offset(openings=...)` 2-D-offsets every face of a solid otherwise | no `get_type` at all; lite selectors flatten | direct-children extraction | lite-patch: ownership subtraction via lite's geometric `_shape_key` (approximate but validated on loft/lego/din_rail) | CLOSED b384dcd (StandardLibrary DirectChildren over TopoDS_Iterator; lite Compound.get_type) |
+| A6 | `Shape.__eq__/__hash__` are topological same-ness upstream; used by `v in face.vertices()` (2-D fillet), `face in solid.faces()` (offset openings), `set(post) - set(pre)` (Select.LAST/NEW) | identity equality + fresh wrappers from every selector call → **silent wrong geometry** (fillet no-op; openings filter empty → tea-cup/loft offset thickened instead of hollowed) | value equality | lite-patch: `Vertex/Edge/Face.__eq__+__hash__` over lite's `_shape_key`. Solid/Compound still identity; `Select.LAST` post−pre set math still over-approximates for non-core types | CLOSED b384dcd (Shape.__eq__ = TopoDS IsSame — the JS seam DOES preserve TShape identity across selector calls; hash over rounded bbox; identity-meaning scans use explicit 'is') |
+| A7 | `Shape._dim` (operations dispatch 1/2/3-D) | absent | per-class dims + content-based for Compound | lite-patch: class attrs + a Compound property | CLOSED b384dcd (native _dim class attrs + content-based Compound._dim property) |
+| A8 | `Shape.topo_parent` (algebra-mode fillet/chamfer find the owner of a selected edge) | lite tracks the same link as `.parent` | alias | lite-patch: property | CLOSED b384dcd (native Shape.topo_parent property) |
 
 ## B. Missing seam METHODS upstream Level-A calls (lite exposes the same
 capability differently — usually as a module-level builder-aware function)
@@ -49,7 +61,7 @@ capability differently — usually as a module-level builder-aware function)
 |---|---|---|---|---|
 | B1 | `Solid.make_box(l, w, h, plane)` (objects_part.Box) | `Box()` object (centered, context-aware) / JS `w.Box(l,w,h,centered)` | adapter classmethod | S |
 | B2 | `Solid.make_cone`, `Solid.make_torus` | `Cone()`/`Torus()` objects | adapter classmethods over the same JS makers | S |
-| B3 | `Wire.make_circle(r, plane)` | `Edge.make_circle` (an EDGE; `Face(edge)` then failed in `MakeFace`) / JS `w.Circle(r, wire=True)` | adapter classmethod on the Wire adapter | S |
+| B3 | `Wire.make_circle(r, plane)` | `Edge.make_circle` (an EDGE; `Face(edge)` then failed in `MakeFace`) / JS `w.Circle(r, wire=True)` | adapter classmethod on the Wire adapter | CLOSED b384dcd (native lite Wire.make_circle) |
 | B4 | `Solid.extrude_taper(section, direction, taper, flip_inner)` (key_cap) | lite's `extrude(taper=)` two-algorithm block | adapter port of that block | S (done) |
 | B5 | `Solid.extrude_until(section, target, direction, until)` | lite's `extrude(until=)` block | adapter port | S (done) |
 | B6 | `Solid.sweep` / `Solid.sweep_multi` (operations_generic.sweep, handle) | lite's `sweep()` function (same `PipeShellSweep` JS call) | adapter classmethods incl. lite's spec-chained path-wire logic | S (done) |
@@ -159,3 +171,62 @@ Boot cost: the upstream layer adds ~180 ms to MicroPython's boot
 Python source (uncompressed; the vendored Level-A files total ~340 KB, the committed shims + adapters ~60 KB).
 Model-evaluation speed is indistinguishable in these examples (time lives in
 OCCT, not the interpreter).
+
+## H. Full-corpus integration round (2026-08-19, the DEFAULT-flip round)
+
+The A-section unification landed (b384dcd/0626d97) and `?pyruntime=micropython`
+now DEFAULTS to the upstream source layer (4fdc7c3, vendored + committed).
+The full 232-script harness then ran against upstream Level-A for the first
+time (`CS_PY_RUNTIME=micropython CS_PY_SRC=upstream`, port 836x — NOTE: always
+check `CS_DEBUG_PYSRC=1`'s '[debug] page booted pySrc=' lines; a stale
+http-server on the harness port serving another checkout masked the first
+attempts entirely).
+
+Progression across the fix rounds (PASS of 222 scored):
+47 → 95 (measurement duck-typing for upstream builders, single_line_width,
+Vector-in-ShapeList, DirectChildren downcasts) → 147 (**the Plane-mutation
+fix**: upstream's named planes are FRESH per access and objects_curve assigns
+`.origin` on its working plane; lite's singletons + a copy shim that returned
+unknown objects unchanged let one algebra arc corrupt Plane.XY for the whole
+page) → 159 (get_type flattens chained wires/nested 1-D compounds to leaf
+edges) → **162 PASS / 31 MISMATCH / 26 ERROR / 3 TIMEOUT** (the final
+verified run; borderline scripts — clock/heat_exchanger/toy_truck/spitfire —
+flap ±3 between runs under 4-page contention; rounds 9/10 measured 159–162.
+The same final round measured Brython AND MicroPython+lite at
+**206 PASS / 10 MISMATCH / 5 ERROR / 1 TIMEOUT** with the per-script set
+identical to the committed baseline — heat_exchanger now PASSES under
+contention thanks to the hot-path perf round).
+
+Closed in this round (beyond A1–A8): B3/B14/B19/B20 (all natively or as seam
+fills), Edge.make_bezier/bspline/helix/ellipse/parabola/hyperbola/
+constrained_arcs/constrained_lines, Wire.make_ellipse/make_convex_hull,
+Shape.split method form, Vector.get_angle/transform + Plane.forward/
+reverse_transform, Solid.make_sphere partials, tangent_at(point),
+settable topo_parent, pack's dataclass fields (MicroPython drops class-body
+annotations — loader transform + shim `_fields`), builder-aware draft(),
+lite-Airfoil override, LineType/ExportSVG/ArrowHead/polar/delta/
+topo_distance_to/edges_to_wires re-exports.
+
+Honest REMAINING list (26 ERROR + 31 MISMATCH, per the final run):
+- upstream-seam S/M gaps, one script each: Solid.make_wedge (objects_3d),
+  trim_to_other on the seam surface (tutorial_constraints/b10), Airfoil
+  result surface (objects_1d_airfoil `.bounding_box`), GeomType-member
+  arithmetic (`filter_inner_wire_count` multiplies an enum member),
+  Joint `.symbols`/LocationList `.positions` (curved_support, Buffer_Stand),
+  BuildSketch pending-face transfer via `add(<sketch>)` then bare
+  `extrude(amount=)` — 4 scripts ("A face or sketch must be provided":
+  custom_sketch_objects, dual_color_3mf, ex32, ex33), IndexError family
+  (pegboard_j_hook, sm_hanger, ppp0104).
+- kernel-family errors identical in character to lite's own compromises:
+  Union/OffsetPlanarWire/FilletFace2D/ChamferEdges/PipeShellSweep raises
+  (ex25×2, ex31, ex33_algebra, group_hole_area, ppp0106, twist_extrude,
+  slide_latch, heat_exchanger, lego mass-assert).
+- MISMATCHes: lite's documented residual set (joints×2, projection×2,
+  objects_1d, filter_all_edges_circle, tips/b04) plus upstream-path
+  numeric/traversal differences in the 0.5–48% band (logo text volume −48%,
+  group_axis −30%, ex35 +22%, selector_example +20%, din_rail +7.6%,
+  ex11 ±6.6%, tutorial_joints −10%, and ~10 more ≤3%).
+
+Judgment stands: the remainder is seam-method coverage and per-script
+semantics replication, not architecture. The upstream default is honest about
+its state (162/222 vs lite's 206/222); `pysrc=lite` is one flag away.
