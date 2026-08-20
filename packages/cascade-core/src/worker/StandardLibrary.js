@@ -375,6 +375,17 @@ function ForEachWire(shape, callback) {
     callback(wire_index++, self.oc.TopoDS_Cast.Wire_1(anExplorer.Current()));
   }
 }
+
+/** The DIRECT children of a shape (TopoDS_Iterator, ONE level deep, with
+ *  cumulative orientation/location applied) — build123d's Compound.get_type
+ *  reads exactly these: the faces inside a compound's solids are NOT direct
+ *  children of the compound, unlike what a TopExp_Explorer sweep returns. */
+function DirectChildren(shape) {
+  const out = [];
+  const it = new self.oc.TopoDS_Iterator_2(shape, true, true);
+  for (; it.More(); it.Next()) { out.push(it.Value()); }
+  return out;
+}
 /** A face bounded by a wire. `onlyPlanar` forces BRepBuilderAPI's OnlyPlane
  *  mode, which build123d's Face(wire) always uses — without it the builder
  *  recovers whatever surface the wire's edges carry pcurves for, so the
@@ -4201,6 +4212,7 @@ class CascadeStudioStandardLibrary {
     self.ForEachShell = ForEachShell;
     self.ForEachFace = ForEachFace;
     self.ForEachWire = ForEachWire;
+    self.DirectChildren = DirectChildren;
     self.MakeFace = MakeFace;
     self.GetWire = GetWire;
     self.ForEachEdge = ForEachEdge;

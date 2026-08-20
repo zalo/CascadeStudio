@@ -158,6 +158,7 @@ export const USED_OCCT_SYMBOLS = [
   "TopTools_ListOfShape",
   "TopoDS_Cast",
   "TopoDS_Compound",
+  "TopoDS_Iterator_2",
   "TopoDS_Shape",
   "TopoDS_Wire",
   "gp",

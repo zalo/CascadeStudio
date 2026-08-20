@@ -1074,7 +1074,7 @@ class Location:
             if other.joints:
                 moved.joints = {k: j._lite_rebind(moved)
                                 for k, j in other.joints.items()}
-            if isinstance(moved, Curve) and moved._specs:
+            if isinstance(moved, Mixin1D) and moved._specs:
                 # keep segment data consistent with the moved geometry so
                 # make_face()/sweep() can still chain the result exactly
                 fn_dir = lambda d: _mat_vec(self._R, d)
@@ -1509,7 +1509,7 @@ def _wrap_like(obj, topo):
         cls = Part
     res = object.__new__(cls)
     Shape.__init__(res, topo)
-    if isinstance(res, Curve):
+    if isinstance(res, Mixin1D):
         res._specs = list(getattr(obj, '_specs', []) or [])
     return res
 
@@ -1534,6 +1534,9 @@ def _tolist(objs):
 class Shape:
     """A shape wrapping a raw OCCT TopoDS shape (self.topo, may be None for
     empty algebra starters like Part()). Supports build123d algebra."""
+
+    material = ''   # upstream Shape surface (BasePartObject reads it)
+    _dim = None     # topological dimension; set per subclass like upstream
 
     def __init__(self, topo=None):
         # graceful promotions like build123d: Shape(list_of_shapes) makes a
@@ -1575,12 +1578,27 @@ class Shape:
         build123d's assembly tree is anytree, where setting .parent is how a
         node joins the tree (tutorial_joints does exactly this with the M6
         screw). COMPROMISE(joints) still holds: there is no anytree, only the
-        parent/children links that Compound walks."""
-        if self._parent is not None and self in self._parent.children:
-            self._parent.children.remove(self)
+        parent/children links that Compound walks.
+
+        Membership here is by IDENTITY (upstream's anytree compares node
+        identity): Shape.__eq__ is geometric same-ness, so 'in'/'remove'
+        would silently detach a geometrically-equal sibling."""
+        if self._parent is not None:
+            kids = self._parent.children
+            for i in range(len(kids)):
+                if kids[i] is self:
+                    del kids[i]
+                    break
         self._parent = value
-        if value is not None and self not in value.children:
+        if value is not None and \
+                not any(k is self for k in value.children):
             value.children.append(self)
+
+    @property
+    def topo_parent(self):
+        """The shape this sub-shape was selected from (upstream
+        Shape.topo_parent; lite's selectors track the same link as .parent)."""
+        return self._parent
 
     # --- location bookkeeping (baked geometry + tracked frame) ---
     @property
@@ -1695,7 +1713,7 @@ class Shape:
         # intersect(Axis) on a 1-D shape is the POINT intersection upstream
         # returns as a ShapeList of Vertex (Mixin1D._intersect), not a boolean
         if len(others) == 1 and isinstance(others[0], Axis) and \
-                isinstance(self, Curve):
+                isinstance(self, Mixin1D):
             return ShapeList([Vertex(tuple(p)) for p in
                               self.find_intersection_points(others[0])])
         return self.__and__(list(others))
@@ -1745,7 +1763,7 @@ class Shape:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
-            out.append(Part(s))
+            out.append(Solid(s))
         w.ForEachSolid(self.topo, _cb)
         return out
 
@@ -1754,7 +1772,7 @@ class Shape:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
-            out.append(Curve(s))
+            out.append(Wire(s))
         w.ForEachWire(self.topo, _cb)
         return out
 
@@ -1862,7 +1880,7 @@ class Shape:
         self._loc = moved._loc
         # the segment specs travel with the geometry: mirror()/make_face()
         # rebuild from them, so stale specs would silently un-place the shape
-        if isinstance(self, Curve):
+        if isinstance(self, Mixin1D):
             self._specs = moved._specs
         return self
 
@@ -1870,7 +1888,7 @@ class Shape:
         placed = self.located(loc)
         self.topo = placed.topo
         self._loc = placed._loc
-        if isinstance(self, Curve):
+        if isinstance(self, Mixin1D):
             self._specs = placed._specs
         return self
 
@@ -2082,6 +2100,35 @@ class Shape:
     def clean(self):
         return self
 
+    # --- shape equality (upstream Shape.__eq__/__hash__) ---
+    def __eq__(self, other):
+        """Topological same-ness like upstream Shape.__eq__ (TopoDS IsSame:
+        same underlying TShape + location; orientation ignored). Lite's
+        selectors return FRESH Python wrappers on every call, so identity
+        comparison silently misses upstream patterns like
+        'face in solid.faces()' (offset openings) or 'v in face.vertices()'
+        (2-D fillets); the wrapped TopoDS handles DO preserve TShape identity
+        across selector calls. NOTE: internal bookkeeping that means identity
+        (parent/children links, sceneShapes) uses explicit 'is' scans."""
+        if self is other:
+            return True
+        if not isinstance(other, Shape):
+            return NotImplemented
+        if self.topo is None or other.topo is None:
+            return self.topo is None and other.topo is None
+        return bool(w._sameShape(self.topo, other.topo))
+
+    def __hash__(self):
+        """Consistent with __eq__: IsSame-equal shapes have identical
+        geometry, so a rounded bounding-box key hashes them equally (distinct
+        shapes may collide, which only costs an extra comparison). Not cached:
+        move()/locate() mutate self.topo in place."""
+        if self.topo is None:
+            return 0
+        bb = list(w.BoundingBox(self.topo))
+        return hash((round(bb[0], 4), round(bb[1], 4), round(bb[2], 4),
+                     round(bb[3], 4), round(bb[4], 4), round(bb[5], 4)))
+
     def _lite_copy(self):
         c = _wrap_like(self, self.topo)
         c._loc = self._loc
@@ -2100,18 +2147,191 @@ class Shape:
         return self._lite_copy()
 
 
-class Part(Shape):
-    def __init__(self, topo=None):
-        # Solid(Shell(faces)) sews the faces into a closed solid, and
-        # Solid(other_shape) adopts its geometry — like build123d.
-        if isinstance(topo, Shape):
-            fl = getattr(topo, '_face_shapes', None) \
-                if isinstance(topo, Shell) else None
-            if fl:
-                topo = w.SewSolidFromFaces([_topo(f) for f in fl])
-            else:
-                topo = topo.topo
+class Compound(Shape):
+    """A Shape made of other shapes (upstream identity: Part/Sketch/Curve are
+    Compound subclasses; builder transfers classify through Compound and
+    extract base objects with get_type)."""
+
+    @classmethod
+    def make_triad(cls, axes_scale):
+        """The coordinate-system triad symbol (build123d Compound.make_triad):
+        three axis lines with spline arrow heads.
+
+        COMPROMISE(triad-labels): upstream also draws 'X'/'Y'/'Z' with the
+        'singleline' STROKE font, which this build does not ship (only the
+        outline font FreeSans), so the labels are omitted. The triad is a
+        viewer symbol, never part of a modelled part."""
+        s = float(axes_scale)
+        parts = [Edge.make_line((0, 0, 0), (s, 0, 0)),
+                 Edge.make_line((0, 0, 0), (0, s, 0)),
+                 Edge.make_line((0, 0, 0), (0, 0, s))]
+        arrow_arc = Edge.make_spline([(0, 0, 0), (-s / 20, s / 30, 0)],
+                                     [(-1, 0, 0), (-1, 1.5, 0)])
+        arrow = Curve([arrow_arc, arrow_arc.mirror(Plane.XZ)])
+        parts.append(Pos(s, 0, 0) * arrow)
+        parts.append(Pos(0, s, 0) * (arrow.rotate(Axis.Z, 90)))
+        parts.append(Pos(0, 0, s) * (arrow.rotate(Axis.Y, -90)))
+        return Curve(parts)
+
+    def __init__(self, children=None, label='', obj=None, **kwargs):
+        # Compound(shape.wrapped) / Compound(topods): a single raw TopoDS shape
+        # (build123d's Shape(obj) form, used by Compound subclasses that call
+        # super().__init__(builder.part.wrapped, ...) - tutorial_joints' Hinge)
+        if children is None and obj is not None:
+            children = obj  # upstream Compound.__init__'s first kwarg is obj=
+        if children is not None and not isinstance(children, Shape) and \
+                hasattr(children, 'ShapeType'):
+            children = [children]
+        topos = [_topo(c) for c in _tolist(children) if not (isinstance(c, Shape) and c.topo is None)]
+        topo = None
+        if len(topos) == 1:
+            topo = topos[0]
+        elif len(topos) > 1:
+            topo = w.MakeCompound(topos)
         Shape.__init__(self, topo)
+        self.label = label
+        self.children = _tolist(children)
+        # Compound(..., joints=<dict>) — build123d's Compound.__init__ adopts a
+        # joint dict and REPARENTS every joint onto the new compound. This is
+        # how a Compound subclass built from a builder keeps the joints the
+        # builder collected (tutorial_joints' Hinge).
+        joints = kwargs.get('joints')
+        if joints:
+            self.joints = {k: j._lite_rebind(self) for k, j in joints.items()}
+
+    # upstream tags every topology class with its dimension (Shape._dim);
+    # operations dispatch fillet/chamfer/offset on it. A generic Compound's
+    # dimension follows its content.
+    @property
+    def _dim(self):
+        if self.topo is None:
+            return None
+        if len(self.solids()) > 0:
+            return 3
+        if len(self.faces()) > 0:
+            return 2
+        return 1
+
+    def get_type(self, obj_type):
+        """This compound's DIRECT children of the given class — upstream
+        Compound.get_type over TopoDS_Iterator: the faces inside a compound's
+        solids (or the edges inside its faces) are NOT returned, unlike
+        faces()/edges(). Lite avoids single-child compound layers, so a root
+        that itself IS the requested type counts as the one direct child."""
+        if self.topo is None:
+            return ShapeList()
+
+        def wrap(t):
+            st = t.ShapeType().value
+            if st == 2:
+                return Solid(t)
+            if st == 3:
+                sh = object.__new__(Shell)
+                Shape.__init__(sh, t)
+                sh._face_shapes = None
+                return sh
+            if st == 4:
+                return Face(t)
+            if st == 5:
+                return Wire(t)
+            if st == 6:
+                return Edge(t)
+            if st == 7:
+                return Vertex(t)
+            return None
+
+        if self.topo.ShapeType().value != 0:  # not a TopoDS_Compound
+            candidates = [self.topo]
+        else:
+            candidates = list(w.DirectChildren(self.topo))
+        out = ShapeList()
+        for t in candidates:
+            s = wrap(t)
+            if s is not None and isinstance(s, obj_type):
+                out.append(s)
+        return out
+
+    @classmethod
+    def make_text(cls, txt, font_size, font='Arial', font_path=None,
+                  font_style=None,
+                  text_align=('center', 'center'),  # TextAlign values
+                  align=None, position_on_path=0.0, text_path=None):
+        """2D text as a compound of faces (build123d Compound.make_text).
+        Like upstream, align defaults to None: only the Font_TextFormatter
+        (advance-based) text_align applies, NOT bbox alignment."""
+        if text_path is not None:
+            raise NotImplementedError(
+                'Compound.make_text(text_path=) is not supported in '
+                'build123d-lite')
+        t = Text(txt, font_size, font=font, font_path=font_path,
+                 font_style=font_style if font_style is not None
+                 else FontStyle.REGULAR,
+                 text_align=text_align, align=align, mode=Mode.PRIVATE)
+        res = object.__new__(cls)
+        Shape.__init__(res, t.topo)
+        return res
+
+
+def _adopt_solid_topo(topo):
+    """Solid(Shell(faces)) sews the faces into a closed solid, and
+    Solid(other_shape)/Part(other_shape) adopt the geometry — like
+    build123d."""
+    if isinstance(topo, Shape):
+        fl = getattr(topo, '_face_shapes', None) \
+            if isinstance(topo, Shell) else None
+        if fl:
+            return w.SewSolidFromFaces([_topo(f) for f in fl])
+        return topo.topo
+    return topo
+
+
+def _apply_compound_kwargs(self, label, color, material, joints, parent,
+                           children):
+    """The tail of upstream Compound.__init__'s kwargs surface, shared by
+    Part/Sketch (BasePartObject-style super().__init__ calls)."""
+    self.label = label or ''
+    if color is not None:
+        self.color = color
+    if material:
+        self.material = material
+    if children:
+        self.children = list(children)
+    if joints:
+        self.joints = {k: j._lite_rebind(self) for k, j in joints.items()}
+    if parent is not None:
+        self.parent = parent
+
+
+class Part(Compound):
+    """A Compound of solids (upstream identity: Part is a Compound subclass, distinct from
+    Solid). Accepts lite's positional-topo form AND upstream Compound's kwargs
+    ctor (obj=, label=, color=, material=, joints=, parent=, children=), which
+    BasePartObject-style super().__init__ calls use."""
+
+    _dim = 3
+
+    def __init__(self, topo=None, obj=None, label='', color=None,
+                 material='', joints=None, parent=None, children=None,
+                 **kwargs):
+        if topo is None and obj is not None:
+            topo = obj
+        Shape.__init__(self, _adopt_solid_topo(topo))
+        _apply_compound_kwargs(self, label, color, material, joints, parent,
+                               children)
+
+
+class Solid(Shape):
+    """A SINGLE solid (upstream identity: Solid is NOT a Compound; .solids()
+    returns these, and the make_* classmethods build them)."""
+
+    _dim = 3
+
+    def __init__(self, topo=None, obj=None, label='', **kwargs):
+        if topo is None and obj is not None:
+            topo = obj
+        Shape.__init__(self, _adopt_solid_topo(topo))
+        if label:
+            self.label = label
 
     @classmethod
     def extrude(cls, obj, direction):
@@ -2217,11 +2437,29 @@ class Part(Shape):
         return cls(solid)
 
 
-class Sketch(Shape):
-    pass
+class Sketch(Compound):
+    """A Compound of faces (upstream identity: Sketch is a Compound subclass). Accepts
+    lite's positional-topo form AND upstream Compound's kwargs ctor."""
+
+    _dim = 2
+
+    def __init__(self, topo=None, obj=None, label='', color=None,
+                 material='', joints=None, parent=None, children=None,
+                 **kwargs):
+        if topo is None and obj is not None:
+            topo = obj
+        Shape.__init__(self, topo)
+        _apply_compound_kwargs(self, label, color, material, joints, parent,
+                               children)
 
 
-class Curve(Shape):
+class Mixin1D(Shape):
+    """Shared 1-D behavior (upstream Mixin1D): everything Edges, Wires and
+    Curves answer — position_at/tangent_at/@/%/^, param_at_point, offset_2d,
+    canonical(), segment-spec bookkeeping (_specs). Edge, Wire and Curve all
+    subclass this; isinstance(x, Mixin1D) is lite's "any 1-D shape" test."""
+
+    _dim = 1
     # A single-segment Curve (what the 1-D object constructors return) answers
     # the circular-arc queries of its one edge, like build123d's Mixin1D.
     @property
@@ -2284,15 +2522,21 @@ class Curve(Shape):
 
     def __init__(self, topo=None, specs=None):
         if isinstance(topo, (list, tuple, ShapeList)):
-            # Wire(edges) / Curve(edges): one chained wire from the edges
+            # Wire(edges) / Curve(edges): one chained wire from the edges.
+            # Wire([]) is upstream's EMPTY wire (operations_generic builds one
+            # as an offset() starting point).
             sp = []
             for it in topo:
-                if isinstance(it, Curve) and it._specs:
+                if isinstance(it, Mixin1D) and it._specs:
                     sp.extend(it._specs)
                 elif isinstance(it, Shape):
                     sp.extend(_specs_from_topo_edges(it))
                 else:
                     raise TypeError('Curve/Wire from a list expects edges')
+            if len(sp) == 0:
+                Shape.__init__(self, None)
+                self._specs = []
+                return
             chained = _chain_segments(sp)
             Shape.__init__(self, w.WireFromSegments(chained))
             self._specs = chained
@@ -2306,7 +2550,7 @@ class Curve(Shape):
         others = [o for o in _tolist(other) if not (isinstance(o, Shape) and o.topo is None)]
         specs = list(self._specs)
         for o in others:
-            if isinstance(o, Curve):
+            if isinstance(o, Mixin1D):
                 specs.extend(o._specs)
         topos = [o.topo for o in others if o.topo is not None]
         if self.topo is not None:
@@ -2591,7 +2835,7 @@ class Curve(Shape):
             else None
         c = list(Vector(center)) if center is not None else None
         out = w.ProjectWireOnShape(_topo(self), _topo(target_object), d, c)
-        return ShapeList([Curve(t) for t in out])
+        return ShapeList([Wire(t) for t in out])
 
     @property
     def is_closed(self):
@@ -2621,7 +2865,7 @@ class Curve(Shape):
         offset_topo = w.OffsetPlanarWire(src, distance, join)
         if offset_topo is None:
             raise RuntimeError('2D offset produced no wire')
-        offset_wire = Curve(offset_topo)
+        offset_wire = Wire(offset_topo)
         if side == Side.BOTH:
             oes = offset_wire.edges()
             return oes[0] if len(oes) == 1 else offset_wire
@@ -2663,7 +2907,7 @@ class Curve(Shape):
                 edge1 = Edge.make_line(self1, end0)
             joined = list(line.edges()) + list(offset_wire.edges()) + \
                 [edge0, edge1]
-            offset_wire = Curve(w.WireFromEdgesFixed(
+            offset_wire = Wire(w.WireFromEdgesFixed(
                 [_topo(e) for e in joined], _TOL_1E6))
 
         oes = offset_wire.edges()
@@ -2689,7 +2933,6 @@ class Curve(Shape):
                         mode=Mode.PRIVATE)
 
 
-Solid = Part
 def _wire_combine(cls, wires, tol=1e-9):
     """Group edges/wires into the largest possible wires (build123d
     Wire.combine): the same connectivity grouping edges_to_wires does, which is
@@ -2700,76 +2943,30 @@ def _wire_combine(cls, wires, tol=1e-9):
     return edges_to_wires(edges, max(tol, 1e-9))
 
 
-Curve.combine = classmethod(_wire_combine)
-
-Wire = Curve
+Mixin1D.combine = classmethod(_wire_combine)
 
 
-class Compound(Shape):
-    @classmethod
-    def make_triad(cls, axes_scale):
-        """The coordinate-system triad symbol (build123d Compound.make_triad):
-        three axis lines with spline arrow heads.
-
-        COMPROMISE(triad-labels): upstream also draws 'X'/'Y'/'Z' with the
-        'singleline' STROKE font, which this build does not ship (only the
-        outline font FreeSans), so the labels are omitted. The triad is a
-        viewer symbol, never part of a modelled part."""
-        s = float(axes_scale)
-        parts = [Edge.make_line((0, 0, 0), (s, 0, 0)),
-                 Edge.make_line((0, 0, 0), (0, s, 0)),
-                 Edge.make_line((0, 0, 0), (0, 0, s))]
-        arrow_arc = Edge.make_spline([(0, 0, 0), (-s / 20, s / 30, 0)],
-                                     [(-1, 0, 0), (-1, 1.5, 0)])
-        arrow = Curve([arrow_arc, arrow_arc.mirror(Plane.XZ)])
-        parts.append(Pos(s, 0, 0) * arrow)
-        parts.append(Pos(0, s, 0) * (arrow.rotate(Axis.Z, 90)))
-        parts.append(Pos(0, 0, s) * (arrow.rotate(Axis.Y, -90)))
-        return Curve(parts)
-
-    def __init__(self, children=None, label='', **kwargs):
-        # Compound(shape.wrapped) / Compound(topods): a single raw TopoDS shape
-        # (build123d's Shape(obj) form, used by Compound subclasses that call
-        # super().__init__(builder.part.wrapped, ...) - tutorial_joints' Hinge)
-        if children is not None and not isinstance(children, Shape) and \
-                hasattr(children, 'ShapeType'):
-            children = [children]
-        topos = [_topo(c) for c in _tolist(children) if not (isinstance(c, Shape) and c.topo is None)]
-        topo = None
-        if len(topos) == 1:
-            topo = topos[0]
-        elif len(topos) > 1:
-            topo = w.MakeCompound(topos)
-        Shape.__init__(self, topo)
-        self.label = label
-        self.children = _tolist(children)
-        # Compound(..., joints=<dict>) — build123d's Compound.__init__ adopts a
-        # joint dict and REPARENTS every joint onto the new compound. This is
-        # how a Compound subclass built from a builder keeps the joints the
-        # builder collected (tutorial_joints' Hinge).
-        joints = kwargs.get('joints')
-        if joints:
-            self.joints = {k: j._lite_rebind(self) for k, j in joints.items()}
+class Wire(Mixin1D):
+    """A connected sequence of edges — ONE wire (upstream identity: a real
+    class distinct from Edge and from Curve). Wire(edges) chains them into a
+    single wire; Wire(topo) wraps a TopoDS wire; Wire([]) is empty."""
 
     @classmethod
-    def make_text(cls, txt, font_size, font='Arial', font_path=None,
-                  font_style=None,
-                  text_align=('center', 'center'),  # TextAlign values
-                  align=None, position_on_path=0.0, text_path=None):
-        """2D text as a compound of faces (build123d Compound.make_text).
-        Like upstream, align defaults to None: only the Font_TextFormatter
-        (advance-based) text_align applies, NOT bbox alignment."""
-        if text_path is not None:
-            raise NotImplementedError(
-                'Compound.make_text(text_path=) is not supported in '
-                'build123d-lite')
-        t = Text(txt, font_size, font=font, font_path=font_path,
-                 font_style=font_style if font_style is not None
-                 else FontStyle.REGULAR,
-                 text_align=text_align, align=align, mode=Mode.PRIVATE)
-        res = object.__new__(cls)
-        Shape.__init__(res, t.topo)
+    def make_circle(cls, radius, plane=None):
+        """A closed circular wire (build123d Wire.make_circle); the worker's
+        Circle(r, wire=True) is a TopoDS_Wire in the XY plane."""
+        res = cls(w.Circle(radius, True))
+        if plane is not None:
+            res = plane.location * res
         return res
+
+
+class Curve(Mixin1D, Compound):
+    """The 1-D algebra accumulator (upstream identity: a Compound OF 1-D
+    shapes). Lite's 1-D object constructors return Curves; all construction
+    and behavior live on Mixin1D (its __init__ wins the MRO on every
+    runtime — CPython C3 and MicroPython's depth-first lookup agree because
+    Compound never overrides a Mixin1D name)."""
 
 
 def _single_edge_of(curve):
@@ -2782,9 +2979,9 @@ def _single_edge_of(curve):
     return es[0]
 
 
-class Edge(Curve):
+class Edge(Mixin1D):
     def __init__(self, topo, parent=None, index=None):
-        Curve.__init__(self, topo)
+        Mixin1D.__init__(self, topo)
         self.parent = parent
         self.index = index
 
@@ -3122,7 +3319,7 @@ def _reverse_1d(shape):
     edges = list(shape.order_edges())
     if len(edges) == 1:
         return Edge(w.ReverseEdgeOrWire(edges[0].topo))
-    return Curve(w.WireFromEdgesFixed(
+    return Wire(w.WireFromEdgesFixed(
         [w.ReverseEdgeOrWire(e.topo) for e in edges[::-1]], _TOL_1E6))
 
 
@@ -3220,10 +3417,10 @@ class Face(Shape):
         # Face(outer_wire, [hole_wires]) like build123d
         inner = None
         if isinstance(parent, (list, tuple, ShapeList)) and \
-                all(isinstance(x, (Curve, Edge)) for x in parent):
+                all(isinstance(x, Mixin1D) for x in parent):
             inner = list(parent)
             parent = None
-        if isinstance(topo, (Curve, Edge)):
+        if isinstance(topo, Mixin1D):
             outer = _topo(topo)
             if outer.ShapeType().value != 5:
                 outer = w.GetWire(outer, 0, True)
@@ -3394,7 +3591,7 @@ class Face(Shape):
 
     def outer_wire(self):
         """The face's outer boundary wire (BRepTools::OuterWire)."""
-        return Curve(w._faceOuterWire(self.topo))
+        return Wire(w._faceOuterWire(self.topo))
 
     def inner_wires(self):
         """Hole wires: every wire of the face except the outer one."""
@@ -3403,7 +3600,7 @@ class Face(Shape):
 
         def _cb(i, wire):
             if not w._sameShape(wire, outer):
-                out.append(Curve(wire))
+                out.append(Wire(wire))
         w.ForEachWire(self.topo, _cb)
         return out
 
@@ -3548,8 +3745,8 @@ class Face(Shape):
 
         planar_edges = planar_wire.order_edges()
         if len(planar_edges) == 1:
-            return Curve([self._wrap_edge(planar_edges[0], surface_loc, True,
-                                          tolerance)])
+            return Wire([self._wrap_edge(planar_edges[0], surface_loc, True,
+                                         tolerance)])
 
         wrapped_edges = []
         first_start_point = None
@@ -3587,7 +3784,7 @@ class Face(Shape):
             wrapped_edges.append(wrapped_edge)
 
         if not planar_wire.is_closed:
-            return Curve(wrapped_edges)
+            return Wire(wrapped_edges)
 
         # extend the first and last wrapped edge so that they cross, then trim
         # both at the crossing
@@ -3618,7 +3815,7 @@ class Face(Shape):
                          trimmed_last.position_at(1)).length
         wire = w.WireFromEdgesFixed([_topo(e) for e in wrapped_edges],
                                     2 * closing_error)
-        return Curve(wire)
+        return Wire(wire)
 
     def _wrap_face(self, planar_face, surface_loc, tolerance=0.001,
                    extension_factor=0.1):
@@ -3648,7 +3845,7 @@ class Face(Shape):
         if isinstance(planar_shape, (Face, Sketch)):
             return self._wrap_face(planar_shape, surface_loc, tolerance,
                                    extension_factor)
-        if isinstance(planar_shape, Curve):
+        if isinstance(planar_shape, Mixin1D):
             return self._wrap_wire(planar_shape, surface_loc, tolerance,
                                    extension_factor)
         raise TypeError('planar_shape must be an Edge, Wire or Face')
@@ -4038,7 +4235,7 @@ def _canonical_center_key(shape):
 def _sort_key_fn(key):
     if isinstance(key, Axis):
         return lambda s: _axis_value(s, key)
-    if isinstance(key, Curve) and getattr(key, 'topo', None) is not None:
+    if isinstance(key, Mixin1D) and getattr(key, 'topo', None) is not None:
         # sort_by(<edge or wire>): the parameter, along that 1-D shape, of the
         # point closest to each object's centre (build123d's
         # u_of_closest_center -> closest_points + param_at_point)
@@ -4106,7 +4303,8 @@ def topo_distance_to(other):
         raise ValueError('Cannot measure topological distance to an empty '
                          'object')
     kind_lut = [(Vertex, 'vertex'), (Face, 'face'), (Edge, 'edge'),
-                (Shell, 'shell'), (Part, 'solid'), (Curve, 'wire')]
+                (Shell, 'shell'), (Solid, 'solid'), (Part, 'solid'),
+                (Wire, 'wire'), (Curve, 'wire')]
     peer_kind = None
     for cls, name in kind_lut:
         if isinstance(sources[0], cls):
@@ -6066,7 +6264,7 @@ class BaseLineObject(Curve):
     super().__init__(wire, mode)."""
 
     def __init__(self, curve, mode=Mode.ADD):
-        if isinstance(curve, Curve) and curve._specs:
+        if isinstance(curve, Mixin1D) and curve._specs:
             specs = curve._specs
         elif isinstance(curve, Shape) and curve.topo is not None:
             specs = _specs_from_topo_edges(curve)
@@ -6345,7 +6543,7 @@ def DoubleTangentArc(pnt, tangent, other, keep=Keep.TOP, mode=Mode.ADD):
     # the active BuildLine at the tangency point instead — the resulting
     # FACE is identical, but the target curve's dangling tail is dropped.
     builder = _active_builder(BuildLine)
-    if builder is not None and isinstance(other, Curve) and other._specs:
+    if builder is not None and isinstance(other, Mixin1D) and other._specs:
         for i, sg in enumerate(builder._specs):
             if any(sg is s2 for s2 in other._specs) and sg[0] == 'arc3':
                 s0 = _v3(w._edgePointAt(e1.topo, 0.0))
@@ -6803,7 +7001,7 @@ def _tangency_pair(arg):
         arg = Edge.make_line(p0, p1)
     if isinstance(arg, Vertex):
         return {'point': list(arg.to_tuple())[:2]}
-    if isinstance(arg, (Curve, Edge)) and getattr(arg, 'topo', None) is not None:
+    if isinstance(arg, Mixin1D) and getattr(arg, 'topo', None) is not None:
         edge = arg if isinstance(arg, Edge) else _single_edge_of(arg)
         return {'edge': edge.topo, 'qualifier': qualifier}
     if isinstance(arg, (Wire, Shape)) and getattr(arg, 'topo', None) is not None:
@@ -6820,7 +7018,7 @@ def _constrained_curve(topo_edges, selector, mode):
     if selected is None:
         raise ValueError('selector must return an Edge or list of Edges, not '
                          'None')
-    if isinstance(selected, (Edge, Curve)):
+    if isinstance(selected, Mixin1D):
         selected = [selected]
     if not selected:
         raise ValueError('selector must return an Edge or list of Edges, not '
@@ -7613,8 +7811,8 @@ def edges_to_wires(edges, tol=1e-6):
                     chain.insert(0, remaining.pop(i))
                     grew = True
                     break
-        wires.append(Curve(w.WireFromEdgesFixed([_topo(e) for e in chain],
-                                                tol)))
+        wires.append(Wire(w.WireFromEdgesFixed([_topo(e) for e in chain],
+                                               tol)))
     return wires
 
 
@@ -7646,9 +7844,9 @@ def _specs_from_topo_edges(shape):
 def SlotArc(arc, height, rotation=0, mode=Mode.ADD):
     """Slot along an arc path: BRepOffsetAPI_MakeOffset on the open wire
     yields both offset sides plus round end caps — build123d's SlotArc."""
-    if isinstance(arc, Curve) and arc._specs:
+    if isinstance(arc, Mixin1D) and arc._specs:
         specs = arc._specs
-    elif isinstance(arc, (Curve, Edge)):
+    elif isinstance(arc, Mixin1D):
         specs = _specs_from_topo_edges(arc)
     else:
         raise NotImplementedError('SlotArc requires a curve/edge')
@@ -7813,7 +8011,7 @@ def make_brake_formed(thickness, station_widths, line=None, side=Side.LEFT,
         if line is None:
             raise ValueError('A line must be provided')
         builder.pending_path = None
-    elif isinstance(line, Curve) and len(line.edges()) == 0:
+    elif isinstance(line, Mixin1D) and len(line.edges()) == 0:
         raise ValueError('A line must be provided')
     offset_line = line.offset_2d(distance=thickness, kind=kind, side=side,
                                  closed=True)
@@ -7896,7 +8094,7 @@ def sweep(sections=None, path=None, multisection=False, is_frenet=False,
     if path is None:
         raise ValueError('sweep requires path= (or a BuildLine inside the '
                          'BuildPart)')
-    if isinstance(path, Curve) and path._specs:
+    if isinstance(path, Mixin1D) and path._specs:
         # multi-segment curves: build ONE chained wire (their topo may be a
         # compound of separate wires, of which GetWire would take only one)
         path_topo = w.WireFromSegments(_chain_segments(path._specs))
@@ -7911,7 +8109,7 @@ def sweep(sections=None, path=None, multisection=False, is_frenet=False,
     binormal_vec = []
     aux_spine = 0
     if binormal is not None:
-        if isinstance(binormal, Curve) and binormal._specs:
+        if isinstance(binormal, Mixin1D) and binormal._specs:
             aux_spine = w.WireFromSegments(_chain_segments(binormal._specs))
         else:
             aux_spine = _topo(binormal)
@@ -8104,7 +8302,7 @@ def _wire_fillet_2d(line, vertices, radius):
             raise ValueError('Vertex must connect exactly two edges: ' +
                              str(v))
         edges = _wire_fillet_corner(edges, touching, v, radius)
-    result = plane.location * Curve(w.WireFromOrderedEdges(
+    result = plane.location * Wire(w.WireFromOrderedEdges(
         [e.topo for e in edges]))
     # keep the wire's DIRECTION (upstream re-reverses when is_forward flips):
     # offset_2d's Side.LEFT/RIGHT is measured against the traversal direction,
@@ -8200,7 +8398,7 @@ def offset(objects=None, amount=0, openings=None, kind=Kind.ARC,
     if side != Side.BOTH:
         # one-sided offset of an OPEN line (build123d's Wire.offset_2d with
         # side=): keep one offset side, optionally closed back onto the line
-        if len(targets) != 1 or not isinstance(targets[0], (Curve, Edge)):
+        if len(targets) != 1 or not isinstance(targets[0], Mixin1D):
             raise ValueError('offset(side=...) applies to a single line')
         src = targets[0]
         if isinstance(src, Edge):
@@ -8275,13 +8473,13 @@ def mirror(objects=None, about=Plane.XZ, mode=Mode.ADD):
     # level so make_face()/sweep() can still chain the result exactly.
     if isinstance(builder, BuildLine) or (
             objects is not None and
-            all(isinstance(t, Curve) and t._specs for t in _tolist(objects))):
+            all(isinstance(t, Mixin1D) and t._specs for t in _tolist(objects))):
         if objects is None:
             src = list(builder._specs)
         else:
             src = []
             for t in _tolist(objects):
-                if not (isinstance(t, Curve) and t._specs):
+                if not (isinstance(t, Mixin1D) and t._specs):
                     raise NotImplementedError('mirror inside BuildLine needs '
                                               'segment-based curves')
                 src.extend(t._specs)
@@ -8411,9 +8609,9 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
         ctx_locs = _ctx_locations()
         out = []
         for o in objs:
-            if isinstance(o, Curve) and o._specs:
+            if isinstance(o, Mixin1D) and o._specs:
                 specs = list(o._specs)
-            elif isinstance(o, (Curve, Edge)):
+            elif isinstance(o, Mixin1D):
                 specs = _specs_from_topo_edges(o)
             else:
                 raise TypeError('add() to BuildLine expects curves')
@@ -8481,9 +8679,9 @@ def make_face(edges=None, mode=Mode.ADD):
     else:
         specs = []
         for e in _tolist(edges):
-            if isinstance(e, Curve) and e._specs:
+            if isinstance(e, Mixin1D) and e._specs:
                 specs.extend(e._specs)
-            elif isinstance(e, (Curve, Edge)):
+            elif isinstance(e, Mixin1D):
                 specs.extend(_specs_from_topo_edges(e))
             else:
                 raise NotImplementedError('make_face from non-curve objects')
@@ -8899,7 +9097,7 @@ def thicken(to_thicken=None, amount=None, normal_override=None, both=False,
     for f in faces:
         n = normal_override if normal_override is not None else f.normal_at()
         for direction in ([1, -1] if both else [1]):
-            solids.append(Part.thicken(
+            solids.append(Solid.thicken(
                 f, amount, normal_override=Vector(n) * direction))
     result = solids[0] if len(solids) == 1 else Part().fuse(*solids)
     if builder is not None:
