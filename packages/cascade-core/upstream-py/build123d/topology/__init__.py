@@ -312,21 +312,38 @@ def _edge_make_hyperbola(cls, x_radius, y_radius, plane=None, start_angle=0.0,
     return _one_edge_placed(arc, plane)
 
 
+def _cs_lite_tangency_args(args):
+    """Translate the shim's Tangency MEMBERS in (entity, qualifier) tuples to
+    lite's string values — the kernel helper reads the qualifier by VALUE, so
+    an untranslated member silently solved UNQUALIFIED (wrong/extra
+    candidates: b13's egg_plant)."""
+    out = []
+    for a in args:
+        if isinstance(a, tuple) and len(a) == 2 and \
+                not isinstance(a[0], (int, float)):
+            nm = getattr(a[1], 'name', None)
+            if nm is not None:
+                a = (a[0], getattr(_lt.Tangency, nm, a[1]))
+        out.append(a)
+    return out
+
+
 def _edge_make_constrained_arcs(cls, *args, radius=None, center=None,
                                 center_on=None, sagitta=None):
     sag = sagitta if sagitta is not None else _lt.Sagitta.SHORT
     sn = getattr(sag, 'name', None)
     if sn is not None:
         sag = getattr(_lt.Sagitta, sn, sag)
-    topos = _lt._constrained_arc_topos(list(args), radius=radius,
+    topos = _lt._constrained_arc_topos(_cs_lite_tangency_args(args),
+                                       radius=radius,
                                        center=center, center_on=center_on,
                                        sagitta=sag)
     return ShapeList([_lt.Edge(t) for t in topos])
 
 
 def _edge_make_constrained_lines(cls, *args, angle=None, direction=None):
-    topos = _lt._constrained_line_topos(list(args), angle=angle,
-                                        direction=direction)
+    topos = _lt._constrained_line_topos(_cs_lite_tangency_args(args),
+                                        angle=angle, direction=direction)
     return ShapeList([_lt.Edge(t) for t in topos])
 
 

@@ -653,23 +653,17 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
             combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
           }
         } else {
-          // ONE list-based fuse for MANY operands, like build123d's
-          // Shape.fuse (BRepAlgoAPI_Fuse + SetArguments/SetTools). The
-          // pairwise chain re-runs the boolean against the GROWING result —
-          // O(n) kernel booleans of increasing complexity, minutes for the
-          // 60-solid fuses upstream's builders produce in one _add_to_context.
-          let fuse = new self.oc.BRepAlgoAPI_Fuse_1();
-          let argList = new self.oc.TopTools_ListOfShape();
-          argList.Append(objectsToJoin[0]);
-          let toolList = new self.oc.TopTools_ListOfShape();
-          for (let i = 1; i < objectsToJoin.length; i++) { toolList.Append(objectsToJoin[i]); }
-          fuse.SetArguments(argList);
-          fuse.SetTools(toolList);
-          // (SetFuzzyValue is not bound on BRepAlgoAPI_Fuse in this build;
-          //  upstream's Shape.fuse defaults to no fuzzy value either)
-          if (typeof fuse.SetFuzzyValue === 'function') { fuse.SetFuzzyValue(fuzzValue); }
-          fuse.Build(new self.oc.Message_ProgressRange_1());
-          combined = fuse.Shape();
+          // ONE fuse against a COMPOUND of the remaining operands for MANY
+          // operands, processed in BATCHES of 8 (this kernel's BOP cost explodes
+          // superlinearly with single-op tool complexity: one 64-box tool took 76 s
+          // where four 16-box tools took under a second; and the one-at-a-time
+          // chain re-runs the boolean against the GROWING result). Each batch is
+          // fused as ONE compound tool, the single boolean lite's add() always did.
+          for (let i = 1; i < objectsToJoin.length; i += 8) {
+            let batch = objectsToJoin.slice(i, i + 8);
+            let tool = batch.length === 1 ? batch[0] : MakeCompound(batch);
+            combined = self.oc.OCJS.BooleanFuse(combined, tool, fuzzValue);
+          }
         }
       } catch (fuseErr) {
         // Same 8.0.1 coplanar-contact family as the operand-drop below, but
@@ -692,6 +686,25 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
       if (rebuilt && _quickVolume(rebuilt) >= maxInput * 0.999 - 1e-9) {
         console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); rebuilt the union from the General-Fuse partition.");
         combined = rebuilt;
+      } else {
+        // Third try: the LIST-based BRepAlgoAPI_Fuse takes a different
+        // kernel route than the fork's OCJS.BooleanFuse and sometimes
+        // survives inputs both of the above drop (Buffer_Stand's rib).
+        try {
+          let fuse = new self.oc.BRepAlgoAPI_Fuse_1();
+          let argList = new self.oc.TopTools_ListOfShape();
+          argList.Append(objectsToJoin[0]);
+          let toolList = new self.oc.TopTools_ListOfShape();
+          for (let i = 1; i < objectsToJoin.length; i++) { toolList.Append(objectsToJoin[i]); }
+          fuse.SetArguments(argList);
+          fuse.SetTools(toolList);
+          fuse.Build(new self.oc.Message_ProgressRange_1());
+          let listFused = fuse.Shape();
+          if (_quickVolume(listFused) >= maxInput * 0.999 - 1e-9) {
+            console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); recovered with the list-based fuse.");
+            combined = listFused;
+          }
+        } catch (e) { /* keep the (guarded) original result */ }
       }
     }
 
