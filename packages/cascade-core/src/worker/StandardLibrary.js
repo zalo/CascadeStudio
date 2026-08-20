@@ -645,10 +645,26 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
     let combined = objectsToJoin[0];
     if (objectsToJoin.length > 1) {
       try {
-        for (let i = 0; i < objectsToJoin.length; i++) {
-          if (i > 0) {
-            combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
-          }
+        if (objectsToJoin.length === 2) {
+          combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[1], fuzzValue);
+        } else {
+          // ONE list-based fuse for 3+ operands, exactly like build123d's
+          // Shape.fuse (BRepAlgoAPI_Fuse + SetArguments/SetTools). The old
+          // pairwise chain re-ran the boolean against the GROWING result —
+          // O(n) kernel booleans of increasing complexity, minutes for the
+          // 60-solid fuses upstream's builders produce in one _add_to_context.
+          let fuse = new self.oc.BRepAlgoAPI_Fuse_1();
+          let argList = new self.oc.TopTools_ListOfShape();
+          argList.Append(objectsToJoin[0]);
+          let toolList = new self.oc.TopTools_ListOfShape();
+          for (let i = 1; i < objectsToJoin.length; i++) { toolList.Append(objectsToJoin[i]); }
+          fuse.SetArguments(argList);
+          fuse.SetTools(toolList);
+          // (SetFuzzyValue is not bound on BRepAlgoAPI_Fuse in this build;
+          //  upstream's Shape.fuse defaults to no fuzzy value either)
+          if (typeof fuse.SetFuzzyValue === 'function') { fuse.SetFuzzyValue(fuzzValue); }
+          fuse.Build(new self.oc.Message_ProgressRange_1());
+          combined = fuse.Shape();
         }
       } catch (fuseErr) {
         // Same 8.0.1 coplanar-contact family as the operand-drop below, but
