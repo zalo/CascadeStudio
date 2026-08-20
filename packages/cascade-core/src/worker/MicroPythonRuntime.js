@@ -198,23 +198,37 @@ def _cs_run_user(src):
 let _runtimePromise = null;
 let _bootedPySrc = null;
 
-/** Lazily bootstrap MicroPython + build123d-lite. Same contract as the
+/** Lazily bootstrap MicroPython + build123d. Same contract as the
  *  Brython/Pyodide runtimes: resolves to an object with `run(code)`.
  *
- *  `pySrc === 'upstream'` (opt-in, `?pysrc=upstream`) registers lite as
- *  `build123d_lite` and layers UPSTREAM build123d 0.11.1 Level-A source on
- *  top as the `build123d` package (see UpstreamB123d.js). One worker
- *  session boots ONE source mode; switching requires a reload. */
+ *  Source-layer resolution (the MicroPython DEFAULT is upstream):
+ *  - 'lite' (`?pysrc=lite` / localStorage cascade-py-src=lite): lite is the
+ *    `build123d` package, like Brython/Pyodide.
+ *  - 'upstream' (explicit `?pysrc=upstream`): lite registers as
+ *    `build123d_lite` and UPSTREAM build123d 0.11.1 Level-A source layers on
+ *    top as `build123d` (see UpstreamB123d.js); a missing vendored payload
+ *    is a hard error.
+ *  - anything else ('auto', the no-flag default): upstream when the payload
+ *    is available, otherwise a console-warned fallback to lite — never a
+ *    hard failure.
+ *  One worker session boots ONE source mode; switching requires a reload. */
 export function ensureMicroPythonRuntime(pySrc) {
-  const srcKind = pySrc === 'upstream' ? 'upstream' : 'lite';
-  if (_runtimePromise && _bootedPySrc !== srcKind) {
+  const srcKind = pySrc === 'lite' ? 'lite'
+    : (pySrc === 'upstream' ? 'upstream' : 'auto');
+  // 'auto' is compatible with whatever actually booted; an EXPLICIT choice
+  // that contradicts the booted layer needs a reload.
+  if (_runtimePromise && srcKind !== 'auto' && _bootedPySrc !== 'auto' &&
+      _bootedPySrc !== srcKind) {
     return Promise.reject(new Error(
       'the MicroPython runtime is already booted with pysrc=' + _bootedPySrc +
       '; reload the page to switch to pysrc=' + srcKind));
   }
   if (!_runtimePromise) {
     _bootedPySrc = srcKind;
-    _runtimePromise = _bootstrap(srcKind).catch((e) => {
+    _runtimePromise = _bootstrap(srcKind).then((runtime) => {
+      _bootedPySrc = runtime.pySrc; // the EFFECTIVE layer ('upstream'|'lite')
+      return runtime;
+    }).catch((e) => {
       _runtimePromise = null; // allow a retry on the next evaluation
       _bootedPySrc = null;
       throw e;
@@ -305,11 +319,12 @@ async function _bootstrap(srcKind) {
         + ((e && e.message) || e));
     }
   }
-  if (srcKind === 'upstream') {
-    // UPSTREAM-source mode: lite becomes the seam library `build123d_lite`;
-    // the `build123d` package is upstream 0.11.1 Level-A source layered on
-    // top by UpstreamB123d.js (fetched from dist/upstream-b123d/).
-    br._cs_register_module('build123d_lite', BUILD123D_LITE_PY, false);
+  let effectiveSrc = srcKind === 'lite' ? 'lite' : 'upstream';
+  if (effectiveSrc === 'upstream') {
+    // UPSTREAM-source mode (the MicroPython default): lite becomes the seam
+    // library `build123d_lite`; the `build123d` package is upstream 0.11.1
+    // Level-A source layered on top by UpstreamB123d.js (fetched from
+    // dist/upstream-b123d/).
     const fetchText = self._csUpstreamFetchText || (async (rel) => {
       let url;
       if (isBuilt) {
@@ -329,8 +344,29 @@ async function _bootstrap(srcKind) {
       }
       return resp.text();
     });
-    await bootstrapUpstreamB123d(mp, br, fetchText);
-  } else {
+    // Probe the payload BEFORE registering anything: the no-flag default
+    // ('auto') falls back to lite with a warning when the vendored upstream
+    // sources are missing at runtime; explicit pysrc=upstream stays a hard,
+    // actionable error.
+    let available = true;
+    try {
+      await fetchText('manifest.json');
+    } catch (probeErr) {
+      if (srcKind === 'upstream') { throw probeErr; }
+      available = false;
+      console.warn('[pyruntime] micropython: upstream build123d payload '
+        + 'unavailable — falling back to build123d-lite ('
+        + String((probeErr && probeErr.message) || probeErr).split('\n')[0]
+        + ')');
+    }
+    if (available) {
+      br._cs_register_module('build123d_lite', BUILD123D_LITE_PY, false);
+      await bootstrapUpstreamB123d(mp, br, fetchText);
+    } else {
+      effectiveSrc = 'lite';
+    }
+  }
+  if (effectiveSrc === 'lite') {
     br._cs_register_module('build123d', BUILD123D_LITE_PY, false);
   }
 
@@ -341,7 +377,7 @@ async function _bootstrap(srcKind) {
   const tDone = performance.now();
   self._pythonBootTiming = {
     runtime: 'micropython',
-    pySrc: srcKind,
+    pySrc: effectiveSrc,
     fetchMs: +(tFetched - t0).toFixed(1),
     initMs: +(tInitialized - tFetched).toFixed(1),
     libMs: +(tDone - tInitialized).toFixed(1),
@@ -352,6 +388,7 @@ async function _bootstrap(srcKind) {
   self._csMpInterpreter = mp; // benchmark/debug access
 
   return {
+    pySrc: effectiveSrc,
     /** Execute user Python source synchronously (same contract as the
      *  Brython runtime: throws a JS Error whose message is the Python
      *  summary + traceback with user editor line numbers). */
@@ -359,7 +396,7 @@ async function _bootstrap(srcKind) {
       for (const k in self.argCache) { delete self.argCache[k]; }
       self.getPythonUserLine = getMpUserLine;
       self._pythonRuntimeKind = 'micropython';
-      self._pythonSrcKind = srcKind;
+      self._pythonSrcKind = effectiveSrc;
       self._b123dSceneDefined = false;
       const err = br._cs_run_user(code);
       if (err) { throw new Error(String(err)); }

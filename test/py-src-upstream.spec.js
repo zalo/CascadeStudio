@@ -66,19 +66,36 @@ test('pysrc=upstream runs upstream BuildLine/BuildPart over lite\'s seam', async
     .toBe('POC2 125.0 (-2.5, -2.5, -2.5) (2.5, 2.5, 2.5)');
 });
 
-test('pysrc=upstream requires the MicroPython runtime; default stays lite', async ({ page }) => {
-  // Default Python mode is untouched by the flag machinery
+test('micropython defaults to upstream source; pysrc=lite opts back into lite', async ({ page }) => {
+  // The no-flag MicroPython default is the UPSTREAM source layer (when the
+  // vendored payload is available — it is committed, so this is the normal
+  // state; a missing payload falls back to lite with a console warning).
   await gotoAndReady(page, '?pyruntime=micropython');
+  const vendored = await upstreamAvailable(page);
   const r = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
     'import build123d',
-    'print("LITECHECK", getattr(build123d, "_upstream_level_a", False))',
+    'print("DEFAULTCHECK", getattr(build123d, "_upstream_level_a", False))',
   ].join('\n'));
   expect(r.errors).toEqual([]);
   await page.waitForFunction(
-    () => window.CascadeAPI.getConsoleLog().some((l) => l.startsWith('LITECHECK')),
+    () => window.CascadeAPI.getConsoleLog().some((l) => l.startsWith('DEFAULTCHECK')),
     { timeout: 90000 });
   const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
-  expect(logs.find((l) => l.startsWith('LITECHECK'))).toBe('LITECHECK False');
+  expect(logs.find((l) => l.startsWith('DEFAULTCHECK')))
+    .toBe('DEFAULTCHECK ' + (vendored ? 'True' : 'False'));
+
+  // pysrc=lite pins the lite source layer on MicroPython
+  await gotoAndReady(page, '?pyruntime=micropython&pysrc=lite');
+  const r2 = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
+    'import build123d',
+    'print("LITECHECK", getattr(build123d, "_upstream_level_a", False))',
+  ].join('\n'));
+  expect(r2.errors).toEqual([]);
+  await page.waitForFunction(
+    () => window.CascadeAPI.getConsoleLog().some((l) => l.startsWith('LITECHECK')),
+    { timeout: 90000 });
+  const logs2 = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
+  expect(logs2.find((l) => l.startsWith('LITECHECK'))).toBe('LITECHECK False');
 
   // pysrc=upstream on a non-MicroPython runtime fails loudly, not silently
   await gotoAndReady(page, '?pysrc=upstream');

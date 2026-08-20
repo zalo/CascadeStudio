@@ -120,5 +120,8 @@ agent-test-*.png
 chess-pawn*.png
 
 # Vendored Pyodide core distribution (experimental Python runtime, fetched by
-# packages/cascade-core/scripts/fetch-pyodide.cjs)
-vendor/
+# packages/cascade-core/scripts/fetch-pyodide.cjs). NOTE: vendor/build123d-*
+# is COMMITTED (Apache-2.0, see its README.md) — it is the MicroPython
+# runtime's default Python source layer and must exist on fresh checkouts.
+vendor/*
+!vendor/build123d-0.11.1/

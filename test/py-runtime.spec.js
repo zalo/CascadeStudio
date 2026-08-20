@@ -42,8 +42,10 @@ test('Python runtime defaults to Brython and the flag selects Pyodide', async ({
   expect(stats.bootTiming.runtime).toBe('brython');
 });
 
-test('?pyruntime=micropython evaluates build123d-lite on MicroPython', async ({ page }) => {
-  await gotoAndReady(page, '?pyruntime=micropython');
+test('?pyruntime=micropython&pysrc=lite evaluates build123d-lite on MicroPython', async ({ page }) => {
+  // pysrc=lite pins the source layer: the MicroPython DEFAULT is upstream
+  // build123d source (see py-src-upstream.spec.js for the default's tests)
+  await gotoAndReady(page, '?pyruntime=micropython&pysrc=lite');
   expect(await page.evaluate(() => window.CascadeAPI.getPyRuntime())).toBe('micropython');
 
   const result = await page.evaluate((code) => window.CascadeAPI.runCode(code), `

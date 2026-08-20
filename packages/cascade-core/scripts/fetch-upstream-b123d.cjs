@@ -52,6 +52,23 @@ for (const f of FILES) {
   fs.copyFileSync(from, path.join(outDir, f));
   copied++;
 }
+// upstream's LICENSE/NOTICE (Apache-2.0) ride along: the vendor dir is
+// COMMITTED (it is the MicroPython runtime's default source layer), so the
+// license text must be present in the repo and in deploys.
+for (const legal of ['LICENSE', 'NOTICE']) {
+  const candidates = [
+    path.join(srcDir, '..', `build123d-0.11.1.dist-info`, 'licenses', legal),
+    path.join(srcDir, '..', legal),
+    path.join(srcDir, legal),
+  ];
+  const found = candidates.find((p) => fs.existsSync(p));
+  if (found) {
+    fs.copyFileSync(found, path.join(outDir, legal));
+  } else {
+    console.warn('[fetch-upstream-b123d] upstream ' + legal + ' not found '
+      + 'next to the sources — copy it into ' + outDir + ' by hand');
+  }
+}
 fs.writeFileSync(path.join(outDir, 'VERSION'),
   'build123d 0.11.1 sources copied from ' + srcDir + '\n');
 console.log('[fetch-upstream-b123d] copied ' + copied + ' files to ' + outDir);

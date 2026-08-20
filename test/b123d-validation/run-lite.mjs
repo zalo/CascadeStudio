@@ -58,6 +58,11 @@ const PAGES = parseInt(argVal('--pages', '4'), 10);
 // or 'pyodide' / 'micropython' (CS_PY_RUNTIME=<name> / --pyruntime).
 const PY_RUNTIME = argVal('--pyruntime', process.env.CS_PY_RUNTIME || 'brython');
 const PY_RUNTIME_QUERY = ['pyodide', 'micropython'].includes(PY_RUNTIME) ? '?pyruntime=' + PY_RUNTIME : '';
+// Python SOURCE layer (CS_PY_SRC=lite|upstream): micropython now DEFAULTS to
+// upstream; pysrc=lite pins the lite layer for A/B harness runs.
+const PY_SRC_ENV = process.env.CS_PY_SRC || '';
+const PY_SRC_QUERY = ['lite', 'upstream'].includes(PY_SRC_ENV)
+  ? (PY_RUNTIME_QUERY ? '&' : '?') + 'pysrc=' + PY_SRC_ENV : '';
 
 const VOL_REL_TOL = 0.005;    // 0.5% relative volume tolerance
 const VOL_ZERO_ABS = 1e-6;    // "zero volume" threshold for 2D/1D shapes
@@ -134,7 +139,7 @@ async function ensureServer() {
 async function newReadyPage(browser) {
   const page = await browser.newPage();
   page.on('pageerror', () => {});
-  await page.goto(`http://localhost:${PORT}/${PY_RUNTIME_QUERY}`, { timeout: 60000 });
+  await page.goto(`http://localhost:${PORT}/${PY_RUNTIME_QUERY}${PY_SRC_QUERY}`, { timeout: 60000 });
   await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(),
     undefined, { timeout: 90000 });
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(),

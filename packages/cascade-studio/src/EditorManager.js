@@ -21,20 +21,22 @@ export function resolvePyRuntime() {
   return 'brython';
 }
 
-/** Resolve the Python SOURCE layer: 'lite' (default — Build123dLite.js) or
- *  the experimental 'upstream' (UPSTREAM build123d 0.11.1 Level-A source on
- *  the MicroPython runtime — requires `?pyruntime=micropython` and vendored
- *  sources, see UpstreamB123d.js). `?pysrc=upstream` or, so it survives
- *  reloads, localStorage['cascade-py-src']. */
+/** Resolve the Python SOURCE layer: 'lite' (Build123dLite.js — what Brython
+ *  and Pyodide always run), 'upstream' (UPSTREAM build123d 0.11.1 Level-A
+ *  source — requires `?pyruntime=micropython` and the vendored payload, see
+ *  UpstreamB123d.js), or 'auto' (the no-flag default): the MicroPython
+ *  runtime prefers upstream and falls back to lite with a console warning
+ *  when the payload is missing; the other runtimes run lite. Explicit choice
+ *  via `?pysrc=` or, so it survives reloads, localStorage['cascade-py-src']. */
 export function resolvePySrc() {
   const KNOWN = ['lite', 'upstream'];
   try {
     const fromURL = new URLSearchParams(window.location.search).get('pysrc');
-    if (fromURL) { return KNOWN.includes(fromURL) ? fromURL : 'lite'; }
+    if (fromURL && KNOWN.includes(fromURL)) { return fromURL; }
     const stored = window.localStorage.getItem('cascade-py-src');
     if (KNOWN.includes(stored)) { return stored; }
   } catch (e) { /* no URL/storage access — fall through to the default */ }
-  return 'lite';
+  return 'auto';
 }
 
 /** Manages the Monaco code editor instance, mode switching, and code evaluation. */
