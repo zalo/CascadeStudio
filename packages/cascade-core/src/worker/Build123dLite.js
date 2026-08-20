@@ -2297,14 +2297,24 @@ class Compound(Shape):
         # geometry through build_common's typed[Edge] + typed[Wire] paths) —
         # and nested compounds flatten to their leaves, which is what
         # upstream's one-level iteration sees on its flat compounds.
-        def expand(t, depth=0):
-            st = t.ShapeType().value
-            if st == 5 or (st == 0 and depth < 8):
-                out = []
-                for c in w.DirectChildren(t):
-                    out.extend(expand(c, depth + 1))
-                return out
-            return [t]
+        def expand(root):
+            # iterative: Mixin1D.__add__'s LEFT-LEANING compound nesting can
+            # be one level PER EDGE (a 20-segment mirrored profile is 20
+            # compounds deep), so a fixed recursion cap silently DROPPED the
+            # deeper leaves. Wires and compounds both present as their
+            # children; everything else is a leaf.
+            out = []
+            stack = [root]
+            while stack:
+                t = stack.pop()
+                st = t.ShapeType().value
+                if st == 5 or st == 0:
+                    kids = list(w.DirectChildren(t))
+                    for i in range(len(kids) - 1, -1, -1):
+                        stack.append(kids[i])
+                else:
+                    out.append(t)
+            return out
 
         candidates = expand(self.topo)
         out = ShapeList()
