@@ -2255,18 +2255,30 @@ class Compound(Shape):
     def make_text(cls, txt, font_size, font='Arial', font_path=None,
                   font_style=None,
                   text_align=('center', 'center'),  # TextAlign values
-                  align=None, position_on_path=0.0, text_path=None):
+                  align=None, position_on_path=0.0, text_path=None,
+                  single_line_width=None):
         """2D text as a compound of faces (build123d Compound.make_text).
         Like upstream, align defaults to None: only the Font_TextFormatter
-        (advance-based) text_align applies, NOT bbox alignment."""
-        if text_path is not None:
-            raise NotImplementedError(
-                'Compound.make_text(text_path=) is not supported in '
-                'build123d-lite')
+        (advance-based) text_align applies, NOT bbox alignment.
+
+        Enum arguments are normalized BY NAME so the upstream-source seam's
+        metaclass-free enum members work here too (lite's FontStyle values
+        ARE the member names; TextAlign values are their lowercase).
+        single_line_width only matters for single-line STROKE fonts, which
+        this build does not ship (outline FreeSans only) — accepted and
+        ignored, like lite's own Text object."""
+        def _byname(v, lower):
+            n = getattr(v, 'name', None)
+            if isinstance(n, str):
+                return n.lower() if lower else n
+            return v
+        fs = _byname(font_style if font_style is not None
+                     else FontStyle.REGULAR, False)
+        ta = (_byname(text_align[0], True), _byname(text_align[1], True))
         t = Text(txt, font_size, font=font, font_path=font_path,
-                 font_style=font_style if font_style is not None
-                 else FontStyle.REGULAR,
-                 text_align=text_align, align=align, mode=Mode.PRIVATE)
+                 font_style=fs, text_align=ta, align=align,
+                 path=text_path, position_on_path=position_on_path,
+                 mode=Mode.PRIVATE)
         res = object.__new__(cls)
         Shape.__init__(res, t.topo)
         return res
