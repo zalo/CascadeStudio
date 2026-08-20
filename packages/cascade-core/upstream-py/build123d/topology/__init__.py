@@ -125,6 +125,39 @@ if not hasattr(_lt.Face, 'fillet_2d'):
     _lt.Mixin1D.fillet_2d = _wire_fillet_2d
 
 
+def _edge_make_tangent_arc(cls, start, tangent, end):
+    """upstream Edge.make_tangent_arc (GC_MakeArcOfCircle's point/tangent/
+    point form), computed analytically in the arc's own plane — lite's
+    TangentArc object is XY-only, and upstream localizes the points BEFORE
+    calling this. The circle is realized as an exact three-point arc
+    (start, mid-sweep, end), which also fixes the traversal direction."""
+    import math
+    p1 = Vector(start)
+    p3 = Vector(end)
+    t = Vector(tangent).normalized()
+    d = p3 - p1
+    n = t.cross(d)
+    if n.length < 1e-12:
+        # tangent aligned with the chord: the arc degenerates to a line
+        return _lt.Edge.make_line(tuple(p1), tuple(p3))
+    u = t
+    v = n.normalized().cross(t)   # in-plane normal; d.dot(v) > 0 by triple product
+    du = d.dot(u)
+    dv = d.dot(v)
+    r = (du * du + dv * dv) / (2.0 * dv)   # always > 0 in this basis
+    c = p1 + v * r
+    phi1 = math.atan2((p1 - c).dot(v), (p1 - c).dot(u))
+    phi3 = math.atan2((p3 - c).dot(v), (p3 - c).dot(u))
+    sweep = (phi3 - phi1) % (2.0 * math.pi)
+    mid_phi = phi1 + sweep / 2.0
+    mid = c + (u * math.cos(mid_phi) + v * math.sin(mid_phi)) * abs(r)
+    return _lt.Edge.make_three_point_arc(tuple(p1), tuple(mid), tuple(p3))
+
+
+if not hasattr(_lt.Edge, 'make_tangent_arc'):
+    _lt.Edge.make_tangent_arc = classmethod(_edge_make_tangent_arc)
+
+
 def _face_is_coplanar(self, plane):
     """upstream Face.is_coplanar(plane): the face's plane equals the given
     plane geometrically (orientation-insensitive — _add_to_context flips
