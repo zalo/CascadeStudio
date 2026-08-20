@@ -645,12 +645,17 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
     let combined = objectsToJoin[0];
     if (objectsToJoin.length > 1) {
       try {
-        if (objectsToJoin.length === 2) {
-          combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[1], fuzzValue);
+        if (objectsToJoin.length <= 8) {
+          // Pairwise fuse for small counts: this kernel's LIST fuse can keep
+          // 3-operand coincident-surface unions unmerged (volume doubles —
+          // ppp0110's revolve+mirror), while the pairwise chain handles them.
+          for (let i = 1; i < objectsToJoin.length; i++) {
+            combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
+          }
         } else {
-          // ONE list-based fuse for 3+ operands, exactly like build123d's
-          // Shape.fuse (BRepAlgoAPI_Fuse + SetArguments/SetTools). The old
-          // pairwise chain re-ran the boolean against the GROWING result —
+          // ONE list-based fuse for MANY operands, like build123d's
+          // Shape.fuse (BRepAlgoAPI_Fuse + SetArguments/SetTools). The
+          // pairwise chain re-runs the boolean against the GROWING result —
           // O(n) kernel booleans of increasing complexity, minutes for the
           // 60-solid fuses upstream's builders produce in one _add_to_context.
           let fuse = new self.oc.BRepAlgoAPI_Fuse_1();
