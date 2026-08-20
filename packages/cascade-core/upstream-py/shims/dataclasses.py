@@ -13,7 +13,10 @@ def field(**k):
 def dataclass(*a, **k):
     def wrap(cls):
         anns = getattr(cls, '__annotations__', {}) or {}
-        names = list(anns.keys())
+        # MicroPython drops class-body annotations: the upstream-source
+        # loader's rewriteDataclassFields transform records the ordered
+        # field names in `_fields` instead
+        names = list(getattr(cls, '_fields', None) or anns.keys())
 
         def __init__(self, *args, **kw):
             for i, v in enumerate(args):

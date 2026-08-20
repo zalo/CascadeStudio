@@ -78,6 +78,30 @@ for _name in ('show', 'show_object', 'show_all', 'volume',
         setattr(_pkg, _name, getattr(_lt, _name))
 
 
+# lite operations with NO upstream Level-A counterpart that must also reach
+# an UPSTREAM builder context: call lite's (context-free here — lite's own
+# builder stack is empty in upstream mode), then hand the result to the
+# active upstream builder with the operation's combination mode.
+def _cs_builder_op(fn, mode):
+    def wrapped(*a, **k):
+        res = fn(*a, **k)
+        ctx = _common.Builder._current.get(None)
+        if ctx is not None and res is not None and \
+                getattr(res, 'topo', None) is not None:
+            ctx._add_to_context(res, mode=mode)
+        return res
+    return wrapped
+
+
+_pkg.draft = _cs_builder_op(_lt.draft, _enums.Mode.REPLACE)
+
+# upstream's Airfoil needs real numpy (an honest raise on this runtime);
+# lite's Airfoil is the VALIDATED numpy-free port — prefer it.
+_pkg.Airfoil = _lt.Airfoil
+
+
+
+
 # (BuildLine._sub_class stays upstream's own Curve: since the class-DAG
 #  unification lite's Curve carries BOTH identities natively — a Mixin1D for
 #  objects_curve's isinstance checks and a Compound for parent-builder
