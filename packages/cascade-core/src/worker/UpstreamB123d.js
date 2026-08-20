@@ -26,15 +26,38 @@
 //      (ONLY simple class patterns and the wildcard are supported; any other
 //      pattern raises at load time rather than mis-translating)
 
-/** Upstream Level-A modules, in dependency order. objects_part/objects_curve
- *  are the object layers over the builders; joints/pack/operations_sketch are
- *  stretch (registered when present, failures logged but non-fatal). */
-export const UPSTREAM_LEVEL_A = [
-  'build_enums', 'build_common', 'build_line', 'build_part', 'build_sketch',
-  'objects_part', 'objects_curve',
-];
-export const UPSTREAM_STRETCH = ['objects_sketch', 'operations_generic',
-  'operations_part', 'operations_sketch', 'joints', 'pack'];
+/** Which vendored upstream source tree is ACTIVE. This is the single
+ *  version-bump switch: the build copies vendor/<this>/ into
+ *  dist/upstream-b123d/upstream/, the unbuilt dev path fetches from it, and
+ *  the module lists below are keyed by it. Flip back to 'build123d-0.11.1'
+ *  to run the release snapshot. */
+export const ACTIVE_UPSTREAM_VENDOR = 'build123d-dev-44a8d7c1';
+
+/** Upstream Level-A modules, in dependency order, per vendored version.
+ *  objects_part/objects_curve are the object layers over the builders;
+ *  joints/pack/operations_sketch are stretch (registered when present,
+ *  failures logged but non-fatal). The dev branch (future 0.12) split
+ *  build_constants out of build_common and pack_utils out of pack. */
+const VENDOR_MODULES = {
+  'build123d-0.11.1': {
+    levelA: [
+      'build_enums', 'build_common', 'build_line', 'build_part',
+      'build_sketch', 'objects_part', 'objects_curve',
+    ],
+    stretch: ['objects_sketch', 'operations_generic', 'operations_part',
+      'operations_sketch', 'joints', 'pack'],
+  },
+  'build123d-dev-44a8d7c1': {
+    levelA: [
+      'build_enums', 'build_constants', 'build_common', 'build_line',
+      'build_part', 'build_sketch', 'objects_part', 'objects_curve',
+    ],
+    stretch: ['objects_sketch', 'operations_generic', 'operations_part',
+      'operations_sketch', 'joints', 'pack_utils', 'pack'],
+  },
+};
+export const UPSTREAM_LEVEL_A = VENDOR_MODULES[ACTIVE_UPSTREAM_VENDOR].levelA;
+export const UPSTREAM_STRETCH = VENDOR_MODULES[ACTIVE_UPSTREAM_VENDOR].stretch;
 
 // --------------------------------------------------------------------- //
 // Source transforms                                                      //

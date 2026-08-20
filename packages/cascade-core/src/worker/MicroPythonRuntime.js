@@ -33,7 +33,7 @@
 //    and remapped via sys.modules; the rest import normally from /lib.
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
-import { bootstrapUpstreamB123d } from './UpstreamB123d.js';
+import { bootstrapUpstreamB123d, ACTIVE_UPSTREAM_VENDOR } from './UpstreamB123d.js';
 
 /** MicroPython GC heap. Fixed at boot (it does not grow); build123d-lite +
  *  a typical model's Python-side bookkeeping fit comfortably — shapes
@@ -334,7 +334,7 @@ async function _bootstrap(srcKind) {
       if (isBuilt) {
         url = new URL('./upstream-b123d/' + rel, import.meta.url).href;
       } else if (rel.indexOf('upstream/') === 0) {
-        url = new URL('../../vendor/build123d-0.11.1/' + rel.slice(9),
+        url = new URL('../../vendor/' + ACTIVE_UPSTREAM_VENDOR + '/' + rel.slice(9),
           import.meta.url).href;
       } else {
         url = new URL('../../upstream-py/' + rel, import.meta.url).href;

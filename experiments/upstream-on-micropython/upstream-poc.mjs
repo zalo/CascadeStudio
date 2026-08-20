@@ -17,8 +17,12 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const MP_DIR = join(ROOT, 'node_modules', '@micropython', 'micropython-webassembly-pyscript');
+// default: the ACTIVE vendored upstream tree (the exact bytes that ship)
+const { ACTIVE_UPSTREAM_VENDOR } = await import(
+  join(dirname(fileURLToPath(import.meta.url)), '..', '..',
+    'packages', 'cascade-core', 'src', 'worker', 'UpstreamB123d.js'));
 const B123D_SRC = process.env.B123D_SRC ||
-  join(process.env.HOME, 'Desktop', 'ocjs-deps', 'b123d-ref-venv', 'lib', 'python3.12', 'site-packages', 'build123d');
+  join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'vendor', ACTIVE_UPSTREAM_VENDOR);
 
 // ---------------------------------------------------------------------- //
 // worker-global shim (the node stand-in for the Web Worker's `self`)      //

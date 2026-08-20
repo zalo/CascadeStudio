@@ -125,4 +125,5 @@ chess-pawn*.png
 # runtime's default Python source layer and must exist on fresh checkouts.
 vendor/*
 !vendor/build123d-0.11.1/
+!vendor/build123d-dev-44a8d7c1/
 __pycache__/
