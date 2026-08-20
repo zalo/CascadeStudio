@@ -271,27 +271,25 @@ objects_1d, filter_all_edges_circle, sort_axis, sm_hanger, tips/b04) — the
 documented COMPROMISE(edge-orientation)/(traversal-order)/(triad-labels)
 items, not MicroPython artifacts.
 
-### The 128 MB question
+### The 128 MB question — ANSWERED (2026-08-19, INITIAL_MEMORY=32MB fork rebuild)
 
-The worker's memory after evaluating the starter model is, exactly:
+The opencascade.js fork was rebuilt with `-sINITIAL_MEMORY=32MB` (was 100MB;
+growth to 4GB was already enabled — fork commit ddabdb0, otherwise
+byte-identical bindings/d.ts). Measured on the rebuilt kernel:
 
-- OCCT wasm linear memory: **100.0 MB** — and that is the module's
-  *declared initial memory* (1600 wasm pages; growable to 4 GB). The starter
-  never grows it, so the actual OCCT working set of a basic model is well
-  below 100 MB.
-- MicroPython interpreter: **20.4 MB** (vs Pyodide's 45.3 MB; Brython's
-  footprint lives in the JS heap and is not separately measurable, but its
-  1.38 MB of compiled-Python JS plus per-object overhead is believed larger).
-- Everything else (worker JS, mesh buffers): single-digit MB for basic models.
-
-So today's artifacts land at **~120 MB + JS overhead — borderline** for a
-128 MB budget. The decisive lever is NOT the interpreter (already minimized):
-it is OCCT's `INITIAL_MEMORY=100MB` build setting on the opencascade.js fork.
-Memory growth is already enabled, so rebuilding the fork with e.g.
-INITIAL_MEMORY=32MB would keep every current workload working (it grows on
-demand) and put a MicroPython basic-model worker at **~55-60 MB total** —
-comfortably inside 128 MB. That is a fork-rebuild knob, recorded here as the
-follow-up.
+- **Basic models: ~52 MB wasm total** — OCCT stays at its 32.0 MB floor
+  (the starter AND a 54-boolean grid-of-holes with fillets never grow it)
+  plus MicroPython's 19.5 MB. Comfortably inside a 128 MB budget with
+  2.4x headroom for the JS runtime around it.
+- **Growth works on demand**: the corpus's heaviest script
+  (examples/heat_exchanger) grows OCCT to 165.6 MB and the MicroPython heap
+  to 78.2 MB (the wasm port's GC heap grows past its initial heapsize) —
+  such models exceed 128 MB on ANY configuration and are out of the budget
+  question's scope. It also runs FASTER here than on Brython (34 s vs ~55 s
+  despite settrace).
+- **Zero regressions from the smaller floor**: full 94-test suite green and
+  the full 232-script harness classifies identically
+  (205/10/5/2 with 4-page contention; heat_exchanger passes solo).
 
 ### Porting notes (what the shared Python source must avoid)
 
