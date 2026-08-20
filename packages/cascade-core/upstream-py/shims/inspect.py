@@ -1,15 +1,21 @@
-# `inspect` shim over the settrace current-frame tracker the MicroPython
-# runtime already maintains (browser._cur): currentframe() must return the
-# CALLER's frame, which is exactly f_back of our own frame (our own frame is
-# the latest 'call' event the tracer saw). Frame objects are identity-stable
-# in MicroPython, so build_common's same-scope builder rule
+# `inspect` shim: currentframe() must return the CALLER's frame, which is
+# exactly f_back of our own frame. Preferred path: sys._getframe (the custom
+# micropython-cs interpreter build — live frames, no tracing). Fallback
+# (stock settrace artifacts): the settrace current-frame tracker the runtime
+# already maintains (browser._cur; our own frame is the latest 'call' event
+# the tracer saw). Frame objects are identity-stable in MicroPython on both
+# paths, so build_common's same-scope builder rule
 # (`parent._python_frame == frame.f_back`) works unchanged.
+import sys as _sys
 import browser as _browser
 
-
-def currentframe():
-    f = _browser._cur[0]
-    return f.f_back if f is not None else None
+if hasattr(_sys, '_getframe'):
+    def currentframe():
+        return _sys._getframe(0).f_back
+else:
+    def currentframe():
+        f = _browser._cur[0]
+        return f.f_back if f is not None else None
 
 
 def stack(*a, **k):

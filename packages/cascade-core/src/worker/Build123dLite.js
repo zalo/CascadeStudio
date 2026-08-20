@@ -353,9 +353,11 @@ def _num(x):
     return float(x)
 
 
-# MicroPython's list sort is NOT stable; build123d's selector semantics
+# STOCK MicroPython's list sort is NOT stable; build123d's selector semantics
 # (chained sort_by, group_by tie order) require CPython stability, so probe
-# once and decorate with the original index when the native sort scrambles
+# once and decorate with the original index when the native sort scrambles.
+# On the custom micropython-cs interpreter build the native sort IS a stable
+# merge sort, the probe passes, and the fast native path below is taken
 _SORT_PROBE = sorted([(i % 2, i) for i in range(32)], key=lambda t: t[0])
 _SORT_IS_STABLE = [t[1] for t in _SORT_PROBE] == \
     [i for i in range(32) if i % 2 == 0] + [i for i in range(32) if i % 2 == 1]
@@ -4139,8 +4141,13 @@ class Vertex(Shape):
 
     def _pos_key(self):
         # INTEGER key tuple: micron-rounded position. Ints, not floats —
-        # MicroPython set probing over float-tuple keys degrades ~100x
-        # (a 512-vertex set() took 35 s with float keys, 0.4 s with ints).
+        # STOCK MicroPython set probing over float-tuple keys degrades ~100x
+        # (a 512-vertex set() took 35 s with float keys, 0.4 s with ints):
+        # its fallback float hash truncates to int, collapsing every
+        # fractional coordinate onto a handful of buckets. The custom
+        # micropython-cs interpreter build fixes float hashing (high-quality
+        # hash + high-bits fold), making this belt-and-braces there — kept
+        # because integer keys are exact, cheap, and stock-artifact safe.
         return (int(round(self.X * 1e6)), int(round(self.Y * 1e6)),
                 int(round(self.Z * 1e6)))
 

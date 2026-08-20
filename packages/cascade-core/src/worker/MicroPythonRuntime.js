@@ -8,15 +8,19 @@
 // use case is headless/constrained execution, e.g. 128 MB-budget workers).
 //
 // Portability notes (each verified empirically — see the PR/commit message):
-//  * The settrace wasm VARIANT is used so the two runtime hooks work:
-//    `getPythonUserLine` (CacheOp's line tagging) and `_pythonCallerFrame`
-//    (Builder.__enter__'s same-stack-frame rule). MicroPython has no
-//    sys._getframe; a sys.settrace handler tracks the CURRENT frame on
-//    'call'/'line' events and the hooks walk the live `f_back` chain from
-//    there. (A maintained frame STACK would leak: MicroPython fires no
-//    'return' event when an exception unwinds a frame.) Frame objects are
-//    identity-stable, so lite's `is` comparison works. Tracing costs ~3.5x
-//    on pure-Python loops; model time inside OCCT is unaffected.
+//  * TWO artifact pairs are supported, feature-detected at boot: the
+//    PREFERRED custom-patched micropython-cs build (vendored, has
+//    sys._getframe — the hooks below walk live frames with NO trace
+//    function and pure-Python code runs untaxed) and the stock npm settrace
+//    artifacts as fallback. On the fallback, the two runtime hooks
+//    (`getPythonUserLine` — CacheOp's line tagging — and
+//    `_pythonCallerFrame` — Builder.__enter__'s same-stack-frame rule) ride
+//    a sys.settrace handler that tracks the CURRENT frame on 'call'/'line'
+//    events and walks the live `f_back` chain from there. (A maintained
+//    frame STACK would leak: MicroPython fires no 'return' event when an
+//    exception unwinds a frame.) Frame objects are identity-stable on both
+//    paths, so lite's `is` comparison works. Tracing costs ~3.5x on
+//    pure-Python loops (custom build: ~0); OCCT time is unaffected.
 //  * JS exceptions MUST NOT cross the FFI into the VM: a `throw` unwinds the
 //    wasm frames without running MicroPython's nlr cleanup and the error
 //    escapes every Python `except`. So every worker-library call goes
@@ -49,8 +53,21 @@ import jsffi
 from jsworker import self as _js
 
 # ---------------------------------------------------------------------- #
-# Current-frame tracking (settrace wasm variant).                         #
+# Frame access for the two runtime hooks (getPythonUserLine and           #
+# _pythonCallerFrame).                                                    #
+#                                                                         #
+# Preferred path: sys._getframe (the custom micropython-cs interpreter    #
+# patch) — frames come straight off the live code-state chain, NO trace   #
+# function is installed, and pure-Python code runs at full speed.         #
+# Fallback path (stock npm settrace artifacts): a sys.settrace handler    #
+# tracks the CURRENT frame on 'call'/'line' events and the hooks walk     #
+# f_back from there.  Both paths start the walk at OUR OWN frame          #
+# (sys._getframe(0) is exactly what _cur[0] holds after our own 'call'    #
+# event fires), so the two implementations are semantically identical:    #
+# same caller-frame identity ('is') rule, same LIVE f_lineno.             #
 # ---------------------------------------------------------------------- #
+_HAS_GETFRAME = hasattr(sys, '_getframe')
+
 _cur = [None]
 
 def _cs_trace(frame, event, arg):
@@ -59,24 +76,46 @@ def _cs_trace(frame, event, arg):
     return _cs_trace
 
 def _cs_install_trace():
-    sys.settrace(_cs_trace)
+    # With sys._getframe there is nothing to install: the interpreter
+    # maintains the code-state chain unconditionally and building frames is
+    # on demand, so tracing (and its per-line callback cost) is not needed.
+    if not _HAS_GETFRAME:
+        sys.settrace(_cs_trace)
 
-def _cs_user_line():
-    """Innermost 'main' (user-module) frame's current line, or 0."""
-    f = _cur[0]
-    while f is not None:
-        if f.f_code.co_filename == 'main':
-            return f.f_lineno
-        f = f.f_back
-    return 0
+if _HAS_GETFRAME:
+    def _cs_user_line():
+        """Innermost 'main' (user-module) frame's current line, or 0."""
+        f = sys._getframe(0)     # our own frame; f_lineno is live
+        while f is not None:
+            if f.f_code.co_filename == 'main':
+                return f.f_lineno
+            f = f.f_back
+        return 0
 
-def _cs_caller_frame():
-    """Frame of the code that called the Python function that called us
-    (Brython: B.frame_obj.prev — used by Builder.__enter__)."""
-    f = _cur[0]              # our own frame (set by our 'call'/'line' event)
-    if f is not None and f.f_back is not None:
-        return f.f_back.f_back
-    return None
+    def _cs_caller_frame():
+        """Frame of the code that called the Python function that called us
+        (Brython: B.frame_obj.prev — used by Builder.__enter__)."""
+        f = sys._getframe(0)     # our own frame
+        if f.f_back is not None:
+            return f.f_back.f_back
+        return None
+else:
+    def _cs_user_line():
+        """Innermost 'main' (user-module) frame's current line, or 0."""
+        f = _cur[0]
+        while f is not None:
+            if f.f_code.co_filename == 'main':
+                return f.f_lineno
+            f = f.f_back
+        return 0
+
+    def _cs_caller_frame():
+        """Frame of the code that called the Python function that called us
+        (Brython: B.frame_obj.prev — used by Builder.__enter__)."""
+        f = _cur[0]          # our own frame (set by our 'call'/'line' event)
+        if f is not None and f.f_back is not None:
+            return f.f_back.f_back
+        return None
 
 # ---------------------------------------------------------------------- #
 # The worker-global wrapper lite sees as 'w'.                             #
@@ -242,15 +281,49 @@ async function _bootstrap(srcKind) {
   const isBuilt = typeof ESBUILD !== 'undefined';
   // Node harnesses (experiments/upstream-on-micropython) run this module
   // outside a worker: they pre-set the interpreter locations explicitly.
+  // Otherwise PREFER the custom-patched micropython-cs artifacts (vendored
+  // in packages/cascade-core/vendor/micropython-cs/, copied to dist as
+  // micropython-cs.mjs/.wasm when present — sys._getframe, nested-tuple
+  // isinstance, distributed float hash, stable sort; see its
+  // PROVENANCE.md), falling back to the stock npm settrace artifacts so a
+  // checkout without the vendored pair keeps working.
   const locate = self._csMicroPythonLocate || null;
-  const base = isBuilt
+  const stockBase = isBuilt
     ? './'
     : '../../node_modules/@micropython/micropython-webassembly-pyscript/';
-  const mjsURL = locate ? locate.mjsURL
-    : new URL(base + 'micropython.mjs', import.meta.url).href;
-  const wasmURL = locate ? locate.wasmURL
-    : new URL(base + 'micropython-settrace.wasm', import.meta.url).href;
-  const mod = await import(/* webpackIgnore: true */ mjsURL);
+  const customBase = isBuilt ? './' : '../../vendor/micropython-cs/';
+  const candidates = locate
+    ? [{ mjs: locate.mjsURL, wasm: locate.wasmURL, kind: locate.kind || 'located' }]
+    : [
+        {
+          mjs: new URL(customBase + (isBuilt ? 'micropython-cs.mjs' : 'micropython.mjs'), import.meta.url).href,
+          wasm: new URL(customBase + (isBuilt ? 'micropython-cs.wasm' : 'micropython.wasm'), import.meta.url).href,
+          kind: 'custom',
+        },
+        {
+          mjs: new URL(stockBase + 'micropython.mjs', import.meta.url).href,
+          wasm: new URL(stockBase + 'micropython-settrace.wasm', import.meta.url).href,
+          kind: 'stock-settrace',
+        },
+      ];
+  let mod = null, wasmURL = null, artifactKind = null, importErr = null;
+  for (const cand of candidates) {
+    try {
+      mod = await import(/* webpackIgnore: true */ cand.mjs);
+      wasmURL = cand.wasm;
+      artifactKind = cand.kind;
+      break;
+    } catch (e) {
+      importErr = e;
+      if (cand.kind === 'custom') {
+        console.log('[pyruntime] micropython: custom micropython-cs artifacts '
+          + 'not present, using the stock settrace artifacts');
+      }
+    }
+  }
+  if (!mod) {
+    throw importErr || new Error('could not load any MicroPython artifacts');
+  }
   const load = (mod && mod.loadMicroPython) || self.loadMicroPython;
   if (!load) {
     throw new Error('micropython.mjs did not provide loadMicroPython');
@@ -395,8 +468,17 @@ async function _bootstrap(srcKind) {
   };
 
   const tDone = performance.now();
+  // Which artifact pair booted ('custom' = the patched micropython-cs build)
+  // and whether the sys._getframe fast path is active (no trace function) —
+  // exposed for tests/benchmarks.
+  let hasGetframe = false;
+  try { hasGetframe = !!br._HAS_GETFRAME; } catch (e) { /* keep false */ }
+  self._csMpArtifact = artifactKind;
+  self._csMpHasGetframe = hasGetframe;
   self._pythonBootTiming = {
     runtime: 'micropython',
+    artifact: artifactKind,
+    getframe: hasGetframe,
     pySrc: effectiveSrc,
     fetchMs: +(tFetched - t0).toFixed(1),
     initMs: +(tInitialized - tFetched).toFixed(1),
