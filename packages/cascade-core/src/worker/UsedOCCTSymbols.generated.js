@@ -6,6 +6,7 @@ export const USED_OCCT_SYMBOLS = [
   "BRepAdaptor_Curve_2",
   "BRepAdaptor_Surface_2",
   "BRepAlgoAPI_Cut_1",
+  "BRepAlgoAPI_Fuse_1",
   "BRepAlgoAPI_Section_3",
   "BRepAlgoAPI_Section_5",
   "BRepBndLib",

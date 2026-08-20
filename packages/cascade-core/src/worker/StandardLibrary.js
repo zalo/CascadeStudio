@@ -390,13 +390,19 @@ function DirectChildren(shape) {
     // TopoDS_Shape, but the typed bindings (normal_at & co.) require the
     // concrete TopoDS_Face/Edge/... exactly like the ForEach* explorers.
     const t = v.ShapeType().value;
-    if (t === 2) { out.push(oc.TopoDS_Cast.Solid_1(v)); }
-    else if (t === 3) { out.push(oc.TopoDS_Cast.Shell_1(v)); }
-    else if (t === 4) { out.push(oc.TopoDS_Cast.Face_1(v)); }
-    else if (t === 5) { out.push(oc.TopoDS_Cast.Wire_1(v)); }
-    else if (t === 6) { out.push(oc.TopoDS_Cast.Edge_1(v)); }
-    else if (t === 7) { out.push(oc.TopoDS_Cast.Vertex_1(v)); }
-    else { out.push(v); } // nested compounds stay generic (no cast bound)
+    let child;
+    if (t === 2) { child = oc.TopoDS_Cast.Solid_1(v); }
+    else if (t === 3) { child = oc.TopoDS_Cast.Shell_1(v); }
+    else if (t === 4) { child = oc.TopoDS_Cast.Face_1(v); }
+    else if (t === 5) { child = oc.TopoDS_Cast.Wire_1(v); }
+    else if (t === 6) { child = oc.TopoDS_Cast.Edge_1(v); }
+    else if (t === 7) { child = oc.TopoDS_Cast.Vertex_1(v); }
+    else { child = v; } // nested compounds stay generic (no cast bound)
+    // see FaceSelector/EdgeSelector: raw sub-shapes need a stable hash for
+    // CacheOp — without one, JSON-hashing strips the ptr and every child
+    // hashes IDENTICALLY, so ops on sibling children all cache-hit the first
+    if (child.hash === undefined) { child.hash = oc.OCJS.HashCode(child, 100000000); }
+    out.push(child);
   }
   return out;
 }
@@ -638,10 +644,36 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   let curUnion = self.CacheOp(arguments, "Union", () => {
     let combined = objectsToJoin[0];
     if (objectsToJoin.length > 1) {
-      for (let i = 0; i < objectsToJoin.length; i++) {
-        if (i > 0) {
-          combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
+      try {
+        if (objectsToJoin.length <= 8) {
+          // Pairwise fuse for small counts: this kernel's LIST fuse can keep
+          // 3-operand coincident-surface unions unmerged (volume doubles —
+          // ppp0110's revolve+mirror), while the pairwise chain handles them.
+          for (let i = 1; i < objectsToJoin.length; i++) {
+            combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
+          }
+        } else {
+          // ONE fuse against a COMPOUND of the remaining operands for MANY
+          // operands, processed in BATCHES of 8 (this kernel's BOP cost explodes
+          // superlinearly with single-op tool complexity: one 64-box tool took 76 s
+          // where four 16-box tools took under a second; and the one-at-a-time
+          // chain re-runs the boolean against the GROWING result). Each batch is
+          // fused as ONE compound tool, the single boolean lite's add() always did.
+          for (let i = 1; i < objectsToJoin.length; i += 8) {
+            let batch = objectsToJoin.slice(i, i + 8);
+            let tool = batch.length === 1 ? batch[0] : MakeCompound(batch);
+            combined = self.oc.OCJS.BooleanFuse(combined, tool, fuzzValue);
+          }
         }
+      } catch (fuseErr) {
+        // Same 8.0.1 coplanar-contact family as the operand-drop below, but
+        // surfacing as a RAISE (e.g. 'gp_Vec::Normalize() - vector has zero
+        // norm' when solids share internal walls). The General-Fuse SPLIT
+        // phase is correct on the same inputs — recover from its partition.
+        let rebuilt = _rebuildFuseFromGF(objectsToJoin);
+        if (!rebuilt) { throw fuseErr; }
+        console.log("Union: BRepAlgoAPI_Fuse raised on these operands (known OCCT 8.0.1 wasm fault family); rebuilt the union from the General-Fuse partition.");
+        combined = rebuilt;
       }
     }
 
@@ -654,12 +686,39 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
       if (rebuilt && _quickVolume(rebuilt) >= maxInput * 0.999 - 1e-9) {
         console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); rebuilt the union from the General-Fuse partition.");
         combined = rebuilt;
+      } else {
+        // Third try: the LIST-based BRepAlgoAPI_Fuse takes a different
+        // kernel route than the fork's OCJS.BooleanFuse and sometimes
+        // survives inputs both of the above drop (Buffer_Stand's rib).
+        try {
+          let fuse = new self.oc.BRepAlgoAPI_Fuse_1();
+          let argList = new self.oc.TopTools_ListOfShape();
+          argList.Append(objectsToJoin[0]);
+          let toolList = new self.oc.TopTools_ListOfShape();
+          for (let i = 1; i < objectsToJoin.length; i++) { toolList.Append(objectsToJoin[i]); }
+          fuse.SetArguments(argList);
+          fuse.SetTools(toolList);
+          fuse.Build(new self.oc.Message_ProgressRange_1());
+          let listFused = fuse.Shape();
+          if (_quickVolume(listFused) >= maxInput * 0.999 - 1e-9) {
+            console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); recovered with the list-based fuse.");
+            combined = listFused;
+          }
+        } catch (e) { /* keep the (guarded) original result */ }
       }
     }
 
     if (!keepEdges) {
-      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
-      combined = fusor.Shape();
+      // Same coplanar-contact fault family: UnifySameDomain can RAISE
+      // ('gp_Vec::Normalize() - vector has zero norm') while merging the
+      // shared internal walls a fuse of exactly-tiling solids leaves behind.
+      // The un-unified result is geometrically correct — keep it.
+      try {
+        let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
+        combined = fusor.Shape();
+      } catch (unifyErr) {
+        console.log("Union: UnifySameDomain raised on this result (known OCCT 8.0.1 wasm fault family); keeping the un-unified fuse result.");
+      }
     }
 
     return combined;
@@ -781,10 +840,24 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
 
 // --- Extrusion and Shape Generation ---
 
+/** A REVERSED profile face (build123d's BuildSketch flips up-side-down faces
+ *  with Complemented) sweeps into an INSIDE-OUT solid that this kernel's
+ *  booleans treat as its complement (cuts silently no-op, subtracts ADD).
+ *  Sweep the FORWARD face instead - same geometry, valid solid. */
+function _forwardProfile(profile) {
+  if (profile.ShapeType && profile.ShapeType().value === 4 &&
+      profile.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED) {
+    let fwd = self.oc.TopoDS_Cast.Face_1(profile.Complemented());
+    fwd.hash = profile.hash;
+    return fwd;
+  }
+  return profile;
+}
+
 function Extrude(face, direction, keepFace) {
   if (!face || face.IsNull()) { console.error("Extrude: input shape is null! Was it consumed by a previous operation? Use keepFace/keepShape to preserve shapes for reuse."); return face; }
   let curExtrusion = self.CacheOp(arguments, "Extrude", () => {
-    return new self.oc.BRepPrimAPI_MakePrism_1(face,
+    return new self.oc.BRepPrimAPI_MakePrism_1(_forwardProfile(face),
       new self.oc.gp_Vec_4(direction[0], direction[1], direction[2]), false, true).Shape();
   });
 
@@ -1055,6 +1128,7 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
     direction = [-direction[0], -direction[1], -direction[2]];
   }
   let curRevolution = self.CacheOp(arguments, "Revolve", () => {
+    shape = _forwardProfile(shape);
     if (degrees >= 360.0) {
       return new self.oc.BRepPrimAPI_MakeRevol_2(shape,
         new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0),
@@ -3940,6 +4014,7 @@ function TaperExtrude(face, height, angleDeg, keepFace) {
   if (!face || face.IsNull()) { console.error("TaperExtrude: input face is null!"); return face; }
   let result = self.CacheOp(arguments, "TaperExtrude", () => {
     let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+    f = _forwardProfile(f);
     // LocOpe_DPrism measures Height along the tapered slant; scale so the
     // resulting solid is `height` tall like build123d's extrude(taper=)
     let slant = height / Math.cos(angleDeg * (Math.PI / 180));
@@ -4339,6 +4414,7 @@ class CascadeStudioStandardLibrary {
     self._faceSurfaceType = _faceSurfaceType;
     self._faceOuterWire = _faceOuterWire;
     self._sameShape = _sameShape;
+    self._shapeHashCode = (shape) => self.oc.OCJS.HashCode(shape, 2147483647);
     self._edgePairContinuity = _edgePairContinuity;
     self._shapeOBB = _shapeOBB;
     self._obbIsOut = _obbIsOut;
