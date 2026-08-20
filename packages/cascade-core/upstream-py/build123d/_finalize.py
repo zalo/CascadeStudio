@@ -112,6 +112,46 @@ def _cs_airfoil(airfoil_code, n_points=50, finite_te=False,
 _pkg.Airfoil = _cs_airfoil
 
 
+# upstream's DoubleTangentArc leaves the tangent TARGET over-extended
+# ("beyond the intersection") and relies on native wire fixing to trim it at
+# face time; this kernel's ShapeFix can't modify topology (the mode setters
+# are unbound), so use lite's validated solver AND trim the target inside the
+# active upstream BuildLine, exactly like lite does in its own builders
+# (COMPROMISE(double-tangent-arc)).
+def _cs_double_tangent_arc(pnt, tangent, other, keep=None, mode=None):
+    lk = getattr(_lt.Keep, getattr(keep, 'name', 'TOP'), _lt.Keep.TOP)
+    arc = _lt.DoubleTangentArc(pnt, tangent, other, keep=lk,
+                               mode=_lt.Mode.PRIVATE)
+    ctx = _common.Builder._current.get(None)
+    if ctx is not None and getattr(ctx, '_tag', '') == 'BuildLine' and \
+            ctx._obj is not None and getattr(ctx._obj, 'topo', None) is not None:
+        try:
+            p1 = arc @ 1
+            other_keys = set()
+            for oe in other.edges():
+                other_keys.add(_lt._shape_key(oe, 'edge'))
+            rebuilt = []
+            for e in ctx._obj.edges():
+                if _lt._shape_key(e, 'edge') in other_keys:
+                    try:
+                        u = e.param_at_point(tuple(p1))
+                        if u > 1e-9:
+                            e = e.trim(0.0, u)
+                    except Exception:
+                        pass
+                rebuilt.append(e)
+            ctx._obj = type(ctx._obj)(rebuilt)
+        except Exception:
+            pass
+    if ctx is not None:
+        ctx._add_to_context(*arc.edges(),
+                            mode=mode if mode is not None else _enums.Mode.ADD)
+    return arc
+
+
+_pkg.DoubleTangentArc = _cs_double_tangent_arc
+
+
 
 
 # (BuildLine._sub_class stays upstream's own Curve: since the class-DAG

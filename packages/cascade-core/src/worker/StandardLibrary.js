@@ -840,19 +840,24 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
 
 // --- Extrusion and Shape Generation ---
 
+/** A REVERSED profile face (build123d's BuildSketch flips up-side-down faces
+ *  with Complemented) sweeps into an INSIDE-OUT solid that this kernel's
+ *  booleans treat as its complement (cuts silently no-op, subtracts ADD).
+ *  Sweep the FORWARD face instead - same geometry, valid solid. */
+function _forwardProfile(profile) {
+  if (profile.ShapeType && profile.ShapeType().value === 4 &&
+      profile.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED) {
+    let fwd = self.oc.TopoDS_Cast.Face_1(profile.Complemented());
+    fwd.hash = profile.hash;
+    return fwd;
+  }
+  return profile;
+}
+
 function Extrude(face, direction, keepFace) {
   if (!face || face.IsNull()) { console.error("Extrude: input shape is null! Was it consumed by a previous operation? Use keepFace/keepShape to preserve shapes for reuse."); return face; }
   let curExtrusion = self.CacheOp(arguments, "Extrude", () => {
-    // A REVERSED profile face (build123d's BuildSketch flips up-side-down
-    // faces with Complemented) prisms into an INSIDE-OUT solid that this
-    // kernel's booleans treat as its complement (cuts silently no-op).
-    // Extrude the FORWARD face — same geometry, valid solid.
-    let profile = face;
-    if (profile.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED) {
-      profile = profile.Complemented();
-      if (profile.ShapeType().value === 4) { profile = self.oc.TopoDS_Cast.Face_1(profile); }
-    }
-    return new self.oc.BRepPrimAPI_MakePrism_1(profile,
+    return new self.oc.BRepPrimAPI_MakePrism_1(_forwardProfile(face),
       new self.oc.gp_Vec_4(direction[0], direction[1], direction[2]), false, true).Shape();
   });
 
@@ -1123,6 +1128,7 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
     direction = [-direction[0], -direction[1], -direction[2]];
   }
   let curRevolution = self.CacheOp(arguments, "Revolve", () => {
+    shape = _forwardProfile(shape);
     if (degrees >= 360.0) {
       return new self.oc.BRepPrimAPI_MakeRevol_2(shape,
         new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0),
@@ -1872,6 +1878,7 @@ function FilletFace2D(face, radius, points, keepFace) {
   if (!face || face.IsNull()) { console.error("FilletFace2D: input face is null!"); return face; }
   let result = self.CacheOp(arguments, "FilletFace2D", () => {
     let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+    f = _forwardProfile(f);
     let mkFillet = new self.oc.BRepFilletAPI_MakeFillet2d_2(f);
     let seen = {};
     let added = 0;
@@ -4008,6 +4015,7 @@ function TaperExtrude(face, height, angleDeg, keepFace) {
   if (!face || face.IsNull()) { console.error("TaperExtrude: input face is null!"); return face; }
   let result = self.CacheOp(arguments, "TaperExtrude", () => {
     let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+    f = _forwardProfile(f);
     // LocOpe_DPrism measures Height along the tapered slant; scale so the
     // resulting solid is `height` tall like build123d's extrude(taper=)
     let slant = height / Math.cos(angleDeg * (Math.PI / 180));
