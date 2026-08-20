@@ -37,6 +37,33 @@ topo_explore_connected_edges = _lt.topo_explore_connected_edges
 SkipClean = getattr(_lt, 'SkipClean', None)
 
 
+# ---- upstream result-class semantics ---------------------------------------
+# Upstream's Shape.moved/located and `loc * shape` PRESERVE the class (a moved
+# Face is a Face); lite's algebra convention remaps operation results via its
+# module-global _wrap_like (Face->Sketch, Edge->Curve, Vertex->Part). Upstream
+# Level-A dispatches on the class AFTER transforms (add()'s isinstance(obj,
+# Face) after obj.moved(rotation), pending-edge batching, solid extraction), so
+# rebind _wrap_like (lite resolves the global at call time) to a
+# class-preserving version at upstream boot. Default modes never load this.
+_orig_wrap_like = _lt._wrap_like
+
+
+def _cs_wrap_like(obj, topo):
+    cls = type(obj) if isinstance(obj, _lt.Shape) else _lt.Part
+    res = object.__new__(cls)
+    _lt.Shape.__init__(res, topo)
+    if isinstance(res, _lt.Mixin1D):
+        res._specs = list(getattr(obj, '_specs', []) or [])
+    if cls is _lt.Vertex and topo is not None:
+        _p = _w._vertexPoint(topo)
+        res.X, res.Y, res.Z = _p[0], _p[1], _p[2]
+    return res
+
+
+if _lt._wrap_like is _orig_wrap_like:
+    _lt._wrap_like = _cs_wrap_like
+
+
 # ---- ported upstream helpers ----------------------------------------------
 def tuplify(obj, dim):
     """Create a size tuple (upstream topology.utils.tuplify, verbatim port)."""
