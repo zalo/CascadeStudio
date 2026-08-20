@@ -244,14 +244,20 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   run-lite.mjs/probe.mjs (and when harness results look implausibly clean,
   run with `CS_DEBUG_PYSRC=1` and check the '[debug] page booted pySrc='
   lines — a stale http-server on the harness port once masked the whole
-  upstream leg). Harness (2026-08-19, 32MB kernel): micropython+upstream
-  classifies **162 PASS / 31 MISMATCH / 25 ERROR / 4 TIMEOUT** of the 222
-  scored scripts (borderline scripts flap ±3 under 4-page contention) vs
-  lite's 206 PASS — the honest shortfall list (per-script, with causes)
-  lives in `experiments/upstream-on-micropython/INVENTORY.md` §H, whose
-  A-section (class-DAG) is CLOSED by the unification; the remainder is
-  seam-method coverage and per-script semantics, not architecture. Compare
-  against lite with
+  upstream leg). Harness (2026-08-20, 32MB kernel, post grind round):
+  micropython+upstream classifies **205 PASS / 10 MISMATCH / 5 ERROR /
+  2 TIMEOUT** of the 222 scored scripts — effectively LITE PARITY (lite:
+  206/10/5/1; the failure sets overlap but differ: upstream additionally
+  PASSES sort_axis, toy_truck and ttt-ppp0110, and additionally fails
+  bicycle_tire (+0.84%, thicken band), ex08_algebra (face-winding
+  orientation family), Buffer_Stand (fuse-drop kernel fault on ITS
+  construction), sm_hanger as ERROR instead of MISMATCH, and
+  heat_exchanger flaps TIMEOUT under 4-page contention; both LITE
+  baselines stay per-script IDENTICAL to the committed 206/10/5/1). The
+  honest shortfall list (per-script, with causes) lives in
+  `experiments/upstream-on-micropython/INVENTORY.md` §H; the A-section
+  (class-DAG) is CLOSED by the unification and the 2026-08-20 grind round
+  closed the seam-method and semantics gaps. Compare against lite with
   `experiments/upstream-on-micropython/compare-examples.mjs`.
 - **Lite's topology class DAG IS upstream's** (class-DAG unification,
   2026-08-19): `Wire` is a real class (distinct from `Edge` and `Curve`;

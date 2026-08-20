@@ -317,8 +317,11 @@ boot (Python-source registration), ~2x on the mid-weight model's
 interpreter-side time (validation layers + settrace) and one 14 MB GC-heap
 growth step under sustained upstream bookkeeping — 68.2 MB total for the
 grid model, still comfortably inside the budget. Correctness state of the
-upstream layer (162/222 vs lite's 206/222) is recorded in
-`experiments/upstream-on-micropython/INVENTORY.md` §H.
+upstream layer (2026-08-20 grind round: **205/222 PASS vs lite's 206/222**,
+per-script deltas: upstream additionally passes sort_axis/toy_truck/ppp0110
+and additionally fails bicycle_tire/ex08_algebra/Buffer_Stand, sm_hanger as
+ERROR, heat_exchanger as a contention TIMEOUT) is recorded in
+`experiments/upstream-on-micropython/INVENTORY.md` §H/§I.
 
 ### Porting notes (what the shared Python source must avoid)
 

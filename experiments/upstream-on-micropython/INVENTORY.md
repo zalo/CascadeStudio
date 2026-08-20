@@ -227,6 +227,59 @@ Honest REMAINING list (26 ERROR + 31 MISMATCH, per the final run):
   group_axis −30%, ex35 +22%, selector_example +20%, din_rail +7.6%,
   ex11 ±6.6%, tutorial_joints −10%, and ~10 more ≤3%).
 
-Judgment stands: the remainder is seam-method coverage and per-script
-semantics replication, not architecture. The upstream default is honest about
-its state (162/222 vs lite's 206/222); `pysrc=lite` is one flag away.
+## I. The grind round (2026-08-20) — 162 → 205 PASS (lite parity)
+
+Every §H item above was root-caused and either FIXED or classified. Final
+verified state: **205 PASS / 10 MISMATCH / 5 ERROR / 2 TIMEOUT** of 222
+scored — statistically at lite's 206/10/5/1, with a DIFFERENT failure set
+(upstream additionally PASSES docs-selectors/sort_axis, toy_truck and
+ttt-ppp0110 — three scripts lite itself fails). Both lite baselines (Brython
+and micropython+pysrc=lite) re-verified per-script IDENTICAL to the
+committed 206/10/5/1, full playwright suite green (95 passed / 1 skipped).
+
+CLOSED (fix → scripts recovered → commit):
+
+| Fix | Scripts | Commit |
+|---|---|---|
+| class-preserving `_wrap_like` at upstream boot (upstream transform semantics: a moved Face IS a Face — the pending-faces path rode on it) | ex32, ppp0102; custom_sketch_objects/dual_color/ex33 progressed | caf48ff |
+| seam fills: `Solid.make_wedge`, `Mixin1D.positions`, `reversed(reconstruct=)`, `Curve.wires()` (chains FREE edges — the whole IndexError family), Locations with enum-member orderings, Airfoil→upstream builder, 1-D fillet vertex dedupe | objects_3d, b10, airfoil, filter_inner_wire_count, pegboard_j_hook (+sm_hanger/ppp0104 progressed) | 46e05d4 |
+| lite Union kernel-guard extended to RAISES (fuse + UnifySameDomain — the coplanar-contact family surfacing as 'gp_Vec::Normalize()') | ex31→MM, ex33, ex33_algebra, heart_token, ppp0102 | 63c3ce0 |
+| lite DirectChildren sub-shapes get stable hashes (CacheOp JSON-hash strips ptr — ops on sibling children all cache-hit the FIRST; silent wrong geometry across a dozen scripts) | logo×2, din_rail, ex19/22/31/34/35, lego, playing_cards, ppp0104, custom_sketch_objects, selector_example… | fad3317 |
+| lite get_type expansion iterative (depth-8 recursion cap DROPPED leaves of lite's per-edge compound nesting) | canadian_flag, shamrock, bicycle_tire→0.84% | 20c277b |
+| lite Wire.make_polygon drops duplicated endpoint (zero-length edge made prisms boolean-INERT); JS Extrude/Revolve/TaperExtrude sweep the FORWARD profile face | ex11×2, ex25×2, twist_extrude, selector_example, maker_coin (with DTA below) | 2c1b555 + 80e2489 |
+| seam: Vertex point-arithmetic + POSITIONAL equality (now in lite's class body), real Shape.clean (UnifySameDomain), fillet/chamfer edge-index remap onto the target | slide_latch, ppp0106, group_hole_area, filter_nested, sm_hanger progressed | 8fa927c + 97a828c |
+| lite Edge.find_intersection_points role-swap (was intersecting the other curve's CHORD); loader installs a STABLE sorted() (MicroPython sort is unstable, pack.py's layout rode on it); copy shim copies plain instances SHALLOWLY like CPython (upstream Builder copy snapshots) | b09, packed_boxes, group_properties_with_keys | 023929e |
+| seam Tangency-qualifier translation (untranslated shim members silently solved UNQUALIFIED); lite batches many-operand fuses | b13 | 8c5e9fc |
+| lite perf: TShape-HashCode Shape.__hash__ (was a kernel Bnd_Box per hash), INTEGER-key Vertex equality (float-tuple keys degrade MicroPython set probing ~100x; a 512-vertex Select.LAST set went 35 s → 0.4 s) | group_axis, examples/extrude, toy_truck, clock, maker_coin (timeouts) | 97a828c |
+| seam DoubleTangentArc via lite's solver, trimming the over-extended target inside the upstream BuildLine (ShapeFix mode setters are unbound getter-only embind) | maker_coin | 80e2489 |
+| lite FilletFace2D must PRESERVE face orientation (the _forwardProfile guard belongs on solid-producing consumers only — regressed lite ppp0106 before the fix) | (lite regression fix) | 5dab4d3 |
+
+REMAINING (final classification):
+- **lite-family residuals** (same script, same magnitude as pysrc=lite):
+  joints×2 / projection×2 (COMPROMISE(edge-orientation)),
+  filter_all_edges_circle / tips/b04 (COMPROMISE(traversal-order)),
+  objects_1d (triad labels + the DTA trim: lite and the seam both TRIM the
+  over-extended double-tangent target where upstream keeps the dangling
+  tail — COMPROMISE(double-tangent-arc)), tutorial_joints m6_screw
+  (CylindricalJoint hole frame), spitfire_wing_gordon (TIMEOUT,
+  COMPROMISE(gordon-surface-realization)), objects_2d (`Draft` drafting
+  module — honest gap), dual_color_3mf (no lib3mf), curved_support (sympy).
+- **upstream-config-only, classified**:
+  - bicycle_tire: 'tire' +0.84% — thicken/wrap numeric band (sub-1%,
+    compromise-family; lite lands 0.3% closer on its own construction).
+  - ex08_algebra: extrude direction from `Plane(face).z_dir` where the
+    make_face wire WINDING differs after lite re-chaining —
+    edge-orientation family (fixing lite's Face(wire) winding preservation
+    risks the whole baseline for one script).
+  - Buffer_Stand: the known fuse-drop kernel fault on ITS rib construction
+    (all three fuse routes drop the operand; lite's own construction of the
+    same part happens to dodge it). KERNEL.
+  - sm_hanger: ERROR (the brake-formed wing's FilletEdges raises
+    'command not done' on upstream's construction) vs lite's MISMATCH —
+    kernel/geometry family; fixable-later at best to lite's own MISMATCH.
+  - heat_exchanger: passes in isolation (~55 s); flaps TIMEOUT under
+    4-page contention exactly like the lite Brython note in CLAUDE.md.
+
+Judgment: the upstream-source-over-lite-seam config is now a PEER of the
+lite source path on this corpus — same pass rate, three scripts better,
+five scripts worse, every difference root-caused above.
