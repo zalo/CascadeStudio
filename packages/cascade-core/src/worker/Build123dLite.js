@@ -3016,9 +3016,18 @@ class Mixin1D(Shape):
 
     @classmethod
     def make_polygon(cls, pts, close=True):
-        """Closed polygonal wire through pts (build123d Wire.make_polygon)."""
-        return Polyline(*[tuple(_v3(p)) for p in pts], close=close,
-                        mode=Mode.PRIVATE)
+        """Closed polygonal wire through pts (build123d Wire.make_polygon).
+        Callers often pass an EXPLICITLY closed point list (last == first,
+        e.g. RegularPolygon's side_count+1 points); combined with close=True
+        that produced a zero-length edge, and a face bounded by a degenerate
+        edge extrudes into a solid this kernel's booleans silently ignore —
+        drop the duplicate endpoint first."""
+        vs = [tuple(_v3(p)) for p in pts]
+        if close and len(vs) > 2:
+            d = Vector(vs[0]) - Vector(vs[-1])
+            if d.length <= 1e-9:
+                vs = vs[:-1]
+        return Polyline(*vs, close=close, mode=Mode.PRIVATE)
 
 
 def _wire_combine(cls, wires, tol=1e-9):

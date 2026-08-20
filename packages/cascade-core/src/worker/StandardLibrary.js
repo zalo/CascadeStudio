@@ -830,7 +830,16 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
 function Extrude(face, direction, keepFace) {
   if (!face || face.IsNull()) { console.error("Extrude: input shape is null! Was it consumed by a previous operation? Use keepFace/keepShape to preserve shapes for reuse."); return face; }
   let curExtrusion = self.CacheOp(arguments, "Extrude", () => {
-    return new self.oc.BRepPrimAPI_MakePrism_1(face,
+    // A REVERSED profile face (build123d's BuildSketch flips up-side-down
+    // faces with Complemented) prisms into an INSIDE-OUT solid that this
+    // kernel's booleans treat as its complement (cuts silently no-op).
+    // Extrude the FORWARD face — same geometry, valid solid.
+    let profile = face;
+    if (profile.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED) {
+      profile = profile.Complemented();
+      if (profile.ShapeType().value === 4) { profile = self.oc.TopoDS_Cast.Face_1(profile); }
+    }
+    return new self.oc.BRepPrimAPI_MakePrism_1(profile,
       new self.oc.gp_Vec_4(direction[0], direction[1], direction[2]), false, true).Shape();
   });
 
