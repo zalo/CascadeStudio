@@ -381,9 +381,23 @@ function ForEachWire(shape, callback) {
  *  reads exactly these: the faces inside a compound's solids are NOT direct
  *  children of the compound, unlike what a TopExp_Explorer sweep returns. */
 function DirectChildren(shape) {
+  const oc = self.oc;
   const out = [];
-  const it = new self.oc.TopoDS_Iterator_2(shape, true, true);
-  for (; it.More(); it.Next()) { out.push(it.Value()); }
+  const it = new oc.TopoDS_Iterator_2(shape, true, true);
+  for (; it.More(); it.Next()) {
+    const v = it.Value();
+    // DOWNCAST to the concrete class: Iterator.Value() is a generic
+    // TopoDS_Shape, but the typed bindings (normal_at & co.) require the
+    // concrete TopoDS_Face/Edge/... exactly like the ForEach* explorers.
+    const t = v.ShapeType().value;
+    if (t === 2) { out.push(oc.TopoDS_Cast.Solid_1(v)); }
+    else if (t === 3) { out.push(oc.TopoDS_Cast.Shell_1(v)); }
+    else if (t === 4) { out.push(oc.TopoDS_Cast.Face_1(v)); }
+    else if (t === 5) { out.push(oc.TopoDS_Cast.Wire_1(v)); }
+    else if (t === 6) { out.push(oc.TopoDS_Cast.Edge_1(v)); }
+    else if (t === 7) { out.push(oc.TopoDS_Cast.Vertex_1(v)); }
+    else { out.push(v); } // nested compounds stay generic (no cast bound)
+  }
   return out;
 }
 /** A face bounded by a wire. `onlyPlanar` forces BRepBuilderAPI's OnlyPlane
@@ -1476,7 +1490,7 @@ function _faceArea(face) {
 }
 
 function _faceNormal(face) {
-  let surf = new self.oc.BRepAdaptor_Surface_2(face, true);
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
   let uMid = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
   let vMid = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
   let pnt = new self.oc.gp_Pnt_1();
@@ -1676,7 +1690,7 @@ function _faceNormalAt(face, u, v) {
 }
 
 function _faceSurfaceType(face) {
-  let surf = new self.oc.BRepAdaptor_Surface_2(face, true);
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
   let type = surf.GetType();
   let ST = self.oc.GeomAbs_SurfaceType;
   if (type === ST.GeomAbs_Plane)          return "Plane";

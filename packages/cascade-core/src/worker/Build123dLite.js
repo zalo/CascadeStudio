@@ -433,15 +433,29 @@ class Vector:
     def __len__(self):
         return 3
 
-    def __add__(self, o):
+    def add(self, o):
+        """Named form of + (upstream Vector.add). build_common MONKEY-PATCHES
+        this (and .sub) at import with a workplane-relative-tuple localizer,
+        so __add__/__sub__ MUST route through the method for upstream's
+        'point + (dx, dy)' semantics inside builder contexts to work."""
         o = Vector(o)
         return Vector(self._v[0] + o._v[0], self._v[1] + o._v[1], self._v[2] + o._v[2])
 
-    __radd__ = __add__
-
-    def __sub__(self, o):
+    def sub(self, o):
         o = Vector(o)
         return Vector(self._v[0] - o._v[0], self._v[1] - o._v[1], self._v[2] - o._v[2])
+
+    def __add__(self, o):
+        return self.add(o)
+
+    def __radd__(self, o):
+        # tuple + vector cannot be workplane-relative (upstream's wrapper only
+        # fires on the tuple ARGUMENT of .add); plain addition
+        o = Vector(o)
+        return Vector(self._v[0] + o._v[0], self._v[1] + o._v[1], self._v[2] + o._v[2])
+
+    def __sub__(self, o):
+        return self.sub(o)
 
     def __rsub__(self, o):
         return Vector(o).__sub__(self)
@@ -2240,10 +2254,16 @@ class Compound(Shape):
                 return Vertex(t)
             return None
 
-        if self.topo.ShapeType().value != 0:  # not a TopoDS_Compound
-            candidates = [self.topo]
-        else:
+        root_type = self.topo.ShapeType().value
+        if root_type == 0:  # a real TopoDS_Compound
             candidates = list(w.DirectChildren(self.topo))
+        else:
+            candidates = [self.topo]
+            if root_type == 5:
+                # lite keeps 1-D results as ONE chained wire where upstream's
+                # Curve wraps a compound OF EDGES; the wire's direct children
+                # ARE those edges (build_common pends typed[Edge] from here)
+                candidates.extend(list(w.DirectChildren(self.topo)))
         out = ShapeList()
         for t in candidates:
             s = wrap(t)
@@ -4176,6 +4196,10 @@ def _entity_center(s):
         return w._faceCentroid(s.topo)
     if isinstance(s, Vertex):
         return (s.X, s.Y, s.Z)
+    if isinstance(s, Vector):
+        # a ShapeList OF VECTORS is valid upstream (RegularPolygon sorts its
+        # corner points with sort_by(Axis.X)); a Vector is its own center
+        return (s.X, s.Y, s.Z)
     return tuple(w.CenterOfMass(_topo(s)))
 
 
@@ -5371,9 +5395,11 @@ class Workplanes(LocationList):
 def _norm_align(align, n):
     if align is None:
         return (None,) * n
-    if isinstance(align, str):
-        return (align,) * n
-    return tuple(align)
+    if isinstance(align, (tuple, list)):
+        return tuple(align)
+    # a single Align value applies on every axis; lite's own values are
+    # strings, the upstream seam's are (non-iterable) enum members
+    return (align,) * n
 
 
 def _align_shift(align, bbox_min, bbox_max):
@@ -7049,18 +7075,11 @@ def _sagitta_index(sagitta):
     return 0
 
 
-def ConstrainedArcs(*args, radius=None, center=None, center_on=None,
-                    sagitta=Sagitta.SHORT, selector=None, mode=Mode.ADD):
-    """Circular arc(s) constrained by tangency to other geometry (build123d
-    ConstrainedArcs). All five upstream overloads are supported, each on the
-    OCCT solver upstream uses:
-
-      (t1, t2, radius=)            Geom2dGcc_Circ2d2TanRad
-      (t1, t2, center_on=)         Geom2dGcc_Circ2d2TanOn
-      (t1, t2, t3)                 Geom2dGcc_Circ2d3Tan
-      (t1, center=)                Geom2dGcc_Circ2dTanCen     (full circles)
-      (t1, radius=, center_on=)    Geom2dGcc_Circ2dTanOnRad   (full circles)
-    """
+def _constrained_arc_topos(args, radius=None, center=None, center_on=None,
+                           sagitta=Sagitta.SHORT):
+    """The RAW candidate arcs of the Geom2dGcc solvers (TopoDS edges) —
+    ConstrainedArcs applies the selector on top; upstream's
+    Edge.make_constrained_arcs returns exactly these."""
     if not args:
         raise ValueError('ConstrainedArcs requires at least one tangency')
     opts = {'sagitta': _sagitta_index(sagitta)}
@@ -7093,16 +7112,30 @@ def ConstrainedArcs(*args, radius=None, center=None, center_on=None,
             raise ValueError('radius must be > 0.0')
         opts['radius'] = float(radius)
     specs = [_tangency_pair(a) for a in args]
-    return _constrained_curve(w.ConstrainedArcs2D(specs, opts), selector, mode)
+    return w.ConstrainedArcs2D(specs, opts)
 
 
-def ConstrainedLines(*args, angle=None, direction=None, selector=None,
-                     mode=Mode.ADD):
-    """Line(s) constrained by tangency (build123d ConstrainedLines):
+def ConstrainedArcs(*args, radius=None, center=None, center_on=None,
+                    sagitta=Sagitta.SHORT, selector=None, mode=Mode.ADD):
+    """Circular arc(s) constrained by tangency to other geometry (build123d
+    ConstrainedArcs). All five upstream overloads are supported, each on the
+    OCCT solver upstream uses:
 
-      (t1, t2)                     Geom2dGcc_Lin2d2Tan  (t2 may be a point)
-      (t1, axis, angle=|direction=) Geom2dGcc_Lin2dTanObl
+      (t1, t2, radius=)            Geom2dGcc_Circ2d2TanRad
+      (t1, t2, center_on=)         Geom2dGcc_Circ2d2TanOn
+      (t1, t2, t3)                 Geom2dGcc_Circ2d3Tan
+      (t1, center=)                Geom2dGcc_Circ2dTanCen     (full circles)
+      (t1, radius=, center_on=)    Geom2dGcc_Circ2dTanOnRad   (full circles)
     """
+    return _constrained_curve(
+        _constrained_arc_topos(args, radius=radius, center=center,
+                               center_on=center_on, sagitta=sagitta),
+        selector, mode)
+
+
+def _constrained_line_topos(args, angle=None, direction=None):
+    """The RAW candidate lines of the Geom2dGcc solvers (TopoDS edges) —
+    upstream's Edge.make_constrained_lines returns exactly these."""
     if len(args) != 2:
         raise ValueError('ConstrainedLines takes exactly two arguments')
     if angle is not None or direction is not None:
@@ -7125,11 +7158,21 @@ def ConstrainedLines(*args, angle=None, direction=None, selector=None,
                                       Vector(reference.position).Y],
                          'direction': [Vector(reference.direction).X,
                                        Vector(reference.direction).Y]}}
-        edges = w.ConstrainedLines2D([_tangency_pair(args[0])], opts)
-    else:
-        specs = [_tangency_pair(a) for a in args]
-        edges = w.ConstrainedLines2D(specs, {})
-    return _constrained_curve(edges, selector, mode)
+        return w.ConstrainedLines2D([_tangency_pair(args[0])], opts)
+    specs = [_tangency_pair(a) for a in args]
+    return w.ConstrainedLines2D(specs, {})
+
+
+def ConstrainedLines(*args, angle=None, direction=None, selector=None,
+                     mode=Mode.ADD):
+    """Line(s) constrained by tangency (build123d ConstrainedLines):
+
+      (t1, t2)                     Geom2dGcc_Lin2d2Tan  (t2 may be a point)
+      (t1, axis, angle=|direction=) Geom2dGcc_Lin2dTanObl
+    """
+    return _constrained_curve(
+        _constrained_line_topos(args, angle=angle, direction=direction),
+        selector, mode)
 
 
 # ------------------------------------------- deprecated tangent objects ---
@@ -9804,6 +9847,19 @@ def _json_num(x):
     return repr(x)
 
 
+def _shape_result_of(obj):
+    """obj._obj when it is a Shape with geometry (an upstream-source builder;
+    guarded because attribute access on module stubs like the numpy shim
+    RAISES rather than returning AttributeError defaults)."""
+    try:
+        cand = getattr(obj, '_obj', None)
+    except Exception:
+        return None
+    if isinstance(cand, Shape) and cand.topo is not None:
+        return cand
+    return None
+
+
 def _measure_globals_json(g):
     """Measure every module-level Shape / builder result in the given globals
     dict via the worker's MeasureShape hook; returns a JSON object string
@@ -9839,6 +9895,11 @@ def _measure_globals_json(g):
         if isinstance(obj, Builder):
             if obj._obj is not None and obj._obj.topo is not None:
                 measure(name, obj._obj)
+        elif not isinstance(obj, Shape) and _shape_result_of(obj) is not None:
+            # An upstream-source builder (pysrc=upstream) is not a lite
+            # Builder, but its result IS a lite-class shape - measure it so
+            # the harness sees 'with BuildPart() as bp:' variables.
+            measure(name, _shape_result_of(obj))
         elif isinstance(obj, Shape):
             if obj.topo is not None:
                 measure(name, obj)
@@ -10378,6 +10439,44 @@ def _stable_sorted(seq, key=None, reverse=False):
 # scipy API raises loudly instead of approximating.
 
 
+class _ScipyVec(list):
+    """1-D ndarray stand-in handed to minimize() objectives: upstream
+    build123d objectives do numpy-style elementwise arithmetic on the
+    parameter vector (DoubleTangentArc: abs(separation - radius))."""
+
+    def _binop(self, other, op):
+        if isinstance(other, (list, tuple)):
+            return _ScipyVec([op(a, b) for a, b in zip(self, other)])
+        return _ScipyVec([op(a, other) for a in self])
+
+    def __sub__(self, other):
+        return self._binop(other, lambda a, b: a - b)
+
+    def __rsub__(self, other):
+        return self._binop(other, lambda a, b: b - a)
+
+    def __add__(self, other):
+        return self._binop(other, lambda a, b: a + b)
+
+    def __radd__(self, other):
+        return self._binop(other, lambda a, b: b + a)
+
+    def __mul__(self, other):
+        return self._binop(other, lambda a, b: a * b)
+
+    def __rmul__(self, other):
+        return self._binop(other, lambda a, b: b * a)
+
+    def __truediv__(self, other):
+        return self._binop(other, lambda a, b: a / b)
+
+    def __abs__(self):
+        return _ScipyVec([abs(a) for a in self])
+
+    def __neg__(self):
+        return _ScipyVec([-a for a in self])
+
+
 class OptimizeResult(dict):
     def __getattr__(self, k):
         try:
@@ -10426,7 +10525,7 @@ def minimize(fun, x0, args=(), method='Nelder-Mead', bounds=None, tol=None,
         return out
 
     def f(x):
-        r = fun(list(x), *args)
+        r = fun(_ScipyVec(x), *args)
         try:
             return float(r)
         except TypeError:
