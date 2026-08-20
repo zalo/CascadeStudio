@@ -135,7 +135,7 @@ Harness, 222 scored scripts, vs the NATIVE 0.11.1 reference
 | — counting the 4 confirmed intentional dev changes as dev-correct | **206** | 10 | 4 | 2 |
 | 0.11.1 upstream (previous state) | 205 | 10 | 5 | 2 |
 | lite (Brython) re-verified this session | 206 | 10 | 5 | 1 |
-| lite (MicroPython) re-verified this session | (§ below) | | | |
+| lite (MicroPython) re-verified this session | 206 | 10 | 5 | 1 |
 
 Dev-config non-PASS, fully classified:
 
@@ -159,8 +159,11 @@ Dev-config non-PASS, fully classified:
   committed baselines).
 
 Gates: fast spec gate (python-mode / py-runtime / py-src-upstream) —
-8 passed, 1 skipped. Brython baseline re-run: 206/10/5/1, per-script
-IDENTICAL to the committed report.md sets.
+8 passed, 1 skipped. FULL playwright suite: 95 passed / 1 skipped. BOTH lite
+baselines re-run this session (Brython on 8384, micropython+pysrc=lite on
+8385, booted-pySrc debug lines verified): 206/10/5/1 each, per-script
+IDENTICAL to the committed report.md failure sets — the bump touched
+nothing outside the upstream-source path.
 
 ## Milestones
 
