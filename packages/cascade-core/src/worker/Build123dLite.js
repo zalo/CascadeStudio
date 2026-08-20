@@ -385,6 +385,12 @@ def _is_nested_seq(x):
         return False
 
 
+# Flipped by the upstream-source seam AFTER build_common monkeypatches
+# Vector.add/.sub with its workplane-relative-tuple localizer; keeps lite's
+# own modes on the direct (untraced-call-free) arithmetic path.
+_VECTOR_OPS_HOOKED = False
+
+
 class Vector:
     """3D vector with build123d-style .X/.Y/.Z properties."""
 
@@ -435,9 +441,11 @@ class Vector:
 
     def add(self, o):
         """Named form of + (upstream Vector.add). build_common MONKEY-PATCHES
-        this (and .sub) at import with a workplane-relative-tuple localizer,
-        so __add__/__sub__ MUST route through the method for upstream's
-        'point + (dx, dy)' semantics inside builder contexts to work."""
+        this (and .sub) at import with a workplane-relative-tuple localizer;
+        __add__/__sub__ route through the method ONLY when the upstream seam
+        has flipped _VECTOR_OPS_HOOKED (an extra traced Python call per
+        vector op costs real time on settrace MicroPython, so lite's own
+        modes keep the direct arithmetic)."""
         o = Vector(o)
         return Vector(self._v[0] + o._v[0], self._v[1] + o._v[1], self._v[2] + o._v[2])
 
@@ -446,7 +454,10 @@ class Vector:
         return Vector(self._v[0] - o._v[0], self._v[1] - o._v[1], self._v[2] - o._v[2])
 
     def __add__(self, o):
-        return self.add(o)
+        if _VECTOR_OPS_HOOKED:
+            return self.add(o)
+        o = Vector(o)
+        return Vector(self._v[0] + o._v[0], self._v[1] + o._v[1], self._v[2] + o._v[2])
 
     def __radd__(self, o):
         # tuple + vector cannot be workplane-relative (upstream's wrapper only
@@ -455,7 +466,10 @@ class Vector:
         return Vector(self._v[0] + o._v[0], self._v[1] + o._v[1], self._v[2] + o._v[2])
 
     def __sub__(self, o):
-        return self.sub(o)
+        if _VECTOR_OPS_HOOKED:
+            return self.sub(o)
+        o = Vector(o)
+        return Vector(self._v[0] - o._v[0], self._v[1] - o._v[1], self._v[2] - o._v[2])
 
     def __rsub__(self, o):
         return Vector(o).__sub__(self)
@@ -1614,8 +1628,11 @@ class Shape:
                     del kids[i]
                     break
         self._parent = value
-        if value is not None and \
-                not any(k is self for k in value.children):
+        if value is not None:
+            # append unconditionally: every selector wrapper is a fresh
+            # object, so a membership scan (which would now have to be a
+            # traced-Python identity loop — geometric __eq__ must NOT decide
+            # this) costs O(len(children)) per selector call for nothing
             value.children.append(self)
 
     @property
