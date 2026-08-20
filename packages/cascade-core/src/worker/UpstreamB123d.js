@@ -266,6 +266,23 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText) {
   runPy(LOGGING_PATCH_PY);
   runPy('import builtins as _cs_bi\n'
     + '_cs_bi._cs_exc_info = lambda: (None, None, None)');
+  // MicroPython's sort is UNSTABLE; upstream sources rely on CPython's
+  // stable sorted() (pack.py's tie ordering decides the whole layout).
+  // Decorate with the input index so ties keep their original order —
+  // including under reverse=True (CPython keeps the ORIGINAL order among
+  // equals there too, hence the negated index).
+  runPy([
+    'def _cs_stable_sorted(iterable, key=None, reverse=False):',
+    '    items = list(iterable)',
+    '    kf = key if key is not None else (lambda v: v)',
+    '    if reverse:',
+    '        dec = [(kf(v), -i, v) for i, v in enumerate(items)]',
+    '    else:',
+    '        dec = [(kf(v), i, v) for i, v in enumerate(items)]',
+    '    dec.sort(key=lambda t: (t[0], t[1]), reverse=reverse)',
+    '    return [t[2] for t in dec]',
+    '_cs_bi.sorted = _cs_stable_sorted',
+  ].join('\n'));
 
   // 3. OCP stubs: exact-name placeholders for every OCP module build123d
   //    imports. OCP.Standard exports must be real Exception subclasses

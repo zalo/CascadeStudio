@@ -3121,6 +3121,14 @@ class Edge(Mixin1D):
             d = Vector(other.direction).normalized()
         else:
             o = other.edges()[0] if not isinstance(other, Edge) else other
+            if o.geom_type != GeomType.LINE and \
+                    self.geom_type == GeomType.LINE:
+                # the sampled solver treats OTHER as a straight line (its
+                # chord) - wrong for a curved other. The intersection set is
+                # symmetric, so sample the CURVED side against the line
+                # instead (PolarLine's length=<arc> limit hit the arc's
+                # chord otherwise).
+                return o.find_intersection_points(self, tolerance)
             base = o.position_at(0)
             d = (o.position_at(1) - base).normalized()
         # signed perpendicular offset of the sampled point from the line,
@@ -10087,6 +10095,18 @@ def copy(x):
         return dict(x)
     if isinstance(x, set):
         return set(x)
+    if hasattr(x, '__dict__') and not isinstance(x, type):
+        # CPython parity: a plain instance copies SHALLOWLY (new object,
+        # same attribute references). Returning x unchanged silently shared
+        # future mutations - copy.copy(<upstream Builder>) must keep the OLD
+        # _obj binding when the builder later reassigns it.
+        try:
+            dup = object.__new__(type(x))
+            for k in x.__dict__:
+                setattr(dup, k, x.__dict__[k])
+            return dup
+        except Exception:
+            return x
     return x
 
 
