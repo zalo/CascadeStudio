@@ -158,6 +158,155 @@ if not hasattr(_lt.Edge, 'make_tangent_arc'):
     _lt.Edge.make_tangent_arc = classmethod(_edge_make_tangent_arc)
 
 
+# ---- Edge.make_* kernel primitives upstream objects_curve dispatches to ----
+# Each delegates to lite's validated 1-D constructor (mode=PRIVATE, so no
+# builder bookkeeping happens here — upstream's BaseLineObject does that) and
+# unwraps the single resulting edge. Points/planes arrive GLOBAL (upstream
+# localizes before calling), so plane-parameterized forms build the XY-local
+# curve and rigidly place it by plane.location (lite transforms segment specs
+# along with the geometry).
+
+def _one_edge_placed(curve, plane):
+    if plane is not None:
+        curve = plane.location * curve
+    return _lt._single_edge_of(curve)
+
+
+def _edge_make_bezier(cls, *cntl_pnts, weights=None):
+    return _lt._single_edge_of(
+        _lt.Bezier(*[tuple(Vector(p)) for p in cntl_pnts], weights=weights,
+                   mode=_lt.Mode.PRIVATE))
+
+
+def _edge_make_bspline(cls, control_points, knots=None, degree=None,
+                       weights=None, periodic=False):
+    return _lt._single_edge_of(
+        _lt.BSpline([tuple(Vector(p)) for p in control_points], knots, degree,
+                    weights=weights, periodic=periodic, mode=_lt.Mode.PRIVATE))
+
+
+def _edge_make_helix(cls, pitch, height, radius, center=(0, 0, 0),
+                     direction=(0, 0, 1), cone_angle=0, lefthand=False):
+    return _lt._single_edge_of(
+        _lt.Helix(pitch, height, radius, center=tuple(Vector(center)),
+                  direction=tuple(Vector(direction)), cone_angle=cone_angle,
+                  lefthand=lefthand, mode=_lt.Mode.PRIVATE))
+
+
+def _cs_is_clockwise(angular_direction):
+    return getattr(angular_direction, 'name', None) == 'CLOCKWISE' or \
+        angular_direction == _lt.AngularDirection.CLOCKWISE
+
+
+def _edge_make_ellipse(cls, x_radius, y_radius, plane=None, start_angle=0.0,
+                       end_angle=360.0, angular_direction=None):
+    """upstream Edge.make_ellipse: an elliptical arc ON the given plane from
+    start_angle to end_angle in the given angular direction. A CLOCKWISE arc
+    is the CCW arc over the same span traversed backwards (same gp_Elips,
+    reversed orientation — what GC_MakeArcOfEllipse's sense=False does)."""
+    cw = angular_direction is not None and _cs_is_clockwise(angular_direction)
+    a0, a1 = (end_angle, start_angle) if cw else (start_angle, end_angle)
+    sweep = (a1 - a0) % 360.0
+    if sweep == 0.0:
+        sweep = 360.0
+    arc = _lt.EllipticalCenterArc((0, 0, 0), x_radius, y_radius,
+                                  start_angle=a0, arc_size=sweep,
+                                  mode=_lt.Mode.PRIVATE)
+    edge = _one_edge_placed(arc, plane)
+    return _lt._reverse_1d(edge) if cw else edge
+
+
+def _edge_make_parabola(cls, focal_length, plane=None, start_angle=0.0,
+                        end_angle=180.0, angular_direction=None):
+    ad = angular_direction if angular_direction is not None \
+        else _lt.AngularDirection.COUNTER_CLOCKWISE
+    if _cs_is_clockwise(ad):
+        ad = _lt.AngularDirection.CLOCKWISE
+    arc = _lt.ParabolicCenterArc((0, 0, 0), focal_length,
+                                 start_angle=start_angle, end_angle=end_angle,
+                                 angular_direction=ad, mode=_lt.Mode.PRIVATE)
+    return _one_edge_placed(arc, plane)
+
+
+def _edge_make_hyperbola(cls, x_radius, y_radius, plane=None, start_angle=0.0,
+                         end_angle=90.0, angular_direction=None):
+    ad = angular_direction if angular_direction is not None \
+        else _lt.AngularDirection.COUNTER_CLOCKWISE
+    if _cs_is_clockwise(ad):
+        ad = _lt.AngularDirection.CLOCKWISE
+    arc = _lt.HyperbolicCenterArc((0, 0, 0), x_radius, y_radius,
+                                  start_angle=start_angle,
+                                  end_angle=end_angle, angular_direction=ad,
+                                  mode=_lt.Mode.PRIVATE)
+    return _one_edge_placed(arc, plane)
+
+
+def _edge_make_constrained_arcs(cls, *args, radius=None, center=None,
+                                center_on=None, sagitta=None):
+    sag = sagitta if sagitta is not None else _lt.Sagitta.SHORT
+    sn = getattr(sag, 'name', None)
+    if sn is not None:
+        sag = getattr(_lt.Sagitta, sn, sag)
+    topos = _lt._constrained_arc_topos(list(args), radius=radius,
+                                       center=center, center_on=center_on,
+                                       sagitta=sag)
+    return ShapeList([_lt.Edge(t) for t in topos])
+
+
+def _edge_make_constrained_lines(cls, *args, angle=None, direction=None):
+    topos = _lt._constrained_line_topos(list(args), angle=angle,
+                                        direction=direction)
+    return ShapeList([_lt.Edge(t) for t in topos])
+
+
+if not hasattr(_lt.Edge, 'make_bezier'):
+    _lt.Edge.make_bezier = classmethod(_edge_make_bezier)
+    _lt.Edge.make_bspline = classmethod(_edge_make_bspline)
+    _lt.Edge.make_helix = classmethod(_edge_make_helix)
+    _lt.Edge.make_ellipse = classmethod(_edge_make_ellipse)
+    _lt.Edge.make_parabola = classmethod(_edge_make_parabola)
+    _lt.Edge.make_hyperbola = classmethod(_edge_make_hyperbola)
+    _lt.Edge.make_constrained_arcs = classmethod(_edge_make_constrained_arcs)
+    _lt.Edge.make_constrained_lines = classmethod(_edge_make_constrained_lines)
+
+
+def _wire_make_ellipse(cls, x_radius, y_radius, plane=None, start_angle=0.0,
+                       end_angle=360.0, angular_direction=None, closed=True):
+    """upstream Wire.make_ellipse (objects_sketch.Ellipse builds its face
+    from the full elliptical WIRE)."""
+    e = _edge_make_ellipse(_lt.Edge, x_radius, y_radius, plane, start_angle,
+                           end_angle, angular_direction)
+    return cls([e])
+
+
+def _wire_make_convex_hull(cls, edges, tolerance=1e-3):
+    """upstream Wire.make_convex_hull over lite's validated make_hull port
+    (which returns the hull FACE; the outer wire is the hull)."""
+    hull = _lt.make_hull(list(edges), tolerance=tolerance,
+                         mode=_lt.Mode.PRIVATE)
+    return hull.faces()[0].outer_wire()
+
+
+if not hasattr(_lt.Wire, 'make_ellipse'):
+    _lt.Wire.make_ellipse = classmethod(_wire_make_ellipse)
+    _lt.Wire.make_convex_hull = classmethod(_wire_make_convex_hull)
+
+
+def _shape_split(self, tool, keep=None):
+    """upstream Mixin3D/Mixin2D.split(plane, keep) as a METHOD, over lite's
+    module-level split() (Edge keeps its own split override). Keep.BOTH stays
+    lite's honest NotImplementedError."""
+    k = keep if keep is not None else _lt.Keep.TOP
+    kn = getattr(k, 'name', None)
+    if kn is not None:
+        k = getattr(_lt.Keep, kn, k)
+    return _lt.split(self, bisect_by=tool, keep=k, mode=_lt.Mode.PRIVATE)
+
+
+if not hasattr(_lt.Shape, 'split'):
+    _lt.Shape.split = _shape_split
+
+
 def _face_is_coplanar(self, plane):
     """upstream Face.is_coplanar(plane): the face's plane equals the given
     plane geometrically (orientation-insensitive — _add_to_context flips

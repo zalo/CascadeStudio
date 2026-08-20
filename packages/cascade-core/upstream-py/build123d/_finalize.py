@@ -52,11 +52,28 @@ for _name in _OPTIONAL:
     if _mod is not None:
         _copy_module(_mod)
 
-# lite's viewer + measurement + export hooks (worker/harness contract)
+# CLASS fallbacks: user-facing lite CLASSES the upstream Level-A layer does
+# not define (LineType, the exporters, ...) fall back to lite's validated
+# implementations. Functions are deliberately NOT filled: lite's object
+# functions are lite-builder-aware and would silently skip an UPSTREAM
+# builder context — an honest NameError beats silently-missing geometry.
+for _name in dir(_lt):
+    if _name.startswith('_') or hasattr(_pkg, _name):
+        continue
+    _val = getattr(_lt, _name)
+    if isinstance(_val, type):
+        setattr(_pkg, _name, _val)
+
+# lite's viewer + measurement + export hooks (worker/harness contract), plus
+# the handful of lite-only user-facing FUNCTIONS with no upstream Level-A
+# counterpart and no builder-context dependence that could silently misfire
+# (ArrowHead is sketch-context-aware in lite, but under an upstream builder
+# its result is still returned and add()-able; the harness measures it).
 for _name in ('show', 'show_object', 'show_all', 'volume',
               '_measure_globals_json', 'export_stl', 'export_step',
               'export_gltf', 'export_brep', 'import_brep', 'import_step',
-              'Mesher'):
+              'Mesher', 'ExportSVG', 'ArrowHead', 'polar', 'delta',
+              'topo_distance_to', 'edges_to_wires'):
     if hasattr(_lt, _name):
         setattr(_pkg, _name, getattr(_lt, _name))
 

@@ -97,22 +97,9 @@ def to_align_offset(min_point, max_point, align, center=None):
 # lite never defined (or, for __eq__, defines identically-shaped semantics),
 # so lite's own modes are unaffected even though the classes are shared.
 
-def _vector_add(self, other):
-    return self.__add__(other)
-
-
-def _vector_sub(self, other):
-    return self.__sub__(other)
-
-
-if not hasattr(Vector, 'add'):
-    # build_common monkey-patches Vector.add/sub with a workplane-localizing
-    # wrapper at import time and AttributeErrors without them. NOTE: lite's
-    # __add__ does NOT route through .add, so upstream's relative-tuple
-    # localization only applies to explicit .add() calls (identity on
-    # Plane.XY). See INVENTORY.md (vector-add-monkeypatch).
-    Vector.add = _vector_add
-    Vector.sub = _vector_sub
+# (Vector.add/.sub are lite-native now and lite's __add__/__sub__ route
+#  through them, so build_common's workplane-relative-tuple monkeypatch works
+#  EXACTLY as upstream — B14 is closed.)
 
 
 def _location_eq(self, other):
@@ -177,6 +164,65 @@ def _plane_to_local_coords(self, obj):
 if Plane.from_local_coords is _orig_from_local:
     Plane.from_local_coords = _plane_from_local_coords
     Plane.to_local_coords = _plane_to_local_coords
+
+
+def _vector_get_angle(self, v):
+    """upstream Vector.get_angle: UNSIGNED angle to another vector, degrees."""
+    b = Vector(v)
+    denom = self.length * b.length
+    if denom < 1e-30:
+        return 0.0
+    d = max(-1.0, min(1.0, self.dot(b) / denom))
+    return math.degrees(math.acos(d))
+
+
+if not hasattr(Vector, 'get_angle'):
+    Vector.get_angle = _vector_get_angle
+
+
+class _CsPlaneTransform:
+    """Stand-in for upstream Plane.forward_transform/reverse_transform (gp_Trsf
+    wrapped in Matrix): Level-A only ever feeds these to Vector.transform, so
+    a (plane, direction-of-mapping) pair carries everything needed."""
+
+    def __init__(self, plane, to_world):
+        self.plane = plane
+        self.to_world = to_world
+
+
+def _plane_forward_transform(self):
+    return _CsPlaneTransform(self, False)   # world -> plane-local
+
+
+def _plane_reverse_transform(self):
+    return _CsPlaneTransform(self, True)    # plane-local -> world
+
+
+if not hasattr(Plane, 'forward_transform'):
+    Plane.forward_transform = property(_plane_forward_transform)
+    Plane.reverse_transform = property(_plane_reverse_transform)
+
+
+def _vector_transform(self, tm, is_direction=False):
+    """upstream Vector.transform(Matrix, is_direction=) — implemented for the
+    plane transforms Level-A passes (objects_curve localizes DIRECTIONS with
+    workplane.reverse_transform)."""
+    if isinstance(tm, _CsPlaneTransform):
+        pl = tm.plane
+        if tm.to_world:
+            out = (pl.x_dir * self.X + pl.y_dir * self.Y + pl.z_dir * self.Z)
+            if not is_direction:
+                out = out + pl.origin
+            return out
+        d = self if is_direction else (self - pl.origin)
+        return Vector(d.dot(pl.x_dir), d.dot(pl.y_dir), d.dot(pl.z_dir))
+    raise NotImplementedError(
+        'Vector.transform supports plane forward/reverse transforms only in '
+        'build123d-lite')
+
+
+if not hasattr(Vector, 'transform'):
+    Vector.transform = _vector_transform
 
 
 def _bbox_add(self, other):
