@@ -141,6 +141,11 @@ def _reset_state():
     _cv._cs_reset_all()
 
 
+# build_common has monkeypatched Vector.add/.sub by now: route lite's
+# __add__/__sub__ through them (workplane-relative tuple localization);
+# lite's own modes never flip this and keep the direct arithmetic.
+_lt._VECTOR_OPS_HOOKED = True
+
 _pkg._reset_state = _reset_state
 _pkg._lite = _lt
 _pkg._upstream_level_a = True
