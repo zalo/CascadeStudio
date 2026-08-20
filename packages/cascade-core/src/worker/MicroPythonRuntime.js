@@ -325,7 +325,11 @@ async function _bootstrap(srcKind) {
     // library `build123d_lite`; the `build123d` package is upstream 0.11.1
     // Level-A source layered on top by UpstreamB123d.js (fetched from
     // dist/upstream-b123d/).
-    const fetchText = self._csUpstreamFetchText || (async (rel) => {
+    // Transient fetch failures (several parallel tabs booting at once can
+    // ECONNRESET a dev http-server) must NOT flip the source layer, so every
+    // payload read retries with backoff; only a REAL 404/missing payload
+    // reaches the probe's fallback below.
+    const fetchOnce = async (rel) => {
       let url;
       if (isBuilt) {
         url = new URL('./upstream-b123d/' + rel, import.meta.url).href;
@@ -337,12 +341,28 @@ async function _bootstrap(srcKind) {
       }
       const resp = await fetch(url);
       if (!resp.ok) {
-        throw new Error('pysrc=upstream: could not load ' + rel + ' (' +
+        const permanent = resp.status === 404;
+        const err = new Error('pysrc=upstream: could not load ' + rel + ' (' +
           resp.status + '). Vendored upstream sources missing? Run ' +
           'node packages/cascade-core/scripts/fetch-upstream-b123d.cjs ' +
           'and rebuild.');
+        err._csPermanent = permanent;
+        throw err;
       }
       return resp.text();
+    };
+    const fetchText = self._csUpstreamFetchText || (async (rel) => {
+      let lastErr;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          return await fetchOnce(rel);
+        } catch (e) {
+          lastErr = e;
+          if (e && e._csPermanent) { break; }
+          await new Promise((res) => setTimeout(res, 150 * (attempt + 1)));
+        }
+      }
+      throw lastErr;
     });
     // Probe the payload BEFORE registering anything: the no-flag default
     // ('auto') falls back to lite with a warning when the vendored upstream

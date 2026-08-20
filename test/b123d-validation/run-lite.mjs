@@ -145,6 +145,14 @@ async function newReadyPage(browser) {
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(),
     undefined, { timeout: 90000 });
   await page.evaluate(() => window.CascadeAPI.setMode('python'));
+  if (process.env.CS_DEBUG_PYSRC) {
+    // one trivial evaluation to boot the runtime, then report the layer
+    await page.evaluate(async () => window.CascadeAPI.runCode('x = 1'));
+    const stats = await page.evaluate(async () => window.CascadeAPI._memoryStats());
+    console.log('[debug] page booted pySrc=' +
+      (stats && stats.bootTiming ? stats.bootTiming.pySrc : '?') +
+      ' runtime=' + (stats ? stats.pyRuntime : '?'));
+  }
   return page;
 }
 
