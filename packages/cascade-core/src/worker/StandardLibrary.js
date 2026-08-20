@@ -638,10 +638,21 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   let curUnion = self.CacheOp(arguments, "Union", () => {
     let combined = objectsToJoin[0];
     if (objectsToJoin.length > 1) {
-      for (let i = 0; i < objectsToJoin.length; i++) {
-        if (i > 0) {
-          combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
+      try {
+        for (let i = 0; i < objectsToJoin.length; i++) {
+          if (i > 0) {
+            combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
+          }
         }
+      } catch (fuseErr) {
+        // Same 8.0.1 coplanar-contact family as the operand-drop below, but
+        // surfacing as a RAISE (e.g. 'gp_Vec::Normalize() - vector has zero
+        // norm' when solids share internal walls). The General-Fuse SPLIT
+        // phase is correct on the same inputs — recover from its partition.
+        let rebuilt = _rebuildFuseFromGF(objectsToJoin);
+        if (!rebuilt) { throw fuseErr; }
+        console.log("Union: BRepAlgoAPI_Fuse raised on these operands (known OCCT 8.0.1 wasm fault family); rebuilt the union from the General-Fuse partition.");
+        combined = rebuilt;
       }
     }
 
@@ -658,8 +669,16 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
     }
 
     if (!keepEdges) {
-      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
-      combined = fusor.Shape();
+      // Same coplanar-contact fault family: UnifySameDomain can RAISE
+      // ('gp_Vec::Normalize() - vector has zero norm') while merging the
+      // shared internal walls a fuse of exactly-tiling solids leaves behind.
+      // The un-unified result is geometrically correct — keep it.
+      try {
+        let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
+        combined = fusor.Shape();
+      } catch (unifyErr) {
+        console.log("Union: UnifySameDomain raised on this result (known OCCT 8.0.1 wasm fault family); keeping the un-unified fuse result.");
+      }
     }
 
     return combined;
