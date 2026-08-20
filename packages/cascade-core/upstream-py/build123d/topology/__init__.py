@@ -112,6 +112,25 @@ if not hasattr(Compound, 'resolve_font'):
     Compound.resolve_font = staticmethod(_cs_resolve_font)
 
 
+# Dev's BuildPart.pending_edges_as_wire chains the published pending edges
+# with Wire.combine. Upstream's ConnectEdgesToWires connects through shared
+# VERTEX TOLERANCES; lite's port compares raw endpoints against tol=1e-9,
+# and a 1-D fillet arc endpoint sits ~1e-7 from the trimmed line end (well
+# inside OCCT's Precision::Confusion), splitting the wire — sm_hanger's
+# make_brake_formed then saw a 3-edge line. Chain at 1e-7 in upstream mode.
+def _cs_wire_combine(cls, wires, tol=1e-9):
+    edges = []
+    for item in wires:
+        if isinstance(item, _lt.Edge):
+            edges.append(item)
+        else:
+            edges.extend(item.edges())
+    return _lt.edges_to_wires(edges, max(tol, 1e-7))
+
+
+Mixin1D.combine = classmethod(_cs_wire_combine)
+
+
 # ---- upstream result-class semantics ---------------------------------------
 # Upstream's Shape.moved/located and `loc * shape` PRESERVE the class (a moved
 # Face is a Face); lite's algebra convention remaps operation results via its
@@ -646,6 +665,10 @@ def _cs_path_wire_topo(path):
     if isinstance(path, _lt.Mixin1D) and getattr(path, '_specs', None):
         return _w.WireFromSegments(_lt._chain_segments(path._specs))
     t = _lt._topo(path)
+    if hasattr(t, 'ShapeType') and t.ShapeType().value == 6:
+        # a bare EDGE path (dev make_brake_formed sweeps per line edge):
+        # GetWire refuses edges, so assemble the one-edge wire directly
+        return _w.WireFromEdgesFixed([t], 1e-7)
     if not hasattr(t, 'ShapeType') or t.ShapeType().value != 5:
         t = _w.GetWire(t, 0, True)
     return t
