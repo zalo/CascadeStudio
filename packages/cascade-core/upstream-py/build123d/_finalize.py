@@ -61,10 +61,10 @@ for _name in ('show', 'show_object', 'show_all', 'volume',
         setattr(_pkg, _name, getattr(_lt, _name))
 
 
-# BuildLine's results must carry BOTH upstream identities (Curve for
-# objects_curve, Compound for parent-builder classification); topology.Curve
-# itself stays lite's Curve — see topology._CsBuilderCurve.
-_line.BuildLine._sub_class = _topology._CsBuilderCurve
+# (BuildLine._sub_class stays upstream's own Curve: since the class-DAG
+#  unification lite's Curve carries BOTH identities natively — a Mixin1D for
+#  objects_curve's isinstance checks and a Compound for parent-builder
+#  classification.)
 
 
 # Algebra placement: `GridLocations(...) * shape` works upstream because its

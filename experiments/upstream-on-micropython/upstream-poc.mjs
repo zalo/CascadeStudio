@@ -135,8 +135,22 @@ const mock = {
     bbox: bboxOf(t),
   }),
 };
+// class-DAG-unification seam: lite's Shape.__eq__/get_type read these
+mock._sameShape = (a, b) => a === b;
+mock.DirectChildren = (t) => (t && t.kind === 'compound' ? t.children.slice() : []);
+// lite's get_type/_edge_chain dispatch on TopoDS ShapeType(); give the mock
+// trees the same surface (7=vertex, 6=edge, 5=wire, 4=face, 2=solid, 0=comp)
+const SHAPE_TYPE_CODE = { compound: 0, box: 2, face: 4, wire: 5, edge: 6, vertex: 7 };
+function decorateShape(t) {
+  if (t && typeof t === 'object' && t.kind && !t.ShapeType) {
+    const code = SHAPE_TYPE_CODE[t.kind];
+    if (code !== undefined) { t.ShapeType = () => ({ value: code }); }
+    if (Array.isArray(t.children)) { t.children.forEach(decorateShape); }
+  }
+  return t;
+}
 for (const [name, fn] of Object.entries(mock)) {
-  self[name] = (...args) => { note(name); return fn(...args); };
+  self[name] = (...args) => { note(name); return decorateShape(fn(...args)); };
 }
 // trap OTHER w calls loudly so gaps surface as named errors, not silence
 self._csMockMissing = new Set();
