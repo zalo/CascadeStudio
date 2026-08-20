@@ -390,13 +390,19 @@ function DirectChildren(shape) {
     // TopoDS_Shape, but the typed bindings (normal_at & co.) require the
     // concrete TopoDS_Face/Edge/... exactly like the ForEach* explorers.
     const t = v.ShapeType().value;
-    if (t === 2) { out.push(oc.TopoDS_Cast.Solid_1(v)); }
-    else if (t === 3) { out.push(oc.TopoDS_Cast.Shell_1(v)); }
-    else if (t === 4) { out.push(oc.TopoDS_Cast.Face_1(v)); }
-    else if (t === 5) { out.push(oc.TopoDS_Cast.Wire_1(v)); }
-    else if (t === 6) { out.push(oc.TopoDS_Cast.Edge_1(v)); }
-    else if (t === 7) { out.push(oc.TopoDS_Cast.Vertex_1(v)); }
-    else { out.push(v); } // nested compounds stay generic (no cast bound)
+    let child;
+    if (t === 2) { child = oc.TopoDS_Cast.Solid_1(v); }
+    else if (t === 3) { child = oc.TopoDS_Cast.Shell_1(v); }
+    else if (t === 4) { child = oc.TopoDS_Cast.Face_1(v); }
+    else if (t === 5) { child = oc.TopoDS_Cast.Wire_1(v); }
+    else if (t === 6) { child = oc.TopoDS_Cast.Edge_1(v); }
+    else if (t === 7) { child = oc.TopoDS_Cast.Vertex_1(v); }
+    else { child = v; } // nested compounds stay generic (no cast bound)
+    // see FaceSelector/EdgeSelector: raw sub-shapes need a stable hash for
+    // CacheOp — without one, JSON-hashing strips the ptr and every child
+    // hashes IDENTICALLY, so ops on sibling children all cache-hit the first
+    if (child.hash === undefined) { child.hash = oc.OCJS.HashCode(child, 100000000); }
+    out.push(child);
   }
   return out;
 }
