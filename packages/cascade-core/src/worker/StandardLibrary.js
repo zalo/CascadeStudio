@@ -1878,7 +1878,6 @@ function FilletFace2D(face, radius, points, keepFace) {
   if (!face || face.IsNull()) { console.error("FilletFace2D: input face is null!"); return face; }
   let result = self.CacheOp(arguments, "FilletFace2D", () => {
     let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
-    f = _forwardProfile(f);
     let mkFillet = new self.oc.BRepFilletAPI_MakeFillet2d_2(f);
     let seen = {};
     let added = 0;
