@@ -228,8 +228,8 @@ see `test/b123d-validation/runtime-comparison.md`)**:
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,
 see `test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
 Too Tall Toby challenge parts (mass asserts kept) and every docs `.rst`
-code-block; currently **205/222 scripts PASS** (volume within 0.5%, bbox within
-1e-3/axis), 10 MISMATCH, 5 ERROR, 2 TIMEOUT, 10 SKIP (real build123d fails
+code-block; currently **206/222 scripts PASS** (volume within 0.5%, bbox within
+1e-3/axis), 10 MISMATCH, 5 ERROR, 1 TIMEOUT, 10 SKIP (real build123d fails
 natively) — full breakdown with per-script reasons AND a hand-maintained
 root-cause/defaults audit of every non-PASS in the committed
 `test/b123d-validation/report.md`. A full 232-script harness pass takes ~150 s
