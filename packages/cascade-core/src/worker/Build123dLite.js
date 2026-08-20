@@ -1444,6 +1444,16 @@ class Plane:
     def _from_location(cls, loc):
         return cls(loc)
 
+    def copy(self):
+        """An independent Plane with the same frame. Upstream planes are
+        MUTABLE (objects_curve assigns .origin on its working plane) and
+        upstream's named planes are FRESH per access; lite's Plane.XY & co
+        are shared singletons, so anything that mutates must copy first —
+        the copy shim dispatches through __copy__."""
+        return Plane(self)
+
+    __copy__ = copy
+
     @property
     def location(self):
         x, y, z = tuple(self.x_dir), tuple(self.y_dir), tuple(self.z_dir)
@@ -1613,6 +1623,13 @@ class Shape:
         """The shape this sub-shape was selected from (upstream
         Shape.topo_parent; lite's selectors track the same link as .parent)."""
         return self._parent
+
+    @topo_parent.setter
+    def topo_parent(self, value):
+        # upstream topo_parent is a PLAIN attribute (objects assign it when
+        # re-homing selector results); it is not the assembly link, so no
+        # children bookkeeping happens here
+        self._parent = value
 
     # --- location bookkeeping (baked geometry + tracked frame) ---
     @property
@@ -2254,16 +2271,25 @@ class Compound(Shape):
                 return Vertex(t)
             return None
 
-        root_type = self.topo.ShapeType().value
-        if root_type == 0:  # a real TopoDS_Compound
-            candidates = list(w.DirectChildren(self.topo))
-        else:
-            candidates = [self.topo]
-            if root_type == 5:
-                # lite keeps 1-D results as ONE chained wire where upstream's
-                # Curve wraps a compound OF EDGES; the wire's direct children
-                # ARE those edges (build_common pends typed[Edge] from here)
-                candidates.extend(list(w.DirectChildren(self.topo)))
+        # lite builds 1-D results as CHAINED WIRES and its algebra NESTS
+        # compounds (Mixin1D.__add__ re-compounds the previous compound with
+        # the new edge) where upstream's Curve wraps a FLAT compound of
+        # edges. Both are packaging artifacts: a wire presents as its edges —
+        # and ONLY as its edges (get_type(Wire) on upstream's compound-of-
+        # edges is EMPTY; reporting the wire AND its edges would double the
+        # geometry through build_common's typed[Edge] + typed[Wire] paths) —
+        # and nested compounds flatten to their leaves, which is what
+        # upstream's one-level iteration sees on its flat compounds.
+        def expand(t, depth=0):
+            st = t.ShapeType().value
+            if st == 5 or (st == 0 and depth < 8):
+                out = []
+                for c in w.DirectChildren(t):
+                    out.extend(expand(c, depth + 1))
+                return out
+            return [t]
+
+        candidates = expand(self.topo)
         out = ShapeList()
         for t in candidates:
             s = wrap(t)
@@ -2374,11 +2400,13 @@ class Solid(Shape):
     @classmethod
     def make_sphere(cls, radius, plane=None, angle1=-90, angle2=90,
                     angle3=360):
-        """A sphere solid (full spheres only, like the examples use)."""
+        """A sphere solid; partial spheres go through the same
+        BRepPrimAPI_MakeSphere two-latitude + longitude-sweep form the Sphere
+        object uses (build123d Solid.make_sphere)."""
         if angle1 != -90 or angle2 != 90 or angle3 != 360:
-            raise NotImplementedError(
-                'partial spheres are not supported in build123d-lite')
-        s = cls(w.Sphere(radius))
+            s = cls(w.PartialSphere(radius, angle1, angle2, angle3))
+        else:
+            s = cls(w.Sphere(radius))
         if plane is not None:
             s = plane * s
             s._loc = None  # the plane is BAKED (upstream keeps identity)
@@ -2698,7 +2726,8 @@ class Mixin1D(Shape):
         return self._walk(u, False)
 
     def tangent_at(self, u=0.5):
-        return self._walk(u, True)
+        # upstream tangent_at also accepts a POINT on the shape
+        return self._walk(self._to_param(u), True)
 
     def location_at(self, u, x_dir=None):
         """Location at length-fraction u: origin on the curve, z along the
@@ -3179,6 +3208,7 @@ class Edge(Mixin1D):
         return Vector(tuple(w._edgePointAt(self.topo, float(uu))))
 
     def tangent_at(self, u=0.5):
+        u = self._to_param(u)   # upstream tangent_at also accepts a POINT
         uu = u if self.is_forward else 1.0 - u
         t = Vector(tuple(w._edgeTangentAt(self.topo, float(uu))))
         return t if self.is_forward else -t

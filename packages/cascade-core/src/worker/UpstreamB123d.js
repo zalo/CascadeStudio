@@ -135,12 +135,62 @@ export function rewriteListSplats(src) {
   return src.replace(/\[\*([A-Za-z_][A-Za-z0-9_]*)\]/g, 'list($1)');
 }
 
+/** Bare named-plane ALIASES become copies: upstream's Plane.XY (classproperty)
+ *  returns a FRESH plane per access and objects_curve MUTATES .origin on it;
+ *  lite's named planes are shared singleton instances, so an aliased mutation
+ *  would corrupt Plane.XY for every later evaluation on the page. Only plain
+ *  `name = Plane.XY`-style statements are rewritten (signature defaults have
+ *  a trailing comma/paren and are left alone — they are never mutated without
+ *  first passing through copy.copy, which lite's Plane.__copy__ serves). */
+export function copyNamedPlaneAliases(src) {
+  return src.replace(
+    /^(\s+)(\w+) = (Plane\.(?:XY|XZ|YZ|YX|ZX|ZY))\s*$/gm,
+    '$1$2 = $3.copy()');
+}
+
+/** MicroPython drops class-body ANNOTATIONS, so @dataclass classes lose the
+ *  field order the shim's generated __init__ needs (pack._Node takes a
+ *  positional arg). Rewrite each annotated-with-default field line inside a
+ *  @dataclass class body into a plain assignment that also records the field
+ *  NAME in an ordered `_fields` list the dataclasses shim reads.
+ *  Line-count preserving; bare annotations (no default) are left alone (they
+ *  are no-ops on MicroPython either way). */
+export function rewriteDataclassFields(src) {
+  const lines = src.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\s*@dataclass\b/.test(lines[i])) { continue; }
+    // find the class line, then its body indent
+    let j = i + 1;
+    while (j < lines.length && !/^\s*class /.test(lines[j])) { j++; }
+    if (j >= lines.length) { continue; }
+    const classIndent = lines[j].match(/^\s*/)[0].length;
+    let first = true;
+    for (let k = j + 1; k < lines.length; k++) {
+      const line = lines[k];
+      if (line.trim() === '') { continue; }
+      const ind = line.match(/^\s*/)[0].length;
+      if (ind <= classIndent) { break; } // class body ended
+      const m = line.match(/^(\s+)(\w+):\s*[^=]+?\s*=\s*(.+)$/);
+      if (!m) { continue; }
+      if (first) {
+        lines[k] = m[1] + "_fields = ['" + m[2] + "']; " + m[2] + ' = ' + m[3];
+        first = false;
+      } else {
+        lines[k] = m[1] + "_fields.append('" + m[2] + "'); " + m[2] + ' = ' + m[3];
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
 export function transformUpstreamSource(name, src) {
   let out = src;
   out = stripTypeAliases(out);
+  out = copyNamedPlaneAliases(out);
   out = stripRuntimeGenerics(out);
   out = cleanClassBases(out);
   out = rewriteMatchStatements(out, name);
+  out = rewriteDataclassFields(out);
   out = rewriteListSplats(out);
   // this MicroPython build has no sys.exc_info and sys is read-only; the
   // loader installs a builtins._cs_exc_info that reports "not handling an
