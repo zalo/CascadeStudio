@@ -58,6 +58,19 @@ for (const f of ['micropython.mjs', 'micropython-settrace.wasm']) {
   }
 }
 
+// 3a'. Copy the custom-patched micropython-cs artifacts (vendored,
+// committed — sys._getframe/nested-isinstance/float-hash/stable-sort; see
+// vendor/micropython-cs/PROVENANCE.md). MicroPythonRuntime.js PREFERS this
+// pair at runtime and falls back to the stock settrace artifacts above
+// when the pair is absent from dist.
+const mpCsDir = path.join(pkgRoot, 'vendor', 'micropython-cs');
+if (fs.existsSync(path.join(mpCsDir, 'micropython.mjs')) &&
+    fs.existsSync(path.join(mpCsDir, 'micropython.wasm'))) {
+  console.log('[cascade-core] Copying custom micropython-cs artifacts...');
+  fs.copyFileSync(path.join(mpCsDir, 'micropython.mjs'), path.join(distDir, 'micropython-cs.mjs'));
+  fs.copyFileSync(path.join(mpCsDir, 'micropython.wasm'), path.join(distDir, 'micropython-cs.wasm'));
+}
+
 // 3b. Copy the Pyodide core distribution, IF it has been vendored
 // (`node packages/cascade-core/scripts/fetch-pyodide.cjs`). Optional by
 // design: Pyodide is the experimental `?pyruntime=pyodide` alternative to
