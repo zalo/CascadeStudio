@@ -50,11 +50,17 @@ _orig_wrap_like = _lt._wrap_like
 
 def _cs_wrap_like(obj, topo):
     cls = type(obj) if isinstance(obj, _lt.Shape) else _lt.Part
+    if cls is _lt.Vertex and not (
+            topo is not None and hasattr(topo, 'ShapeType')
+            and topo.ShapeType().value == 7):
+        # an operation ON a vertex may not RETURN a vertex (e.g. a boolean's
+        # compound) — fall back to the base wrapper for non-vertex results
+        cls = _lt.Shape
     res = object.__new__(cls)
     _lt.Shape.__init__(res, topo)
     if isinstance(res, _lt.Mixin1D):
         res._specs = list(getattr(obj, '_specs', []) or [])
-    if cls is _lt.Vertex and topo is not None:
+    if cls is _lt.Vertex:
         _p = _w._vertexPoint(topo)
         res.X, res.Y, res.Z = _p[0], _p[1], _p[2]
     return res
@@ -94,15 +100,38 @@ def unwrapped_shapetype(obj):
 
 
 # ---- S-sized method fills (upstream methods over lite's capabilities) ------
+def _cs_edge_indices(target, edges):
+    """Per-TARGET edge indices for FilletEdges/ChamferEdges. An edge selected
+    through an intermediate shape (f.outer_wire().edges()) carries indices
+    relative to THAT shape — remap geometrically onto the target's edges
+    like lite's _edges_by_parent (same midpoint+length key)."""
+    if not edges:
+        raise ValueError('no edges given (use shape.edges() selectors)')
+    keyed = None
+    idxs = []
+    for e in edges:
+        if getattr(e, 'parent', None) is target and \
+                getattr(e, 'index', None) is not None:
+            i = e.index
+        else:
+            if keyed is None:
+                keyed = {}
+                for te in target.edges():
+                    keyed[_lt._shape_key(te, 'edge')] = te.index
+            i = keyed.get(_lt._shape_key(e, 'edge'))
+            if i is None:
+                raise ValueError('one of these edges is not an edge of the '
+                                 'shape being filleted/chamfered')
+        if i not in idxs:
+            idxs.append(i)
+    return idxs
+
+
 def _shape_fillet_3d(self, radius, edge_list):
     """upstream Mixin3D.fillet(radius, edge_list) as a method on the seam
     Shape (lite exposes filleting as the module-level fillet(edges, r) over
     per-shape edge indices)."""
-    edges = list(edge_list)
-    idxs = [getattr(e, 'index', None) for e in edges]
-    if not edges or any(i is None for i in idxs):
-        raise ValueError('fillet: the edges must come from this shape\'s '
-                         'edges() selector')
+    idxs = _cs_edge_indices(self, [e for e in edge_list])
     return _lt._wrap_like(self, _w.FilletEdges(_lt._topo(self), radius, idxs))
 
 
@@ -115,11 +144,7 @@ def _shape_chamfer_3d(self, length, length2, edge_list, face=None):
     if face is not None:
         raise NotImplementedError(
             'chamfer(face=) is not supported in build123d-lite')
-    edges = list(edge_list)
-    idxs = [getattr(e, 'index', None) for e in edges]
-    if not edges or any(i is None for i in idxs):
-        raise ValueError('chamfer: the edges must come from this shape\'s '
-                         'edges() selector')
+    idxs = _cs_edge_indices(self, [e for e in edge_list])
     return _lt._wrap_like(self, _w.ChamferEdges(_lt._topo(self), length, idxs))
 
 
@@ -130,8 +155,16 @@ if not hasattr(_lt.Shape, 'fillet'):
 
 def _face_fillet_2d(self, radius, vertices):
     """upstream Face.fillet_2d(radius, vertices) over lite's
-    BRepFilletAPI_MakeFillet2d binding."""
-    pts = [[v.X, v.Y, v.Z] for v in vertices]
+    BRepFilletAPI_MakeFillet2d binding. Dedupe by position: builder
+    .vertices() yields each shared corner once per incident edge (lite keeps
+    free-edge compounds), and filleting the same corner twice raises
+    'BRep_API: command not done'."""
+    pts = []
+    for v in vertices:
+        p = [v.X, v.Y, v.Z]
+        if not any(abs(p[0] - q[0]) + abs(p[1] - q[1]) + abs(p[2] - q[2])
+                   <= 1e-9 for q in pts):
+            pts.append(p)
     return _lt.Face(_w.FilletFace2D(_lt._topo(self), radius, pts))
 
 
@@ -328,6 +361,51 @@ def _wire_make_convex_hull(cls, edges, tolerance=1e-3):
 if not hasattr(_lt.Wire, 'make_ellipse'):
     _lt.Wire.make_ellipse = classmethod(_wire_make_ellipse)
     _lt.Wire.make_convex_hull = classmethod(_wire_make_convex_hull)
+
+
+def _cs_vertex_xyz(other):
+    if isinstance(other, _lt.Vertex):
+        return other.X, other.Y, other.Z
+    v = Vector(other)
+    return v.X, v.Y, v.Z
+
+
+def _vertex_add(self, other):
+    """upstream Vertex.__add__: POINT arithmetic (lite's Shape.__add__ is the
+    boolean fuse, which silently built garbage for make_brake_formed's
+    `vertex - other` distance checks)."""
+    ox, oy, oz = _cs_vertex_xyz(other)
+    return _lt.Vertex(self.X + ox, self.Y + oy, self.Z + oz)
+
+
+def _vertex_sub(self, other):
+    """upstream Vertex.__sub__ (point arithmetic)."""
+    ox, oy, oz = _cs_vertex_xyz(other)
+    return _lt.Vertex(self.X - ox, self.Y - oy, self.Z - oz)
+
+
+def _vertex_eq(self, other):
+    """POSITIONAL vertex equality: upstream dedups vertices with set() /
+    `v in face.vertices()`, which relies on shared corners being the SAME
+    TopoDS vertex after the builder's fuse — lite keeps free-edge compounds,
+    so each corner exists once per incident edge and TopoDS-IsSame equality
+    keeps duplicates (group_by buckets then split and 2-D fillets hit the
+    same corner twice)."""
+    if not isinstance(other, _lt.Vertex):
+        return NotImplemented
+    return (abs(self.X - other.X) + abs(self.Y - other.Y) +
+            abs(self.Z - other.Z)) <= 1e-9
+
+
+def _vertex_hash(self):
+    return hash((round(self.X, 6), round(self.Y, 6), round(self.Z, 6)))
+
+
+if _lt.Vertex.__sub__ is _lt.Shape.__sub__:
+    _lt.Vertex.__add__ = _vertex_add
+    _lt.Vertex.__sub__ = _vertex_sub
+    _lt.Vertex.__eq__ = _vertex_eq
+    _lt.Vertex.__hash__ = _vertex_hash
 
 
 def _curve_wires(self):
@@ -553,6 +631,24 @@ def _solid_offset_3d(self, openings, thickness, tolerance=0.0001,
 def _shape_fix(self):
     """upstream Shape.fix (ShapeFix_Shape): lite's JS ops fix internally."""
     return self
+
+
+def _shape_clean(self):
+    """upstream Shape.clean (ShapeUpgrade_UnifySameDomain). Lite's own ops
+    unify internally so lite's clean() is the identity, but upstream's
+    builders RELY on clean() merging the seam edges a mirrored profile
+    leaves behind (a later 2-D fillet on the un-merged corner raises
+    'BRep_API: command not done' — ppp0106)."""
+    if self.topo is None:
+        return self
+    try:
+        return _lt._wrap_like(self, _w.UnifyWire(self.topo, False))
+    except Exception:
+        return self  # the known UnifySameDomain kernel raise: keep unmerged
+
+
+if _lt.Shape.clean(_lt.Shape) is _lt.Shape:  # lite's clean is the identity
+    _lt.Shape.clean = _shape_clean
 
 
 if not hasattr(_lt.Shape, 'offset_3d'):

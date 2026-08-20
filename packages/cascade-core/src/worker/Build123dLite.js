@@ -3331,14 +3331,26 @@ class Edge(Mixin1D):
     def make_circle(cls, radius, plane=None, start_angle=360.0,
                     end_angle=360.0, angular_direction=None):
         """Full circle or circular arc edge (build123d Edge.make_circle).
-        A full circle is the default (start_angle == end_angle)."""
+        A full circle is the default (start_angle == end_angle). A CLOCKWISE
+        arc runs from start_angle DOWN to end_angle: geometrically the
+        complement span, traversed backwards (GC_MakeArcOfCircle's
+        sense=False) - CenterArc(_, _, 135, -135) covers [0..135] deg, not
+        [135..360]."""
         if plane is None:
             plane = Plane.XY
-        topo = w.CircularEdge(float(radius), float(start_angle),
-                              float(end_angle),
+        cw = getattr(angular_direction, 'name',
+                     angular_direction) == 'CLOCKWISE'
+        a0, a1 = float(start_angle), float(end_angle)
+        partial = (a0 % 360.0) != (a1 % 360.0)
+        if cw and partial:
+            span = (a0 - a1) % 360.0
+            a0 = a1 % 360.0
+            a1 = a0 + span
+        topo = w.CircularEdge(float(radius), a0, a1,
                               list(plane.origin), list(plane.z_dir),
                               list(plane.x_dir))
-        return cls(topo)
+        edge = cls(topo)
+        return _reverse_1d(edge) if cw and partial else edge
 
     @classmethod
     def make_three_point_arc(cls, p1, p2, p3):
