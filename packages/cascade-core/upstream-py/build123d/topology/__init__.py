@@ -37,6 +37,24 @@ topo_explore_connected_edges = _lt.topo_explore_connected_edges
 SkipClean = getattr(_lt, 'SkipClean', None)
 
 
+# ---- dev (future 0.12) attribute-protocol fills ----------------------------
+# Dev's topology stores the raw TopoDS in Shape._wrapped behind a wrapped
+# property WITH a setter; its build_common reads `_wrapped` directly
+# (_PublicationService.place's None-guard) and ASSIGNS `.wrapped`
+# (publish(preserve_identity=True) adopts the placed topology). Lite stores
+# the raw shape in .topo with a getter-only `wrapped`: bridge both here.
+def _cs_get_wrapped(self):
+    return self.topo
+
+
+def _cs_set_wrapped(self, value):
+    self.topo = value
+
+
+Shape._wrapped = property(_cs_get_wrapped)
+Shape.wrapped = property(_cs_get_wrapped, _cs_set_wrapped)
+
+
 # ---- upstream result-class semantics ---------------------------------------
 # Upstream's Shape.moved/located and `loc * shape` PRESERVE the class (a moved
 # Face is a Face); lite's algebra convention remaps operation results via its

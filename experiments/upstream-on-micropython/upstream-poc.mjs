@@ -141,6 +141,12 @@ const mock = {
 };
 // class-DAG-unification seam: lite's Shape.__eq__/get_type read these
 mock._sameShape = (a, b) => a === b;
+// lite's TShape-HashCode Shape.__hash__ (perf round): stable per mock object
+const hashMap = new WeakMap(); let hashSeq = 1;
+mock._shapeHashCode = (t) => {
+  if (!hashMap.has(t)) { hashMap.set(t, hashSeq++); }
+  return hashMap.get(t);
+};
 mock.DirectChildren = (t) => (t && t.kind === 'compound' ? t.children.slice() : []);
 // lite's get_type/_edge_chain dispatch on TopoDS ShapeType(); give the mock
 // trees the same surface (7=vertex, 6=edge, 5=wire, 4=face, 2=solid, 0=comp)

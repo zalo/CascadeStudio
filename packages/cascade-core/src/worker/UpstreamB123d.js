@@ -102,11 +102,21 @@ export function stripTypeAliases(src) {
 
 export function cleanClassBases(src) {
   // class bases: Base[T] -> Base (runtime class subscription needs
-  // metaclasses); Generic[...] dropped entirely.
+  // metaclasses); Generic[...] dropped entirely; `metaclass=<Name>` dropped
+  // (MicroPython has no metaclass= kwarg — dev's BaseObjectMeta construction
+  // firewall is EMULATED post-import by the seam's _finalize pass, which
+  // requires the metaclass semantics; refuse any OTHER metaclass loudly).
   return src.replace(/^(class \s*\w+\()([^)\n]*)(\):)/gm, (m, a, bases, c) => {
     let b = bases.replace(/Generic\[[^\]]*\]\s*,?\s*/g, '')
       .replace(/,\s*Generic\[[^\]]*\]/g, '');
-    b = b.replace(/\[[^\]]*\]/g, '').replace(/,\s*$/, '');
+    const meta = b.match(/metaclass=(\w+)/);
+    if (meta) {
+      if (meta[1] !== 'BaseObjectMeta' && meta[1] !== 'ABCMeta') {
+        throw new Error('unsupported metaclass in upstream source: ' + meta[1]);
+      }
+      b = b.replace(/,?\s*metaclass=\w+/, '');
+    }
+    b = b.replace(/\[[^\]]*\]/g, '').replace(/,\s*$/, '').replace(/^\s*,/, '');
     if (b.trim() === '') { b = 'object'; }
     return a + b + c;
   });
@@ -153,6 +163,12 @@ export function rewriteMatchStatements(src, name) {
   return lines.join('\n');
 }
 
+export function stripPositionalOnlyMarkers(src) {
+  // PEP 570 `/` markers in def signatures (MicroPython rejects them); the
+  // positional-only ENFORCEMENT is lost, which build123d never relies on.
+  return src.replace(/^(\s*def [^\n]*?), \/([),])/gm, '$1$2');
+}
+
 export function rewriteListSplats(src) {
   // `[*name]` list displays (MicroPython has no PEP 448 in displays)
   return src.replace(/\[\*([A-Za-z_][A-Za-z0-9_]*)\]/g, 'list($1)');
@@ -193,6 +209,10 @@ export function rewriteDataclassFields(src) {
       if (line.trim() === '') { continue; }
       const ind = line.match(/^\s*/)[0].length;
       if (ind <= classIndent) { break; } // class body ended
+      // fields precede methods in a dataclass body; stop at the first
+      // def/decorator/nested class so METHOD SIGNATURE lines (annotated
+      // keyword params, e.g. BuildScope.derive) are never rewritten
+      if (/^\s*(def |@|class )/.test(line)) { break; }
       const m = line.match(/^(\s+)(\w+):\s*[^=]+?\s*=\s*(.+)$/);
       if (!m) { continue; }
       if (first) {
@@ -214,6 +234,7 @@ export function transformUpstreamSource(name, src) {
   out = cleanClassBases(out);
   out = rewriteMatchStatements(out, name);
   out = rewriteDataclassFields(out);
+  out = stripPositionalOnlyMarkers(out);
   out = rewriteListSplats(out);
   // this MicroPython build has no sys.exc_info and sys is read-only; the
   // loader installs a builtins._cs_exc_info that reports "not handling an

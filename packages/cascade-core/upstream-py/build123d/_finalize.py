@@ -78,6 +78,16 @@ for _name in ('show', 'show_object', 'show_all', 'volume',
         setattr(_pkg, _name, getattr(_lt, _name))
 
 
+def _cs_current_builder():
+    """The active upstream Builder, across upstream versions: 0.11.1 keeps a
+    Builder._current ContextVar; dev (future 0.12) unified it into the
+    BuildScope stack behind Builder._get_context()."""
+    cur = getattr(_common.Builder, '_current', None)
+    if cur is not None:
+        return cur.get(None)
+    return _common.Builder._get_context(log=False)
+
+
 # lite operations with NO upstream Level-A counterpart that must also reach
 # an UPSTREAM builder context: call lite's (context-free here — lite's own
 # builder stack is empty in upstream mode), then hand the result to the
@@ -85,7 +95,7 @@ for _name in ('show', 'show_object', 'show_all', 'volume',
 def _cs_builder_op(fn, mode):
     def wrapped(*a, **k):
         res = fn(*a, **k)
-        ctx = _common.Builder._current.get(None)
+        ctx = _cs_current_builder()
         if ctx is not None and res is not None and \
                 getattr(res, 'topo', None) is not None:
             ctx._add_to_context(res, mode=mode)
@@ -103,7 +113,7 @@ def _cs_airfoil(airfoil_code, n_points=50, finite_te=False,
                 mode=_enums.Mode.ADD):
     res = _lt.Airfoil(airfoil_code, n_points=n_points, finite_te=finite_te,
                       mode=_lt.Mode.PRIVATE)
-    ctx = _common.Builder._current.get(None)
+    ctx = _cs_current_builder()
     if ctx is not None and getattr(res, 'topo', None) is not None:
         ctx._add_to_context(*res.edges(), mode=mode)
     return res
@@ -122,7 +132,7 @@ def _cs_double_tangent_arc(pnt, tangent, other, keep=None, mode=None):
     lk = getattr(_lt.Keep, getattr(keep, 'name', 'TOP'), _lt.Keep.TOP)
     arc = _lt.DoubleTangentArc(pnt, tangent, other, keep=lk,
                                mode=_lt.Mode.PRIVATE)
-    ctx = _common.Builder._current.get(None)
+    ctx = _cs_current_builder()
     if ctx is not None and getattr(ctx, '_tag', '') == 'BuildLine' and \
             ctx._obj is not None and getattr(ctx._obj, 'topo', None) is not None:
         try:
@@ -183,6 +193,104 @@ def _loclist_rmul(self, other):
 
 _common.LocationList.__mul__ = _loclist_mul
 _common.LocationList.__rmul__ = _loclist_rmul
+
+
+# --- dev (future 0.12) BaseObjectMeta construction-firewall emulation -----
+# Upstream dev builds BaseObject on a METACLASS whose __call__ wraps every
+# object construction in an isolated BuildScope and publishes the finished
+# instance to its captured Builder. MicroPython has no metaclasses; the
+# loader strips `metaclass=BaseObjectMeta` and this pass reproduces the
+# __call__ semantics in two halves:
+#   * BaseObject.__new__ — everything the metaclass did BEFORE construction
+#     (validate the builder restriction, capture contexts, build + PUSH the
+#     isolated scope; owner.root, which upstream's own __new__ set, is set
+#     here too), leaving the pending (scope, token) on the instance;
+#   * a wrapper on each terminal publisher __init__ (Base{Part,Sketch,Curve,
+#     Line,Edge}Object) — pop + _publish_to_context when the OUTERMOST
+#     __init__ completes. This relies on upstream's own convention that a
+#     subclass __init__ ends with super().__init__(...): statements AFTER
+#     that super call would run outside the isolated scope (none of the
+#     library objects do this).
+# KNOWN COMPROMISE: if a subclass __init__ raises BEFORE reaching the
+# terminal super().__init__, the pushed scope leaks until the worker's
+# between-runs _cs_reset_all (the evaluation is erroring out anyway).
+if hasattr(_common, 'BaseObjectMeta'):
+    def _cs_bo_new(cls, *args, **kwargs):
+        inst = object.__new__(cls)
+        parent_scope = _common._get_build_scope()
+        if parent_scope is None:
+            return inst
+        parent_object_scope = _common.BaseObjectMeta._get_context()
+        location_context = _common.LocationList._get_context()
+        publication_target = _common.Builder._get_context(log=False)
+        _common.BaseObjectMeta._validate_builder(cls, publication_target)
+        publication_locations = (
+            tuple(location_context.locations)
+            if location_context is not None
+            else _common._identity_locations()
+        )
+        object_local_locations = (
+            tuple(location_context.local_locations)
+            if location_context is not None
+            else _common._identity_locations()
+        )
+        owner = _common._BaseObjectScopeOwner()
+        owner.root = inst
+        isolated_scope = _common.BuildScope(
+            parent=parent_scope,
+            builder=None,
+            operation_locations=_common._identity_locations(),
+            publication_locations=publication_locations,
+            output_placements=_common._identity_locations(),
+            owner=owner,
+            publication_target=publication_target,
+            isolated=True,
+            location_context=_common.LocationList([_geometry.Location()]),
+            object_context=parent_object_scope,
+            object_local_locations=object_local_locations,
+            object_placements=(
+                parent_scope.output_placements
+                if parent_scope is not None
+                else _common._identity_locations()
+            ),
+        )
+        token = _common._push_build_scope(isolated_scope)
+        inst._cs_pending_scope = (isolated_scope, token)
+        return inst
+
+    _common.BaseObject.__new__ = _cs_bo_new
+
+    def _cs_finish_object(inst, publish):
+        pend = getattr(inst, '_cs_pending_scope', None)
+        if pend is None:
+            return
+        inst._cs_pending_scope = None
+        scope, token = pend
+        _common._pop_build_scope(token)
+        if publish:
+            inst._publish_to_context(scope)
+
+    def _cs_wrap_publisher_init(kls):
+        orig = kls.__init__
+
+        def wrapped(self, *a, **k):
+            try:
+                orig(self, *a, **k)
+            except BaseException:
+                _cs_finish_object(self, False)
+                raise
+            _cs_finish_object(self, True)
+        kls.__init__ = wrapped
+
+    for _mname, _cname in (('objects_part', 'BasePartObject'),
+                           ('objects_sketch', 'BaseSketchObject'),
+                           ('objects_curve', 'BaseCurveObject'),
+                           ('objects_curve', 'BaseLineObject'),
+                           ('objects_curve', 'BaseEdgeObject')):
+        _omod = sys.modules.get('build123d.' + _mname)
+        _okls = getattr(_omod, _cname, None) if _omod is not None else None
+        if _okls is not None:
+            _cs_wrap_publisher_init(_okls)
 
 
 def _reset_state():
