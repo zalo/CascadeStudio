@@ -75,6 +75,27 @@ fs.copyFileSync(
   path.join(typedefsDir, 'StandardLibraryIntellisense.ts')
 );
 
+// 4b. Copy the basedpyright language-server worker (Python IntelliSense) and
+// bundle the build123d-lite Python stubs into a single JSON (one fetch).
+console.log('[cascade-studio] Copying pyright worker + Python stubs...');
+const pyrightDir = path.join(distDir, 'pyright');
+fs.mkdirSync(pyrightDir, { recursive: true });
+fs.copyFileSync(
+  path.join(monoRoot, 'node_modules', 'browser-basedpyright', 'dist', 'pyright.worker.js'),
+  path.join(pyrightDir, 'pyright.worker.js')
+);
+const stubsRoot = path.join(coreRoot, 'types', 'python-stubs');
+const stubs = {};
+(function collectStubs(dir, rel) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const abs = path.join(dir, entry.name);
+    const relPath = rel ? rel + '/' + entry.name : entry.name;
+    if (entry.isDirectory()) { collectStubs(abs, relPath); }
+    else if (entry.name.endsWith('.pyi')) { stubs[relPath] = fs.readFileSync(abs, 'utf8'); }
+  }
+})(stubsRoot, '');
+fs.writeFileSync(path.join(typedefsDir, 'python-stubs.json'), JSON.stringify(stubs));
+
 // 5. Copy static assets (css, textures, icon, lib)
 console.log('[cascade-studio] Copying static assets...');
 for (const dir of ['css', 'textures', 'icon', 'lib']) {
@@ -139,7 +160,7 @@ fs.writeFileSync(path.join(distDir, 'index.html'), `<!DOCTYPE html>
     </head>
 
     <body data-api="window.CascadeAPI">
-        <h1 class="sr-only">AGENT API: Run CascadeAPI.getQuickStart() to learn how to use this CAD app. All interaction goes through window.CascadeAPI — do NOT use browser_take_screenshot or browser_run_code.</h1>
+        <h1 class="sr-only">AGENT API: Run CascadeAPI.getQuickStart() to learn how to use this CAD app. All interaction goes through window.CascadeAPI — do NOT use browser_take_screenshot or browser_run_code. The editor opens in Python (build123d) mode; call CascadeAPI.setMode('cascadestudio') for the JavaScript API.</h1>
         <div id="topnav" class="topnav">
             <a href="https://github.com/zalo/CascadeStudio" class="topnav-brand">Cascade Studio</a>
             <div class="topnav-actions">
@@ -155,6 +176,9 @@ fs.writeFileSync(path.join(distDir, 'index.html'), `<!DOCTYPE html>
                 </label>
                 <a href="#" title="Clears the external step/iges/stl files stored in the project." onmouseup="window.clearExternalFiles();">Clear Imported</a>
                 <select id="editorMode" class="topnav-select" title="Editor Language Mode">
+                    <!-- Python is the default mode; CascadeMain sets .value to
+                         the mode it resolves from the URL / saved project. -->
+                    <option value="python" selected>Python (build123d)</option>
                     <option value="cascadestudio">CascadeStudio JS</option>
                     <option value="openscad">OpenSCAD</option>
                 </select>

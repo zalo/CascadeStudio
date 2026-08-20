@@ -1,3 +1,5 @@
+import { createGordonEngine } from './GordonSurface.js';
+
 // Cascade Studio Standard Library
 // Adding new standard library features and functions:
 // 1. Research the OpenCascade API: https://www.opencascade.com/doc/occt-7.4.0/refman/html/annotated.html
@@ -12,6 +14,7 @@
 //  - From there, you can graft those into CascadeStudio/node_modules/opencascade.js/dist (following its existing conventions)
 
 import { CascadeStudioUtils } from './StandardUtils.js';
+import quickhull3d from 'quickhull3d';
 
 // --- CAD API Functions ---
 // These are regular function declarations (NOT class methods) to preserve
@@ -22,7 +25,12 @@ function Box(x, y, z, centered) {
   let curBox = self.CacheOp(arguments, "Box", () => {
     let box = new self.oc.BRepPrimAPI_MakeBox_2(x, y, z).Shape();
     if (centered) {
-      return Translate([-x / 2, -y / 2, -z / 2], box);
+      let centeredBox = Translate([-x / 2, -y / 2, -z / 2], box);
+      // Translate() scene-registers its result, and Box pushes curBox below —
+      // deregister the nested result so a cache miss doesn't double-add it
+      // (same pattern as Text3D's internal Rotate/Extrude).
+      self.sceneShapes = self.Remove(self.sceneShapes, centeredBox);
+      return centeredBox;
     } else {
       return box;
     }
@@ -38,6 +46,19 @@ function Sphere(radius) {
   });
   self.sceneShapes.push(curSphere);
   return curSphere;
+}
+
+/** Full or PARTIAL sphere (BRepPrimAPI_MakeSphere with two latitude angles
+ *  and a longitude sweep, in DEGREES — build123d's Solid.make_sphere). */
+function PartialSphere(radius, angle1, angle2, angle3) {
+  let sphere = self.CacheOp(arguments, "PartialSphere", () => {
+    let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(0, 0, 0), self.oc.gp.DZ());
+    const rad = Math.PI / 180;
+    return new self.oc.BRepPrimAPI_MakeSphere_12(
+      ax2, radius, angle1 * rad, angle2 * rad, angle3 * rad).Shape();
+  });
+  self.sceneShapes.push(sphere);
+  return sphere;
 }
 
 function Cylinder(radius, height, centered) {
@@ -116,16 +137,102 @@ function BSpline(inPoints, closed) {
   return curSpline;
 }
 
-function Text3D(text, size, height, fontName) {
-  if (!size   ) { size    = 36; }
-  if (!height && height !== 0.0) { height  = 0.15; }
-  if (!fontName) { fontName = "Roboto"; }
+/** Kerning between two glyphs in font units, from the worker's own kern
+ *  table parse (opentype.js misses multi-subtable kern tables). */
+function _kernValue(fontName, leftGlyph, rightGlyph) {
+  let pairs = self.fontKernPairs && self.fontKernPairs[fontName];
+  if (!pairs) { return 0; }
+  return pairs.get(leftGlyph.index + ',' + rightGlyph.index) || 0;
+}
 
-  let textArgs = JSON.stringify(arguments);
-  let curText = self.CacheOp(arguments, "Text3D", () => {
-    if (self.loadedFonts[fontName] === undefined) { for (let k in self.argCache) delete self.argCache[k]; console.log("Font not loaded or found yet!  Try again..."); return; }
+/** Convert an opentype.js glyph path (y-down canvas coords, baseline at 0)
+ *  into a face-with-holes. Shared by Text3D and Text2D. Lays glyphs out
+ *  itself (advance + kern-table pairs, like FreeType) instead of relying on
+ *  opentype's getPath kerning. Returns the face, or null when the font is
+ *  not loaded yet. */
+function _opentypeTextFace(text, size, fontName, perGlyphCompound) {
+    if (self.loadedFonts[fontName] === undefined) { for (let k in self.argCache) delete self.argCache[k]; console.log("Font not loaded or found yet!  Try again..."); return null; }
+    let font = self.loadedFonts[fontName];
+    let scale = size / font.unitsPerEm;
+    let glyphCommandRuns = [];
+    let penX = 0;
+    let prevGlyph = null;
+    for (const ch of text) {
+      let glyph = font.charToGlyph(ch);
+      if (prevGlyph) { penX += _kernValue(fontName, prevGlyph, glyph) * scale; }
+      glyphCommandRuns.push(glyph.getPath(penX, 0, size).commands);
+      penX += glyph.advanceWidth * scale;
+      prevGlyph = glyph;
+    }
+    if (!perGlyphCompound) {
+      return _textCommandsToFace([].concat.apply([], glyphCommandRuns));
+    }
+    // Per-glyph faces collected in a compound — the topology build123d's
+    // Text produces (its faces() are the individual glyphs, with DISJOINT
+    // outer contours as separate faces: the dot of an 'i'/'j' is its own
+    // face, while nested contours like the counter of an 'o' stay holes).
+    let glyphFaces = [];
+    for (let g = 0; g < glyphCommandRuns.length; g++) {
+      glyphFaces = glyphFaces.concat(_glyphContourFaces(glyphCommandRuns[g]));
+    }
+    if (glyphFaces.length === 0) { return null; }
+    if (glyphFaces.length === 1) { return glyphFaces[0]; }
+    let builder = new self.oc.BRep_Builder();
+    let compound = new self.oc.TopoDS_Compound();
+    builder.MakeCompound(compound);
+    for (let g = 0; g < glyphFaces.length; g++) { builder.Add(compound, glyphFaces[g]); }
+    compound.hash = self.oc.OCJS.HashCode(compound, 100000000);
+    return compound;
+}
+
+/** Split one glyph's path commands into faces by contour winding: TrueType
+ *  outlines wind outer contours one way and holes the other, so contours
+ *  matching the first contour's winding start a NEW face and
+ *  opposite-winding contours become holes of the most recent outer. This
+ *  reproduces Font_BRepTextBuilder's topology (i/j dots are separate
+ *  faces; o/a/d counters are holes). */
+function _glyphContourFaces(commands) {
+  let contours = [];
+  let cur = null;
+  for (let i = 0; i < commands.length; i++) {
+    if (commands[i].type === "M") { cur = []; contours.push(cur); }
+    if (cur) { cur.push(commands[i]); }
+  }
+  let signedArea = (cmds) => {
+    let pts = [];
+    for (let i = 0; i < cmds.length; i++) {
+      if (cmds[i].x !== undefined) { pts.push([cmds[i].x, cmds[i].y]); }
+    }
+    let a = 0;
+    for (let i = 0; i < pts.length; i++) {
+      let p = pts[i], q = pts[(i + 1) % pts.length];
+      a += p[0] * q[1] - q[0] * p[1];
+    }
+    return a / 2;
+  };
+  let outerSign = null;
+  let groups = [];
+  for (let i = 0; i < contours.length; i++) {
+    let s = Math.sign(signedArea(contours[i])) || 1;
+    if (outerSign === null) { outerSign = s; }
+    if (s === outerSign || groups.length === 0) {
+      groups.push(contours[i].slice());
+    } else {
+      // hole: append to the most recent outer's command run
+      let last = groups[groups.length - 1];
+      for (let k = 0; k < contours[i].length; k++) { last.push(contours[i][k]); }
+    }
+  }
+  let faces = [];
+  for (let i = 0; i < groups.length; i++) {
+    let f = _textCommandsToFace(groups[i]);
+    if (f) { faces.push(f); }
+  }
+  return faces;
+}
+
+function _textCommandsToFace(commands) {
     let textFaces = [];
-    let commands = self.loadedFonts[fontName].getPath(text, 0, 0, size).commands;
     for (let idx = 0; idx < commands.length; idx++) {
       if (commands[idx].type === "M") {
         var firstPoint = new self.oc.gp_Pnt_3(commands[idx].x, commands[idx].y, 0);
@@ -181,12 +288,23 @@ function Text3D(text, size, height, fontName) {
         lastPoint = nextPoint;
       }
     }
+    return textFaces.length > 0 ? textFaces[textFaces.length - 1] : null;
+}
 
+function Text3D(text, size, height, fontName) {
+  if (!size   ) { size    = 36; }
+  if (!height && height !== 0.0) { height  = 0.15; }
+  if (!fontName) { fontName = "Roboto"; }
+
+  let textArgs = JSON.stringify(arguments);
+  let curText = self.CacheOp(arguments, "Text3D", () => {
+    let textFace = _opentypeTextFace(text, size, fontName);
+    if (!textFace) { return; }
     if (height === 0) {
-      return textFaces[textFaces.length - 1];
+      return textFace;
     } else {
-      textFaces[textFaces.length - 1].hash = self.stringToHash(textArgs);
-      let textSolid = Rotate([1, 0, 0], -90, Extrude(textFaces[textFaces.length - 1], [0, 0, height * size]));
+      textFace.hash = self.stringToHash(textArgs);
+      let textSolid = Rotate([1, 0, 0], -90, Extrude(textFace, [0, 0, height * size]));
       self.sceneShapes = self.Remove(self.sceneShapes, textSolid);
       return textSolid;
     }
@@ -202,7 +320,10 @@ function ForEachSolid(shape, callback) {
   let solid_index = 0;
   let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SOLID, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
   for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SOLID, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-    callback(solid_index++, self.oc.TopoDS_Cast.Solid_1(anExplorer.Current()));
+    let solid = self.oc.TopoDS_Cast.Solid_1(anExplorer.Current());
+    // sub-shapes need a stable hash for CacheOp (see EdgeSelector)
+    if (solid.hash === undefined) { solid.hash = self.oc.OCJS.HashCode(solid, 100000000); }
+    callback(solid_index++, solid);
   }
 }
 function GetNumSolidsInCompound(shape) {
@@ -254,11 +375,47 @@ function ForEachWire(shape, callback) {
     callback(wire_index++, self.oc.TopoDS_Cast.Wire_1(anExplorer.Current()));
   }
 }
-function MakeFace(wire, keepWire) {
+
+/** The DIRECT children of a shape (TopoDS_Iterator, ONE level deep, with
+ *  cumulative orientation/location applied) — build123d's Compound.get_type
+ *  reads exactly these: the faces inside a compound's solids are NOT direct
+ *  children of the compound, unlike what a TopExp_Explorer sweep returns. */
+function DirectChildren(shape) {
+  const oc = self.oc;
+  const out = [];
+  const it = new oc.TopoDS_Iterator_2(shape, true, true);
+  for (; it.More(); it.Next()) {
+    const v = it.Value();
+    // DOWNCAST to the concrete class: Iterator.Value() is a generic
+    // TopoDS_Shape, but the typed bindings (normal_at & co.) require the
+    // concrete TopoDS_Face/Edge/... exactly like the ForEach* explorers.
+    const t = v.ShapeType().value;
+    let child;
+    if (t === 2) { child = oc.TopoDS_Cast.Solid_1(v); }
+    else if (t === 3) { child = oc.TopoDS_Cast.Shell_1(v); }
+    else if (t === 4) { child = oc.TopoDS_Cast.Face_1(v); }
+    else if (t === 5) { child = oc.TopoDS_Cast.Wire_1(v); }
+    else if (t === 6) { child = oc.TopoDS_Cast.Edge_1(v); }
+    else if (t === 7) { child = oc.TopoDS_Cast.Vertex_1(v); }
+    else { child = v; } // nested compounds stay generic (no cast bound)
+    // see FaceSelector/EdgeSelector: raw sub-shapes need a stable hash for
+    // CacheOp — without one, JSON-hashing strips the ptr and every child
+    // hashes IDENTICALLY, so ops on sibling children all cache-hit the first
+    if (child.hash === undefined) { child.hash = oc.OCJS.HashCode(child, 100000000); }
+    out.push(child);
+  }
+  return out;
+}
+/** A face bounded by a wire. `onlyPlanar` forces BRepBuilderAPI's OnlyPlane
+ *  mode, which build123d's Face(wire) always uses — without it the builder
+ *  recovers whatever surface the wire's edges carry pcurves for, so the
+ *  boundary of a freeform face rebuilds that same freeform face instead of
+ *  capping it flat. */
+function MakeFace(wire, keepWire, onlyPlanar) {
   if (!wire || wire.IsNull()) { console.error("MakeFace: input wire is null!"); return wire; }
   let face = self.CacheOp(arguments, "MakeFace", () => {
     let w = wire.ShapeType().value === 5 ? wire : self.oc.TopoDS_Cast.Wire_1(wire);
-    return new self.oc.BRepBuilderAPI_MakeFace_15(w, false).Face();
+    return new self.oc.BRepBuilderAPI_MakeFace_15(w, !!onlyPlanar).Face();
   });
 
   if (!keepWire) { self.sceneShapes = self.Remove(self.sceneShapes, wire); }
@@ -399,13 +556,17 @@ function Rotate(axis, degrees, shapes, keepOriginal) {
       let transformation = new self.oc.gp_Trsf_1();
       transformation.SetRotation_1(
         new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0), new self.oc.gp_Dir_3(
-          new self.oc.gp_Vec_4(axis[0], axis[1], axis[2]))), degrees * 0.0174533);
-      let rotation = new self.oc.TopLoc_Location_4(transformation);
+          new self.oc.gp_Vec_4(axis[0], axis[1], axis[2]))), degrees * (Math.PI / 180));
+      // Bake the rotation into the geometry (deep copy) instead of hanging a
+      // TopLoc_Location on the shape: boolean ops in this WASM build silently
+      // fail to fuse/cut shapes that carry rotation Locations (they come out
+      // as unfused compounds), which broke e.g. subtracting a rotated copy.
       if (!self.isArrayLike(shapes)) {
-        newRot = shapes.Moved(rotation, false);
+        newRot = new self.oc.BRepBuilderAPI_Transform_2(shapes, transformation, true, false).Shape();
       } else if (shapes.length >= 1) {
+        newRot = [];
         for (let shapeIndex = 0; shapeIndex < shapes.length; shapeIndex++) {
-          shapes[shapeIndex].Move(rotation, false);
+          newRot.push(new self.oc.BRepBuilderAPI_Transform_2(shapes[shapeIndex], transformation, true, false).Shape());
         }
       }
       return newRot;
@@ -483,16 +644,81 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   let curUnion = self.CacheOp(arguments, "Union", () => {
     let combined = objectsToJoin[0];
     if (objectsToJoin.length > 1) {
-      for (let i = 0; i < objectsToJoin.length; i++) {
-        if (i > 0) {
-          combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
+      try {
+        if (objectsToJoin.length <= 8) {
+          // Pairwise fuse for small counts: this kernel's LIST fuse can keep
+          // 3-operand coincident-surface unions unmerged (volume doubles —
+          // ppp0110's revolve+mirror), while the pairwise chain handles them.
+          for (let i = 1; i < objectsToJoin.length; i++) {
+            combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
+          }
+        } else {
+          // ONE fuse against a COMPOUND of the remaining operands for MANY
+          // operands, processed in BATCHES of 8 (this kernel's BOP cost explodes
+          // superlinearly with single-op tool complexity: one 64-box tool took 76 s
+          // where four 16-box tools took under a second; and the one-at-a-time
+          // chain re-runs the boolean against the GROWING result). Each batch is
+          // fused as ONE compound tool, the single boolean lite's add() always did.
+          for (let i = 1; i < objectsToJoin.length; i += 8) {
+            let batch = objectsToJoin.slice(i, i + 8);
+            let tool = batch.length === 1 ? batch[0] : MakeCompound(batch);
+            combined = self.oc.OCJS.BooleanFuse(combined, tool, fuzzValue);
+          }
         }
+      } catch (fuseErr) {
+        // Same 8.0.1 coplanar-contact family as the operand-drop below, but
+        // surfacing as a RAISE (e.g. 'gp_Vec::Normalize() - vector has zero
+        // norm' when solids share internal walls). The General-Fuse SPLIT
+        // phase is correct on the same inputs — recover from its partition.
+        let rebuilt = _rebuildFuseFromGF(objectsToJoin);
+        if (!rebuilt) { throw fuseErr; }
+        console.log("Union: BRepAlgoAPI_Fuse raised on these operands (known OCCT 8.0.1 wasm fault family); rebuilt the union from the General-Fuse partition.");
+        combined = rebuilt;
+      }
+    }
+
+    // Recover from the known 8.0.1 fuse operand-drop fault (see
+    // _rebuildFuseFromGF above): a valid fuse can never be smaller than
+    // its largest input.
+    let maxInput = Math.max(...objectsToJoin.map(o => _quickVolume(o)));
+    if (maxInput > 1e-6 && _quickVolume(combined) < maxInput * 0.999 - 1e-9) {
+      let rebuilt = _rebuildFuseFromGF(objectsToJoin);
+      if (rebuilt && _quickVolume(rebuilt) >= maxInput * 0.999 - 1e-9) {
+        console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); rebuilt the union from the General-Fuse partition.");
+        combined = rebuilt;
+      } else {
+        // Third try: the LIST-based BRepAlgoAPI_Fuse takes a different
+        // kernel route than the fork's OCJS.BooleanFuse and sometimes
+        // survives inputs both of the above drop (Buffer_Stand's rib).
+        try {
+          let fuse = new self.oc.BRepAlgoAPI_Fuse_1();
+          let argList = new self.oc.TopTools_ListOfShape();
+          argList.Append(objectsToJoin[0]);
+          let toolList = new self.oc.TopTools_ListOfShape();
+          for (let i = 1; i < objectsToJoin.length; i++) { toolList.Append(objectsToJoin[i]); }
+          fuse.SetArguments(argList);
+          fuse.SetTools(toolList);
+          fuse.Build(new self.oc.Message_ProgressRange_1());
+          let listFused = fuse.Shape();
+          if (_quickVolume(listFused) >= maxInput * 0.999 - 1e-9) {
+            console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); recovered with the list-based fuse.");
+            combined = listFused;
+          }
+        } catch (e) { /* keep the (guarded) original result */ }
       }
     }
 
     if (!keepEdges) {
-      let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
-      combined = fusor.Shape();
+      // Same coplanar-contact fault family: UnifySameDomain can RAISE
+      // ('gp_Vec::Normalize() - vector has zero norm') while merging the
+      // shared internal walls a fuse of exactly-tiling solids leaves behind.
+      // The un-unified result is geometrically correct — keep it.
+      try {
+        let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
+        combined = fusor.Shape();
+      } catch (unifyErr) {
+        console.log("Union: UnifySameDomain raised on this result (known OCCT 8.0.1 wasm fault family); keeping the un-unified fuse result.");
+      }
     }
 
     return combined;
@@ -507,6 +733,29 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
   }
   self.sceneShapes.push(curUnion);
   return curUnion;
+}
+
+// KNOWN OCCT 8.0.1 wasm kernel fault: BRepAlgoAPI_Fuse's result-ASSEMBLY
+// phase can silently DROP an operand when coplanar faces meet along BSpline
+// edges (e.g. font glyphs extruded off a planar face). The defaults audit
+// (test/b123d-validation/report.md) showed upstream build123d/OCP defaults
+// (no fuzzy value, no NonDestructive) reproduce the drop identically — but
+// the General-Fuse SPLIT phase is correct on the same inputs. So fall back
+// to the exact GF partition: a compound of disjoint-interior solids whose
+// union IS the fuse result (volumes/bboxes exact). COMPROMISE(kernel-guard):
+// the partition keeps the internal contact faces (the operands are not
+// merged into one solid), so face/edge selectors see the contact topology.
+function _rebuildFuseFromGF(shapes) {
+  try {
+    let op = new self.oc.BOPAlgo_Builder_1();
+    for (let i = 0; i < shapes.length; i++) { op.AddArgument(shapes[i]); }
+    op.Perform(new self.oc.Message_ProgressRange_1());
+    if (op.HasErrors()) { return null; }
+    let gf = op.Shape();
+    let sawSolid = false;
+    ForEachSolid(gf, () => { sawSolid = true; });
+    return sawSolid ? gf : null;
+  } catch (e) { return null; }
 }
 
 function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdges) {
@@ -591,16 +840,44 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
 
 // --- Extrusion and Shape Generation ---
 
+/** A REVERSED profile face (build123d's BuildSketch flips up-side-down faces
+ *  with Complemented) sweeps into an INSIDE-OUT solid that this kernel's
+ *  booleans treat as its complement (cuts silently no-op, subtracts ADD).
+ *  Sweep the FORWARD face instead - same geometry, valid solid. */
+function _forwardProfile(profile) {
+  if (profile.ShapeType && profile.ShapeType().value === 4 &&
+      profile.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED) {
+    let fwd = self.oc.TopoDS_Cast.Face_1(profile.Complemented());
+    fwd.hash = profile.hash;
+    return fwd;
+  }
+  return profile;
+}
+
 function Extrude(face, direction, keepFace) {
   if (!face || face.IsNull()) { console.error("Extrude: input shape is null! Was it consumed by a previous operation? Use keepFace/keepShape to preserve shapes for reuse."); return face; }
   let curExtrusion = self.CacheOp(arguments, "Extrude", () => {
-    return new self.oc.BRepPrimAPI_MakePrism_1(face,
+    return new self.oc.BRepPrimAPI_MakePrism_1(_forwardProfile(face),
       new self.oc.gp_Vec_4(direction[0], direction[1], direction[2]), false, true).Shape();
   });
 
   if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
   self.sceneShapes.push(curExtrusion);
   return curExtrusion;
+}
+
+/** ShapeUpgrade_UnifySameDomain — build123d's Shape.clean(). `concat` also
+ *  concatenates tangent-continuous B-spline/Bezier edges into one curve.
+ *  The result is re-typed as a face/wire when it is one, so face/wire APIs
+ *  keep working on it. */
+function UnifyWire(shape, concat) {
+  let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(shape, true, true, !!concat);
+  fusor.Build();
+  let out = fusor.Shape();
+  if (out.ShapeType().value === 4) { out = self.oc.TopoDS_Cast.Face_1(out); }
+  else if (out.ShapeType().value === 5) { out = self.oc.TopoDS_Cast.Wire_1(out); }
+  out.hash = self.oc.OCJS.HashCode(out, 100000000);
+  return out;
 }
 
 function RemoveInternalEdges(shape, keepShape) {
@@ -615,10 +892,13 @@ function RemoveInternalEdges(shape, keepShape) {
   return cleanShape;
 }
 
-function Offset(shape, offsetDistance, tolerance, keepShape) {
+function Offset(shape, offsetDistance, tolerance, keepShape, joinType) {
   if (!shape || shape.IsNull()) { console.error("Offset: input shape is null!"); return shape; }
   if (!tolerance) { tolerance = 0.1; }
   if (offsetDistance === 0.0) { return shape; }
+  let join = joinType === 'intersection'
+    ? self.oc.GeomAbs_JoinType.GeomAbs_Intersection
+    : self.oc.GeomAbs_JoinType.GeomAbs_Arc;
   let curOffset = self.CacheOp(arguments, "Offset", () => {
     let offset = null;
     let shapeType = shape.ShapeType().value;
@@ -630,8 +910,7 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
     } else if (shapeType === 4) {
       // Face: 2D boundary offset using the face's own surface as reference plane
       let face = self.oc.TopoDS_Cast.Face_1(shape);
-      offset = new self.oc.BRepOffsetAPI_MakeOffset_2(face,
-        self.oc.GeomAbs_JoinType.GeomAbs_Arc, false);
+      offset = new self.oc.BRepOffsetAPI_MakeOffset_2(face, join, false);
       offset.Perform(offsetDistance);
       // Result is a wire — extract and rebuild as a face
       let resultShape = offset.Shape();
@@ -646,7 +925,7 @@ function Offset(shape, offsetDistance, tolerance, keepShape) {
     } else {
       // Solid/Shell: 3D shell offset
       offset = new self.oc.BRepOffsetAPI_MakeOffsetShape();
-      offset.PerformByJoin(shape, offsetDistance, tolerance, self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false, self.oc.GeomAbs_JoinType.GeomAbs_Arc, false, new self.oc.Message_ProgressRange_1());
+      offset.PerformByJoin(shape, offsetDistance, tolerance, self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false, join, false, new self.oc.Message_ProgressRange_1());
     }
     let offsetShape = offset.Shape();
 
@@ -682,6 +961,164 @@ function OffsetWire(wire, offsetDistance, keepWire) {
   return result;
 }
 
+/** BRepOffsetAPI_MakeOffset on a planar wire with an explicit join type —
+ *  the exact construction of build123d's Wire.offset_2d (Init(kind) +
+ *  AddWire + Perform). For an OPEN wire the result is a closed contour: both
+ *  offset sides plus round end caps, which the caller can split per side. */
+function OffsetPlanarWire(wire, offsetDistance, joinType) {
+  let join = joinType === 'intersection'
+    ? self.oc.GeomAbs_JoinType.GeomAbs_Intersection
+    : self.oc.GeomAbs_JoinType.GeomAbs_Arc;
+  let result = self.CacheOp(arguments, "OffsetPlanarWire", () => {
+    let offset = new self.oc.BRepOffsetAPI_MakeOffset_1();
+    offset.Init_2(join, false);
+    offset.AddWire(_asWire(wire));
+    offset.Perform(offsetDistance, 0.0);
+    let out = offset.Shape();
+    if (out.ShapeType().value === 5) { return self.oc.TopoDS_Cast.Wire_1(out); }
+    let wires = [];
+    ForEachWire(out, (i, wr) => { wires.push(wr); });
+    if (wires.length !== 1) {
+      console.error("OffsetPlanarWire: expected one offset wire, got " + wires.length);
+      return null;
+    }
+    return wires[0];
+  });
+  if (result) { self.sceneShapes.push(result); }
+  return result;
+}
+
+/** Center of a circular/elliptical edge, or null (build123d Edge.arc_center). */
+function _edgeArcCenter(edge) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  let CT = self.oc.GeomAbs_CurveType;
+  let type = curve.GetType();
+  let loc = null;
+  if (type === CT.GeomAbs_Circle) { loc = curve.Circle().Location(); }
+  else if (type === CT.GeomAbs_Ellipse) { loc = curve.Ellipse().Location(); }
+  if (loc === null) { return null; }
+  return [loc.X(), loc.Y(), loc.Z()];
+}
+
+/** An EXACT B-spline edge from poles, unique knots + multiplicities, degree and
+ *  optional weights (build123d's Edge.make_bspline -> Geom_BSplineCurve). */
+function BSplineEdge(poles, knots, mults, degree, weights, periodic) {
+  return self.CacheOp(arguments, "BSplineEdge", () => {
+    let poleArr = new self.oc.TColgp_Array1OfPnt_2(1, poles.length);
+    for (let i = 0; i < poles.length; i++) {
+      poleArr.SetValue(i + 1, new self.oc.gp_Pnt_3(poles[i][0], poles[i][1], poles[i][2] || 0));
+    }
+    let knotArr = new self.oc.TColStd_Array1OfReal_2(1, knots.length);
+    for (let i = 0; i < knots.length; i++) { knotArr.SetValue(i + 1, knots[i]); }
+    let multArr = new self.oc.TColStd_Array1OfInteger_2(1, mults.length);
+    for (let i = 0; i < mults.length; i++) { multArr.SetValue(i + 1, mults[i]); }
+    let spline;
+    if (weights && weights.length) {
+      let weightArr = new self.oc.TColStd_Array1OfReal_2(1, weights.length);
+      for (let i = 0; i < weights.length; i++) { weightArr.SetValue(i + 1, weights[i]); }
+      spline = new self.oc.Geom_BSplineCurve_2(poleArr, weightArr, knotArr, multArr,
+        degree, !!periodic, false);
+    } else {
+      spline = new self.oc.Geom_BSplineCurve_1(poleArr, knotArr, multArr, degree, !!periodic);
+    }
+    return new self.oc.BRepBuilderAPI_MakeEdge_24(
+      new self.oc.Handle_Geom_Curve_2(spline)).Edge();
+  });
+}
+
+/** The order-th derivative of an edge's curve at the normalized arc-length
+ *  position u — build123d's Mixin1D.derivative_at (BRepAdaptor_Curve::DN at
+ *  the same GCPnts_AbscissaPoint parameter position_at uses). NOT normalized:
+ *  the magnitude carries the curve's natural "speed", which is what
+ *  BlendCurve's tangent scalars scale. */
+function _edgeDerivativeAt(edge, u, order) {
+  let e = _asEdge(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(e);
+  let vec = curve.DN(_edgeParamAtFraction(curve, u), order);
+  return [vec.X(), vec.Y(), vec.Z()];
+}
+
+/** Normal of a circular/elliptical edge: its gp_Circ/gp_Elips axis direction
+ *  (build123d Mixin1D.normal's conic branch). null for any other curve type —
+ *  the caller falls back to a planarity check. */
+function _edgeArcNormal(edge) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  let CT = self.oc.GeomAbs_CurveType;
+  let type = curve.GetType();
+  let dir = null;
+  if (type === CT.GeomAbs_Circle) { dir = curve.Circle().Axis().Direction(); }
+  else if (type === CT.GeomAbs_Ellipse) { dir = curve.Ellipse().Axis().Direction(); }
+  if (dir === null) { return null; }
+  return [dir.X(), dir.Y(), dir.Z()];
+}
+
+/** Radius of a circular edge, or null when the edge is not a circle
+ *  (build123d Edge.radius). */
+function _edgeArcRadius(edge) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  if (curve.GetType() !== self.oc.GeomAbs_CurveType.GeomAbs_Circle) { return null; }
+  return curve.Circle().Radius();
+}
+
+/** A circle or circular ARC edge on a plane given by origin/normal/x-dir,
+ *  angles in DEGREES measured from the x direction (build123d
+ *  Edge.make_circle; start == end means a full circle). */
+function CircularEdge(radius, startAngle, endAngle, origin, normal, xDir) {
+  return self.CacheOp(arguments, "CircularEdge", () => {
+    let ax2 = new self.oc.gp_Ax2_2(
+      new self.oc.gp_Pnt_3(origin[0], origin[1], origin[2]),
+      new self.oc.gp_Dir_5(normal[0], normal[1], normal[2]),
+      new self.oc.gp_Dir_5(xDir[0], xDir[1], xDir[2]));
+    let circle = new self.oc.gp_Circ_2(ax2, radius);
+    if (Math.abs(startAngle - endAngle) % 360 < 1e-9) {
+      return new self.oc.BRepBuilderAPI_MakeEdge_8(circle).Edge();
+    }
+    const rad = Math.PI / 180;
+    return new self.oc.BRepBuilderAPI_MakeEdge_9(
+      circle, startAngle * rad, endAngle * rad).Edge();
+  });
+}
+
+/** build123d's Edge.is_interior: an edge is INTERIOR when the two faces
+ *  meeting at it, each offset outward by length/100, still intersect in an
+ *  edge (an exterior/convex edge's offsets separate). Exactly upstream's
+ *  construction (topo_explore_connected_faces + offset_topods_face +
+ *  BRepAlgoAPI_Section). */
+function EdgeIsInterior(edge, parentShape) {
+  let e = _asEdge(edge);
+  let faces = [];
+  let source = parentShape || e;
+  if (parentShape) {
+    // faces of the parent that contain this edge
+    let target = self.oc.OCJS.HashCode(e, 100000000);
+    ForEachFace(parentShape, (i, face) => {
+      let found = false;
+      ForEachEdge(face, (j, fe) => {
+        if (self.oc.OCJS.HashCode(fe, 100000000) === target) { found = true; }
+      });
+      if (found) { faces.push(face); }
+    });
+  }
+  if (faces.length !== 2) { return false; }
+  let dist = _edgeLength(e) / 100;
+  let offsets = [];
+  for (let i = 0; i < 2; i++) {
+    // BRepOffset_MakeOffset (upstream's offset_topods_face) is unbound here;
+    // BRepOffsetAPI_MakeOffsetShape drives the same BRepOffset algorithm
+    let mk = new self.oc.BRepOffsetAPI_MakeOffsetShape();
+    mk.PerformByJoin(faces[i], dist, 1e-6,
+      self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false,
+      self.oc.GeomAbs_JoinType.GeomAbs_Arc, false,
+      new self.oc.Message_ProgressRange_1());
+    offsets.push(mk.Shape());
+  }
+  let section = new self.oc.BRepAlgoAPI_Section_3(offsets[0], offsets[1], false);
+  section.Build(new self.oc.Message_ProgressRange_1());
+  let found = false;
+  ForEachEdge(section.Shape(), () => { found = true; });
+  return found;
+}
+
 function Revolve(shape, degrees, direction, keepShape, copy) {
   if (!degrees  ) { degrees   = 360.0; }
   if (!direction) { direction = [0, 0, 1]; }
@@ -691,6 +1128,7 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
     direction = [-direction[0], -direction[1], -direction[2]];
   }
   let curRevolution = self.CacheOp(arguments, "Revolve", () => {
+    shape = _forwardProfile(shape);
     if (degrees >= 360.0) {
       return new self.oc.BRepPrimAPI_MakeRevol_2(shape,
         new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0),
@@ -700,7 +1138,7 @@ function Revolve(shape, degrees, direction, keepShape, copy) {
       return new self.oc.BRepPrimAPI_MakeRevol_1(shape,
         new self.oc.gp_Ax1_2(new self.oc.gp_Pnt_3(0, 0, 0),
           new self.oc.gp_Dir_5(direction[0], direction[1], direction[2])),
-        degrees * 0.0174533, copy).Shape();
+        degrees * (Math.PI / 180), copy).Shape();
     }
   });
 
@@ -725,8 +1163,8 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
     for (let i = 0; i <= steps; i++) {
       let alpha = i / steps;
       aspinePoints.push([
-        20 * Math.sin(alpha * rotation * 0.0174533),
-        20 * Math.cos(alpha * rotation * 0.0174533),
+        20 * Math.sin(alpha * rotation * (Math.PI / 180)),
+        20 * Math.cos(alpha * rotation * (Math.PI / 180)),
         height * alpha]);
     }
 
@@ -1076,7 +1514,7 @@ function Dropdown(name = "Dropdown", defaultValue = "", options = {}, realTime =
 // --- Internal Topology Helpers (used by selectors, not exported to user API) ---
 
 function _edgeMidpoint(edge) {
-  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
   let midParam = (curve.FirstParameter() + curve.LastParameter()) / 2;
   let pnt = new self.oc.gp_Pnt_1();
   curve.D0(midParam, pnt);
@@ -1090,7 +1528,7 @@ function _edgeLength(edge) {
 }
 
 function _edgeCurveType(edge) {
-  let curve = new self.oc.BRepAdaptor_Curve_2(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
   let type = curve.GetType();
   let CT = self.oc.GeomAbs_CurveType;
   if (type === CT.GeomAbs_Line)        return "Line";
@@ -1126,7 +1564,7 @@ function _faceArea(face) {
 }
 
 function _faceNormal(face) {
-  let surf = new self.oc.BRepAdaptor_Surface_2(face, true);
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
   let uMid = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
   let vMid = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
   let pnt = new self.oc.gp_Pnt_1();
@@ -1136,7 +1574,1693 @@ function _faceNormal(face) {
   let normal = du.Crossed(dv);
   let mag = normal.Magnitude();
   if (mag < 1e-10) return [0, 0, 1];
-  return [normal.X() / mag, normal.Y() / mag, normal.Z() / mag];
+  // respect the face's topological orientation (outward normals on solids)
+  let flip = face.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED ? -1 : 1;
+  return [flip * normal.X() / mag, flip * normal.Y() / mag, flip * normal.Z() / mag];
+}
+
+/** The x direction build123d's Plane(face) derives: for elementary surfaces
+ *  the underlying gp_Ax3's XDirection (surface.Position().XDirection()); for
+ *  bounded surfaces (BSpline/Bezier/trimmed) the U derivative at RAW surface
+ *  parameters (0.5, 0.5) — exactly geometry.py's Plane.__init__ Face branch. */
+function _faceUDir(face) {
+  let f = face.ShapeType && face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+  let surf = new self.oc.BRepAdaptor_Surface_2(f, false);
+  let ST = self.oc.GeomAbs_SurfaceType;
+  let type = surf.GetType();
+  if (type === ST.GeomAbs_Plane) {
+    let xd = surf.Plane().Position().XDirection();
+    return [xd.X(), xd.Y(), xd.Z()];
+  }
+  let pnt = new self.oc.gp_Pnt_1();
+  let du = new self.oc.gp_Vec_1();
+  let dv = new self.oc.gp_Vec_1();
+  if (type === ST.GeomAbs_BSplineSurface || type === ST.GeomAbs_BezierSurface) {
+    // Geom_BoundedSurface: build123d evaluates D1 at raw (0.5, 0.5)
+    surf.D1(0.5, 0.5, pnt, du, dv);
+  } else {
+    let uMid = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
+    let vMid = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
+    surf.D1(uMid, vMid, pnt, du, dv);
+  }
+  let mag = du.Magnitude();
+  if (mag < 1e-10) return null;
+  return [du.X() / mag, du.Y() / mag, du.Z() / mag];
+}
+
+/** TopoDS_Face view of a shape that IS a face but may still be typed as a
+ *  generic TopoDS_Shape (everything that comes back from a transform or a
+ *  boolean is). Single-face shells/compounds resolve to their one face: the
+ *  extrusion of a wire is a SHELL even when build123d calls the result a
+ *  Face, and build123d's face APIs work on it all the same. */
+function _asFace(face) {
+  if (face.ShapeType().value === 4) { return self.oc.TopoDS_Cast.Face_1(face); }
+  let found = [];
+  ForEachFace(face, (i, f) => { found.push(f); });
+  if (found.length === 1) { return found[0]; }
+  throw new Error("expected a single face, got a shape with " + found.length + " faces");
+}
+
+/** The face's UV parameter bounds, [uMin, uMax, vMin, vMax] (BRepTools::
+ *  UVBounds) — build123d's Face._uv_bounds, the domain its normalized u/v
+ *  arguments are mapped into. */
+function _faceUVBounds(face) {
+  let u1 = { current: 0 }, u2 = { current: 0 }, v1 = { current: 0 }, v2 = { current: 0 };
+  self.oc.BRepTools.UVBounds_1(_asFace(face), u1, u2, v1, v2);
+  return [u1.current, u2.current, v1.current, v2.current];
+}
+
+/** Point and U/V partial derivatives of the face's underlying surface at RAW
+ *  surface parameters: [[x,y,z], [dU], [dV]] — the D1 evaluation
+ *  build123d's Face.location_at performs (Restriction=false, so the RAW
+ *  surface parameterization, exactly like BRep_Tool::Surface). */
+function _faceD1(face, u, v) {
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), false);
+  let pnt = new self.oc.gp_Pnt_1();
+  let du = new self.oc.gp_Vec_1();
+  let dv = new self.oc.gp_Vec_1();
+  surf.D1(u, v, pnt, du, dv);
+  return [[pnt.X(), pnt.Y(), pnt.Z()],
+          [du.X(), du.Y(), du.Z()],
+          [dv.X(), dv.Y(), dv.Z()]];
+}
+
+/** RAW (u, v) surface parameters of the point of the face's surface closest to
+ *  `point` — what build123d reads out of GeomAPI_ProjectPointOnSurf for the
+ *  surface_point overloads of normal_at/location_at. `hint` ([u, v]) seeds the
+ *  search when the caller already knows roughly where the point lands.
+ *
+ *  This is upstream's call: GeomAPI_ProjectPointOnSurf over the face's own UV
+ *  box, read back through OCJS_Out.ProjectPointOnSurf_LowerDistanceParameters
+ *  (LowerDistanceParameters returns (u, v) through Standard_Real&, which
+ *  Embind passes by value). The UV-grid + Newton search below is kept as a
+ *  fallback for the cases where OCCT reports no solution — it is exact for
+ *  points on or near the surface and was the only route before
+ *  Extrema_ExtAlgo/Extrema_ExtFlag were bound. */
+function _faceParamsAtPoint(face, point, hint) {
+  let f = _asFace(face);
+  let projected = _faceParamsAtPointOCCT(f, point);
+  if (projected) { return projected; }
+  return _faceParamsAtPointSearch(f, point, hint);
+}
+
+/** GeomAPI_ProjectPointOnSurf on the face's surface, restricted to the face's
+ *  own UV bounds (build123d's Face.normal_at/location_at path). */
+function _faceParamsAtPointOCCT(f, point) {
+  let bounds = _faceUVBounds(f);
+  let surface = self.oc.BRep_Tool.Surface_2(f);
+  let projector = new self.oc.GeomAPI_ProjectPointOnSurf_5(
+    new self.oc.gp_Pnt_3(point[0], point[1], point[2]), surface,
+    bounds[0], bounds[1], bounds[2], bounds[3],
+    self.oc.Extrema_ExtAlgo.Extrema_ExtAlgo_Grad);
+  if (!projector.IsDone() || projector.NbPoints() < 1) { return null; }
+  let uv = self.oc.OCJS_Out.ProjectPointOnSurf_LowerDistanceParameters(projector);
+  return [uv.u, uv.v];
+}
+
+function _faceParamsAtPointSearch(face, point, hint) {
+  let f = _asFace(face);
+  let surf = new self.oc.BRepAdaptor_Surface_2(f, false);
+  let bounds = _faceUVBounds(f);
+  let uMin = bounds[0], uMax = bounds[1], vMin = bounds[2], vMax = bounds[3];
+  let px = point[0], py = point[1], pz = point[2];
+  let pnt = new self.oc.gp_Pnt_1();
+  let d1u = new self.oc.gp_Vec_1(), d1v = new self.oc.gp_Vec_1();
+  let d2u = new self.oc.gp_Vec_1(), d2v = new self.oc.gp_Vec_1(), d2uv = new self.oc.gp_Vec_1();
+  let dist2 = (u, v) => {
+    surf.D0(u, v, pnt);
+    let dx = pnt.X() - px, dy = pnt.Y() - py, dz = pnt.Z() - pz;
+    return dx * dx + dy * dy + dz * dz;
+  };
+  let bu, bv;
+  if (hint) {
+    bu = Math.min(uMax, Math.max(uMin, hint[0]));
+    bv = Math.min(vMax, Math.max(vMin, hint[1]));
+  } else {
+    const N = 24;
+    let best = Infinity;
+    for (let i = 0; i <= N; i++) {
+      let u = uMin + (uMax - uMin) * (i / N);
+      for (let j = 0; j <= N; j++) {
+        let v = vMin + (vMax - vMin) * (j / N);
+        let d = dist2(u, v);
+        if (d < best) { best = d; bu = u; bv = v; }
+      }
+    }
+    if (best === Infinity) { return null; }
+  }
+  let dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  for (let iter = 0; iter < 40; iter++) {
+    surf.D2(bu, bv, pnt, d1u, d1v, d2u, d2v, d2uv);
+    let fv = [pnt.X() - px, pnt.Y() - py, pnt.Z() - pz];
+    let su = [d1u.X(), d1u.Y(), d1u.Z()], sv = [d1v.X(), d1v.Y(), d1v.Z()];
+    let suu = [d2u.X(), d2u.Y(), d2u.Z()], svv = [d2v.X(), d2v.Y(), d2v.Z()];
+    let suv = [d2uv.X(), d2uv.Y(), d2uv.Z()];
+    let g0 = dot(fv, su), g1 = dot(fv, sv);
+    let a = dot(su, su) + dot(fv, suu);
+    let b = dot(su, sv) + dot(fv, suv);
+    let c = dot(sv, sv) + dot(fv, svv);
+    let det = a * c - b * b;
+    let du, dv;
+    if (Math.abs(det) < 1e-30) {
+      // singular Hessian (degenerate/ruled directions): plain gradient step
+      // scaled by the first fundamental form
+      du = dot(su, su) > 1e-30 ? -g0 / dot(su, su) : 0;
+      dv = dot(sv, sv) > 1e-30 ? -g1 / dot(sv, sv) : 0;
+    } else {
+      du = (b * g1 - c * g0) / det;
+      dv = (b * g0 - a * g1) / det;
+    }
+    // backtracking so the residual never grows, clamped into the UV box
+    let cur = dot(fv, fv);
+    let t = 1.0, stepped = false;
+    for (let k = 0; k < 24; k++) {
+      let nu = Math.min(uMax, Math.max(uMin, bu + t * du));
+      let nv = Math.min(vMax, Math.max(vMin, bv + t * dv));
+      if (dist2(nu, nv) <= cur + 1e-18) {
+        stepped = Math.abs(nu - bu) > 1e-14 * (1 + Math.abs(bu)) ||
+                  Math.abs(nv - bv) > 1e-14 * (1 + Math.abs(bv));
+        bu = nu; bv = nv;
+        break;
+      }
+      t *= 0.5;
+    }
+    if (!stepped) { break; }
+  }
+  return [bu, bv];
+}
+
+/** Unit surface normal at RAW (u, v) parameters, respecting the face's
+ *  topological orientation (BRepGProp_Face::Normal) — build123d's
+ *  Face.normal_at. */
+function _faceNormalAt(face, u, v) {
+  let props = new self.oc.BRepGProp_Face_2(_asFace(face), false);
+  let pnt = new self.oc.gp_Pnt_1();
+  let nrm = new self.oc.gp_Vec_1();
+  props.Normal(u, v, pnt, nrm);
+  let mag = nrm.Magnitude();
+  if (mag < 1e-12) { return [0, 0, 1]; }
+  return [nrm.X() / mag, nrm.Y() / mag, nrm.Z() / mag];
+}
+
+function _faceSurfaceType(face) {
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
+  let type = surf.GetType();
+  let ST = self.oc.GeomAbs_SurfaceType;
+  if (type === ST.GeomAbs_Plane)          return "Plane";
+  if (type === ST.GeomAbs_Cylinder)       return "Cylinder";
+  if (type === ST.GeomAbs_Cone)           return "Cone";
+  if (type === ST.GeomAbs_Sphere)         return "Sphere";
+  if (type === ST.GeomAbs_Torus)          return "Torus";
+  if (type === ST.GeomAbs_BezierSurface)  return "BezierSurface";
+  if (type === ST.GeomAbs_BSplineSurface) return "BSplineSurface";
+  return "Other";
+}
+
+/** The face's outer boundary wire (BRepTools::OuterWire). */
+function _faceOuterWire(face) {
+  let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+  let wire = self.oc.BRepTools.OuterWire(f);
+  if (wire.hash === undefined) { wire.hash = self.oc.OCJS.HashCode(wire, 100000000); }
+  return wire;
+}
+
+/** Whether an edge's topological orientation is FORWARD (build123d's
+ *  Edge.is_forward — position_at/tangent_at flip on REVERSED edges). */
+function _edgeIsForward(edge) {
+  return _asEdge(edge).Orientation_1() !== self.oc.TopAbs_Orientation.TopAbs_REVERSED;
+}
+
+/** TopoDS_Shape::IsSame across the Brython boundary. */
+function _sameShape(a, b) {
+  return a.IsSame(b);
+}
+
+/** GeomAbs_Shape continuity (as its integer enum value) of the junction
+ *  between two edges at a shared vertex — BRep_Tool::Parameter +
+ *  BRepAdaptor_Curve + BRepLProp::Continuity, exactly the calls build123d's
+ *  topo_explore_connected_edges makes. */
+function _edgePairContinuity(edge1, edge2, vertex, tolerance) {
+  const oc = self.oc;
+  let e1 = _asEdge(edge1); let e2 = _asEdge(edge2);
+  let u1 = oc.BRep_Tool.Parameter_2(vertex, e1);
+  let u2 = oc.BRep_Tool.Parameter_2(vertex, e2);
+  let c1 = new oc.BRepAdaptor_Curve_2(e1);
+  let c2 = new oc.BRepAdaptor_Curve_2(e2);
+  return oc.BRepLProp.Continuity_1(c1, c2, u1, u2, tolerance, tolerance).value;
+}
+
+/** Oriented bounding box of a shape (Bnd_OBB via BRepBndLib::AddOBB with
+ *  upstream build123d's arguments: triangulation used, not optimal, no shape
+ *  tolerance) — the engine behind build123d-lite's OrientedBoundBox. */
+function _shapeOBB(shape) {
+  let obb = new self.oc.Bnd_OBB_1();
+  self.oc.BRepBndLib.AddOBB(shape, obb, true, false, false);
+  return obb;
+}
+
+/** Bnd_OBB::IsOut for a plain [x, y, z] point (gp_Pnt cannot be constructed
+ *  from Brython). */
+function _obbIsOut(obb, p) {
+  return obb.IsOut_2(new self.oc.gp_Pnt_3(p[0], p[1], p[2]));
+}
+
+function _vertexPoint(vertex) {
+  let p = self.oc.BRep_Tool.Pnt(vertex);
+  return [p.X(), p.Y(), p.Z()];
+}
+
+/** Curve parameter at the given ARC-LENGTH fraction u of an edge —
+ *  GCPnts_AbscissaPoint, matching build123d's default
+ *  PositionMode.LENGTH for position_at/tangent_at. (Raw parameter
+ *  fraction only coincides with this for uniform-speed curves like
+ *  lines and circles; it diverges on BSplines, e.g. surface-surface
+ *  intersection curves.) */
+function _edgeParamAtFraction(curve, u) {
+  let first = curve.FirstParameter();
+  let last = curve.LastParameter();
+  if (u === 0) { return first; }
+  if (u === 1) { return last; }
+  // u outside [0, 1] EXTRAPOLATES along the underlying curve, like
+  // build123d's param_at/position_at ("positions outside [0, 1] are not
+  // validated and yield OCCT-dependent results"). The docs rely on it:
+  // `line @ 2/3` parses as `(line @ 2) / 3`, so the object lands at twice the
+  // line's end point divided by three.
+  let len = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, last);
+  let ap = new self.oc.GCPnts_AbscissaPoint_2(curve, len * u, first);
+  if (ap.IsDone()) { return ap.Parameter(); }
+  return first + (last - first) * u;
+}
+
+function _edgePointAt(edge, u) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  let param = _edgeParamAtFraction(curve, u);
+  let pnt = new self.oc.gp_Pnt_1();
+  curve.D0(param, pnt);
+  return [pnt.X(), pnt.Y(), pnt.Z()];
+}
+
+function _edgeTangentAt(edge, u) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  let param = _edgeParamAtFraction(curve, u);
+  let pnt = new self.oc.gp_Pnt_1();
+  let vec = new self.oc.gp_Vec_1();
+  curve.D1(param, pnt, vec);
+  let mag = vec.Magnitude();
+  if (mag < 1e-12) { return [0, 0, 0]; }
+  return [vec.X() / mag, vec.Y() / mag, vec.Z() / mag];
+}
+
+/** 2D fillet of a planar face's corner vertices (BRepFilletAPI_MakeFillet2d).
+ *  `points` selects vertices by position ([[x,y,z], ...], 1e-6 tolerance);
+ *  pass null to fillet every corner. Returns the new face. */
+function FilletFace2D(face, radius, points, keepFace) {
+  if (!face || face.IsNull()) { console.error("FilletFace2D: input face is null!"); return face; }
+  let result = self.CacheOp(arguments, "FilletFace2D", () => {
+    let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+    let mkFillet = new self.oc.BRepFilletAPI_MakeFillet2d_2(f);
+    let seen = {};
+    let added = 0;
+    ForEachVertex(f, (vertex) => {
+      let p = self.oc.BRep_Tool.Pnt(vertex);
+      let key = p.X().toFixed(6) + "," + p.Y().toFixed(6) + "," + p.Z().toFixed(6);
+      if (seen[key]) { return; }
+      let wanted = !points;
+      if (points) {
+        for (let i = 0; i < points.length; i++) {
+          if (Math.abs(points[i][0] - p.X()) < 1e-6 &&
+              Math.abs(points[i][1] - p.Y()) < 1e-6 &&
+              Math.abs((points[i][2] || 0) - p.Z()) < 1e-6) { wanted = true; break; }
+        }
+      }
+      if (wanted) { seen[key] = true; mkFillet.AddFillet(vertex, radius); added++; }
+    });
+    if (added === 0) {
+      console.error("FilletFace2D: no vertices matched — nothing filleted.");
+      return face;
+    }
+    mkFillet.Build(new self.oc.Message_ProgressRange_1());
+    return mkFillet.Shape();
+  });
+  if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Reverse a face's topological orientation (flips the oriented normal),
+ *  returning a properly-typed TopoDS_Face. */
+function ReverseFace(face, keepFace) {
+  let reversed = self.oc.TopoDS_Cast.Face_1(face.Reversed());
+  reversed.hash = self.oc.OCJS.HashCode(reversed, 100000000);
+  if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
+  self.sceneShapes.push(reversed);
+  return reversed;
+}
+
+// ---------------------------------------------------------------------------
+// Curve-on-surface primitives for build123d-lite's wrap()/wrap_faces(): the
+// exact OCCT calls upstream's Face._wrap_edge / _wrap_wire / _wrap_face and
+// Edge._extend_spline / trim / param_at make.
+// ---------------------------------------------------------------------------
+
+function _asEdge(shape) {
+  return shape.ShapeType().value === 6 ? self.oc.TopoDS_Cast.Edge_1(shape) : shape;
+}
+
+/** Curve parameter at an arc-length FRACTION of an edge, allowing fractions
+ *  outside [0, 1] (build123d's Edge.param_at, which _extend_spline calls with
+ *  -0.1 / 1.1 to run past the ends). */
+function _edgeParam(edge, u) {
+  let curve = new self.oc.BRepAdaptor_Curve_2(_asEdge(edge));
+  let first = curve.FirstParameter(), last = curve.LastParameter();
+  let len = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, last);
+  let ap = new self.oc.GCPnts_AbscissaPoint_2(curve, len * u, first);
+  if (ap.IsDone()) { return ap.Parameter(); }
+  return first + (last - first) * u;
+}
+
+/** The part of an edge between two arc-length fractions (build123d
+ *  Edge.trim), oriented from f0 towards f1. */
+function TrimEdge(edge, f0, f1) {
+  let e = _asEdge(edge);
+  let p0 = _edgeParam(e, f0), p1 = _edgeParam(e, f1);
+  let first = { current: 0 }, last = { current: 0 };
+  let curve = self.oc.BRep_Tool.Curve_2(e, first, last);
+  let lo = Math.min(p0, p1), hi = Math.max(p0, p1);
+  let trimmed = new self.oc.BRepBuilderAPI_MakeEdge_25(curve, lo, hi).Edge();
+  if (p1 < p0) { trimmed = self.oc.TopoDS_Cast.Edge_1(trimmed.Reversed()); }
+  trimmed.hash = self.oc.OCJS.HashCode(trimmed, 100000000);
+  self.sceneShapes.push(trimmed);
+  return trimmed;
+}
+
+// ---------------------------------------------------------------------------
+// Canonical free-edge parametrization primitives (build123d-lite's
+// Mixin1D.canonical — see the upstream proposal in
+// zalo/build123d branch canonical-research, research/). The rule itself is pure
+// geometry and lives
+// in Python (Build123dLite.js); these are the four kernel operations it needs:
+// reverse a 1D shape, locate a point on an edge, measure a point's distance to
+// an edge, and concatenate an ordered edge chain into ONE edge (which is what
+// gives a re-seamed closed loop an unambiguous start point).
+// ---------------------------------------------------------------------------
+
+/** Reverse the topological orientation of an Edge or a Wire, keeping the
+ *  concrete TopoDS type (build123d's Edge.reversed / _reverse_1d). */
+function ReverseEdgeOrWire(shape) {
+  let reversed = shape.Reversed();
+  let kind = shape.ShapeType().value;
+  if (kind === 6) { reversed = self.oc.TopoDS_Cast.Edge_1(reversed); }
+  else if (kind === 5) { reversed = self.oc.TopoDS_Cast.Wire_1(reversed); }
+  reversed.hash = self.oc.OCJS.HashCode(reversed, 100000000);
+  self.sceneShapes.push(reversed);
+  return reversed;
+}
+
+/** Minimal distance between two shapes and the closest point ON EACH
+ *  (BRepExtrema_DistShapeShape) — build123d's
+ *  Shape.distance_to_with_closest_points / closest_points / distance.
+ *  Returns [distance, [x1, y1, z1], [x2, y2, z2]], or null when the extrema
+ *  algorithm finds no solution. */
+function _distShapeShape(shapeA, shapeB) {
+  let ext = new self.oc.BRepExtrema_DistShapeShape_1();
+  ext.LoadS1(shapeA);
+  ext.LoadS2(shapeB);
+  ext.Perform(new self.oc.Message_ProgressRange_1());
+  if (!ext.IsDone() || ext.NbSolution() < 1) { return null; }
+  let p1 = ext.PointOnShape1(1), p2 = ext.PointOnShape2(1);
+  return [ext.Value(), [p1.X(), p1.Y(), p1.Z()], [p2.X(), p2.Y(), p2.Z()]];
+}
+
+/** Sign of a face's curvature relative to its OWN geometry, for the three
+ *  surface types build123d's Face.is_circular_convex/_concave support
+ *  (cylinder, sphere, torus): positive = convex, negative = concave, 0 for
+ *  every other surface type — build123d's Face._curvature_sign.
+ *
+ *  This is upstream's own comparison: the surface's reference geometry
+ *  (gp_Cylinder's axis, gp_Sphere's centre, the core circle of a gp_Torus) is
+ *  read off the adaptor and dotted against the oriented normal at the face's
+ *  mid parameters. gp_Cylinder/gp_Sphere/gp_Torus are bound in the fork as of
+ *  this round; the second-fundamental-form substitution that stood in for them
+ *  is kept below for any other kernel where they are missing. */
+function _faceCurvatureSign(face) {
+  let f = _asFace(face);
+  let surf = new self.oc.BRepAdaptor_Surface_2(f, true);
+  let ST = self.oc.GeomAbs_SurfaceType;
+  let type = surf.GetType();
+  if (type !== ST.GeomAbs_Cylinder && type !== ST.GeomAbs_Sphere &&
+      type !== ST.GeomAbs_Torus) { return 0.0; }
+  let midU = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
+  let midV = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
+  let reference = null;
+  if (type === ST.GeomAbs_Sphere) {
+    let loc = surf.Sphere().Location();
+    reference = [loc.X(), loc.Y(), loc.Z()];
+  } else if (type === ST.GeomAbs_Cylinder) {
+    // the point on the cylinder's axis nearest the sample point
+    let axis = surf.Cylinder().Axis();
+    let o = axis.Location(), d = axis.Direction();
+    let p = new self.oc.gp_Pnt_1();
+    surf.D0(midU, midV, p);
+    let t = (p.X() - o.X()) * d.X() + (p.Y() - o.Y()) * d.Y() + (p.Z() - o.Z()) * d.Z();
+    reference = [o.X() + d.X() * t, o.Y() + d.Y() * t, o.Z() + d.Z() * t];
+  } else {
+    // torus: the point on the CORE circle nearest the sample point
+    let tor = surf.Torus();
+    let pos = tor.Position();
+    let o = pos.Location(), d = pos.Direction();
+    let major = tor.MajorRadius();
+    let p = new self.oc.gp_Pnt_1();
+    surf.D0(midU, midV, p);
+    let vx = p.X() - o.X(), vy = p.Y() - o.Y(), vz = p.Z() - o.Z();
+    let along = vx * d.X() + vy * d.Y() + vz * d.Z();
+    let rx = vx - d.X() * along, ry = vy - d.Y() * along, rz = vz - d.Z() * along;
+    let rl = Math.sqrt(rx * rx + ry * ry + rz * rz);
+    if (rl > 1e-12) {
+      reference = [o.X() + rx / rl * major, o.Y() + ry / rl * major,
+                   o.Z() + rz / rl * major];
+    }
+  }
+  if (reference) {
+    let p = new self.oc.gp_Pnt_1();
+    surf.D0(midU, midV, p);
+    let n = _faceNormalAt(f, midU, midV);
+    let dx = p.X() - reference[0], dy = p.Y() - reference[1], dz = p.Z() - reference[2];
+    let dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (dist > 1e-12) {
+      // upstream: normal . (P - reference) > 0 is convex; the magnitude is the
+      // reference distance, which callers compare against _TOL_1E6
+      return (n[0] * dx + n[1] * dy + n[2] * dz) > 0 ? dist : -dist;
+    }
+  }
+  let u = (surf.FirstUParameter() + surf.LastUParameter()) / 2;
+  let v = (surf.FirstVParameter() + surf.LastVParameter()) / 2;
+  let pnt = new self.oc.gp_Pnt_1();
+  let du = new self.oc.gp_Vec_1(), dv = new self.oc.gp_Vec_1();
+  let duu = new self.oc.gp_Vec_1(), dvv = new self.oc.gp_Vec_1();
+  let duv = new self.oc.gp_Vec_1();
+  surf.D2(u, v, pnt, du, dv, duu, dvv, duv);
+  let normal = du.Crossed(dv);
+  let mag = normal.Magnitude();
+  if (mag < 1e-12) { return 0.0; }
+  let flip = f.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED ? -1 : 1;
+  let nx = flip * normal.X() / mag, ny = flip * normal.Y() / mag, nz = flip * normal.Z() / mag;
+  let curvature = (second, first) => {
+    let sq = first.SquareMagnitude();
+    if (sq < 1e-24) { return 0.0; }
+    return (second.X() * nx + second.Y() * ny + second.Z() * nz) / sq;
+  };
+  let ku = curvature(duu, du), kv = curvature(dvv, dv);
+  let k = Math.abs(ku) >= Math.abs(kv) ? ku : kv;
+  if (Math.abs(k) < 1e-12) { return 0.0; }
+  // report the reference distance (1/|k| == the radius upstream dots against),
+  // signed the way upstream signs it
+  return -Math.sign(k) / Math.abs(k);
+}
+
+/** 2-D corner fillet between two connected edges of an OPEN planar wire
+ *  (build123d's `_solve_wire_fillet_corner_chfi2d`, the primary solver behind
+ *  Wire.fillet_2d). `vertexPoint` is the shared corner. Returns
+ *  `{ fillet, trimmed1, trimmed2 }` TopoDS_Edges, or null when ChFi2d finds no
+ *  solution — upstream then falls back to the Geom2dGcc tangent-arc solver.
+ *
+ *  ChFi2d_FilletAlgo::Result hands the two trimmed edges back through
+ *  references; the fork registers OCJS_Out.FilletAlgo_Result for that. */
+function FilletWireCorner(edge1, edge2, vertexPoint, radius) {
+  let algo = new self.oc.ChFi2d_FilletAlgo_1();
+  algo.Init_2(_asEdge(edge1), _asEdge(edge2),
+              new self.oc.gp_Pln_3(new self.oc.gp_Pnt_3(0, 0, 0),
+                                   new self.oc.gp_Dir_5(0, 0, 1)));
+  if (!algo.Perform(radius)) { return null; }
+  let corner = new self.oc.gp_Pnt_3(vertexPoint[0], vertexPoint[1],
+                                    vertexPoint[2] || 0);
+  if (algo.NbResults(corner) === 0) { return null; }
+  let out = self.oc.OCJS_Out.FilletAlgo_Result(algo, corner);
+  return [out.fillet, out.trimmed1, out.trimmed2];
+}
+
+/** Radius of a cylindrical or spherical face (build123d Face.radius), null for
+ *  every other surface type. Reads the surface's own gp_Cylinder/gp_Sphere,
+ *  which the fork binds as of this round. */
+function _faceRadius(face) {
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
+  let ST = self.oc.GeomAbs_SurfaceType;
+  let type = surf.GetType();
+  if (type === ST.GeomAbs_Cylinder) { return surf.Cylinder().Radius(); }
+  if (type === ST.GeomAbs_Sphere) { return surf.Sphere().Radius(); }
+  return null;
+}
+
+/** Rotational axis of a cone/cylinder/sphere/torus/surface-of-revolution
+ *  face (build123d Face.axis_of_rotation) as [origin, direction], else null. */
+function _faceAxisOfRotation(face) {
+  let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
+  let ST = self.oc.GeomAbs_SurfaceType;
+  let type = surf.GetType();
+  let ax = null;
+  if (type === ST.GeomAbs_Cone) { ax = surf.Cone().Axis(); }
+  else if (type === ST.GeomAbs_Cylinder) { ax = surf.Cylinder().Axis(); }
+  else if (type === ST.GeomAbs_Torus) { ax = surf.Torus().Axis(); }
+  else if (type === ST.GeomAbs_Sphere) { ax = surf.Sphere().Position().Axis(); }
+  else if (type === ST.GeomAbs_SurfaceOfRevolution) { ax = surf.AxeOfRevolution(); }
+  if (!ax) { return null; }
+  let o = ax.Location(), d = ax.Direction();
+  return [[o.X(), o.Y(), o.Z()], [d.X(), d.Y(), d.Z()]];
+}
+
+// ---------------------------------------------------------------------------
+// 2-D geometric constraint solvers (OCCT Geom2dGcc) — the kernel side of
+// build123d's ConstrainedArcs / ConstrainedLines.
+//
+// A statement-for-statement port of build123d 0.11.1's
+// topology/constrained_lines.py: every argument is projected onto Plane.XY
+// (GeomAPI::To2d), wrapped in a Geom2dGcc_QualifiedCurve with the script's
+// Tangency qualifier, handed to the matching Geom2dGcc solver, and each
+// solution is kept only when its tangency parameter falls inside the
+// argument's TRIMMED range (upstream's _param_in_trim).
+//
+// `Tangency1/2/3` return their two parameters through `Standard_Real&`, which
+// Embind passes by value; the fork registers OCJS_Out.<Solver>_Tangency<N>()
+// for exactly this (see builds/cascadestudio.yml).
+// ---------------------------------------------------------------------------
+
+const _GCC_TOLERANCE = 1e-6;   // build123d.geometry.TOLERANCE
+
+function _gccQualifier(name) {
+  const P = self.oc.GccEnt_Position;
+  if (name === 'ENCLOSING') { return P.GccEnt_enclosing; }
+  if (name === 'ENCLOSED') { return P.GccEnt_enclosed; }
+  if (name === 'OUTSIDE') { return P.GccEnt_outside; }
+  return P.GccEnt_unqualified;
+}
+
+function _gccXYPlane() {
+  return new self.oc.gp_Pln_3(new self.oc.gp_Pnt_3(0, 0, 0),
+                              new self.oc.gp_Dir_5(0, 0, 1));
+}
+
+/** build123d's `_edge_to_qualified_2d`: the edge's 3-D curve projected onto
+ *  Plane.XY, kept on the edge's own parameter range. */
+function _gccQualifiedCurve(edge, qualifier) {
+  let e = _asEdge(edge);
+  let adaptor = new self.oc.BRepAdaptor_Curve_2(e);
+  let first = adaptor.FirstParameter(), last = adaptor.LastParameter();
+  let curve3d = self.oc.BRep_Tool.Curve_2(e, { current: 0 }, { current: 0 });
+  let curve2d = self.oc.GeomAPI.To2d(curve3d, _gccXYPlane());
+  let adapt2d = new self.oc.Geom2dAdaptor_Curve_3(curve2d, first, last);
+  return {
+    isEdge: true,
+    q: new self.oc.Geom2dGcc_QualifiedCurve(adapt2d, _gccQualifier(qualifier)),
+    curve2d: curve2d, adapt2d: adapt2d, first: first, last: last,
+  };
+}
+
+/** One tangency/target argument: `{edge, qualifier}` or `{point: [x, y]}`. */
+function _gccArg(spec) {
+  if (spec.point) {
+    return {
+      isEdge: false,
+      q: new self.oc.Geom2d_CartesianPoint_2(spec.point[0], spec.point[1]),
+      pnt2d: new self.oc.gp_Pnt2d_3(spec.point[0], spec.point[1]),
+    };
+  }
+  return _gccQualifiedCurve(spec.edge, spec.qualifier);
+}
+
+/** upstream's `_param_in_trim`: normalize onto the period, then test the
+ *  argument's trimmed range with TOLERANCE. */
+function _gccParamInTrim(arg, u) {
+  if (!arg.isEdge) { return true; }
+  let v = u;
+  if (arg.adapt2d.IsPeriodic()) {
+    let period = arg.adapt2d.Period();
+    v = ((u - arg.first) % period + period) % period + arg.first;
+  }
+  return v >= arg.first - _GCC_TOLERANCE && v <= arg.last + _GCC_TOLERANCE;
+}
+
+/** A 3-D edge on Plane.XY from a trimmed 2-D circle span, exactly like
+ *  upstream's `_edge_from_circle` (Geom2d_TrimmedCurve on the XY surface,
+ *  then BRepLib::BuildCurves3d). */
+function _gccEdgeFromCircle2d(circ2d, u1, u2) {
+  let geomCircle = new self.oc.Geom2d_Circle_1(circ2d);
+  let handle = new self.oc.Handle_Geom2d_Curve_2(geomCircle);
+  let trimmed = new self.oc.Geom2d_TrimmedCurve(handle, u1, u2, true, true);
+  let surface = new self.oc.Handle_Geom_Surface_2(
+    new self.oc.Geom_Plane_2(_gccXYPlane()));
+  let edge = new self.oc.BRepBuilderAPI_MakeEdge_30(
+    new self.oc.Handle_Geom2d_Curve_2(trimmed), surface).Edge();
+  self.oc.BRepLib.BuildCurves3d_2(edge);
+  return edge;
+}
+
+/** Both arcs of a solution circle between two of its parameters — upstream's
+ *  `_two_arc_edges_from_params` (the forward span and its complement). */
+function _gccTwoArcs(circ2d, u1, u2) {
+  const period = 2 * Math.PI;
+  const norm = (u) => ((u % period) + period) % period;
+  let u1n = norm(u1), u2n = norm(u2);
+  let d = u2n - u1n;
+  if (d < 0) { d += period; }
+  if (d <= _GCC_TOLERANCE || Math.abs(period - d) <= _GCC_TOLERANCE) { return []; }
+  return [_gccEdgeFromCircle2d(circ2d, u1n, u1n + d),
+          _gccEdgeFromCircle2d(circ2d, u2n, u2n + (period - d))];
+}
+
+/** upstream's `_edge_from_line`: a finite segment between two 2-D points. */
+function _gccEdgeFromLine(p1, p2) {
+  let v1 = new self.oc.BRepBuilderAPI_MakeVertex(
+    new self.oc.gp_Pnt_3(p1[0], p1[1], 0)).Vertex();
+  let v2 = new self.oc.BRepBuilderAPI_MakeVertex(
+    new self.oc.gp_Pnt_3(p2[0], p2[1], 0)).Vertex();
+  let mk = new self.oc.BRepBuilderAPI_MakeEdge_2(v1, v2);
+  if (!mk.IsDone()) { return null; }
+  return mk.Edge();
+}
+
+/** Sagitta selection: BOTH keeps the pair, SHORT/LONG index the pair sorted
+ *  by arc length (upstream sorts with GCPnts_AbscissaPoint). */
+function _gccPickSagitta(arcs, sagitta, out) {
+  if (arcs.length === 0) { return; }
+  if (sagitta === 1) { for (const a of arcs) { out.push(a); } return; }
+  let sorted = arcs.slice().sort((a, b) => _edgeLength(a) - _edgeLength(b));
+  out.push(sorted[sagitta === -1 ? sorted.length - 1 : 0]);
+}
+
+/** Upstream's `_enclosed_circ_param_offset`: when a solution circle sits
+ *  INSIDE a circular tangency target and at least one argument is not a
+ *  circle, OCCT reports the tangency parameter half a turn away. */
+function _gccEnclosedOffset(specs, circ2d, params) {
+  let isCirc = specs.map((s) => {
+    if (!s.edge) { return false; }
+    return _edgeCurveType(s.edge) === 'CIRCLE';
+  });
+  if (isCirc.every((c) => c)) { return params.slice(); }
+  let center = circ2d.Location();
+  return params.map((p, i) => {
+    if (!specs[i].edge || !isCirc[i]) { return p; }
+    let c = _edgeArcCenter(specs[i].edge);
+    let dx = center.X() - c[0], dy = center.Y() - c[1], dz = 0 - c[2];
+    let dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    return dist < _edgeArcRadius(specs[i].edge) ? p + Math.PI : p;
+  });
+}
+
+/** Circular arcs constrained by tangency (build123d Edge.make_constrained_arcs
+ *  / ConstrainedArcs). `specs` is 1-3 tangency arguments; `opts` selects the
+ *  overload exactly as upstream's keyword arguments do:
+ *    {radius}              -> Geom2dGcc_Circ2d2TanRad     (2 args)
+ *    {centerOn}            -> Geom2dGcc_Circ2d2TanOn      (2 args)
+ *    {}                    -> Geom2dGcc_Circ2d3Tan        (3 args)
+ *    {center}              -> Geom2dGcc_Circ2dTanCen      (1 arg)
+ *    {radius, centerOn}    -> Geom2dGcc_Circ2dTanOnRad    (1 arg)
+ *  Returns an array of TopoDS_Edge (not added to the scene). */
+function ConstrainedArcs2D(specs, opts) {
+  const oc = self.oc;
+  const sagitta = opts.sagitta === undefined ? 0 : opts.sagitta;
+  let args = specs.map(_gccArg);
+  let out = [];
+
+  // --- fixed centre, one tangency: full circles ---------------------------
+  if (opts.center) {
+    let cx = opts.center[0], cy = opts.center[1];
+    if (!args[0].isEdge) {
+      let p = args[0].q.Pnt2d();
+      let r = Math.hypot(p.X() - cx, p.Y() - cy);
+      if (r <= _GCC_TOLERANCE) { return []; }
+      let circ = new oc.gp_Circ2d_2(new oc.gp_Ax2d_2(
+        new oc.gp_Pnt2d_3(cx, cy), new oc.gp_Dir2d_5(1, 0)), r, true);
+      return [_gccEdgeFromCircle2d(circ, 0, 2 * Math.PI)];
+    }
+    let gcc = new oc.Geom2dGcc_Circ2dTanCen(
+      args[0].q, new oc.Handle_Geom2d_Point_2(
+        new oc.Geom2d_CartesianPoint_2(cx, cy)), _GCC_TOLERANCE);
+    if (!gcc.IsDone() || gcc.NbSolutions() === 0) {
+      throw new Error('ConstrainedArcs: no tangent circle for the given centre');
+    }
+    for (let i = 1; i <= gcc.NbSolutions(); i++) {
+      let t = oc.OCJS_Out.Circ2dTanCen_Tangency1(gcc, i);
+      if (!_gccParamInTrim(args[0], t.parArg)) { continue; }
+      out.push(_gccEdgeFromCircle2d(gcc.ThisSolution(i), 0, 2 * Math.PI));
+    }
+    return out;
+  }
+
+  // --- one tangency + radius + centre locus: full circles ------------------
+  if (opts.centerOn && specs.length === 1) {
+    let on = _gccQualifiedCurve(opts.centerOn, 'UNQUALIFIED');
+    let gcc = new oc.Geom2dGcc_Circ2dTanOnRad_1(
+      args[0].q, on.adapt2d, opts.radius, _GCC_TOLERANCE);
+    if (!gcc.IsDone() || gcc.NbSolutions() === 0) {
+      throw new Error('ConstrainedArcs: no circle for the TanOnRad constraints');
+    }
+    for (let i = 1; i <= gcc.NbSolutions(); i++) {
+      let t = oc.OCJS_Out.Circ2dTanOnRad_Tangency1(gcc, i);
+      if (!_gccParamInTrim(args[0], t.parArg)) { continue; }
+      let circ = gcc.ThisSolution(i);
+      // the centre must land on the TRIMMED locus
+      let proj = new oc.Geom2dAPI_ProjectPointOnCurve_2(circ.Location(), on.curve2d);
+      if (proj.NbPoints() < 1 || !_gccParamInTrim(on, proj.Parameter_1(1))) { continue; }
+      out.push(_gccEdgeFromCircle2d(circ, 0, 2 * Math.PI));
+    }
+    return out;
+  }
+
+  // --- two/three tangencies: arcs between the first two tangency points ----
+  let gcc, tangency1, tangency2, tangency3 = null;
+  if (opts.centerOn) {
+    let on = _gccQualifiedCurve(opts.centerOn, 'UNQUALIFIED');
+    let guesses = [];
+    for (const a of args) { if (a.isEdge) { guesses.push((a.first + a.last) / 2); } }
+    if (on.isEdge) { guesses.push((on.first + on.last) / 2); }
+    gcc = guesses.length === 3
+      ? new oc.Geom2dGcc_Circ2d2TanOn_1(args[0].q, args[1].q, on.adapt2d,
+                                        _GCC_TOLERANCE, guesses[0], guesses[1], guesses[2])
+      : new oc.Geom2dGcc_Circ2d2TanOn_3(args[0].q, args[1].q, on.adapt2d, _GCC_TOLERANCE);
+    tangency1 = (i) => oc.OCJS_Out.Circ2d2TanOn_Tangency1(gcc, i);
+    tangency2 = (i) => oc.OCJS_Out.Circ2d2TanOn_Tangency2(gcc, i);
+  } else if (specs.length === 3) {
+    let guesses = args.map((a) => (a.isEdge ? (a.first + a.last) / 2 : 0));
+    gcc = new oc.Geom2dGcc_Circ2d3Tan_1(args[0].q, args[1].q, args[2].q,
+                                        _GCC_TOLERANCE, guesses[0], guesses[1], guesses[2]);
+    tangency1 = (i) => oc.OCJS_Out.Circ2d3Tan_Tangency1(gcc, i);
+    tangency2 = (i) => oc.OCJS_Out.Circ2d3Tan_Tangency2(gcc, i);
+    tangency3 = (i) => oc.OCJS_Out.Circ2d3Tan_Tangency3(gcc, i);
+  } else {
+    gcc = new oc.Geom2dGcc_Circ2d2TanRad_1(args[0].q, args[1].q,
+                                           opts.radius, _GCC_TOLERANCE);
+    tangency1 = (i) => oc.OCJS_Out.Circ2d2TanRad_Tangency1(gcc, i);
+    tangency2 = (i) => oc.OCJS_Out.Circ2d2TanRad_Tangency2(gcc, i);
+  }
+  if (!gcc.IsDone() || gcc.NbSolutions() === 0) {
+    throw new Error('ConstrainedArcs: unable to find a tangent arc');
+  }
+  for (let i = 1; i <= gcc.NbSolutions(); i++) {
+    let circ = gcc.ThisSolution(i);
+    let t1 = tangency1(i);
+    if (!_gccParamInTrim(args[0], t1.parArg)) { continue; }
+    let t2 = tangency2(i);
+    if (!_gccParamInTrim(args[1], t2.parArg)) { continue; }
+    let params = [t1.parSol, t2.parSol];
+    if (tangency3) {
+      let t3 = tangency3(i);
+      if (!_gccParamInTrim(args[2], t3.parArg)) { continue; }
+      params.push(t3.parSol);
+    }
+    if (tangency3 || opts.centerOn) { params = _gccEnclosedOffset(specs, circ, params); }
+    _gccPickSagitta(_gccTwoArcs(circ, params[0], params[1]), sagitta, out);
+  }
+  return out;
+}
+
+/** Lines constrained by tangency (build123d Edge.make_constrained_lines /
+ *  ConstrainedLines). Two forms, matching upstream:
+ *    specs = [tangency, tangency|point]        -> Geom2dGcc_Lin2d2Tan
+ *    specs = [tangency], opts = {angle, axis}  -> Geom2dGcc_Lin2dTanObl
+ *  Returns an array of TopoDS_Edge (not added to the scene). */
+function ConstrainedLines2D(specs, opts) {
+  const oc = self.oc;
+  opts = opts || {};
+  let a1 = _gccArg(specs[0]);
+  let out = [];
+
+  if (opts.axis) {
+    // tangent to one curve at a fixed orientation, trimmed between the
+    // tangency point and the reference axis
+    let pos = opts.axis.position, dir = opts.axis.direction;
+    let refLin = new oc.gp_Lin2d_3(new oc.gp_Pnt2d_3(pos[0], pos[1]),
+                                   new oc.gp_Dir2d_5(dir[0], dir[1]));
+    let thetaAbs = Math.atan2(dir[1], dir[0]) + opts.angle;
+    let gcc = new oc.Geom2dGcc_Lin2dTanObl_1(a1.q, refLin, _GCC_TOLERANCE, opts.angle);
+    for (let i = 1; i <= gcc.NbSolutions(); i++) {
+      let t = oc.OCJS_Out.Lin2dTanObl_Tangency1(gcc, i);
+      // Intersection of the solution line with the reference axis. Upstream
+      // runs IntAna2d_AnaIntersection here and notes Intersection2() is not
+      // reliable; IntAna2d_IntPoint is not registered in this build, so the
+      // same two-line solve is done in closed form (one linear system, no
+      // tolerance of its own).
+      let cx = Math.cos(thetaAbs), cy = Math.sin(thetaAbs);
+      let den = cx * dir[1] - cy * dir[0];
+      if (Math.abs(den) < 1e-15) { continue; }
+      let s = ((pos[0] - t.x) * dir[1] - (pos[1] - t.y) * dir[0]) / den;
+      let px = t.x + cx * s, py = t.y + cy * s;
+      if (!(Math.hypot(px - t.x, py - t.y) >= _GCC_TOLERANCE)) { continue; }
+      let edge = _gccEdgeFromLine([t.x, t.y], [px, py]);
+      if (edge) { out.push(edge); }
+    }
+    return out;
+  }
+
+  let a2 = _gccArg(specs[1]);
+  let gcc = a2.isEdge
+    ? new oc.Geom2dGcc_Lin2d2Tan_1(a1.q, a2.q, _GCC_TOLERANCE)
+    : new oc.Geom2dGcc_Lin2d2Tan_2(a1.q, a2.pnt2d, _GCC_TOLERANCE);
+  if (!gcc.IsDone() || gcc.NbSolutions() === 0) {
+    throw new Error('ConstrainedLines: unable to find a common tangent line');
+  }
+  for (let i = 1; i <= gcc.NbSolutions(); i++) {
+    // The two contact points come from intersecting the solution line with
+    // each argument curve (upstream: Tangency1/Tangency2 can index the same
+    // line differently, so it uses Geom2dAPI_InterCurveCurve).
+    let lin = new oc.Handle_Geom2d_Curve_2(
+      new oc.Geom2d_Line_2(gcc.ThisSolution(i)));
+    let inter1 = new oc.Geom2dAPI_InterCurveCurve_2(lin, a1.curve2d, _GCC_TOLERANCE);
+    if (inter1.NbPoints() < 1) { continue; }
+    let p1 = inter1.Point(1);
+    let p2;
+    if (a2.isEdge) {
+      let inter2 = new oc.Geom2dAPI_InterCurveCurve_2(lin, a2.curve2d, _GCC_TOLERANCE);
+      if (inter2.NbPoints() < 1) { continue; }
+      p2 = inter2.Point(1);
+    } else {
+      p2 = a2.pnt2d;
+    }
+    let sep = p1.Distance(p2);
+    if (!(sep >= _GCC_TOLERANCE)) { continue; }
+    let edge = _gccEdgeFromLine([p1.X(), p1.Y()], [p2.X(), p2.Y()]);
+    if (edge) { out.push(edge); }
+  }
+  return out;
+}
+
+/** Minimal distance from a point to an edge (build123d's Shape.distance_to for
+ *  the Edge/point case), measured on the edge's own parameter range. */
+function _edgeDistanceToPoint(edge, point) {
+  let e = _asEdge(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(e);
+  let first = curve.FirstParameter(), last = curve.LastParameter();
+  let pnt = new self.oc.gp_Pnt_3(point[0], point[1], point[2]);
+  let best = Infinity;
+  for (let u of [first, last]) {
+    let p = new self.oc.gp_Pnt_1();
+    curve.D0(u, p);
+    best = Math.min(best, p.Distance(pnt));
+  }
+  let handle = self.oc.BRep_Tool.Curve_2(e, { current: 0 }, { current: 0 });
+  let projector = new self.oc.GeomAPI_ProjectPointOnCurve_3(pnt, handle, first, last);
+  if (projector.NbPoints() > 0) { best = Math.min(best, projector.LowerDistance()); }
+  return best;
+}
+
+/** The normalized ARC-LENGTH position (0..1, measured along the underlying
+ *  curve from its first parameter) of the point on an edge closest to `point`
+ *  — build123d's Edge.param_at_point, same three-stage strategy: endpoint
+ *  snap, GeomAPI_ProjectPointOnCurve validated by re-evaluation, then a
+ *  sampled + golden-section search. Returns -1 when the point is not on the
+ *  edge. */
+function _edgeParamAtPoint(edge, point) {
+  let e = _asEdge(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(e);
+  let first = curve.FirstParameter(), last = curve.LastParameter();
+  let total = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, last);
+  if (!(total > 0)) { return 0.0; }
+  let pnt = new self.oc.gp_Pnt_3(point[0], point[1], point[2]);
+  let pointAtParam = (u) => {
+    let p = new self.oc.gp_Pnt_1();
+    curve.D0(Math.min(last, Math.max(first, u)), p);
+    return p;
+  };
+  let distAtFraction = (u) => {
+    let p = new self.oc.gp_Pnt_1();
+    curve.D0(_edgeParamAtFraction(curve, u), p);
+    return p.Distance(pnt);
+  };
+  // 1. endpoint snap (a vertex of the edge)
+  if (pointAtParam(first).Distance(pnt) <= 1e-6) { return 0.0; }
+  if (pointAtParam(last).Distance(pnt) <= 1e-6) { return 1.0; }
+  // 2. projection onto the curve, wrapped back into range when periodic
+  let handle = self.oc.BRep_Tool.Curve_2(e, { current: 0 }, { current: 0 });
+  let projector = new self.oc.GeomAPI_ProjectPointOnCurve_2(pnt, handle);
+  if (projector.NbPoints() > 0) {
+    let param = projector.LowerDistanceParameter();
+    if (curve.IsPeriodic()) {
+      let period = curve.Period();
+      param = first + (((param - first) % period) + period) % period;
+    }
+    if (param >= first - 1e-9 && param <= last + 1e-9) {
+      param = Math.min(last, Math.max(first, param));
+      let u = self.oc.GCPnts_AbscissaPoint.Length_5(curve, first, param) / total;
+      if (distAtFraction(u) <= 1e-6) { return u; }
+    }
+  }
+  // 3. sampled scan + golden-section refinement of the distance minimum
+  let samples = 512, bestU = 0.0, bestD = Infinity;
+  for (let i = 0; i <= samples; i++) {
+    let u = i / samples, d = distAtFraction(u);
+    if (d < bestD) { bestD = d; bestU = u; }
+  }
+  let invPhi = 0.6180339887498949;
+  let lo = Math.max(0, bestU - 1 / samples), hi = Math.min(1, bestU + 1 / samples);
+  let x1 = hi - invPhi * (hi - lo), x2 = lo + invPhi * (hi - lo);
+  let f1 = distAtFraction(x1), f2 = distAtFraction(x2);
+  for (let i = 0; i < 60; i++) {
+    if (f1 <= f2) { hi = x2; x2 = x1; f2 = f1; x1 = hi - invPhi * (hi - lo); f1 = distAtFraction(x1); }
+    else { lo = x1; x1 = x2; f1 = f2; x2 = lo + invPhi * (hi - lo); f2 = distAtFraction(x2); }
+  }
+  let u = f1 <= f2 ? x1 : x2;
+  // -1 (not null) for "not on this edge": a JS null crosses into Brython as
+  // NullType, which cannot be compared or tested with `is None`
+  return distAtFraction(u) <= 1e-6 ? u : -1.0;
+}
+
+function _bsplineDataOf(curve) {
+  let data = {
+    deg: curve.Degree(), periodic: curve.IsPeriodic(),
+    knots: [], mults: [], poles: [], weights: null,
+  };
+  for (let i = 1; i <= curve.NbPoles(); i++) {
+    let p = curve.Pole(i);
+    data.poles.push([p.X(), p.Y(), p.Z()]);
+  }
+  for (let i = 1; i <= curve.NbKnots(); i++) {
+    data.knots.push(curve.Knot(i));
+    data.mults.push(curve.Multiplicity(i));
+  }
+  if (curve.IsRational()) {
+    data.weights = [];
+    for (let i = 1; i <= curve.NbPoles(); i++) { data.weights.push(curve.Weight(i)); }
+  }
+  return data;
+}
+
+function _bsplineFromData(data) {
+  let count = data.poles.length;
+  let poles = new self.oc.TColgp_Array1OfPnt_2(1, count);
+  for (let i = 0; i < count; i++) {
+    poles.SetValue(i + 1, new self.oc.gp_Pnt_3(
+      data.poles[i][0], data.poles[i][1], data.poles[i][2]));
+  }
+  let knots = new self.oc.TColStd_Array1OfReal_2(1, data.knots.length);
+  for (let i = 0; i < data.knots.length; i++) { knots.SetValue(i + 1, data.knots[i]); }
+  let mults = new self.oc.TColStd_Array1OfInteger_2(1, data.mults.length);
+  for (let i = 0; i < data.mults.length; i++) { mults.SetValue(i + 1, data.mults[i]); }
+  if (data.weights) {
+    let weights = new self.oc.TColStd_Array1OfReal_2(1, count);
+    for (let i = 0; i < count; i++) { weights.SetValue(i + 1, data.weights[i]); }
+    return new self.oc.Geom_BSplineCurve_2(
+      poles, weights, knots, mults, data.deg, !!data.periodic, false);
+  }
+  return new self.oc.Geom_BSplineCurve_1(poles, knots, mults, data.deg, !!data.periodic);
+}
+
+/** Exact rational-quadratic NURBS of a conic arc: built in the unit-circle
+ *  parameter plane (where the classic cos(alpha/2) construction is exact) and
+ *  mapped through the conic's own affine frame, which is exact for ellipses
+ *  too because an ellipse IS an affine image of a circle. */
+function _conicArcData(origin, xDir, yDir, radiusX, radiusY, u0, u1) {
+  let span = u1 - u0;
+  let segments = Math.max(1, Math.ceil(Math.abs(span) / (Math.PI / 2) - 1e-9));
+  let step = span / segments;
+  let half = Math.cos(step / 2);
+  let map = (px, py) => [0, 1, 2].map(
+    (k) => origin[k] + px * radiusX * xDir[k] + py * radiusY * yDir[k]);
+  let poles = [map(Math.cos(u0), Math.sin(u0))], weights = [1];
+  for (let i = 0; i < segments; i++) {
+    let a0 = u0 + i * step, a1 = a0 + step, mid = 0.5 * (a0 + a1);
+    poles.push(map(Math.cos(mid) / half, Math.sin(mid) / half));
+    weights.push(half);
+    poles.push(map(Math.cos(a1), Math.sin(a1)));
+    weights.push(1);
+  }
+  let knots = [], mults = [];
+  for (let i = 0; i <= segments; i++) {
+    knots.push(u0 + i * step);
+    mults.push(i === 0 || i === segments ? 3 : 2);
+  }
+  return { deg: 2, periodic: false, knots, mults, poles, weights };
+}
+
+/** An edge's curve as B-spline pole/knot data, trimmed to the edge's range and
+ *  oriented the way the EDGE runs (build123d's `bspline_of` inside
+ *  _concatenate_edges: CurveToBSplineCurve of a Geom_TrimmedCurve, reversed
+ *  for a REVERSED edge). This wasm build cannot bind
+ *  Convert_ParameterisationType, so GeomConvert is unavailable and the
+ *  analytic curve types are converted here instead — exactly, not by
+ *  approximation. */
+function _edgeBSplineData(edge) {
+  let e = _asEdge(edge);
+  let curve = new self.oc.BRepAdaptor_Curve_2(e);
+  let type = curve.GetType(), types = self.oc.GeomAbs_CurveType;
+  let first = curve.FirstParameter(), last = curve.LastParameter();
+  let bspline;
+  if (type === types.GeomAbs_Line) {
+    let p0 = new self.oc.gp_Pnt_1(), p1 = new self.oc.gp_Pnt_1();
+    curve.D0(first, p0);
+    curve.D0(last, p1);
+    bspline = _bsplineFromData({
+      deg: 1, periodic: false, knots: [first, last], mults: [2, 2], weights: null,
+      poles: [[p0.X(), p0.Y(), p0.Z()], [p1.X(), p1.Y(), p1.Z()]],
+    });
+  } else if (type === types.GeomAbs_Circle || type === types.GeomAbs_Ellipse) {
+    let isCircle = type === types.GeomAbs_Circle;
+    let conic = isCircle ? curve.Circle() : curve.Ellipse();
+    let frame = conic.Position();
+    let origin = frame.Location(), xDir = frame.XDirection(), yDir = frame.YDirection();
+    bspline = _bsplineFromData(_conicArcData(
+      [origin.X(), origin.Y(), origin.Z()],
+      [xDir.X(), xDir.Y(), xDir.Z()],
+      [yDir.X(), yDir.Y(), yDir.Z()],
+      isCircle ? conic.Radius() : conic.MajorRadius(),
+      isCircle ? conic.Radius() : conic.MinorRadius(),
+      first, last));
+  } else if (type === types.GeomAbs_BezierCurve) {
+    let bezier = curve.Bezier().get();
+    let poles = [], weights = bezier.IsRational() ? [] : null;
+    for (let i = 1; i <= bezier.NbPoles(); i++) {
+      let p = bezier.Pole(i);
+      poles.push([p.X(), p.Y(), p.Z()]);
+      if (weights) { weights.push(bezier.Weight(i)); }
+    }
+    let deg = bezier.Degree();
+    bspline = _bsplineFromData({
+      deg, periodic: false, knots: [0, 1], mults: [deg + 1, deg + 1], poles, weights,
+    });
+    if (first > 0 || last < 1) { bspline.Segment(first, last, 1e-9); }
+  } else if (type === types.GeomAbs_BSplineCurve) {
+    // rebuild from data first: Segment() mutates in place and the adaptor's
+    // handle points at the edge's own basis curve
+    bspline = _bsplineFromData(_bsplineDataOf(curve.BSpline().get()));
+    bspline.Segment(first, last, 1e-9);
+  } else {
+    throw new Error(
+      "build123d-lite cannot canonicalize a closed shape containing a " +
+      "hyperbola, parabola or offset curve (no exact B-spline form)");
+  }
+  if (e.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED) {
+    bspline.Reverse();
+  }
+  return _bsplineDataOf(bspline);
+}
+
+/** ONE edge whose curve is the exact concatenation of an ordered, head-to-tail
+ *  edge chain (build123d's _concatenate_edges, which uses
+ *  GeomConvert_CompCurveToBSplineCurve — unavailable here, see
+ *  _edgeBSplineData). Used to give a re-seamed closed loop an unambiguous
+ *  start point: a closed TopoDS_Wire carries no distinguished first edge,
+ *  while an Edge's curve parametrization does. */
+function ConcatEdgesToEdge(edges) {
+  let pieces = edges.map(_edgeBSplineData);
+  let degree = pieces.reduce((d, piece) => Math.max(d, piece.deg), 1);
+  pieces = pieces.map((piece) => {
+    if (piece.deg === degree) { return piece; }
+    let raised = _bsplineFromData(piece);
+    raised.IncreaseDegree(degree);
+    return _bsplineDataOf(raised);
+  });
+  let joined = pieces[0];
+  for (let i = 1; i < pieces.length; i++) {
+    let next = pieces[i];
+    let shift = joined.knots[joined.knots.length - 1] - next.knots[0];
+    let rational = !!(joined.weights || next.weights);
+    let weightsA = joined.weights || joined.poles.map(() => 1);
+    let weightsB = next.weights || next.poles.map(() => 1);
+    // the junction pole is shared, so rescale the incoming weights to match
+    let scale = weightsA[weightsA.length - 1] / weightsB[0];
+    joined = {
+      deg: degree,
+      periodic: false,
+      poles: joined.poles.concat(next.poles.slice(1)),
+      weights: rational
+        ? weightsA.concat(weightsB.slice(1).map((weight) => weight * scale))
+        : null,
+      knots: joined.knots.concat(next.knots.slice(1).map((knot) => knot + shift)),
+      // C0 junction: multiplicity == degree instead of the clamped degree + 1
+      mults: joined.mults.slice(0, -1).concat([degree]).concat(next.mults.slice(1)),
+    };
+  }
+  let handle = new self.oc.Handle_Geom_Curve_2(_bsplineFromData(joined));
+  let out = new self.oc.BRepBuilderAPI_MakeEdge_24(handle).Edge();
+  out.hash = self.oc.OCJS.HashCode(out, 100000000);
+  self.sceneShapes.push(out);
+  return out;
+}
+
+/** An edge's 3D curve projected onto a face's surface (GeomProjLib::Project —
+ *  build123d's "snap_to_face" step of _wrap_edge). */
+function ProjectEdgeOnFace(edge, face) {
+  let e = _asEdge(edge);
+  let first = { current: 0 }, last = { current: 0 };
+  let curve = self.oc.BRep_Tool.Curve_2(e, first, last);
+  let surf = self.oc.BRep_Tool.Surface_2(_asFace(face));
+  let projected = self.oc.GeomProjLib.Project(curve, surf);
+  if (!projected) { return null; }
+  let out = new self.oc.BRepBuilderAPI_MakeEdge_24(projected).Edge();
+  out.hash = self.oc.OCJS.HashCode(out, 100000000);
+  self.sceneShapes.push(out);
+  return out;
+}
+
+/** Extend a B-spline edge past one of its ends by `factor` of its length and
+ *  snap the result back onto a face's surface — build123d's
+ *  Edge._extend_spline, used to make the first and last wrapped edges of a
+ *  closed wire cross so they can be trimmed to a clean junction. */
+function ExtendSplineOnFace(edge, atStart, face, factor) {
+  let e = _asEdge(edge);
+  let adaptor = new self.oc.BRepAdaptor_Curve_2(e);
+  let bspl = adaptor.BSpline().get();
+  let poles = [];
+  for (let i = 1; i <= bspl.NbPoles(); i++) {
+    let p = bspl.Pole(i);
+    poles.push([p.X(), p.Y(), p.Z()]);
+  }
+  let pointAt = (f) => {
+    let pnt = new self.oc.gp_Pnt_1();
+    adaptor.D0(_edgeParam(e, f), pnt);
+    return [pnt.X(), pnt.Y(), pnt.Z()];
+  };
+  let tangentAt = (f) => {
+    let pnt = new self.oc.gp_Pnt_1(), vec = new self.oc.gp_Vec_1();
+    adaptor.D1(_edgeParam(e, f), pnt, vec);
+    let m = vec.Magnitude() || 1;
+    return [vec.X() / m, vec.Y() / m, vec.Z() / m];
+  };
+  let ends = atStart ? [-factor, 1] : [0, 1 + factor];
+  if (atStart) { poles.unshift(pointAt(-factor)); } else { poles.push(pointAt(1 + factor)); }
+  let tangents = [tangentAt(ends[0]), tangentAt(ends[1])];
+  let extended = InterpolatedEdge(poles, tangents, false, true);
+  return ProjectEdgeOnFace(extended, face);
+}
+
+/** A single edge exactly interpolating the given points (GeomAPI_Interpolate,
+ *  build123d's Edge.make_spline). */
+function InterpolatedEdge(points, tangents, periodic, scale) {
+  let wire = WireFromSegments([['interp', points.map((p) => [p[0], p[1], p[2]]),
+    [tangents && tangents.length ? tangents : null, !!periodic,
+     scale === undefined ? true : !!scale]]], true);
+  let edges = [];
+  ForEachEdge(wire, (i, e) => { edges.push(e); });
+  if (edges.length !== 1) {
+    throw new Error('InterpolatedEdge: expected one edge, got ' + edges.length);
+  }
+  return edges[0];
+}
+
+/** Curve parameters of the closest extremum between two edges' curves
+ *  (GeomAPI_ExtremaCurveCurve, build123d's first/last wrapped-edge junction).
+ *  Returns [paramOnFirst, paramOnSecond] or null. */
+function ExtremaEdgeParams(edgeA, edgeB) {
+  let fa = { current: 0 }, la = { current: 0 }, fb = { current: 0 }, lb = { current: 0 };
+  let ca = self.oc.BRep_Tool.Curve_2(_asEdge(edgeA), fa, la);
+  let cb = self.oc.BRep_Tool.Curve_2(_asEdge(edgeB), fb, lb);
+  let ext = new self.oc.GeomAPI_ExtremaCurveCurve_2(ca, cb);
+  if (ext.NbExtrema() < 1) { return null; }
+  let u = { current: 0 }, v = { current: 0 };
+  ext.LowerDistanceParameters(u, v);
+  return [u.current, v.current];
+}
+
+/** A potentially NON-planar face bounded by the given edges, optionally
+ *  refined by interior points and holed by interior wires — the exact
+ *  BRepOffsetAPI_MakeFilling construction of build123d's Face.make_surface. */
+function FillingFace(edges, points, interiorWires) {
+  let filling = new self.oc.BRepOffsetAPI_MakeFilling(
+    3, 15, 2, false, 0.00001, 0.0001, 0.01, 0.1, 8, 9);
+  let C0 = self.oc.GeomAbs_Shape.GeomAbs_C0;
+  for (let i = 0; i < edges.length; i++) {
+    filling.Add_1(_asEdge(edges[i]), C0, true);
+  }
+  filling.Build(new self.oc.Message_ProgressRange_1());
+  if (!filling.IsDone()) { console.error("FillingFace: surface filling failed"); return null; }
+  if (points && points.length) {
+    for (let i = 0; i < points.length; i++) {
+      filling.Add_4(new self.oc.gp_Pnt_3(points[i][0], points[i][1], points[i][2]));
+    }
+    filling.Build(new self.oc.Message_ProgressRange_1());
+    if (!filling.IsDone()) {
+      console.error("FillingFace: surface filling with interior points failed");
+      return null;
+    }
+  }
+  let face = self.oc.TopoDS_Cast.Face_1(filling.Shape());
+  if (interiorWires && interiorWires.length) {
+    face = _asFace(FaceWithHoles(_faceOuterWire(face), interiorWires.map(_asWire)));
+  }
+  let fixer = new self.oc.ShapeFix_Shape_2(face);
+  fixer.Perform(new self.oc.Message_ProgressRange_1());
+  face = _asFace(fixer.Shape());
+  face.hash = self.oc.OCJS.HashCode(face, 100000000);
+  self.sceneShapes.push(face);
+  return face;
+}
+
+/** A wire from edges, reordered and gap-closed with ShapeFix_Wire (build123d
+ *  closes the wrapped-wire junction this way). */
+function WireFromEdgesFixed(edges, precision) {
+  let mkWire = new self.oc.BRepBuilderAPI_MakeWire_1();
+  // build123d adds every edge at once (TopTools_ListOfShape), which lets the
+  // builder connect them in any order instead of demanding that each new edge
+  // touch the wire built so far
+  let list = new self.oc.TopTools_ListOfShape();
+  for (let i = 0; i < edges.length; i++) { list.Append(_asEdge(edges[i])); }
+  mkWire.Add_3(list);
+  let raw;
+  if (mkWire.IsDone()) {
+    raw = mkWire.Wire();
+  } else {
+    // The gaps between independently projected wrapped edges can exceed
+    // MakeWire's connectivity tolerance. Assemble the wire directly and let
+    // ShapeFix close the gaps — which is exactly what build123d's
+    // SetPrecision(2 * closing_error) + FixConnected pass is there for.
+    let builder = new self.oc.BRep_Builder();
+    raw = new self.oc.TopoDS_Wire();
+    builder.MakeWire(raw);
+    for (let i = 0; i < edges.length; i++) { builder.Add(raw, _asEdge(edges[i])); }
+  }
+  let fixer = new self.oc.ShapeFix_Wire_1();
+  if (precision > 0) { fixer.SetPrecision(precision); }
+  fixer.Load_1(raw);
+  fixer.FixReorder_1(false);
+  fixer.FixConnected_1(precision > 0 ? precision : 1e-7);
+  let wire = fixer.Wire();
+  wire.hash = self.oc.OCJS.HashCode(wire, 100000000);
+  self.sceneShapes.push(wire);
+  return wire;
+}
+
+/** Whether a wire is topologically closed (BRep_Tool::IsClosed). */
+function _wireIsClosed(wire) {
+  return !!self.oc.BRep_Tool.IsClosed_1(_asWire(wire));
+}
+
+/** A wire's edges in CONNECTION order (BRepTools_WireExplorer — build123d's
+ *  Wire.order_edges); ForEachEdge follows TopExp's storage order instead. */
+/** A wire built from edges IN THE GIVEN ORDER, each keeping its own
+ *  orientation (BRepBuilderAPI_MakeWire::Add per edge). build123d's
+ *  Wire.fillet_2d rebuilds a filleted wire this way, and the traversal order
+ *  it produces matters downstream: BRepOffsetAPI_MakeOffset fails on the same
+ *  edges assembled order-agnostically. Falls back to WireFromEdgesFixed. */
+function WireFromOrderedEdges(edges) {
+  let mkWire = new self.oc.BRepBuilderAPI_MakeWire_1();
+  for (let i = 0; i < edges.length; i++) {
+    mkWire.Add_1(_asEdge(edges[i]));
+    if (!mkWire.IsDone()) { return WireFromEdgesFixed(edges); }
+  }
+  let wire = mkWire.Wire();
+  if (!wire || wire.IsNull()) { return WireFromEdgesFixed(edges); }
+  wire.hash = self.oc.OCJS.HashCode(wire, 100000000);
+  return wire;
+}
+
+function OrderedEdges(wire) {
+  let out = [];
+  let exp = new self.oc.BRepTools_WireExplorer_2(_asWire(wire));
+  for (; exp.More(); exp.Next()) {
+    let e = self.oc.TopoDS_Cast.Edge_1(exp.Current());
+    if (e.hash === undefined) { e.hash = self.oc.OCJS.HashCode(e, 100000000); }
+    out.push(e);
+  }
+  return out;
+}
+
+/** The single TopoDS_Face of a one-face shape (shell/compound), or the shape
+ *  unchanged when it holds none or several. Extruding a one-edge wire yields a
+ *  SHELL here where build123d's Face.extrude casts straight to TopoDS_Face,
+ *  and downstream OCCT algorithms (BRepProj_Projection above all) treat a
+ *  shell differently from the face inside it. */
+function AsSingleFace(shape, keepShape) {
+  if (shape.ShapeType().value === 4) { return shape; }
+  let found = [];
+  ForEachFace(shape, (i, f) => { found.push(f); });
+  if (found.length !== 1) { return shape; }
+  let face = found[0];
+  if (face.hash === undefined) { face.hash = self.oc.OCJS.HashCode(face, 100000000); }
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(face);
+  return face;
+}
+
+/** TopoDS_Wire view of a wire, or a wire built from a shape's edges. */
+function _asWire(shape) {
+  if (shape.ShapeType().value === 5) { return self.oc.TopoDS_Cast.Wire_1(shape); }
+  let mkWire = new self.oc.BRepBuilderAPI_MakeWire_1();
+  ForEachEdge(shape, (i, e) => { mkWire.Add_1(e); });
+  return mkWire.Wire();
+}
+
+/** Project a wire (or a shape's edges) onto a target shape, either along a
+ *  direction or from a conical `center` point (pass one, null the other) —
+ *  BRepProj_Projection, exactly build123d's Wire/Edge.project_to_shape.
+ *  Results keep the input's orientation and, when the projection lands on
+ *  more than one surface, are sorted nearest-first along the projection
+ *  (wires BEHIND the profile are dropped for directional projection, like
+ *  build123d).
+ *  COMPROMISE(projection-sort): build123d sorts by Wire.center() (the
+ *  position at half arc length); this sorts by center of mass, which orders
+ *  front/back hits identically but can differ for exotic wires. */
+function ProjectWireOnShape(profile, target, direction, center) {
+  let wire = _asWire(profile);
+  let proj = direction
+    ? new self.oc.BRepProj_Projection_1(wire, target,
+        new self.oc.gp_Dir_5(direction[0], direction[1], direction[2]))
+    : new self.oc.BRepProj_Projection_2(wire, target,
+        new self.oc.gp_Pnt_3(center[0], center[1], center[2]));
+  let wanted = wire.Orientation_1();
+  let found = [];
+  for (; proj.More(); proj.Next()) {
+    let pw = proj.Current();
+    if (pw.Orientation_1() !== wanted) { pw = self.oc.TopoDS_Cast.Wire_1(pw.Reversed()); }
+    // build123d cleans the projected wires "to remove cases where projection
+    // artificially split edges".
+    // COMPROMISE(projected-edge-split): this kernel splits more eagerly than
+    // OCP 7.x's — a single projected arc comes back as two BSpline edges
+    // meeting where the curve grazes the surface boundary — so unification
+    // has to CONCATENATE B-splines (build123d's clean() leaves that flag off)
+    // to get back to build123d's one-edge result. Same curve, same length.
+    pw = UnifyWire(pw, true);
+    pw.hash = self.oc.OCJS.HashCode(pw, 100000000);
+    found.push(pw);
+  }
+  if (found.length > 1) {
+    let c0 = _shapeLinearCenter(wire);
+    let keyed = [];
+    for (let i = 0; i < found.length; i++) {
+      let c = _shapeLinearCenter(found[i]);
+      let d = [c[0] - c0[0], c[1] - c0[1], c[2] - c0[2]];
+      let len = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+      if (direction) {
+        let dot = d[0] * direction[0] + d[1] * direction[1] + d[2] * direction[2];
+        if (dot < 0) { continue; }  // behind the profile: not a projection hit
+      }
+      keyed.push([len, found[i]]);
+    }
+    keyed.sort((a, b) => a[0] - b[0]);
+    found = keyed.map((k) => k[1]);
+  }
+  for (let i = 0; i < found.length; i++) { self.sceneShapes.push(found[i]); }
+  return found;
+}
+
+function _shapeLinearCenter(shape) {
+  let props = new self.oc.GProp_GProps_1();
+  self.oc.BRepGProp.LinearProperties(shape, props, false, false);
+  let c = props.CentreOfMass();
+  return [c.X(), c.Y(), c.Z()];
+}
+
+/** Reverse ANY shape's topological orientation (TopoDS_Shape::Complemented —
+ *  what build123d's Mixin2D.__neg__ does), re-typing the result when it is a
+ *  face so downstream face APIs keep working. */
+function ReverseShape(shape, keepShape) {
+  let reversed = shape.Complemented();
+  if (reversed.ShapeType().value === 4) {
+    reversed = self.oc.TopoDS_Cast.Face_1(reversed);
+  }
+  reversed.hash = self.oc.OCJS.HashCode(reversed, 100000000);
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(reversed);
+  return reversed;
+}
+
+/** Uniform scale about a center point, BAKED into the geometry
+ *  (BRepBuilderAPI_Transform + gp_Trsf::SetScale — what build123d's
+ *  Shape.scale does). The legacy Scale() encodes the factor in a
+ *  TopLoc_Location, which downstream OCCT algorithms handle
+ *  inconsistently (TopLoc is only specified for isometries). */
+function ScaleUniform(shape, factor, center, keepShape) {
+  if (!shape || shape.IsNull()) { console.error("ScaleUniform: input shape is null!"); return shape; }
+  if (!center) { center = [0, 0, 0]; }
+  let scaled = self.CacheOp(arguments, "ScaleUniform", () => {
+    let trsf = new self.oc.gp_Trsf_1();
+    trsf.SetScale(new self.oc.gp_Pnt_3(center[0], center[1], center[2]), factor);
+    let op = new self.oc.BRepBuilderAPI_Transform_2(shape, trsf, true, false);
+    op.Build(new self.oc.Message_ProgressRange_1());
+    return op.Shape();
+  });
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(scaled);
+  return scaled;
+}
+
+/** Non-uniform scale via gp_GTrsf + BRepBuilderAPI_GTransform (converts
+ *  analytic surfaces to BSplines where needed — same as build123d). */
+function ScaleXYZ(factors, shape, keepShape) {
+  if (!shape || shape.IsNull()) { console.error("ScaleXYZ: input shape is null!"); return shape; }
+  let scaled = self.CacheOp(arguments, "ScaleXYZ", () => {
+    let gtrsf = new self.oc.gp_GTrsf_1();
+    gtrsf.SetValue(1, 1, factors[0]);
+    gtrsf.SetValue(2, 2, factors[1]);
+    gtrsf.SetValue(3, 3, factors[2]);
+    let op = new self.oc.BRepBuilderAPI_GTransform_2(shape, gtrsf, true);
+    op.Build(new self.oc.Message_ProgressRange_1());
+    return op.Shape();
+  });
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(scaled);
+  return scaled;
+}
+
+/** Hidden-line-removal projection: project the shape onto a viewport with
+ *  the given view direction, returning [visibleEdges, hiddenEdges] as two
+ *  compounds (HLRBRep — what build123d's project_to_viewport uses). */
+function HLRProject(shape, viewDir, keepShape) {
+  let result = self.CacheOp(arguments, "HLRProject", () => {
+    let hlr = new self.oc.HLRBRep_Algo_1();
+    hlr.Add_2(shape, 0);
+    let projDir = new self.oc.gp_Dir_5(viewDir[0], viewDir[1], viewDir[2]);
+    let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(0, 0, 0), projDir);
+    let projector = new self.oc.HLRAlgo_Projector_2(ax2);
+    hlr.Projector_1(projector);
+    hlr.Update();
+    hlr.Hide_1();
+    let toShape = new self.oc.HLRBRep_HLRToShape(new self.oc.Handle_HLRBRep_Algo_2(hlr));
+    let visible = [];
+    let hidden = [];
+    let grab = (s, into) => { if (s && !s.IsNull()) { into.push(s); } };
+    grab(toShape.VCompound_1(), visible);
+    grab(toShape.Rg1LineVCompound_1(), visible);
+    grab(toShape.OutLineVCompound_1(), visible);
+    grab(toShape.HCompound_1(), hidden);
+    grab(toShape.Rg1LineHCompound_1(), hidden);
+    grab(toShape.OutLineHCompound_1(), hidden);
+    let mk = (list) => {
+      let builder = new self.oc.BRep_Builder();
+      let compound = new self.oc.TopoDS_Compound();
+      builder.MakeCompound(compound);
+      for (let i = 0; i < list.length; i++) { builder.Add(compound, list[i]); }
+      self.oc.BRepLib.BuildCurves3d_2(compound);
+      compound.hash = self.oc.OCJS.HashCode(compound, 100000000);
+      return compound;
+    };
+    return [mk(visible), mk(hidden)];
+  });
+  return result;
+}
+
+/** Surface through a 2D grid of points, returned as a face. build123d uses
+ *  GeomAPI_PointsToBSplineSurface, whose Surface() accessor returns
+ *  Handle_Geom_BSplineSurface — a type this WASM build does not bind — so
+ *  instead each row (fixed V, varying U) is interpolated exactly
+ *  (GeomAPI_Interpolate, 1e-6) and the rows are skinned with
+ *  BRepOffsetAPI_ThruSections (non-solid, 1e-6). Both constructions
+ *  approximate the same grid to well below harness tolerance.
+ *  `points` outer index = V, inner = U, like build123d. */
+function SurfaceFromPoints(points, tol, degMin, degMax, smoothing) {
+  let curFace = self.CacheOp(arguments, "SurfaceFromPoints", () => {
+    // The exact calls build123d's Face.make_surface_from_array_of_points
+    // makes: GeomAPI_PointsToBSplineSurface(points, DegMin, DegMax,
+    // GeomAbs_C2, Tol3D) — a 2-D least-squares fit — then
+    // BRepBuilderAPI_MakeFace(surface, Precision::Confusion()).
+    // With smoothing weights: the variational (Weight1..3) constructor.
+    let arr = new self.oc.TColgp_Array2OfPnt_2(1, points.length, 1, points[0].length);
+    for (let i = 0; i < points.length; i++) {
+      let row = points[i];
+      for (let j = 0; j < row.length; j++) {
+        let p = row[j];
+        arr.SetValue(i + 1, j + 1, new self.oc.gp_Pnt_3(p[0], p[1], p.length > 2 ? p[2] : 0));
+      }
+    }
+    let alg;
+    if (smoothing && smoothing.length === 3) {
+      alg = new self.oc.GeomAPI_PointsToBSplineSurface_4(
+        arr, smoothing[0], smoothing[1], smoothing[2], degMax,
+        self.oc.GeomAbs_Shape.GeomAbs_C2, tol);
+    } else {
+      alg = new self.oc.GeomAPI_PointsToBSplineSurface_2(
+        arr, degMin, degMax, self.oc.GeomAbs_Shape.GeomAbs_C2, tol);
+    }
+    if (!alg.IsDone()) {
+      console.error("SurfaceFromPoints: B-spline surface approximation failed");
+      return null;
+    }
+    let surfaceHandle = alg.Surface().AsGeomSurface();
+    let face = new self.oc.BRepBuilderAPI_MakeFace_8(surfaceHandle, 1.0e-7).Face();
+    face.hash = self.oc.OCJS.HashCode(face, 100000000);
+    return face;
+  });
+  self.sceneShapes.push(curFace);
+  return curFace;
+}
+
+/** Sweep profile wires along a spine wire with BRepOffsetAPI_MakePipeShell —
+ *  the exact calls build123d's Solid.sweep/sweep_multi make:
+ *    - trihedron: SetMode(isFrenet) (false = corrected Frenet), unless a
+ *      constant `binormal` vector ([x,y,z], build123d normal=) or an
+ *      auxiliary spine wire (`auxSpine`, build123d binormal=) is given
+ *    - transition: 'transformed' | 'round' | 'right' (ignored when null,
+ *      matching sweep_multi which never sets a transition mode)
+ *    - every profile is added with Add(profile, WithContact=false,
+ *      WithCorrection=rotate) where rotate is true only for a binormal vector
+ *  Multiple profiles = multisection sweep (profile correspondence is OCCT's).
+ *  Profiles must be TopoDS_Wire; returns a solid (MakeSolid), or the raw
+ *  shell when makeShell is true. */
+function PipeShellSweep(profileWires, spineWire, isFrenet, transition, binormal, auxSpine, auxCurvilinear, makeShell) {
+  let result = self.CacheOp(arguments, "PipeShellSweep", () => {
+    let toWire = (w) => {
+      // rebuild for exact Embind TopoDS_Wire typing (see Loft). The edges are
+      // added AS A LIST: TopExp_Explorer hands them back in storage order, and
+      // adding them one at a time makes BRepBuilderAPI_MakeWire silently drop
+      // any edge that does not touch the wire built so far (which quietly cost
+      // brake-formed sections a side face).
+      let mw = new self.oc.BRepBuilderAPI_MakeWire_1();
+      let list = new self.oc.TopTools_ListOfShape();
+      let exp = new self.oc.TopExp_Explorer_2(w, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+        self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+      while (exp.More()) { list.Append(self.oc.TopoDS_Cast.Edge_1(exp.Current())); exp.Next(); }
+      mw.Add_3(list);
+      return mw.Wire();
+    };
+    let builder = new self.oc.BRepOffsetAPI_MakePipeShell(toWire(spineWire));
+    let rotate = false;
+    if (binormal && binormal.length) {
+      let ax = new self.oc.gp_Ax2_1();
+      let start = _edgePointAt(
+        new self.oc.TopExp_Explorer_2(spineWire, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+          self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE).Current(), 0.0);
+      ax.SetLocation(new self.oc.gp_Pnt_3(start[0], start[1], start[2]));
+      ax.SetDirection(new self.oc.gp_Dir_5(binormal[0], binormal[1], binormal[2]));
+      builder.SetMode_2(ax);
+      rotate = true;
+    } else if (auxSpine) {
+      // binormal wire -> CurvilinearEquivalence true (Solid._set_sweep_mode);
+      // extrude_linear_with_rotation's helix aux spine passes false
+      let curv = (auxCurvilinear === undefined || auxCurvilinear === null || auxCurvilinear === '') ? true : !!auxCurvilinear;
+      builder.SetMode_5(toWire(auxSpine), curv, self.oc.BRepFill_TypeOfContact.BRepFill_NoContact);
+    } else {
+      builder.SetMode_1(!!isFrenet);
+    }
+    if (transition) {
+      let TM = self.oc.BRepBuilderAPI_TransitionMode;
+      let mode = transition === 'round' ? TM.BRepBuilderAPI_RoundCorner :
+                 transition === 'right' ? TM.BRepBuilderAPI_RightCorner :
+                 TM.BRepBuilderAPI_Transformed;
+      builder.SetTransitionMode(mode);
+    }
+    for (let i = 0; i < profileWires.length; i++) {
+      builder.Add_1(toWire(profileWires[i]), false, rotate);
+    }
+    builder.Build(new self.oc.Message_ProgressRange_1());
+    if (!makeShell) { builder.MakeSolid(); }
+    return builder.Shape();
+  });
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Planar face from an outer wire plus hole wires (build123d's
+ *  Face(outer_wire, inner_wires)) — no booleans: MakeFace + Add(wire) with a
+ *  ShapeFix_Face orientation pass so the holes subtract regardless of the
+ *  input wires' winding. */
+function FaceWithHoles(outerWire, holeWires) {
+  let curFace = self.CacheOp(arguments, "FaceWithHoles", () => {
+    let toWire = (shape) => shape.ShapeType().value === 5
+      ? self.oc.TopoDS_Cast.Wire_1(shape) : self.oc.TopoDS_Cast.Wire_1(
+        new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_WIRE,
+          self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE).Current());
+    let mk = new self.oc.BRepBuilderAPI_MakeFace_15(toWire(outerWire), true);
+    for (let i = 0; i < holeWires.length; i++) { mk.Add(toWire(holeWires[i])); }
+    let fixer = new self.oc.ShapeFix_Face_2(mk.Face());
+    fixer.FixOrientation_1();
+    return fixer.Face();
+  });
+  self.sceneShapes.push(curFace);
+  return curFace;
+}
+
+/** Apply a draft angle to the given faces of a solid — BRepOffsetAPI_DraftAngle
+ *  with build123d's Solid.draft conventions (pull direction and neutral plane
+ *  from the neutral Plane's z_dir/origin, Flag=true). */
+function DraftAngleFaces(shape, faces, angleDeg, planeOrigin, planeNormal, keepShape) {
+  let result = self.CacheOp(arguments, "DraftAngleFaces", () => {
+    let builder = new self.oc.BRepOffsetAPI_DraftAngle_2(shape);
+    let dir = new self.oc.gp_Dir_5(planeNormal[0], planeNormal[1], planeNormal[2]);
+    let pln = new self.oc.gp_Pln_3(
+      new self.oc.gp_Pnt_3(planeOrigin[0], planeOrigin[1], planeOrigin[2]), dir);
+    for (let i = 0; i < faces.length; i++) {
+      let f = faces[i].ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(faces[i]) : faces[i];
+      builder.Add(f, dir, angleDeg * (Math.PI / 180), pln, true);
+      if (!builder.AddDone()) {
+        console.error("DraftAngleFaces: draft could not be added to face " + i);
+        return shape;
+      }
+    }
+    builder.Build(new self.oc.Message_ProgressRange_1());
+    return builder.Shape();
+  });
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Write the shape as an STL file into the worker's Emscripten MEMFS and
+ *  return the file's text content (ASCII) or byte length (binary) — the
+ *  engine behind build123d-lite's Mesher/export_stl. */
+function ExportSTL(shape, filename, linearDeflection, angularDeflection, asciiFormat) {
+  if (!shape || shape.IsNull()) { console.error("ExportSTL: input shape is null!"); return null; }
+  if (!linearDeflection) { linearDeflection = 1e-3; }
+  if (!angularDeflection) { angularDeflection = 0.1; }
+  new self.oc.BRepMesh_IncrementalMesh_2(shape, linearDeflection, true, angularDeflection, true);
+  let writer = new self.oc.StlAPI_Writer();
+  // StlAPI_Writer defaults to ASCII in OCCT; the binding exposes ASCIIMode()
+  // as a getter only, so we always write ASCII (fine for MEMFS round-trips)
+  let done = writer.Write_1(shape, "/" + filename, new self.oc.Message_ProgressRange_1());
+  if (!done) { console.error("ExportSTL: STL write failed"); return null; }
+  let text = self.oc.FS.readFile("/" + filename, { encoding: "utf8" });
+  return text;
+}
+
+/** Write the shape as a BREP file into the worker's Emscripten MEMFS and
+ *  return the file's text content (BRepTools::Write) — the engine behind
+ *  build123d-lite's export_brep. */
+function ExportBREP(shape, filename) {
+  if (!shape || shape.IsNull()) { console.error("ExportBREP: input shape is null!"); return null; }
+  let done = self.oc.BRepTools.Write_3(shape, "/" + filename, new self.oc.Message_ProgressRange_1());
+  if (!done) { console.error("ExportBREP: BREP write failed"); return null; }
+  return self.oc.FS.readFile("/" + filename, { encoding: "utf8" });
+}
+
+/** Read a shape from a BREP file in the worker's MEMFS (BRepTools::Read with
+ *  a BRep_Builder). fileText, when given, (re)creates the MEMFS file first.
+ *  Returns null when the file is missing or unreadable — the engine behind
+ *  build123d-lite's import_brep. */
+function ImportBREP(filename, fileText) {
+  const oc = self.oc;
+  if (fileText !== undefined && fileText !== null) {
+    try { oc.FS.unlink("/" + filename); } catch (e) { /* file was absent */ }
+    oc.FS.createDataFile("/", filename, fileText, true, true);
+  }
+  let shape = new oc.TopoDS_Shape();
+  let builder = new oc.BRep_Builder();
+  let ok = false;
+  try {
+    ok = oc.BRepTools.Read_2(shape, "/" + filename, builder, new oc.Message_ProgressRange_1());
+  } catch (e) { ok = false; }
+  if (!ok || shape.IsNull()) { return null; }
+  return shape;
+}
+
+/** Group shapes into a single TopoDS_Compound (no boolean fusion). */
+function MakeCompound(shapes, keepInputs) {
+  let builder = new self.oc.BRep_Builder();
+  let compound = new self.oc.TopoDS_Compound();
+  builder.MakeCompound(compound);
+  for (let i = 0; i < shapes.length; i++) { builder.Add(compound, shapes[i]); }
+  // not CacheOp'd — give the result a stable identity for downstream CacheOps
+  compound.hash = self.oc.OCJS.HashCode(compound, 100000000);
+  if (!keepInputs) {
+    for (let i = 0; i < shapes.length; i++) { self.sceneShapes = self.Remove(self.sceneShapes, shapes[i]); }
+  }
+  self.sceneShapes.push(compound);
+  return compound;
 }
 
 function _dot(a, b) {
@@ -1159,6 +3283,10 @@ class EdgeSelector {
   constructor(shape) {
     this._entries = [];
     ForEachEdge(shape, (index, edge) => {
+      // Sub-shapes carry no .hash, so CacheOp's ptr-stripping would hash any
+      // two of them identically ("{}") — give each a stable identity so ops
+      // that receive raw edges/faces are cached correctly.
+      if (edge.hash === undefined) { edge.hash = self.oc.OCJS.HashCode(edge, 100000000); }
       this._entries.push({ index, edge });
     });
   }
@@ -1343,6 +3471,8 @@ class FaceSelector {
   constructor(shape) {
     this._entries = [];
     ForEachFace(shape, (index, face) => {
+      // see EdgeSelector: raw sub-shapes need a stable hash for CacheOp
+      if (face.hash === undefined) { face.hash = self.oc.OCJS.HashCode(face, 100000000); }
       this._entries.push({ index, face });
     });
   }
@@ -1494,12 +3624,60 @@ function Faces(shape) {
   return new FaceSelector(shape);
 }
 
+/** build123d's `new_edges(*objects, combined=)` (topology/utils.py): the edges
+ *  of `combined` that no shape in `originals` contributed — i.e. the edges the
+ *  combining operation created.
+ *
+ *  Implemented with upstream's exact algorithm rather than a geometric
+ *  comparison: a boolean CUT of the combined shape's edge list by the
+ *  originals' edge list, which also splits partially-shared edges so only the
+ *  genuinely new portion survives.
+ *
+ *  @param {TopoDS_Shape} combined - the result of the operation
+ *  @param {TopoDS_Shape[]} originals - its inputs
+ *  @returns {TopoDS_Edge[]} the new edges */
+function NewEdges(combined, originals) {
+  if (!combined || combined.IsNull()) { return []; }
+  let combinedEdges = new self.oc.TopTools_ListOfShape();
+  let combinedCount = 0;
+  let allCombined = [];
+  ForEachEdge(combined, (i, edge) => {
+    combinedEdges.Append(edge); combinedCount++; allCombined.push(edge);
+  });
+  if (combinedCount === 0) { return []; }
+  let originalEdges = new self.oc.TopTools_ListOfShape();
+  let originalCount = 0;
+  for (let i = 0; i < originals.length; i++) {
+    if (!originals[i] || originals[i].IsNull()) { continue; }
+    ForEachEdge(originals[i], (j, edge) => { originalEdges.Append(edge); originalCount++; });
+  }
+  if (originalCount === 0) { return allCombined; }
+  let cut = new self.oc.BRepAlgoAPI_Cut_1();
+  cut.SetArguments(combinedEdges);
+  cut.SetTools(originalEdges);
+  // (upstream also calls SetRunParallel(True) - a BOPAlgo_Options perf flag
+  //  that is not bound in this build; it does not affect the result)
+  cut.Build(new self.oc.Message_ProgressRange_1());
+  let out = [];
+  ForEachEdge(cut.Shape(), (i, edge) => { out.push(edge); });
+  return out;
+}
+
 // --- Measurement Functions ---
 
 function Volume(shape) {
   let props = new self.oc.GProp_GProps_1();
   self.oc.BRepGProp.VolumeProperties_1(shape, props, false, false, false);
   return props.Mass();
+}
+
+/** Sum of |volume| over the shape's SOLIDS only — immune to the spurious
+ *  open-face contributions VolumeProperties picks up on mixed compounds
+ *  in this OCCT build (build123d-lite's Shape.volume semantics). */
+function SolidsVolume(shape) {
+  let total = 0;
+  ForEachSolid(shape, (i, solid) => { total += Math.abs(Volume(solid)); });
+  return total;
 }
 
 function SurfaceArea(shape) {
@@ -1521,7 +3699,457 @@ function EdgeLength(shape) {
   return props.Mass();
 }
 
+/** Build a single TopoDS_Wire from an ordered list of connected segments.
+ *  Each segment is [kind, points] with 3D points; kinds:
+ *    'line'   [start, end]
+ *    'arc3'   [start, pointOnArc, end]        (circular arc through 3 points)
+ *    'bezier' [ctrl0, ctrl1, ..., ctrlN]      (Bezier control points)
+ *    'spline' [p0, p1, ..., pN]               (fit through points, C2, 1e-3)
+ *    'interp' [p0, p1, ..., pN] + params [tangents|null, periodic, scale]
+ *             (exact GeomAPI_Interpolate — build123d's Edge.make_spline;
+ *             tangents is null, [t0, t1] end tangents, or one per point)
+ *  Used by build123d-lite's BuildLine/make_face (the segment MATH lives in
+ *  Python; this helper only assembles edges with the same OCCT calls the
+ *  Sketch class already uses). Returns the wire (scene-registered). */
+function WireFromSegments(segments, keepInputs) {
+  let curWire = self.CacheOp(arguments, "WireFromSegments", () => {
+    let toPnt = (p) => new self.oc.gp_Pnt_3(p[0], p[1], p.length > 2 ? p[2] : 0);
+    // Disjoint segment runs (e.g. build123d dimension lines with arrows)
+    // become SEPARATE wires collected into a compound — feeding a
+    // disconnected edge to one MakeWire aborts inside the kernel.
+    let wires = [];
+    let wireBuilder = new self.oc.BRepBuilderAPI_MakeWire_1();
+    let started = false;
+    let lastEnd = null;
+    let closeRun = () => {
+      if (started) { wires.push(wireBuilder.Wire()); }
+      wireBuilder = new self.oc.BRepBuilderAPI_MakeWire_1();
+      started = false;
+    };
+    let near = (a, b) => a && b &&
+      Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6 &&
+      Math.abs((a[2] || 0) - (b[2] || 0)) < 1e-6;
+    for (let s = 0; s < segments.length; s++) {
+      let segPts = segments[s][1];
+      if (started && !near(lastEnd, segPts[0])) { closeRun(); }
+      lastEnd = segPts[segPts.length - 1];
+      let kind = segments[s][0], pts = segments[s][1];
+      let curveHandle = null;
+      if (kind === 'line') {
+        curveHandle = new self.oc.GC_MakeSegment_1(toPnt(pts[0]), toPnt(pts[1])).Value();
+      } else if (kind === 'arc3') {
+        curveHandle = new self.oc.GC_MakeArcOfCircle_4(toPnt(pts[0]), toPnt(pts[1]), toPnt(pts[2])).Value();
+      } else if (kind === 'bezier') {
+        let ptList = new self.oc.TColgp_Array1OfPnt_2(1, pts.length);
+        for (let i = 0; i < pts.length; i++) { ptList.SetValue(i + 1, toPnt(pts[i])); }
+        let bezier = new self.oc.Geom_BezierCurve_1(ptList);
+        let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(bezier)).Edge();
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
+      } else if (kind === 'spline') {
+        let ptList = new self.oc.TColgp_Array1OfPnt_2(1, pts.length);
+        for (let i = 0; i < pts.length; i++) { ptList.SetValue(i + 1, toPnt(pts[i])); }
+        // cubic fit only: higher degrees oscillate/overshoot on the densely
+        // sampled clamped splines build123d-lite feeds through here
+        curveHandle = new self.oc.GeomAPI_PointsToBSpline_2(ptList, 3, 3,
+          (self.oc.GeomAbs_Shape ? self.oc.GeomAbs_Shape.GeomAbs_C2 : 2), 1.0e-4).Curve();
+      } else if (kind === 'interp') {
+        // exact interpolation through the points — GeomAPI_Interpolate, the
+        // same calls as build123d's Edge.make_spline (tol 1e-6):
+        //   params = [tangents, periodic, scale]
+        //   tangents: null | [[t0],[t1]] end tangents | one (or null) per point
+        //   scale: true = only tangent DIRECTION matters (OCCT rescales)
+        let p = segments[s][2] || [];
+        let tangents = (p[0] && p[0].length) ? p[0] : null;
+        let periodic = !!p[1];
+        let scaleFlag = (p[2] === undefined || p[2] === null) ? true : !!p[2];
+        let ptList = new self.oc.TColgp_HArray1OfPnt_2(1, pts.length);
+        for (let i = 0; i < pts.length; i++) { ptList.SetValue(i + 1, toPnt(pts[i])); }
+        let interp = new self.oc.GeomAPI_Interpolate_1(
+          new self.oc.Handle_TColgp_HArray1OfPnt_2(ptList), periodic, 1.0e-6);
+        if (tangents && tangents.length === 2 && pts.length !== 2) {
+          // start/end tangents only (build123d passes them via Load this way)
+          interp.Load_1(new self.oc.gp_Vec_4(tangents[0][0], tangents[0][1], tangents[0][2]),
+                        new self.oc.gp_Vec_4(tangents[1][0], tangents[1][1], tangents[1][2]),
+                        scaleFlag);
+        } else if (tangents && tangents.length > 0) {
+          if (tangents.length !== pts.length) {
+            console.error("WireFromSegments: interp needs 2 or per-point tangents");
+            continue;
+          }
+          let tanArr = new self.oc.TColgp_Array1OfVec_2(1, tangents.length);
+          let flagArr = new self.oc.TColStd_HArray1OfBoolean_2(1, tangents.length);
+          for (let i = 0; i < tangents.length; i++) {
+            let t = tangents[i];
+            let has = !!(t && t.length === 3);
+            flagArr.SetValue(i + 1, has);
+            tanArr.SetValue(i + 1, new self.oc.gp_Vec_4(has ? t[0] : 0, has ? t[1] : 0, has ? t[2] : 0));
+          }
+          interp.Load_2(tanArr, new self.oc.Handle_TColStd_HArray1OfBoolean_2(flagArr), scaleFlag);
+        }
+        interp.Perform();
+        if (!interp.IsDone()) {
+          console.error("WireFromSegments: B-spline interpolation failed");
+          continue;
+        }
+        curveHandle = interp.Curve();
+      } else if (kind === 'raw') {
+        // pre-existing TopoDS_Edge passed through untouched (exact geometry
+        // for edges that cannot be reconstructed as an analytic segment)
+        let edge = self.oc.TopoDS_Cast.Edge_1(segments[s][2][0]);
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
+      } else if (kind === 'earc') {
+        // elliptical arc: pts = [start, end] (chaining bookkeeping only),
+        // params = [center, xdir, normal, major, minor, a1deg, a2deg]
+        let p = segments[s][2];
+        let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(p[0][0], p[0][1], p[0][2]),
+          new self.oc.gp_Dir_5(p[2][0], p[2][1], p[2][2]));
+        ax2.SetXDirection(new self.oc.gp_Dir_5(p[1][0], p[1][1], p[1][2]));
+        let elips = new self.oc.gp_Elips_2(ax2, p[3], p[4]);
+        let deg = Math.PI / 180;
+        let arc = new self.oc.GC_MakeArcOfEllipse_1(elips, p[5] * deg, p[6] * deg, true).Value();
+        let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(arc.get())).Edge();
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
+      } else if (kind === 'circle') {
+        // a FULL circle as ONE closed edge (build123d's CenterArc with
+        // |arc_size| >= 360 is a single Geom_Circle edge, and the number of
+        // edges a full circle is made of changes what sampling-based
+        // operations like make_hull see): params = [center, normal, xdir, r]
+        let p = segments[s][2];
+        let edge = CircularEdge(p[3], 360, 360, p[0], p[1], p[2]);
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
+      } else if (kind === 'parab' || kind === 'hypr') {
+        // conic arc: pts = [start, end] (chaining bookkeeping only), params =
+        // [origin, xdir, normal, focal | [xr, yr], a1deg, a2deg, sense]
+        // — build123d's Edge.make_parabola / make_hyperbola
+        let p = segments[s][2];
+        let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(p[0][0], p[0][1], p[0][2]),
+          new self.oc.gp_Dir_5(p[2][0], p[2][1], p[2][2]));
+        ax2.SetXDirection(new self.oc.gp_Dir_5(p[1][0], p[1][1], p[1][2]));
+        let deg = Math.PI / 180;
+        let arc;
+        if (kind === 'parab') {
+          arc = new self.oc.GC_MakeArcOfParabola_1(
+            new self.oc.gp_Parab_2(ax2, p[3]), p[4] * deg, p[5] * deg, !!p[6]).Value();
+        } else {
+          arc = new self.oc.GC_MakeArcOfHyperbola_1(
+            new self.oc.gp_Hypr_2(ax2, p[3][0], p[3][1]), p[4] * deg, p[5] * deg,
+            !!p[6]).Value();
+        }
+        let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(
+          new self.oc.Handle_Geom_Curve_2(arc.get())).Edge();
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
+      } else if (kind === 'bspline') {
+        // EXACT B-spline: pts = [start, end] (chaining bookkeeping only),
+        // params = [poles, knots, mults, degree, weights, periodic]
+        // — build123d's Edge.make_bspline
+        let p = segments[s][2];
+        let edge = BSplineEdge(p[0], p[1], p[2], p[3], p[4], p[5]);
+        wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+        started = true;
+        continue;
+      } else {
+        console.error("WireFromSegments: unknown segment kind '" + kind + "'");
+        continue;
+      }
+      let edge = new self.oc.BRepBuilderAPI_MakeEdge_24(new self.oc.Handle_Geom_Curve_2(curveHandle.get())).Edge();
+      wireBuilder.Add_2(new self.oc.BRepBuilderAPI_MakeWire_2(edge).Wire());
+      started = true;
+    }
+    closeRun();
+    if (wires.length === 1) { return wires[0]; }
+    let builder = new self.oc.BRep_Builder();
+    let compound = new self.oc.TopoDS_Compound();
+    builder.MakeCompound(compound);
+    for (let i = 0; i < wires.length; i++) { builder.Add(compound, wires[i]); }
+    return compound;
+  });
+  self.sceneShapes.push(curWire);
+  return curWire;
+}
+
+/** Hollow a solid with the given wall thickness, removing `openingFaces`
+ *  (raw face sub-shapes of `shape`) — BRepOffsetAPI_MakeThickSolid, the same
+ *  operation build123d's offset(openings=...) performs. Negative offset
+ *  shells inward. */
+function ThickSolidOffset(shape, openingFaces, offsetDistance, tolerance, keepShape) {
+  if (!shape || shape.IsNull()) { console.error("ThickSolidOffset: input shape is null!"); return shape; }
+  if (!tolerance) { tolerance = 1e-4; }
+  let result = self.CacheOp(arguments, "ThickSolidOffset", () => {
+    let facesToRemove = new self.oc.TopTools_ListOfShape();
+    for (let i = 0; i < openingFaces.length; i++) { facesToRemove.Append(openingFaces[i]); }
+    let mkThick = new self.oc.BRepOffsetAPI_MakeThickSolid();
+    mkThick.MakeThickSolidByJoin(shape, facesToRemove, offsetDistance, tolerance,
+      self.oc.BRepOffset_Mode.BRepOffset_Skin, false, false,
+      self.oc.GeomAbs_JoinType.GeomAbs_Arc, false, new self.oc.Message_ProgressRange_1());
+    return mkThick.Shape();
+  });
+  if (!keepShape) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Thicken a face into a solid along its normals like build123d's
+ *  Solid.thicken. COMPROMISE(thicken): upstream drives BRepOffset_MakeOffset
+ *  with Thickening=true (offset shell + MakeMissingWalls + MakeSolid); that
+ *  class is unbound here and BRepOffsetAPI_MakeThickSolid never builds the
+ *  missing walls for open input. So this reconstructs the same solid
+ *  manually: the offset surface comes from the identical BRepOffset engine
+ *  (MakeThickSolidByJoin with no closing faces, Skin/Intersection join like
+ *  upstream), the side walls are RULED ThruSections lofts between each
+ *  boundary wire and its offset image (upstream's MakeMissingWalls also
+ *  builds ruled walls between matching edges), and the three sheets are
+ *  sewn and solidified. */
+function ThickenSolid(surface, depth) {
+  if (!surface || surface.IsNull()) { console.error("ThickenSolid: input surface is null!"); return surface; }
+  let result = self.CacheOp(arguments, "ThickenSolid", () => {
+    // Closed surfaces (e.g. a full sphere face) have no free boundary to
+    // build walls from — upstream produces a hollow two-shell solid there,
+    // which this reconstruction does not support.
+    let edgeCounts = [];
+    let edgeExp = new self.oc.TopExp_Explorer_2(surface,
+      self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    for (; edgeExp.More(); edgeExp.Next()) {
+      let e = self.oc.TopoDS_Cast.Edge_1(edgeExp.Current());
+      let found = null;
+      for (let k = 0; k < edgeCounts.length; k++) {
+        if (edgeCounts[k].edge.IsSame(e)) { found = edgeCounts[k]; break; }
+      }
+      if (found) { found.count++; } else { edgeCounts.push({ edge: e, count: 1, degen: self.oc.BRep_Tool.Degenerated(e) }); }
+    }
+    let freeEdges = edgeCounts.filter((e) => e.count === 1 && !e.degen).length;
+    if (freeEdges === 0) {
+      console.error("ThickenSolid: the surface is closed (no free boundary); thicken of closed surfaces is not supported");
+      return null;
+    }
+
+    // 1) the offset surface (pure offset of the input, no walls)
+    let closingFaces = new self.oc.TopTools_ListOfShape();
+    let mkThick = new self.oc.BRepOffsetAPI_MakeThickSolid();
+    mkThick.MakeThickSolidByJoin(surface, closingFaces, depth, 1.0e-5,
+      self.oc.BRepOffset_Mode.BRepOffset_Skin, true, false,
+      self.oc.GeomAbs_JoinType.GeomAbs_Intersection, true,
+      new self.oc.Message_ProgressRange_1());
+    let offsetShell = mkThick.Shape();
+    if (!offsetShell || offsetShell.IsNull()) {
+      console.error("ThickenSolid: offset surface construction failed");
+      return null;
+    }
+
+    // 2) pair each boundary wire with its offset image (nearest centroid)
+    let wiresOf = (shape) => {
+      let out = [];
+      ForEachWire(shape, (i, wire) => { out.push(wire); });
+      return out;
+    };
+    let wireCenter = (wire) => {
+      let props = new self.oc.GProp_GProps_1();
+      self.oc.BRepGProp.LinearProperties(wire, props, false, false);
+      let p = props.CentreOfMass();
+      return [p.X(), p.Y(), p.Z()];
+    };
+    let baseWires = wiresOf(surface);
+    let offWires = wiresOf(offsetShell);
+    if (baseWires.length === 0 || offWires.length === 0 ||
+        baseWires.length !== offWires.length) {
+      console.error("ThickenSolid: could not match boundary wires (" +
+        baseWires.length + " vs " + offWires.length + ")");
+      return null;
+    }
+    let offCenters = offWires.map(wireCenter);
+
+    // 3) ruled walls per wire pair + 4) sew everything into a solid
+    let facesToSew = [];
+    ForEachFace(surface, (i, f) => { facesToSew.push(f); });
+    ForEachFace(offsetShell, (i, f) => { facesToSew.push(f); });
+    for (let i = 0; i < baseWires.length; i++) {
+      let c = wireCenter(baseWires[i]);
+      let best = 0, bestD = Infinity;
+      for (let j = 0; j < offWires.length; j++) {
+        let d = Math.pow(c[0] - offCenters[j][0], 2) +
+                Math.pow(c[1] - offCenters[j][1], 2) +
+                Math.pow(c[2] - offCenters[j][2], 2);
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      let loft = new self.oc.BRepOffsetAPI_ThruSections(false, true, 1.0e-6);
+      loft.AddWire(self.oc.TopoDS_Cast.Wire_1(baseWires[i]));
+      loft.AddWire(self.oc.TopoDS_Cast.Wire_1(offWires[best]));
+      loft.Build(new self.oc.Message_ProgressRange_1());
+      ForEachFace(loft.Shape(), (k, f) => { facesToSew.push(f); });
+    }
+
+    let sew = new self.oc.BRepBuilderAPI_Sewing(1.0e-5, true, true, true, false);
+    for (let i = 0; i < facesToSew.length; i++) { sew.Add(facesToSew[i]); }
+    sew.Perform(new self.oc.Message_ProgressRange_1());
+    let solids = [];
+    ForEachShell(sew.SewedShape(), (i, shell) => {
+      let fixer = new self.oc.ShapeFix_Solid_1();
+      let solid = fixer.SolidFromShell(shell);
+      if (solid && !solid.IsNull()) { solids.push(solid); }
+    });
+    if (solids.length === 0) {
+      console.error("ThickenSolid: sewing the thickened boundary failed");
+      return null;
+    }
+    return solids[0];
+  });
+  self.sceneShapes = self.Remove(self.sceneShapes, surface);
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Draft-angle ("tapered") extrusion of a planar face — LocOpe_DPrism, the
+ *  primitive behind build123d's extrude(taper=...). Positive taper angles
+ *  narrow the profile with height. */
+function TaperExtrude(face, height, angleDeg, keepFace) {
+  if (!face || face.IsNull()) { console.error("TaperExtrude: input face is null!"); return face; }
+  let result = self.CacheOp(arguments, "TaperExtrude", () => {
+    let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
+    f = _forwardProfile(f);
+    // LocOpe_DPrism measures Height along the tapered slant; scale so the
+    // resulting solid is `height` tall like build123d's extrude(taper=)
+    let slant = height / Math.cos(angleDeg * (Math.PI / 180));
+    let dprism = new self.oc.LocOpe_DPrism_2(f, slant, angleDeg * (Math.PI / 180));
+    return dprism.Shape();
+  });
+  if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
+  self.sceneShapes.push(result);
+  return result;
+}
+
+/** Render text as a planar face for build123d-lite's Text: opentype.js
+ *  outlines from the bundled Liberation Sans (what Linux fontconfig
+ *  resolves 'Arial' to, so glyph geometry matches native build123d), plus
+ *  OCCT-text-builder-compatible alignment offsets. Alignment references
+ *  the FONT LAYOUT metrics (advance width, ascender/descender), not the
+ *  ink bounding box — like Font_TextFormatter. */
+function Text2D(text, size, fontName, halign, valign) {
+  if (!fontName) { fontName = "FreeSans"; }
+  let curText = self.CacheOp(arguments, "Text2D", () => {
+    let face = _opentypeTextFace(text, size, fontName, true);
+    if (!face) { return; }
+    let font = self.loadedFonts[fontName];
+    let upm = font.unitsPerEm;
+    // Width for alignment: kerned advance PLUS a spurious kern(last, last)
+    // pair — Font_TextFormatter (which build123d's Text uses) evaluates the
+    // kerning of the final glyph against itself when flushing the line, and
+    // matching it here makes centered text line up exactly.
+    let advance = 0;
+    let prev = null;
+    for (const ch of text) {
+      let g = font.charToGlyph(ch);
+      if (prev) { advance += _kernValue(fontName, prev, g) / upm * size; }
+      advance += g.advanceWidth / upm * size;
+      prev = g;
+    }
+    if (prev) { advance += _kernValue(fontName, prev, prev) / upm * size; }
+    // Vertical alignment uses the OS/2 typographic metrics (verified against
+    // build123d 0.11.1: TOP = -typoAscender, CENTER = lineSpacing/2 -
+    // typoAscender, BOTTOM = baseline).
+    let os2 = font.tables.os2 || {};
+    let typoAsc = (os2.sTypoAscender !== undefined ? os2.sTypoAscender : font.ascender) / upm * size;
+    let typoDesc = (os2.sTypoDescender !== undefined ? os2.sTypoDescender : font.descender) / upm * size;
+    let typoGap = (os2.sTypoLineGap !== undefined ? os2.sTypoLineGap : 0) / upm * size;
+    let lineSpacing = typoAsc - typoDesc + typoGap;
+    let dx = halign === 'left' ? 0 : halign === 'right' ? -advance : -advance / 2;
+    let dy = valign === 'bottom' ? 0 :
+             valign === 'top' ? -typoAsc : lineSpacing / 2 - typoAsc;
+    // opentype glyph paths are y-DOWN (canvas convention) — mirror across
+    // the baseline (bakes geometry, keeping hole orientations valid), then
+    // reverse the face so its oriented normal is +Z like build123d text
+    // (mirroring flips the surface handedness; extrusions and fuses follow
+    // the ORIENTED normal)
+    // The freshly built face MUST carry a stable hash before entering the
+    // CacheOp'd Mirror below: un-hashed shapes hash as "{}" (ptr stripped),
+    // which made every Text2D after the first REUSE the first text's
+    // mirrored geometry (fresh alignment, stale glyphs).
+    face.hash = self.oc.OCJS.HashCode(face, 100000000);
+    let mirrored = Mirror([0, 1, 0], face);
+    let translated = Translate([dx, dy, 0], mirrored);
+    let moved;
+    if (translated.ShapeType().value === 4) {
+      moved = self.oc.TopoDS_Cast.Face_1(translated.Reversed());
+    } else {
+      // per-glyph compound: give each glyph face a +Z ORIENTED normal (the
+      // same rule as the single-face branch). The mirror transform above
+      // already flipped the sub-face orientation flags inside the compound
+      // (BRepTools_TrsfModification keeps oriented normals consistent for
+      // container shapes), so reverse CONDITIONALLY on the actual oriented
+      // normal instead of blindly — a blind .Reversed() double-flips.
+      let builder = new self.oc.BRep_Builder();
+      let compound = new self.oc.TopoDS_Compound();
+      builder.MakeCompound(compound);
+      ForEachFace(translated, (i, f) => {
+        builder.Add(compound, _faceNormal(f)[2] < 0 ? f.Reversed() : f);
+      });
+      compound.hash = self.oc.OCJS.HashCode(compound, 100000000);
+      moved = compound;
+    }
+    self.sceneShapes = self.Remove(self.sceneShapes, moved);
+    return moved;
+  });
+  if (curText) { self.sceneShapes.push(curText); }
+  return curText;
+}
+
+/** Axis-aligned bounding box [minX,minY,minZ,maxX,maxY,maxZ] via
+ *  BRepBndLib.AddOptimal — the exact box, no triangulation-tolerance
+ *  padding, matching build123d's Shape.bounding_box(optimal=True).
+ *  (The `deflection` parameter is legacy from the pre-OCCT-8.0.1 build,
+ *  which had no Bnd_Box binding and meshed a deep copy instead.) */
+function BoundingBox(shape, deflection) {
+  if (!shape || shape.IsNull()) { console.error("BoundingBox: input shape is null!"); return null; }
+  let box = new self.oc.Bnd_Box_1();
+  self.oc.BRepBndLib.AddOptimal(shape, box, false, false);
+  if (box.IsVoid()) { return null; }
+  return [box.GetXMin(), box.GetYMin(), box.GetZMin(),
+          box.GetXMax(), box.GetYMax(), box.GetZMax()];
+}
+
+/** Measure a shape for the build123d validation harness / lite bounding_box:
+ *  volume (mm^3, absolute), surface area, unique face/edge counts, and the
+ *  mesh-approximated bounding box. Returns a plain JS object. */
+function MeasureShape(shape, deflection) {
+  if (!shape || shape.IsNull()) { console.error("MeasureShape: input shape is null!"); return null; }
+  let nFaces = 0; ForEachFace(shape, () => { nFaces++; });
+  let nEdges = 0; ForEachEdge(shape, () => { nEdges++; });
+  // COMPROMISE(volume-measure): VolumeProperties on OPEN faces yields
+  // meaningless partial integrals — report 0 for shapes with no solid
+  // (matches build123d's Sketch.volume). For compounds MIXING solids and
+  // stray faces, this OCCT 8.0.1 build's VolumeProperties also picks up
+  // spurious face contributions (7.x reported the solids' volume alone),
+  // so volume is summed per-solid instead of one whole-shape integral.
+  let nSolids = 0; ForEachSolid(shape, () => { nSolids++; });
+  return {
+    volume: nSolids > 0 ? SolidsVolume(shape) : 0,
+    area: SurfaceArea(shape),
+    faces: nFaces,
+    edges: nEdges,
+    bbox: BoundingBox(shape, deflection)
+  };
+}
+
 // --- Additional Primitives ---
+
+/** A wedge whose near face is dx by dz and whose far face spans xmin..xmax by
+ *  zmin..zmax (BRepPrimAPI_MakeWedge's min/max form) — build123d's
+ *  Solid.make_wedge. */
+function WedgeMinMax(dx, dy, dz, xmin, zmin, xmax, zmax) {
+  let result = self.CacheOp(arguments, "WedgeMinMax", () => {
+    return new self.oc.BRepPrimAPI_MakeWedge_3(dx, dy, dz, xmin, zmin, xmax, zmax).Shape();
+  });
+  self.sceneShapes.push(result);
+  return result;
+}
 
 function Wedge(dx, dy, dz, ltx) {
   let curWedge = self.CacheOp(arguments, "Wedge", () => {
@@ -1549,6 +4177,82 @@ function Section(shape, planeOrigin, planeNormal) {
   return curSection;
 }
 
+/** 3-D convex hull of an array of [x,y,z] points via quickhull3d (pure JS,
+ *  esbuild-bundled into the worker). Returns triangulated facets as arrays
+ *  of vertex indices — the same convention as scipy's ConvexHull.simplices
+ *  (used by build123d-lite's scipy.spatial shim). */
+function ConvexHull3D(points) {
+  return quickhull3d(points);
+}
+
+/** Sew a list of faces into shell(s) and build solid(s) — the OCCT calls
+ *  behind build123d's Solid(Shell(faces)): BRepBuilderAPI_Sewing +
+ *  ShapeFix_Solid::SolidFromShell (which also orients the shell outward).
+ *  Returns a single solid, or a compound if the faces sew into multiple
+ *  closed shells. */
+function SewSolidFromFaces(faces) {
+  let curSolid = self.CacheOp(arguments, "SewSolidFromFaces", () => {
+    let sew = new self.oc.BRepBuilderAPI_Sewing(1.0e-6, true, true, true, false);
+    for (let i = 0; i < faces.length; i++) { sew.Add(faces[i]); }
+    sew.Perform(new self.oc.Message_ProgressRange_1());
+    let sewed = sew.SewedShape();
+    let solids = [];
+    ForEachShell(sewed, (i, shell) => {
+      let fixer = new self.oc.ShapeFix_Solid_1();
+      let solid = fixer.SolidFromShell(shell);
+      if (solid && !solid.IsNull()) { solids.push(solid); }
+    });
+    if (solids.length === 0) {
+      console.error("SewSolidFromFaces: sewing produced no closed shell");
+      return null;
+    }
+    if (solids.length === 1) { return solids[0]; }
+    let builder = new self.oc.BRep_Builder();
+    let compound = new self.oc.TopoDS_Compound();
+    builder.MakeCompound(compound);
+    for (let i = 0; i < solids.length; i++) { builder.Add(compound, solids[i]); }
+    return compound;
+  });
+  self.sceneShapes.push(curSolid);
+  return curSolid;
+}
+
+/** Intersect an infinite line with a shape's surface —
+ *  BRepIntCurveSurface_Inter, exactly build123d's
+ *  Shape.find_intersection_points. Returns [[point, unitNormalAtPoint,
+ *  distanceAlongLine], ...] sorted by distance along the line. */
+function IntersectLineShape(shape, origin, direction, tolerance) {
+  if (!tolerance) { tolerance = 1e-6; }
+  let pnt = new self.oc.gp_Pnt_3(origin[0], origin[1], origin[2]);
+  let dir = new self.oc.gp_Dir_5(direction[0], direction[1], direction[2]);
+  let line = new self.oc.gp_Lin_3(pnt, dir);
+  let inter = new self.oc.BRepIntCurveSurface_Inter();
+  inter.Init_2(shape, line, tolerance);
+  let out = [];
+  while (inter.More()) {
+    let p = inter.Pnt();
+    let face = inter.Face();
+    let gpf = new self.oc.BRepGProp_Face_2(face, false);
+    let np = new self.oc.gp_Pnt_1();
+    let nv = new self.oc.gp_Vec_1();
+    gpf.Normal(inter.U(), inter.V(), np, nv);
+    let mag = nv.Magnitude();
+    let n = mag > 1e-12 ? [nv.X() / mag, nv.Y() / mag, nv.Z() / mag] : [0, 0, 1];
+    out.push([[p.X(), p.Y(), p.Z()], n, inter.W()]);
+    inter.Next();
+  }
+  out.sort((a, b) => a[2] - b[2]);
+  return out;
+}
+
+/** A TopoDS_Vertex at the given [x,y,z] point (BRepBuilderAPI_MakeVertex). */
+function PointVertex(p) {
+  let v = new self.oc.BRepBuilderAPI_MakeVertex(
+    new self.oc.gp_Pnt_3(p[0], p[1], p.length > 2 ? p[2] : 0)).Vertex();
+  v.hash = self.oc.OCJS.HashCode(v, 100000000);
+  return v;
+}
+
 // --- Library Class (organizes initialization and self-registration) ---
 
 /** Wraps initialization of all CAD standard library functions.
@@ -1559,9 +4263,32 @@ class CascadeStudioStandardLibrary {
     // Instantiate utility dependencies
     this.utils = new CascadeStudioUtils();
 
+    // Gordon curve-network surfaces (build123d Face.make_gordon_surface —
+    // see GordonSurface.js). Engine is created lazily: oc must be live.
+    let gordonEngine = null;
+    self.GordonSurfaceFace = function (profiles, guides, tolerance) {
+      if (!gordonEngine) { gordonEngine = createGordonEngine(self.oc); }
+      // The engine's edgeToCurveData needs a downcast TopoDS_Edge; callers
+      // hand generic TopoDS_Shape (single-edge wires included). Points pass
+      // through as [x, y, z] arrays.
+      const toEdge = (item) => {
+        if (Array.isArray(item)) { return item; }
+        const t = item.ShapeType().value;
+        if (t === 6) { return self.oc.TopoDS_Cast.Edge_1(item); }
+        let edge = null, count = 0;
+        for (let ex = new self.oc.TopExp_Explorer_2(item, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+          edge = self.oc.TopoDS_Cast.Edge_1(ex.Current()); count++;
+        }
+        if (count !== 1) { throw new Error("make_gordon_surface: each profile/guide must be a single edge or a point (got " + count + " edges)"); }
+        return edge;
+      };
+      return gordonEngine.gordonSurfaceFace(profiles.map(toEdge), guides.map(toEdge), tolerance);
+    };
+
     // Assign all CAD API functions to self for eval() access
     self.Box = Box;
     self.Sphere = Sphere;
+    self.PartialSphere = PartialSphere;
     self.Cylinder = Cylinder;
     self.Cone = Cone;
     self.Polygon = Polygon;
@@ -1574,6 +4301,7 @@ class CascadeStudioStandardLibrary {
     self.ForEachShell = ForEachShell;
     self.ForEachFace = ForEachFace;
     self.ForEachWire = ForEachWire;
+    self.DirectChildren = DirectChildren;
     self.MakeFace = MakeFace;
     self.GetWire = GetWire;
     self.ForEachEdge = ForEachEdge;
@@ -1590,6 +4318,7 @@ class CascadeStudioStandardLibrary {
     self.Intersection = Intersection;
     self.Extrude = Extrude;
     self.RemoveInternalEdges = RemoveInternalEdges;
+    self.UnifyWire = UnifyWire;
     self.Offset = Offset;
     self.OffsetWire = OffsetWire;
     self.Revolve = Revolve;
@@ -1607,18 +4336,105 @@ class CascadeStudioStandardLibrary {
     // Selectors
     self.Edges = Edges;
     self.Faces = Faces;
+    self.NewEdges = NewEdges;
     self.EdgeSelector = EdgeSelector;
     self.FaceSelector = FaceSelector;
 
     // Measurement
     self.Volume = Volume;
+    self.SolidsVolume = SolidsVolume;
     self.SurfaceArea = SurfaceArea;
     self.CenterOfMass = CenterOfMass;
     self.EdgeLength = EdgeLength;
+    self.BoundingBox = BoundingBox;
+    self.MeasureShape = MeasureShape;
+    self.WireFromSegments = WireFromSegments;
+    self.ThickSolidOffset = ThickSolidOffset;
+    self.ThickenSolid = ThickenSolid;
+    self.TaperExtrude = TaperExtrude;
+    self.Text2D = Text2D;
+    self.ScaleXYZ = ScaleXYZ;
+    self.ScaleUniform = ScaleUniform;
+    self.ReverseFace = ReverseFace;
+    self.ReverseShape = ReverseShape;
+    self.ProjectWireOnShape = ProjectWireOnShape;
+    self.AsSingleFace = AsSingleFace;
+    self._edgeParam = _edgeParam;
+    self.TrimEdge = TrimEdge;
+    self.ReverseEdgeOrWire = ReverseEdgeOrWire;
+    self._edgeDistanceToPoint = _edgeDistanceToPoint;
+    self._edgeParamAtPoint = _edgeParamAtPoint;
+    self.ConcatEdgesToEdge = ConcatEdgesToEdge;
+    self.ProjectEdgeOnFace = ProjectEdgeOnFace;
+    self.ExtendSplineOnFace = ExtendSplineOnFace;
+    self.InterpolatedEdge = InterpolatedEdge;
+    self.ExtremaEdgeParams = ExtremaEdgeParams;
+    self.FillingFace = FillingFace;
+    self.WireFromEdgesFixed = WireFromEdgesFixed;
+    self._wireIsClosed = _wireIsClosed;
+    self.OrderedEdges = OrderedEdges;
+    self.WireFromOrderedEdges = WireFromOrderedEdges;
+    self.OffsetPlanarWire = OffsetPlanarWire;
+    self._edgeArcCenter = _edgeArcCenter;
+    self._edgeArcRadius = _edgeArcRadius;
+    self._edgeArcNormal = _edgeArcNormal;
+    self._edgeDerivativeAt = _edgeDerivativeAt;
+    self.BSplineEdge = BSplineEdge;
+    self._distShapeShape = _distShapeShape;
+    self._faceCurvatureSign = _faceCurvatureSign;
+    self.FilletWireCorner = FilletWireCorner;
+    self._faceRadius = _faceRadius;
+    self._faceAxisOfRotation = _faceAxisOfRotation;
+    self.CircularEdge = CircularEdge;
+    self.EdgeIsInterior = EdgeIsInterior;
+    self.HLRProject = HLRProject;
+    self.SurfaceFromPoints = SurfaceFromPoints;
+    self.PipeShellSweep = PipeShellSweep;
+    self.ExportSTL = ExportSTL;
+    self.ExportBREP = ExportBREP;
+    self.ImportBREP = ImportBREP;
+    self.DraftAngleFaces = DraftAngleFaces;
+    self.FaceWithHoles = FaceWithHoles;
+
+    // Per-entity introspection helpers (used by build123d-lite's Python
+    // selectors: filter_by/group_by/sort_by need positions, directions,
+    // lengths, areas and geometry types of individual edges/faces).
+    self._edgeMidpoint = _edgeMidpoint;
+    self._edgeLength = _edgeLength;
+    self._edgeCurveType = _edgeCurveType;
+    self._edgeDirection = _edgeDirection;
+    self._faceCentroid = _faceCentroid;
+    self._faceArea = _faceArea;
+    self._faceNormal = _faceNormal;
+    self._faceUDir = _faceUDir;
+    self._faceUVBounds = _faceUVBounds;
+    self._faceD1 = _faceD1;
+    self._faceParamsAtPoint = _faceParamsAtPoint;
+    self._faceNormalAt = _faceNormalAt;
+    self._faceSurfaceType = _faceSurfaceType;
+    self._faceOuterWire = _faceOuterWire;
+    self._sameShape = _sameShape;
+    self._shapeHashCode = (shape) => self.oc.OCJS.HashCode(shape, 2147483647);
+    self._edgePairContinuity = _edgePairContinuity;
+    self._shapeOBB = _shapeOBB;
+    self._obbIsOut = _obbIsOut;
+    self._edgeIsForward = _edgeIsForward;
+    self._vertexPoint = _vertexPoint;
+    self._edgePointAt = _edgePointAt;
+    self._edgeTangentAt = _edgeTangentAt;
+    self.MakeCompound = MakeCompound;
+    self.FilletFace2D = FilletFace2D;
 
     // Additional primitives & operations
     self.Wedge = Wedge;
+    self.WedgeMinMax = WedgeMinMax;
     self.Section = Section;
+    self.ConvexHull3D = ConvexHull3D;
+    self.SewSolidFromFaces = SewSolidFromFaces;
+    self.IntersectLineShape = IntersectLineShape;
+    self.PointVertex = PointVertex;
+    self.ConstrainedArcs2D = ConstrainedArcs2D;
+    self.ConstrainedLines2D = ConstrainedLines2D;
   }
 }
 

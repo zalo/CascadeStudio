@@ -35,7 +35,8 @@ class HandleManager {
 
       // Inject transform data back into the editor upon completion
       if (this.viewport.environment.controls.enabled) {
-        let code = window.monacoEditor.getValue().split("\n");
+        let editor = this.viewport._app.editor;
+        let code = editor.getCode().split("\n");
         let lineNum = handle.lineAndColumn[0] - 1;
 
         let translateString = "[" +
@@ -71,8 +72,8 @@ class HandleManager {
 
           let newCode = "";
           code.forEach((codeLine) => { newCode += codeLine + "\n"; });
-          window.monacoEditor.setValue(newCode.slice(0, -1));
-          window.monacoEditor.evaluateCode(false);
+          editor.setCode(newCode.slice(0, -1));
+          editor.evaluateCode(false);
         }
       }
     };

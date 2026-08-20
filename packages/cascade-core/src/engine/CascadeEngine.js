@@ -58,8 +58,12 @@ class CascadeEngine {
 
   /** Evaluate CAD code and return mesh data.
    *  Fires intermediate events (log, addSlider, etc.) in real-time.
+   *  `language` selects the worker runtime ('cascadestudio' default;
+   *  'python' evaluates build123d-lite code via Brython). `pyRuntime`
+   *  ('brython' default | 'pyodide') picks the Python interpreter for that
+   *  path — see PyodideRuntime.js.
    *  Returns: { meshData: { faces, edges }, sceneOptions, logs, errors } */
-  async evaluate(code, { guiState = {}, maxDeviation, sceneOptions } = {}) {
+  async evaluate(code, { guiState = {}, maxDeviation, sceneOptions, language, pyRuntime } = {}) {
     if (!this._ready) throw new Error('CascadeEngine not initialized. Call init() first.');
 
     this._working = true;
@@ -67,7 +71,9 @@ class CascadeEngine {
     // Send evaluation command (fire-and-forget — worker processes asynchronously)
     this._messageBus.send('Evaluate', {
       code,
-      GUIState: guiState
+      GUIState: guiState,
+      language,
+      pyRuntime
     });
 
     // Request meshing — this returns a Promise that resolves with [facesAndEdges, sceneOptions]
@@ -83,9 +89,9 @@ class CascadeEngine {
 
     if (!result) return { meshData: null, sceneOptions: {} };
 
-    const [[faces, edges], resultSceneOptions] = result;
+    const [[faces, edges], resultSceneOptions, shapeLines] = result;
     return {
-      meshData: { faces, edges },
+      meshData: { faces, edges, shapeLines: shapeLines || [] },
       sceneOptions: resultSceneOptions || {}
     };
   }
@@ -98,6 +104,13 @@ class CascadeEngine {
     });
   }
 
+  /** Worker-side memory footprint: { pyRuntime, jsHeapUsed, jsHeapTotal,
+   *  occtWasm, pythonWasm, bootTiming }. Everything Python costs lives in
+   *  the worker, so the page's own numbers say nothing about it. */
+  async memoryStats() {
+    return this._messageBus.request('memoryStats', {}, 15000);
+  }
+
   /** Export the current shape as STEP text. */
   async exportSTEP() {
     return this._messageBus.request('saveShapeSTEP');
@@ -106,6 +119,13 @@ class CascadeEngine {
   /** Send files to the worker for import. */
   importFiles(files) {
     this._messageBus.send('loadFiles', files);
+  }
+
+  /** Import external files and RESOLVE once the worker has done so, with the
+   *  names it actually imported. Python mode's `import_step()` needs the
+   *  asset to be in the worker BEFORE the evaluation runs. */
+  loadExternalFilesAwaited(dict) {
+    return this._messageBus.request('loadPrexistingExternalFiles', dict, 120000);
   }
 
   /** Load pre-existing external files (from saved project state). */

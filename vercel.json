@@ -1,4 +1,13 @@
 {
+  "installCommand": "npm ci",
   "buildCommand": "npm run build",
-  "outputDirectory": "packages/cascade-studio/dist"
+  "outputDirectory": "packages/cascade-studio/dist",
+  "headers": [
+    {
+      "source": "/typedefs/(.*)",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+      ]
+    }
+  ]
 }

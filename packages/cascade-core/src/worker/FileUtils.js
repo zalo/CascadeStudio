@@ -15,19 +15,45 @@ class CascadeStudioFileIO {
     self.importSTEPorIGES = this.importSTEPorIGES.bind(this);
     self.importSTL = this.importSTL.bind(this);
     self.saveShapeSTEP = this.saveShapeSTEP.bind(this);
+    self.GetExternalShape = this.getExternalShape.bind(this);
+  }
+
+  /** Look up an already-imported external shape by file name, tolerating a
+   *  full path (only the base name is keyed) and case. Python mode's
+   *  `import_step()` resolves its asset this way: the worker has no
+   *  filesystem, so the harness/app hands the file over ahead of the run
+   *  (CascadeAPI.loadExternalFiles → loadPrexistingExternalFiles) and the
+   *  script's `os.path.join(dirname(__file__), "x.step")` is matched on
+   *  "x.step". Returns null when the asset was never delivered. */
+  getExternalShape(name) {
+    const shapes = self.externalShapes || {};
+    if (shapes[name]) { return shapes[name]; }
+    const base = String(name).split('/').pop().toLowerCase();
+    for (const key of Object.keys(shapes)) {
+      if (key.split('/').pop().toLowerCase() === base) { return shapes[key]; }
+    }
+    return null;
   }
 
   /** Synchronously loads the "files" in the current project into
    * the `externalFiles` dictionary upon startup. */
   loadPrexistingExternalFiles(externalFileDict) {
     console.log("Loading Pre-Existing external files...");
+    const loaded = [];
     for (let key in externalFileDict) {
-      if (key.includes(".stl")) {
-        this.importSTL(key, externalFileDict[key].content);
-      } else {
-        this.importSTEPorIGES(key, externalFileDict[key].content);
+      let shape = null;
+      try {
+        shape = key.includes(".stl")
+          ? this.importSTL(key, externalFileDict[key].content)
+          : this.importSTEPorIGES(key, externalFileDict[key].content);
+      } catch (e) {
+        console.log("Failed to import " + key + ": " + e.message);
       }
+      if (shape) { loaded.push(key); }
     }
+    // Reported back so callers can WAIT for the import (CascadeAPI's
+    // loadExternalFiles awaits this) instead of racing the next evaluation.
+    return loaded;
   }
 
   /** Synchronously loads a list of files into the `externalShapes`

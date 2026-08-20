@@ -17,7 +17,8 @@ if (fs.existsSync(distDir)) {
 }
 fs.mkdirSync(distDir, { recursive: true });
 
-// 1. Bundle the worker entry point
+// 1. Regenerate the oc.* symbol manifest, then bundle the worker entry point
+require('./generate-occt-symbols.cjs');
 console.log('[cascade-core] Bundling worker...');
 execFileSync(npx, [
   'esbuild',
@@ -38,7 +39,40 @@ if (fs.existsSync(wasmSrc)) {
   fs.copyFileSync(wasmSrc, path.join(distDir, 'cascadestudio.wasm'));
 }
 
-// 3. Copy fonts to dist/fonts/
+// 3. Copy Brython (lazy-loaded by the worker for Python/build123d mode)
+console.log('[cascade-core] Copying Brython...');
+const brythonSrc = path.join(monoRoot, 'node_modules', 'brython', 'brython.js');
+if (fs.existsSync(brythonSrc)) {
+  fs.copyFileSync(brythonSrc, path.join(distDir, 'brython.js'));
+}
+
+// 3a. Copy MicroPython (the `?pyruntime=micropython` low-memory runtime;
+// the settrace wasm variant is required for the line-mapping and
+// caller-frame hooks — see MicroPythonRuntime.js).
+console.log('[cascade-core] Copying MicroPython...');
+const mpDir = path.join(monoRoot, 'node_modules', '@micropython', 'micropython-webassembly-pyscript');
+for (const f of ['micropython.mjs', 'micropython-settrace.wasm']) {
+  const src = path.join(mpDir, f);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, path.join(distDir, f));
+  }
+}
+
+// 3b. Copy the Pyodide core distribution, IF it has been vendored
+// (`node packages/cascade-core/scripts/fetch-pyodide.cjs`). Optional by
+// design: Pyodide is the experimental `?pyruntime=pyodide` alternative to
+// Brython, ~13.5 MB, off by default and absent from a plain checkout.
+const pyodideSrc = path.join(monoRoot, 'vendor', 'pyodide');
+if (fs.existsSync(pyodideSrc)) {
+  console.log('[cascade-core] Copying Pyodide (experimental runtime)...');
+  const pyodideDist = path.join(distDir, 'pyodide');
+  fs.mkdirSync(pyodideDist, { recursive: true });
+  for (const file of fs.readdirSync(pyodideSrc)) {
+    fs.copyFileSync(path.join(pyodideSrc, file), path.join(pyodideDist, file));
+  }
+}
+
+// 4. Copy fonts to dist/fonts/
 console.log('[cascade-core] Copying fonts...');
 const fontsDir = path.join(pkgRoot, 'fonts');
 const distFontsDir = path.join(distDir, 'fonts');

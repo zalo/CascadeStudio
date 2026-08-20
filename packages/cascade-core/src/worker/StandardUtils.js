@@ -33,6 +33,8 @@ class CascadeStudioUtils {
     self.convertToPnt = CascadeStudioUtils.convertToPnt;
     self.stringToHash = CascadeStudioUtils.stringToHash;
     self.CantorPairing = CascadeStudioUtils.CantorPairing;
+    self.decodeOCCTException = CascadeStudioUtils.decodeOCCTException;
+    self.describeOCCTException = CascadeStudioUtils.describeOCCTException;
   }
 
   /** Hashes input arguments and checks the cache for that hash.
@@ -51,7 +53,12 @@ class CascadeStudioUtils {
 
     this.currentOp = fnName;
     self.currentOp = this.currentOp;
-    this.currentLineNumber = CascadeStudioUtils.getCallingLocation()[0];
+    // getCallingLocation() parses JS eval stack frames, which is meaningless
+    // for Brython-generated code — Python mode resolves the user's source
+    // line from Brython's frame chain instead (see PythonRuntime.js).
+    this.currentLineNumber = (self.evalLanguage === 'python')
+      ? (self.getPythonUserLine ? self.getPythonUserLine() : 0)
+      : CascadeStudioUtils.getCallingLocation()[0];
     self.currentLineNumber = this.currentLineNumber;
     postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber++, "opType": fnName } });
     self.opNumber = this.opNumber;
@@ -66,10 +73,30 @@ class CascadeStudioUtils {
       toReturn.hash = check.hash;
       this.cacheHits = (this.cacheHits || 0) + 1;
     } else {
-      toReturn = cacheMiss();
+      try {
+        toReturn = cacheMiss();
+      } catch (e) {
+        // Emscripten-compiled OCCT throws raw NUMBERS (C++ exception
+        // pointers) on kernel aborts. Brython cannot attach a traceback to
+        // a primitive ("Cannot create property '__traceback__' on number"),
+        // which masks the real failure — normalize to a proper Error here,
+        // DECODING the pointer back into OCCT's own message first.
+        if (typeof e === 'number' || typeof e === 'string') {
+          throw new Error("INTERNAL OPENCASCADE ERROR in " + fnName + ": " +
+            CascadeStudioUtils.describeOCCTException(e));
+        }
+        throw e;
+      }
       toReturn.hash = curHash;
       if (self.GUIState["Cache?"]) { this.AddToCache(curHash, toReturn); }
       this.cacheMisses = (this.cacheMisses || 0) + 1;
+    }
+    // Tag the shape with the 1-based editor line that produced it so the
+    // main thread can map picked shapes back to their source line.
+    // (Refreshed on every call, including cache hits, since the same cached
+    //  shape may be produced from a different line after edits.)
+    if (toReturn && typeof toReturn === 'object') {
+      toReturn.producingLine = this.currentLineNumber;
     }
     self.cacheHits = this.cacheHits;
     self.cacheMisses = this.cacheMisses;
@@ -122,6 +149,87 @@ class CascadeStudioUtils {
   }
 
   // --- Static utility methods (no instance state needed) ---
+
+  /** Decode a RAW wasm exception into the message OpenCascade actually raised.
+   *
+   *  Emscripten-compiled OCCT throws C++ exceptions as raw NUMBERS: the value
+   *  is a pointer to the thrown object in wasm linear memory. Everything OCCT
+   *  raises derives from `Standard_Failure`, whose layout is stable and small
+   *  (Standard_Failure.hxx, OCCT 8.0.1):
+   *
+   *      class Standard_Failure : public std::exception {   // vtable only
+   *        StringRef* myMessage;      // +4
+   *        StringRef* myStackTrace;   // +8
+   *      };
+   *      struct StringRef { int Counter; char Message[1]; };  // text at +4
+   *
+   *  so the message is the NUL-terminated string at `*(ptr + 4) + 4`.
+   *
+   *  Reading it by hand is a substitution, not a preference:
+   *  COMPROMISE(failure-decode) — the fork binds
+   *  `OCJS::getStandard_FailureData(intptr_t) -> Standard_Failure*`
+   *  (builds/cascadestudio.yml) for exactly this purpose, but calling it in
+   *  this build raises "Cannot call OCJS.getStandard_FailureData due to
+   *  unbound types: St9exception": Standard_Failure derives from
+   *  std::exception, which the build never registers, so embind treats the
+   *  whole type as unresolved. The module also exports no runtime helpers
+   *  (HEAPU8 / getValue / UTF8ToString are all absent), so the wasm Memory is
+   *  captured at instantiation instead (CascadeWorker's `instantiateWasm`).
+   *
+   *  Returns `{ message }` on success, or null when the value cannot be
+   *  decoded — an Emscripten abort ("memory access out of bounds") arrives as
+   *  a RuntimeError rather than a number, a non-OCCT C++ throw has a different
+   *  layout, and either way the caller must fall back to the raw value.
+   *
+   *  @param {*} e - the caught value
+   *  @returns {{message: string}|null} */
+  static decodeOCCTException(e) {
+    // Only integral pointer-shaped values can be exception pointers.
+    if (typeof e !== 'number' || !Number.isInteger(e) || e <= 0) { return null; }
+    const memory = self.ocMemory;
+    if (!memory || !memory.buffer) { return null; }
+    try {
+      // Views must be rebuilt per call: growing the wasm memory detaches the
+      // previous ArrayBuffer.
+      const u32 = new Uint32Array(memory.buffer);
+      const u8 = new Uint8Array(memory.buffer);
+      if (e + 12 > u8.length || (e & 3) !== 0) { return null; }
+      const stringRef = u32[(e >> 2) + 1];        // myMessage
+      if (!stringRef || stringRef + 8 > u8.length) { return null; }
+      let text = '';
+      for (let i = stringRef + 4; i < u8.length && u8[i] !== 0; i++) {
+        if (text.length >= 512) { return null; } // not a message: bail out
+        text += String.fromCharCode(u8[i]);
+      }
+      const message = CascadeStudioUtils._plausibleOCCTText(text);
+      return message === null ? null : { message };
+    } catch (decodeError) {
+      return null; // undecodable: the caller reports the raw value
+    }
+  }
+
+  /** Accept only short, printable, non-empty text as a decoded OCCT message
+   *  (a mis-decoded pointer yields control characters or binary noise). */
+  static _plausibleOCCTText(value) {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 512) { return null; }
+    // eslint-disable-next-line no-control-regex
+    if (/[\x00-\x08\x0b-\x1f\x7f-\x9f]/.test(value)) { return null; }
+    return value.trim() === '' ? null : value.trim();
+  }
+
+  /** Human-readable one-liner for any caught kernel value: OCCT's own message
+   *  when the throw was a Standard_Failure pointer, else the raw value. Used
+   *  by every worker error path so users see real diagnostics. */
+  static describeOCCTException(e) {
+    const decoded = CascadeStudioUtils.decodeOCCTException(e);
+    if (decoded) {
+      return "the OCCT kernel raised '" + decoded.message + "'";
+    }
+    if (e && typeof e === 'object' && e.message) { return String(e.message); }
+    return "the OCCT kernel threw '" + e + "' (a raw wasm exception carrying " +
+      "no readable message — most likely an Emscripten abort rather than a " +
+      "Standard_Failure)";
+  }
 
   /** This function recursively traverses x and calls `callback()` on each subelement. */
   static recursiveTraverse(x, callback) {

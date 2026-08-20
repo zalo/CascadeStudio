@@ -1,6 +1,25 @@
 // EditorManager.js - Monaco editor management
 
+import { PythonLanguageProvider } from './PythonLanguage.js';
+
 const monaco = window.monaco;
+
+/** Which Python interpreter the worker should use for Python mode:
+ *  'brython' (default, ~300 KB gz, boots in a few hundred ms) or the
+ *  experimental 'pyodide' (real CPython on wasm — see
+ *  test/b123d-validation/runtime-comparison.md for why it is not the
+ *  default). Selected with `?pyruntime=pyodide` or, so it survives reloads,
+ *  localStorage['cascade-py-runtime']. */
+export function resolvePyRuntime() {
+  const KNOWN = ['brython', 'pyodide', 'micropython'];
+  try {
+    const fromURL = new URLSearchParams(window.location.search).get('pyruntime');
+    if (fromURL) { return KNOWN.includes(fromURL) ? fromURL : 'brython'; }
+    const stored = window.localStorage.getItem('cascade-py-runtime');
+    if (KNOWN.includes(stored)) { return stored; }
+  } catch (e) { /* no URL/storage access — fall through to the default */ }
+  return 'brython';
+}
 
 /** Manages the Monaco code editor instance, mode switching, and code evaluation. */
 class EditorManager {
@@ -9,8 +28,20 @@ class EditorManager {
     this.editor = null;
     this.mode = 'cascadestudio';
     this._extraLibs = [];
+    this._typedefsPromise = null;
     this._codeContainer = null;
     this._openscadProviders = [];
+    this._pythonLsp = null;
+  }
+
+  /** Lazily boot the in-browser basedpyright language server (Python
+   *  IntelliSense). Deferred a beat so the first model render wins the
+   *  bandwidth race; idempotent after that. */
+  _ensurePythonLsp(delayMs = 0) {
+    if (typeof ESBUILD === 'undefined') { return; } // dev tree has no dist/pyright
+    if (!this._pythonLsp) { this._pythonLsp = new PythonLanguageProvider(this._app); }
+    const boot = () => { this._pythonLsp.init().catch(() => { /* logged inside */ }); };
+    if (delayMs > 0) { setTimeout(boot, delayMs); } else { boot(); }
   }
 
   /** Initialize the editor panel inside a DockviewContainer. */
@@ -27,25 +58,12 @@ class EditorManager {
     });
     monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
 
-    // Import Typescript Intellisense Definitions
-    const isBuilt = typeof ESBUILD !== 'undefined';
-    let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
-    const ocDtsPath = isBuilt ? 'typedefs/cascadestudio.d.ts' : prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts';
-    const threeDtsPath = isBuilt ? 'typedefs/three.d.ts' : prefix + 'node_modules/@types/three/index.d.ts';
-    const libDtsPath = isBuilt ? 'typedefs/StandardLibraryIntellisense.ts' : prefix + 'js/StandardLibraryIntellisense.ts';
-    Promise.all([
-      fetch(ocDtsPath).then(r => r.text()),
-      fetch(threeDtsPath).then(r => r.text()),
-      fetch(libDtsPath).then(r => r.text()),
-    ]).then(([ocDts, threeDts, libDts]) => {
-      this._extraLibs = [
-        { content: ocDts, filePath: 'file://' + ocDtsPath },
-        { content: threeDts, filePath: 'file://' + threeDtsPath },
-        { content: libDts, filePath: 'file://' + libDtsPath },
-      ];
-      monaco.editor.createModel("", "typescript");
-      monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
-    }).catch(error => console.log("Error loading type definitions: " + error.message));
+    // The TypeScript IntelliSense typedefs (~600 KB) only matter in
+    // CascadeStudio JS mode; Python/OpenSCAD loads skip the fetch until the
+    // user actually switches to JS (setMode triggers it).
+    const initialMode = (this._app && this._app._resolvedMode) || this.mode;
+    if (initialMode === 'cascadestudio') { this._loadTypedefs(); }
+    if (initialMode === 'python') { this._ensurePythonLsp(1500); }
 
     // Check for code serialization as an array
     this._codeContainer = container;
@@ -59,11 +77,13 @@ class EditorManager {
       container.setState({ code: codeString });
     }
 
-    // Initialize the Monaco Code Editor
+    // Initialize the Monaco Code Editor. Creating the model in the resolved
+    // language up front keeps Python loads from spinning up Monaco's
+    // TypeScript language worker at all.
     const isMobile = window.innerHeight > window.innerWidth;
     this.editor = monaco.editor.create(container.element, {
       value: state.code,
-      language: "typescript",
+      language: initialMode === 'python' ? 'python' : 'typescript',
       theme: "vs-dark",
       automaticLayout: true,
       minimap: { enabled: false },
@@ -106,6 +126,63 @@ class EditorManager {
     if (this.editor) { this.editor.setValue(code); }
   }
 
+  /** Insert a snippet on a new line after the last non-empty line of the
+   *  document. Uses executeEdits so the Monaco undo stack is preserved.
+   *  Returns the 1-based line number the snippet's first line landed on. */
+  insertCode(snippet) {
+    if (!this.editor) return -1;
+    const model = this.editor.getModel();
+    let lastLine = model.getLineCount();
+    while (lastLine > 1 && model.getLineContent(lastLine).trim() === '') { lastLine--; }
+    const isEmptyDoc = (lastLine === 1 && model.getLineContent(1).trim() === '');
+    const col = model.getLineMaxColumn(lastLine);
+    const text = isEmptyDoc ? snippet : '\n' + snippet;
+    this.editor.pushUndoStop();
+    this.editor.executeEdits('cascade-gui-tools', [{
+      range: new monaco.Range(lastLine, col, lastLine, col),
+      text: text
+    }]);
+    this.editor.pushUndoStop();
+    return isEmptyDoc ? lastLine : lastLine + 1;
+  }
+
+  /** Get the text of a 1-based line (empty string if out of range). */
+  getLineContent(lineNumber) {
+    if (!this.editor) return '';
+    const model = this.editor.getModel();
+    if (lineNumber < 1 || lineNumber > model.getLineCount()) return '';
+    return model.getLineContent(lineNumber);
+  }
+
+  /** Replace the full text of a 1-based line (undo-friendly). */
+  replaceLine(lineNumber, newText) {
+    if (!this.editor) return;
+    const model = this.editor.getModel();
+    if (lineNumber < 1 || lineNumber > model.getLineCount()) return;
+    this.editor.pushUndoStop();
+    this.editor.executeEdits('cascade-gui-tools', [{
+      range: new monaco.Range(lineNumber, 1, lineNumber, model.getLineMaxColumn(lineNumber)),
+      text: newText
+    }]);
+    this.editor.pushUndoStop();
+  }
+
+  /** Reveal a line and flash a temporary highlight on it.
+   *  Used by the Select tool's pick → code line mapping. */
+  flashLine(lineNumber) {
+    if (!this.editor || !lineNumber || lineNumber < 1) return;
+    this.editor.revealLineInCenterIfOutsideViewport(lineNumber);
+    const decorations = this.editor.deltaDecorations(this._flashDecorations || [], [{
+      range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+      options: { isWholeLine: true, className: 'cs-pick-line-flash' }
+    }]);
+    this._flashDecorations = decorations;
+    clearTimeout(this._flashTimeout);
+    this._flashTimeout = setTimeout(() => {
+      this._flashDecorations = this.editor.deltaDecorations(this._flashDecorations || [], []);
+    }, 1200);
+  }
+
   /** Evaluate the current code: transpile if OpenSCAD, then send to worker via engine. */
   evaluateCode(saveToURL = false) {
     if (window.workerWorking) { return; }
@@ -133,9 +210,13 @@ class EditorManager {
       }
     }
 
-    // Use CascadeEngine to evaluate and get mesh data
+    // Use CascadeEngine to evaluate and get mesh data.
+    // Python code is passed through as-is; the worker runs it via Brython
+    // (or Pyodide when the experimental flag is set).
     this._app.engine.evaluate(codeToEval, {
       guiState: this._app.gui.state,
+      language: this.mode === 'python' ? 'python' : undefined,
+      pyRuntime: this.mode === 'python' ? resolvePyRuntime() : undefined,
     }).then((result) => {
       if (this._app.viewport && result.meshData) {
         this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);
@@ -150,10 +231,14 @@ class EditorManager {
     if (saveToURL) {
       const AppClass = this._app.constructor;
       console.log("Saved to URL!");
+      // `mode` is a plain, human-readable param so the language travels with
+      // the code. Links without it predate mode serialization and load as
+      // CascadeStudio JS (see CascadeStudioApp.initialize).
       window.history.replaceState({}, 'Cascade Studio',
         new URL(
           location.pathname + "?code=" + AppClass.encode(newCode) +
-          "&gui=" + AppClass.encode(JSON.stringify(this._app.gui.state)),
+          "&gui=" + AppClass.encode(JSON.stringify(this._app.gui.state)) +
+          "&mode=" + encodeURIComponent(this.mode),
           location.href
         ).href
       );
@@ -162,18 +247,48 @@ class EditorManager {
     console.log("Generating Model");
   }
 
-  /** Set editor mode: 'cascadestudio' or 'openscad'. */
+  /** Fetch the TypeScript IntelliSense typedefs once and register them with
+   *  Monaco. Memoized — safe to call on every switch into JS mode. */
+  _loadTypedefs() {
+    if (this._typedefsPromise) { return this._typedefsPromise; }
+    const isBuilt = typeof ESBUILD !== 'undefined';
+    let prefix = window.location.href.startsWith("https://zalo.github.io/") ? "/CascadeStudio/" : "";
+    const ocDtsPath = isBuilt ? 'typedefs/cascadestudio.d.ts' : prefix + 'node_modules/opencascade.js/dist/cascadestudio.d.ts';
+    const threeDtsPath = isBuilt ? 'typedefs/three.d.ts' : prefix + 'node_modules/@types/three/index.d.ts';
+    const libDtsPath = isBuilt ? 'typedefs/StandardLibraryIntellisense.ts' : prefix + 'js/StandardLibraryIntellisense.ts';
+    this._typedefsPromise = Promise.all([
+      fetch(ocDtsPath).then(r => r.text()),
+      fetch(threeDtsPath).then(r => r.text()),
+      fetch(libDtsPath).then(r => r.text()),
+    ]).then(([ocDts, threeDts, libDts]) => {
+      this._extraLibs = [
+        { content: ocDts, filePath: 'file://' + ocDtsPath },
+        { content: threeDts, filePath: 'file://' + threeDtsPath },
+        { content: libDts, filePath: 'file://' + libDtsPath },
+      ];
+      monaco.editor.createModel("", "typescript");
+      monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
+    }).catch(error => {
+      this._typedefsPromise = null; // allow a retry on the next JS-mode switch
+      console.log("Error loading type definitions: " + error.message);
+    });
+    return this._typedefsPromise;
+  }
+
+  /** Set editor mode: 'cascadestudio', 'openscad', or 'python'. */
   setMode(newMode) {
     if (newMode === this.mode) return;
 
-    // Swap starter code if current content matches the other mode's starter
+    // Swap starter code if the current content is any known mode's starter
+    const AppClass = this._app.constructor;
+    const starters = {
+      cascadestudio: AppClass.STARTER_CODE,
+      openscad: AppClass.OPENSCAD_STARTER_CODE,
+      python: AppClass.PYTHON_STARTER_CODE,
+    };
     const currentCode = this.editor.getValue();
-    const csStarter = this._app.constructor.STARTER_CODE;
-    const osStarter = this._app.constructor.OPENSCAD_STARTER_CODE;
-    if (newMode === 'openscad' && osStarter && currentCode === csStarter) {
-      this.editor.setValue(osStarter);
-    } else if (newMode === 'cascadestudio' && currentCode === osStarter) {
-      this.editor.setValue(csStarter);
+    if (starters[newMode] && Object.values(starters).includes(currentCode)) {
+      this.editor.setValue(starters[newMode]);
     }
 
     // Fit camera on the next render after a mode switch
@@ -187,20 +302,31 @@ class EditorManager {
     this._openscadProviders.forEach(d => d.dispose());
     this._openscadProviders = [];
 
+    const model = this.editor.getModel();
+    if (this._pythonLsp && newMode !== 'python') { this._pythonLsp.clearMarkers(); }
     if (newMode === 'openscad') {
       // Switch to OpenSCAD language
-      const model = this.editor.getModel();
       monaco.editor.setModelLanguage(model, 'openscad');
 
       // Register OpenSCAD providers if available
       if (this._app._openscadMonaco) {
         this._openscadProviders = this._app._openscadMonaco.registerProviders(this.editor);
       }
+    } else if (newMode === 'python') {
+      // Monaco ships a built-in Python tokenizer — no custom language needed
+      monaco.editor.setModelLanguage(model, 'python');
+      this._ensurePythonLsp();
+      if (this._pythonLsp) { this._pythonLsp.sync(); }
     } else {
       // Switch back to TypeScript
-      const model = this.editor.getModel();
       monaco.editor.setModelLanguage(model, 'typescript');
+      this._loadTypedefs();
       monaco.languages.typescript.typescriptDefaults.setExtraLibs(this._extraLibs);
+    }
+
+    // Let the GUI tools react (e.g. the Sketch tool is JS-only for now)
+    if (this._app.viewport && this._app.viewport.toolManager) {
+      this._app.viewport.toolManager.onLanguageChanged();
     }
   }
 

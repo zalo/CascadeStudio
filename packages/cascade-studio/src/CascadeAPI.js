@@ -2,6 +2,7 @@
 
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
+import { resolvePyRuntime } from './EditorManager.js';
 
 /** Exposes window.CascadeAPI for programmatic control of Cascade Studio.
  *  Designed for use by AI agents (via Playwright) and developer tooling. */
@@ -71,6 +72,14 @@ class CascadeAPI {
   /** Compact quick-start guide. Call this FIRST to learn the API. */
   getQuickStart() {
     return {
+      mode: {
+        current: this._app.editor.mode,
+        note: 'The editor language mode decides how runCode() interprets your code. ' +
+          'A fresh load starts in "python" (build123d algebra mode: ' +
+          '`from build123d import *` … `show(shape)`). Everything below documents the ' +
+          'CascadeStudio JS API — call CascadeAPI.setMode("cascadestudio") before using it.',
+        switch: 'CascadeAPI.setMode("python" | "cascadestudio" | "openscad")',
+      },
       workflow: [
         'result = await CascadeAPI.runCode(code) → {success, errors, logs, historySteps}',
         'CascadeAPI.setCameraAngle(azimuth, elevation) → 0=front, 90=right; 0=level, 90=top',
@@ -205,12 +214,35 @@ Revolve(profile, 360);`,
   isReady() { return this._app.engine && this._app.engine.isReady; }
   isWorking() { return window.workerWorking; }
 
+  /** Internal: the viewport's GUI ToolManager (for tests/tooling). */
+  get _tools() {
+    const viewport = this._app.viewport;
+    return viewport ? viewport.toolManager : null;
+  }
+
   setMode(mode) {
     this._app.editor.setMode(mode);
     const modeSelect = document.getElementById('editorMode');
     if (modeSelect) modeSelect.value = mode;
   }
   getMode() { return this._app.editor.mode; }
+
+  /** Worker memory footprint (JS heap + the OCCT and Python wasm heaps) and
+   *  the Python runtime's boot timing. Used by the runtime comparison. */
+  async _memoryStats() { return this._app.engine.memoryStats(); }
+
+  /** Which Python interpreter Python mode evaluates on: 'brython' (default)
+   *  or the experimental 'pyodide'. Set with `?pyruntime=pyodide` or
+   *  setPyRuntime(); a change takes effect on the NEXT evaluation, but the
+   *  worker keeps whichever runtime it already booted for the session. */
+  getPyRuntime() { return resolvePyRuntime(); }
+  setPyRuntime(kind) {
+    try {
+      window.localStorage.setItem('cascade-py-runtime',
+        kind === 'pyodide' ? 'pyodide' : 'brython');
+    } catch (e) { console.error('setPyRuntime: ' + e.message); }
+    return this.getPyRuntime();
+  }
 
   // Debug / history inspection
   showHistoryStep(index) {
@@ -229,6 +261,19 @@ Revolve(profile, 360);`,
     return this.getHistorySteps().map((s, i) =>
       `${i}: ${s.fnName} (line ${s.lineNumber}, ${s.shapeCount} shapes)`
     ).join('\n');
+  }
+
+  /** Load STEP/IGES/STL assets into the worker's `externalShapes` dict, keyed
+   *  by file name. This is how a script that reads a file next to itself gets
+   *  its data: the worker has no filesystem, so the asset is handed over
+   *  up-front and Python mode's `import_step(path)` resolves it by base name.
+   *  `files` is `{ "part.step": "<file text>", ... }`. */
+  async loadExternalFiles(files) {
+    const dict = {};
+    for (const name of Object.keys(files || {})) {
+      dict[name] = { content: files[name] };
+    }
+    return await this._app.engine.loadExternalFilesAwaited(dict);
   }
 
   // Export formats

@@ -118,3 +118,7 @@ test-results/
 # Agent test screenshots
 agent-test-*.png
 chess-pawn*.png
+
+# Vendored Pyodide core distribution (experimental Python runtime, fetched by
+# packages/cascade-core/scripts/fetch-pyodide.cjs)
+vendor/
