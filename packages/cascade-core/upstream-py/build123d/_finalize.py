@@ -96,8 +96,20 @@ def _cs_builder_op(fn, mode):
 _pkg.draft = _cs_builder_op(_lt.draft, _enums.Mode.REPLACE)
 
 # upstream's Airfoil needs real numpy (an honest raise on this runtime);
-# lite's Airfoil is the VALIDATED numpy-free port — prefer it.
-_pkg.Airfoil = _lt.Airfoil
+# lite's Airfoil is the VALIDATED numpy-free port. Its builder bookkeeping
+# talks to LITE's builder stack (empty in upstream mode), so hand the edges
+# to the active upstream BuildLine like objects_curve._add_curve_to_context.
+def _cs_airfoil(airfoil_code, n_points=50, finite_te=False,
+                mode=_enums.Mode.ADD):
+    res = _lt.Airfoil(airfoil_code, n_points=n_points, finite_te=finite_te,
+                      mode=_lt.Mode.PRIVATE)
+    ctx = _common.Builder._current.get(None)
+    if ctx is not None and getattr(res, 'topo', None) is not None:
+        ctx._add_to_context(*res.edges(), mode=mode)
+    return res
+
+
+_pkg.Airfoil = _cs_airfoil
 
 
 

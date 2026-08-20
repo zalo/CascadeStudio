@@ -142,8 +142,19 @@ def _face_chamfer_2d(self, distance, distance2, vertices, edge=None):
 
 def _wire_fillet_2d(self, radius, vertices):
     """upstream Wire/Edge.fillet_2d(radius, vertices) — 1-D corner fillets
-    (ChFi2d_FilletAlgo in lite)."""
-    return _lt._wire_fillet_2d(self, list(vertices), radius)
+    (ChFi2d_FilletAlgo in lite). Dedupe the vertices by POSITION first:
+    upstream's Builder.vertices() dedups via set() + TopoDS same-ness, which
+    only works when coincident endpoints were FUSED into one shared vertex;
+    lite keeps builder lines as compounds of free edges, so each corner
+    arrives twice (once per incident edge) and the second fillet of the same
+    corner would fail after the first one trimmed it away."""
+    uniq, seen = [], []
+    for v in vertices:
+        key = (round(v.X, 9), round(v.Y, 9), round(v.Z, 9))
+        if key not in seen:
+            seen.append(key)
+            uniq.append(v)
+    return _lt._wire_fillet_2d(self, uniq, radius)
 
 
 if not hasattr(_lt.Face, 'fillet_2d'):
@@ -317,6 +328,18 @@ def _wire_make_convex_hull(cls, edges, tolerance=1e-3):
 if not hasattr(_lt.Wire, 'make_ellipse'):
     _lt.Wire.make_ellipse = classmethod(_wire_make_ellipse)
     _lt.Wire.make_convex_hull = classmethod(_wire_make_convex_hull)
+
+
+def _curve_wires(self):
+    """upstream Curve.wires(): 'a list of wires created from the edges' —
+    a Curve is a compound of FREE edges (no TopoDS wires inside), so chain
+    them with Wire.combine (lite already has it on Mixin1D).
+    Builder.wires()/fillet's target.wires()[0] depend on this."""
+    return _lt.Wire.combine(self.edges())
+
+
+if _lt.Curve.wires is _lt.Shape.wires:
+    _lt.Curve.wires = _curve_wires
 
 
 def _shape_split(self, tool, keep=None):
@@ -586,8 +609,67 @@ def _solid_extrude_until(cls, section, target, direction, until=None):
     return candidate - pieces[-1]
 
 
+def _solid_make_wedge(cls, delta_x, delta_y, delta_z, min_x, min_z, max_x,
+                      max_z, plane=None):
+    """upstream Solid.make_wedge (BRepPrimAPI_MakeWedge's min/max form) over
+    lite's WedgeMinMax binding."""
+    s = cls(_w.WedgeMinMax(delta_x, delta_y, delta_z, min_x, min_z, max_x,
+                           max_z))
+    if plane is not None:
+        s = plane.location * s
+    return s
+
+
+def _mixin1d_positions(self, distances=None, position_mode=None,
+                       deflection=None):
+    """upstream Mixin1D.positions: points along the curve at the given
+    normalized parameters (PositionMode.PARAMETER, the default) or absolute
+    arc lengths (PositionMode.LENGTH)."""
+    if deflection is not None:
+        raise NotImplementedError(
+            'positions(deflection=) is not supported in build123d-lite')
+    dists = list(distances or [])
+    if getattr(position_mode, 'name', 'PARAMETER') == 'LENGTH':
+        ln = self.length
+        dists = [d / ln for d in dists]
+    return [self.position_at(d) for d in dists]
+
+
+_orig_reversed = _lt.Mixin1D.reversed
+
+
+def _cs_reversed(self, reconstruct=False):
+    """upstream Edge.reversed(reconstruct=): lite's orientation flip IS
+    parametrization-reversing for position_at/trim (lite's 1-D evaluators are
+    orientation-aware), so reconstruct needs no separate rebuild here."""
+    return _orig_reversed(self)
+
+
+if not hasattr(_lt.Mixin1D, 'positions'):
+    _lt.Mixin1D.positions = _mixin1d_positions
+    _lt.Mixin1D.reversed = _cs_reversed
+
+
+# lite's Location 3-arg form dispatches on a STRING Euler-ordering (lite's
+# Intrinsic/Extrinsic values); upstream user code passes the shim's enum
+# MEMBERS (Location(p, angles, Intrinsic.YXZ)) which lite would treat as an
+# axis-angle ANGLE. Translate members to lite's values up front.
+_orig_location_init = Location.__init__
+
+
+def _cs_location_init(self, *args):
+    if len(args) == 3 and isinstance(args[2], _enum_shim._Member):
+        args = (args[0], args[1], _cs_enum_to_lite(args[2]))
+    _orig_location_init(self, *args)
+
+
+if Location.__init__ is _orig_location_init:
+    Location.__init__ = _cs_location_init
+
+
 if not hasattr(_lt.Solid, 'make_box'):
     _lt.Solid.make_box = classmethod(_solid_make_box)
+    _lt.Solid.make_wedge = classmethod(_solid_make_wedge)
     _lt.Solid.extrude_until = classmethod(_solid_extrude_until)
     _lt.Solid.sweep = classmethod(_solid_sweep)
     _lt.Solid.sweep_multi = classmethod(_solid_sweep_multi)
