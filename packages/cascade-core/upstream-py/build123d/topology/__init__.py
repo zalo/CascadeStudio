@@ -55,6 +55,63 @@ Shape._wrapped = property(_cs_get_wrapped)
 Shape.wrapped = property(_cs_get_wrapped, _cs_set_wrapped)
 
 
+# Dev's _PublicationService.place / Builder publication call
+# Shape.copy_attributes_to(target, exceptions) to carry USER metadata
+# (label, color, joints, ...) onto the placed result. Port of upstream
+# shape_core's method, with lite's INTERNAL bookkeeping attrs always
+# excluded: `topo` (upstream excludes its `wrapped` equivalent by name),
+# `_loc` (None means identity — upstream's falsy-target guard would
+# otherwise overwrite a placed location with the source's) and `_parent`.
+_CS_COPY_ATTR_INTERNAL = ('topo', 'wrapped', '_loc', '_parent',
+                          '_cs_pending_scope')
+
+
+def _cs_copy_attributes_to(self, target, exceptions=None):
+    import copy as _copy
+    attrs = set(self.__dict__.keys()) & set(target.__dict__.keys())
+    if exceptions is not None:
+        attrs -= set(exceptions)
+    attrs -= set(_CS_COPY_ATTR_INTERNAL)
+    for attr in attrs:
+        if attr == 'joints':
+            if not getattr(target, attr):
+                try:
+                    target.joints = _copy.deepcopy(self.joints)
+                except Exception:
+                    target.joints = dict(self.joints)
+            for joint in target.joints.values():
+                joint.parent = target
+        elif not getattr(target, attr):
+            setattr(target, attr, getattr(self, attr))
+
+
+if not hasattr(Shape, 'copy_attributes_to'):
+    Shape.copy_attributes_to = _cs_copy_attributes_to
+
+
+# Dev's objects_sketch.Text resolves its font up front via
+# Compound.resolve_font(font, font_path, font_style) -> (name, path,
+# Font_SystemFont). This build has no Font_FontMgr — lite's honest
+# FontManager knows exactly the bundled FreeSans family (COMPROMISE(text)),
+# and lite's make_text falls back to FreeSans for unknown names, so resolve
+# the same way and return the face NAME in the Font_SystemFont slot.
+def _cs_resolve_font(font='Arial', font_path=None, font_style=None):
+    fm = _lt.FontManager()
+    style = font_style if font_style is not None else _lt.FontStyle.REGULAR
+    try:
+        face = fm.find_font(font, style)
+    except Exception:
+        try:
+            face = fm.find_font('FreeSans', style)
+        except Exception:
+            face = 'FreeSans'
+    return (face, '', face)
+
+
+if not hasattr(Compound, 'resolve_font'):
+    Compound.resolve_font = staticmethod(_cs_resolve_font)
+
+
 # ---- upstream result-class semantics ---------------------------------------
 # Upstream's Shape.moved/located and `loc * shape` PRESERVE the class (a moved
 # Face is a Face); lite's algebra convention remaps operation results via its

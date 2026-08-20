@@ -163,6 +163,26 @@ export function rewriteMatchStatements(src, name) {
   return lines.join('\n');
 }
 
+/** The collections.abc shim exposes Iterable/Iterator/... as type TUPLES
+ *  (MicroPython has no __instancecheck__). CPython's isinstance flattens
+ *  NESTED tuples in classinfo; MicroPython does NOT (it silently returns
+ *  False), so `isinstance(x, (list, set, Iterator))` must become
+ *  `isinstance(x, (list, set) + Iterator)`. Single-line, mechanical. */
+const SHIM_TYPE_TUPLES = ['Iterable', 'Iterator', 'Sequence', 'Collection',
+  'Sized', 'Mapping', 'MutableMapping', 'MutableSequence', 'MutableSet'];
+export function rewriteNestedTypeTuples(src) {
+  return src.replace(/isinstance\(([^,()]+(?:\([^()]*\))?[^,()]*), \(([^()]+)\)\)/g,
+    (m, expr, inner) => {
+      const parts = inner.split(',').map((s) => s.trim()).filter(Boolean);
+      const shims = parts.filter((p) => SHIM_TYPE_TUPLES.includes(p));
+      if (!shims.length) { return m; }
+      const plain = parts.filter((p) => !SHIM_TYPE_TUPLES.includes(p));
+      const head = plain.length ? '(' + plain.join(', ') + ',)' : '()';
+      return 'isinstance(' + expr + ', ' + head + ' + '
+        + shims.join(' + ') + ')';
+    });
+}
+
 export function stripPositionalOnlyMarkers(src) {
   // PEP 570 `/` markers in def signatures (MicroPython rejects them); the
   // positional-only ENFORCEMENT is lost, which build123d never relies on.
@@ -234,6 +254,7 @@ export function transformUpstreamSource(name, src) {
   out = cleanClassBases(out);
   out = rewriteMatchStatements(out, name);
   out = rewriteDataclassFields(out);
+  out = rewriteNestedTypeTuples(out);
   out = stripPositionalOnlyMarkers(out);
   out = rewriteListSplats(out);
   // this MicroPython build has no sys.exc_info and sys is read-only; the

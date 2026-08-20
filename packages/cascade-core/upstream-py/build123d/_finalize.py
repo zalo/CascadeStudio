@@ -293,6 +293,34 @@ if hasattr(_common, 'BaseObjectMeta'):
             _cs_wrap_publisher_init(_okls)
 
 
+# lite's show()/show_object() coerce LITE builders to their result; teach
+# them the UPSTREAM Builder too (an upstream BuildPart is not lite's Builder,
+# so _topo() rejects it and the viewport stays empty).
+def _cs_unwrap_builders(shapes):
+    conv = []
+    for s in shapes:
+        if isinstance(s, _common.Builder):
+            try:
+                s = s._output_obj() if hasattr(s, '_output_obj') else s._obj
+            except AttributeError:
+                pass
+        conv.append(s)
+    return conv
+
+
+def _cs_show(*shapes, **kwargs):
+    return _lt.show(*_cs_unwrap_builders(shapes), **kwargs)
+
+
+def _cs_show_object(shape, name=None, options=None, **kwargs):
+    return _lt.show_object(_cs_unwrap_builders([shape])[0], name=name,
+                           options=options, **kwargs)
+
+
+_pkg.show = _cs_show
+_pkg.show_object = _cs_show_object
+
+
 def _reset_state():
     """Called by the worker (browser._cs_run_user) before every evaluation:
     clear lite's builder stacks AND every upstream ContextVar (a JS-level
