@@ -62,6 +62,30 @@ class _Member:
     def __hash__(self):
         return hash(self._cls_name_ + '.' + self._name_)
 
+    # IntEnum-style ordering/arithmetic on the member VALUE (upstream
+    # compares ContinuityLevel members and does arithmetic on GeomType
+    # values; plain Enums with non-numeric values raise like CPython would)
+    def _cs_val(self, other):
+        return other._value_ if isinstance(other, _Member) else other
+
+    def __lt__(self, other):
+        return self._value_ < self._cs_val(other)
+
+    def __le__(self, other):
+        return self._value_ <= self._cs_val(other)
+
+    def __gt__(self, other):
+        return self._value_ > self._cs_val(other)
+
+    def __ge__(self, other):
+        return self._value_ >= self._cs_val(other)
+
+    def __int__(self):
+        return int(self._value_)
+
+    def __index__(self):
+        return int(self._value_)
+
     @property
     def name(self):
         return self._name_

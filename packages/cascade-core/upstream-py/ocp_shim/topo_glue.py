@@ -54,6 +54,15 @@ def _cs_attach_collection_protocols():
         cls = getattr(_reg, name, None)
         if cls is not None:
             cls.__call__ = _c._map_call
+    # pybind hasher functor: hasher(shape) -> int (topo_distance_to's
+    # peer lookup); serve through the same OCCT HashCode the proxies hash by
+    hasher = getattr(_reg, 'TopTools_ShapeMapHasher', None)
+    if hasher is not None:
+        def _hasher_call(self, s):
+            raw = getattr(s, '_ref', s)
+            h = w._csOcpHashCode(raw)
+            return id(s) if h is None else int(h)
+        hasher.__call__ = _hasher_call
 
 
 _cs_attach_collection_protocols()

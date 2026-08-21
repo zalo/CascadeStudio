@@ -350,6 +350,13 @@ export function transformUpstreamSource(name, src, opts) {
   // filter_by/group_by(property) evaluate through a builtins helper that
   // finds the property on the instance's class by IDENTITY and getattrs it
   out = out.replace(/(\w+)\.__get__\((\w+)\)/g, '_cs_prop_get($1, $2)');
+  // ... and the BARE bound-method form (sorted(key=sort_by.__get__))
+  out = out.replace(/(\w+)\.__get__(?!\()/g,
+    '(lambda _cs_o, _cs_p=$1: _cs_prop_get(_cs_p, _cs_o))');
+  // MicroPython sys has no float_info and sys is read-only (two_d uses .max)
+  out = out.replace(/\bsys\.float_info\.max\b/g, '1.7976931348623157e+308');
+  out = out.replace(/\bsys\.float_info\.epsilon\b/g, '2.220446049250313e-16');
+  out = out.replace(/\bsys\.float_info\.min\b/g, '2.2250738585072014e-308');
   // PEP 604 runtime unions in isinstance (`isinstance(x, Location | Plane)`)
   // — MicroPython types have no __or__; rewrite the union to a tuple. Only
   // the simple-name form appears in the corpus (4 sites, all Location|Plane).
@@ -617,12 +624,19 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       "        stack.extend(getattr(k, '__bases__', ()))",
       "    raise AttributeError('property not found on ' + type(obj).__name__)",
       '_cs_bi2._cs_prop_get = _cs_prop_get',
-      // MicroPython has no builtin format() (geometry hex-color paths)
+      // MicroPython has no builtin format() (geometry hex-color paths;
+      // Vector.__str__ calls format(self, '.6g') — dispatch to __format__)
+      "def _cs_format(v, spec=''):",
+      "    f = getattr(v, '__format__', None)",
+      '    if f is not None:',
+      '        try:',
+      '            return f(spec)',
+      '        except (TypeError, NotImplementedError):',
+      '            pass',
+      "    return ('{:' + spec + '}').format(v) if spec else str(v)",
       'try:',
       '    format',
       'except NameError:',
-      "    def _cs_format(v, spec=''):",
-      "        return ('{:' + spec + '}').format(v) if spec else str(v)",
       '    _cs_bi2.format = _cs_format',
     ].join('\n'));
 

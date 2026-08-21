@@ -12,20 +12,30 @@ class NodeMixin:
     def parent(self):
         return getattr(self, '_NodeMixin__parent', None)
 
+    def _cs_hook(self, name, arg):
+        fn = getattr(self, name, None)
+        if fn is not None:
+            fn(arg)
+
     @parent.setter
     def parent(self, value):
         old = getattr(self, '_NodeMixin__parent', None)
         if old is value:
             return
         if old is not None:
+            self._cs_hook('_pre_detach', old)
             kids = list(getattr(old, '_NodeMixin__children', ()))
             kids = [k for k in kids if k is not self]
             setattr(old, '_NodeMixin__children', tuple(kids))
+            self._cs_hook('_post_detach', old)
+        if value is not None:
+            self._cs_hook('_pre_attach', value)
         setattr(self, '_NodeMixin__parent', value)
         if value is not None:
             kids = list(getattr(value, '_NodeMixin__children', ()))
             kids.append(self)
             setattr(value, '_NodeMixin__children', tuple(kids))
+            self._cs_hook('_post_attach', value)
 
     @property
     def children(self):
@@ -33,11 +43,21 @@ class NodeMixin:
 
     @children.setter
     def children(self, value):
-        for c in self.children:
-            setattr(c, '_NodeMixin__parent', None)
-        setattr(self, '_NodeMixin__children', tuple(value))
+        # anytree's attach/detach hook protocol: upstream Compound rebuilds
+        # its wrapped TopoDS from the children in _post_attach_children
+        old = self.children
+        value = tuple(value)
+        if old:
+            self._cs_hook('_pre_detach_children', old)
+            for c in old:
+                setattr(c, '_NodeMixin__parent', None)
+            setattr(self, '_NodeMixin__children', ())
+            self._cs_hook('_post_detach_children', old)
+        self._cs_hook('_pre_attach_children', value)
+        setattr(self, '_NodeMixin__children', value)
         for c in value:
             setattr(c, '_NodeMixin__parent', self)
+        self._cs_hook('_post_attach_children', value)
 
     @property
     def is_leaf(self):

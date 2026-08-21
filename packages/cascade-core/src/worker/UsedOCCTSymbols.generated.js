@@ -113,6 +113,7 @@ export const USED_OCCT_SYMBOLS = [
   "GeomAbs_Shape",
   "GeomAbs_SurfaceType",
   "GeomAdaptor_Curve_2",
+  "GeomAdaptor_Surface_2",
   "GeomProjLib",
   "Geom_BSplineCurve_1",
   "Geom_BSplineCurve_2",

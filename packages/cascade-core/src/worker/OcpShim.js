@@ -49,6 +49,13 @@ export function installOcpShim(self, table) {
     const cn = v.constructor.name;
     if (cn.startsWith('Handle_')) {
       if (typeof v.IsNull === 'function' && v.IsNull()) { return null; }
+      // Handle_Geom_BSplineSurface: the fork binds AsGeomSurface for
+      // EXACTLY this — .get() on the surface handle is unsafe in this
+      // build (see CLAUDE.md make_surface_from_array_of_points note)
+      if (typeof v.AsGeomSurface === 'function') {
+        keepAlive.push(v);
+        return v.AsGeomSurface();
+      }
       if (typeof v.get === 'function') {
         keepAlive.push(v);
         return v.get();
@@ -552,6 +559,43 @@ export function installOcpShim(self, table) {
   };
   GLUE['Quantity_Color.ColorFromName'] = () => false; // webcolors shim covers CSS3
 
+  // Concrete Geom surface classes the fork build DROPPED (Toroidal/
+  // Spherical/SurfaceOfRevolution are unregistered, so embind's polymorphic
+  // downcast returns the BASE Geom_Surface). Upstream face-inspection
+  // (axis_of_rotation, is_circular_*) calls the concrete accessors — serve
+  // them through the bound GeomAdaptor_Surface.
+  const surfAdaptor = (ref) => {
+    const h = new oc.Handle_Geom_Surface_2(ref);
+    return new oc.GeomAdaptor_Surface_2(h);
+  };
+  GLUE['Geom_Surface.Torus'] = (args, ref) => surfAdaptor(ref).Torus();
+  GLUE['Geom_Surface.Position'] = (args, ref) => {
+    const ad = surfAdaptor(ref);
+    const t = ad.GetType();
+    if (t === oc.GeomAbs_SurfaceType.GeomAbs_Sphere) {
+      return ad.Sphere().Position();
+    }
+    if (t === oc.GeomAbs_SurfaceType.GeomAbs_Torus) {
+      return ad.Torus().Position();
+    }
+    throw new Error('ocp_shim: Geom_Surface.Position glue: unsupported '
+      + 'surface type (unregistered concrete Geom class)');
+  };
+  GLUE['Geom_Surface.MajorRadius'] = (args, ref) => surfAdaptor(ref).Torus().MajorRadius();
+  GLUE['Geom_Surface.MinorRadius'] = (args, ref) => surfAdaptor(ref).Torus().MinorRadius();
+  GLUE['Geom_Surface.Radius'] = (args, ref) => {
+    const ad = surfAdaptor(ref);
+    if (ad.GetType() === oc.GeomAbs_SurfaceType.GeomAbs_Sphere) {
+      return ad.Sphere().Radius();
+    }
+    return ad.Cylinder().Radius();
+  };
+  GLUE['Geom_Surface.Axis'] = (args, ref) => {
+    const ad = surfAdaptor(ref);
+    if (typeof ad.AxeOfRevolution === 'function') { return ad.AxeOfRevolution(); }
+    throw new Error('ocp_shim: Geom_Surface.Axis glue: AxeOfRevolution unbound');
+  };
+
   // ---- kernel-guard (COMPROMISE(kernel-guard), ported to the upstream
   // topology path): this OCCT 8.0.1 wasm build's BRepAlgoAPI_Fuse can
   // silently DROP an operand (coplanar faces meeting along BSpline edges)
@@ -741,6 +785,27 @@ export function installOcpShim(self, table) {
     kwargs = normKw(kwargs);
     if (HISTORY_FAMILIES.test(cls) && typeof self.recordExternalOp === 'function') {
       self.recordExternalOp(historyName(cls));
+    }
+    // pybind auto-derefs HArray2 handles into the NCollection_Array2 the
+    // surface-approximation ctors expect; the embind Array2/HArray2 classes
+    // are unrelated — copy the values across (small grids)
+    if ((cls === 'GeomAPI_PointsToBSplineSurface' || cls === 'Geom_BezierSurface'
+         || cls === 'Geom_BSplineSurface') && args.length) {
+      for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (!isEmbind(a)) { continue; }
+        const m = /^TCol(gp|Std)_HArray2Of(Pnt|Real)/.exec(a.constructor.name);
+        if (!m) { continue; }
+        const AC = oc['TCol' + m[1] + '_Array2Of' + m[2] + '_2'] ||
+          oc['TCol' + m[1] + '_Array2Of' + m[2]];
+        if (!AC) { continue; }
+        const nr = a.NbRows(), nc2 = a.NbColumns();
+        const arr = new AC(1, nr, 1, nc2);
+        for (let r2 = 1; r2 <= nr; r2++) {
+          for (let c2 = 1; c2 <= nc2; c2++) { arr.SetValue(r2, c2, a.Value(r2, c2)); }
+        }
+        args[i] = arr;  // the args array is the bridge's own copy
+      }
     }
     // COMPROMISE(quantity-color) stand-ins (see mkFakeQC above)
     if (cls === 'Quantity_Color' && !oc.Quantity_Color_1) {
