@@ -1,0 +1,11 @@
+# GENERATED OCP.BRepBuilderAPI — proxies over the embind binding (gen-ocp-shim.mjs)
+from ocp_registry import BRepBuilderAPI_Copy, BRepBuilderAPI_GTransform, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform  # noqa: F401
+from ocp_registry import BRepBuilderAPI_TransitionMode  # noqa: F401
+BRepBuilderAPI_Transformed = BRepBuilderAPI_TransitionMode.BRepBuilderAPI_Transformed
+BRepBuilderAPI_RightCorner = BRepBuilderAPI_TransitionMode.BRepBuilderAPI_RightCorner
+BRepBuilderAPI_RoundCorner = BRepBuilderAPI_TransitionMode.BRepBuilderAPI_RoundCorner
+from ocp_registry import BRepBuilderAPI_WireError  # noqa: F401
+BRepBuilderAPI_WireDone = BRepBuilderAPI_WireError.BRepBuilderAPI_WireDone
+BRepBuilderAPI_EmptyWire = BRepBuilderAPI_WireError.BRepBuilderAPI_EmptyWire
+BRepBuilderAPI_DisconnectedWire = BRepBuilderAPI_WireError.BRepBuilderAPI_DisconnectedWire
+BRepBuilderAPI_NonManifoldWire = BRepBuilderAPI_WireError.BRepBuilderAPI_NonManifoldWire

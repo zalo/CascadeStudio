@@ -26,6 +26,17 @@
 //      (ONLY simple class patterns and the wildcard are supported; any other
 //      pattern raises at load time rather than mis-translating)
 
+import { installOcpShim } from './OcpShim.js';
+
+/** The upstream-TOPOLOGY spike (experiments/upstream-topology-spike/):
+ *  'upstream' additionally boots the generated OCP-over-embind shim
+ *  (upstream-py/ocp_shim/) and registers upstream topology/utils.py +
+ *  zero_d.py VERBATIM (plus shape_core.py best-effort under an alias),
+ *  interoperating with lite shapes through topo_bridge.py. Default OFF so
+ *  mainline classification cannot move; opt in with ?pytopo=upstream
+ *  (self._csPyTopo). */
+export const PYTOPO_DEFAULT = 'lite';
+
 /** Upstream Level-A modules, in dependency order. objects_part/objects_curve
  *  are the object layers over the builders; joints/pack/operations_sketch are
  *  stretch (registered when present, failures logged but non-fatal). */
@@ -40,13 +51,13 @@ export const UPSTREAM_STRETCH = ['objects_sketch', 'operations_generic',
 // Source transforms                                                      //
 // --------------------------------------------------------------------- //
 
-export function stripRuntimeGenerics(src) {
+export function stripRuntimeGenerics(src, extraNames) {
   // remove runtime-evaluated generic subscriptions: list[...] -> list etc.
   // (annotations are strings under `from __future__ import annotations`, so
   // this only affects real expressions like TypeVar("T", Any, list[Any]) or
   // ShapeList[Any]() calls).
   const names = ['list', 'tuple', 'dict', 'set', 'frozenset', 'type',
-    'ShapeList', 'ContextVar'];
+    'ShapeList', 'ContextVar', ...(extraNames || [])];
   let out = src;
   for (const n of names) {
     let i = 0;
@@ -244,7 +255,8 @@ if _cs_os_shim is not None and not hasattr(_cs_os_shim, 'PathLike'):
  *  @param br        the imported `browser` module (has _cs_register_module)
  *  @param fetchText async (relativePath) => string  — reads dist/upstream-b123d files
  */
-export async function bootstrapUpstreamB123d(mp, br, fetchText) {
+export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
+  const pytopo = pytopoOpt || self._csPyTopo || PYTOPO_DEFAULT;
   const manifest = JSON.parse(await fetchText('manifest.json'));
 
   const runPy = (code) => mp.runPython(code);
@@ -327,6 +339,24 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText) {
     runPy("with open('/lib/OCP/' + _CS_OM + '.py', 'w') as _f:\n    _f.write(_CS_OB)");
   }
 
+  // 3b. pytopo=upstream: the generated OCP-over-embind shim replaces the
+  //     inert stubs for every module it covers (see
+  //     experiments/upstream-topology-spike/gen-ocp-shim.mjs)
+  if (pytopo === 'upstream') {
+    const shimManifest = JSON.parse(await fetchText('ocp_shim/MANIFEST.json'));
+    installOcpShim(self, JSON.parse(await fetchText('ocp_shim/table.json')));
+    registerAlias('ocp_core', await fetchText('ocp_shim/ocp_core.py'));
+    registerAlias('ocp_registry', await fetchText('ocp_shim/_registry.py'));
+    for (const mod of shimManifest.modules) {
+      mp.globals.set('_CS_OM', mod);
+      mp.globals.set('_CS_OB', await fetchText('ocp_shim/OCP/' + mod + '.py'));
+      runPy("with open('/lib/OCP/' + _CS_OM + '.py', 'w') as _f:\n    _f.write(_CS_OB)");
+    }
+    console.log('[pytopo=upstream] OCP shim installed ('
+      + shimManifest.classCount + ' classes, ' + shimManifest.modules.length
+      + ' modules)');
+  }
+
   // 4. the build123d package: placeholder init, then seam adapters
   br._cs_register_module('build123d', await fetchText('build123d/__init__.py'), true);
 
@@ -347,9 +377,43 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText) {
   // 6. seam adapters
   br._cs_register_module('build123d.geometry', await fetchText('build123d/geometry.py'), false);
   br._cs_register_module('build123d.topology', await fetchText('build123d/topology/__init__.py'), true);
-  for (const sub of ['shape_core', 'composite', 'three_d', 'two_d', 'one_d', 'zero_d']) {
+  const seamSubs = ['shape_core', 'composite', 'three_d', 'two_d', 'one_d'];
+  if (pytopo !== 'upstream') { seamSubs.push('zero_d'); }
+  for (const sub of seamSubs) {
     br._cs_register_module('build123d.topology.' + sub,
       await fetchText('build123d/topology/' + sub + '.py'), false);
+  }
+
+  // 6b. pytopo=upstream: UPSTREAM topology modules run VERBATIM over the
+  //     shim (utils + zero_d replace the seam re-exports; shape_core is
+  //     registered best-effort under an alias for interop measurement)
+  if (pytopo === 'upstream') {
+    registerAlias('anytree', await fetchText('ocp_shim/anytree.py'));
+    br._cs_register_module('IPython', 'pass\n', true);
+    br._cs_register_module('IPython.lib', 'pass\n', true);
+    br._cs_register_module('IPython.lib.pretty', await fetchText('ocp_shim/ipython_pretty.py'), false);
+    registerAlias('topo_bridge', await fetchText('ocp_shim/topo_bridge.py'));
+    const regUpstreamTopo = async (name, asName) => {
+      const raw = await fetchText('upstream/topology/' + name + '.py');
+      let src = transformUpstreamSource(name, raw);
+      // topology-only extra strips: module-level type-alias factories built
+      // on the isinstance-tuple collections.abc shim (Callable[[...], X])
+      src = stripRuntimeGenerics(src, ['Callable', 'Iterator']);
+      // MicroPython exposes no bound dunders on builtin instances
+      // (list(self).__getitem__(key) in ShapeList slicing)
+      src = src.replace(/\.__getitem__\(([^()]+)\)/g, '[$1]');
+      br._cs_register_module(asName, src, false);
+    };
+    await regUpstreamTopo('utils', 'build123d.topology.utils');
+    await regUpstreamTopo('zero_d', 'build123d.topology.zero_d');
+    try {
+      await regUpstreamTopo('shape_core', 'b123d_shape_core_u');
+      console.log('[pytopo=upstream] upstream shape_core registered (alias b123d_shape_core_u)');
+    } catch (e) {
+      console.log('[pytopo=upstream] upstream shape_core not loaded: '
+        + String((e && e.message) || e).split('\n').slice(-3).join(' | ').slice(0, 300));
+    }
+    console.log('[pytopo=upstream] upstream topology utils + zero_d registered');
   }
 
   // 7. the upstream Level-A modules

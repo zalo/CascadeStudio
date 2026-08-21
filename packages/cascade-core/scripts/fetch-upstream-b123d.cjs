@@ -22,6 +22,9 @@ const FILES = [
   // stretch modules (loaded best-effort at runtime)
   'objects_sketch.py', 'operations_generic.py', 'operations_part.py',
   'operations_sketch.py', 'joints.py', 'pack.py',
+  // upstream TOPOLOGY layer (the ?pytopo=upstream spike — see
+  // experiments/upstream-topology-spike/)
+  'topology/utils.py', 'topology/zero_d.py', 'topology/shape_core.py',
 ];
 
 const CANDIDATES = [
@@ -49,7 +52,9 @@ for (const f of FILES) {
     console.warn('[fetch-upstream-b123d] missing (skipped): ' + f);
     continue;
   }
-  fs.copyFileSync(from, path.join(outDir, f));
+  const to = path.join(outDir, f);
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  fs.copyFileSync(from, to);
   copied++;
 }
 // upstream's LICENSE/NOTICE (Apache-2.0) ride along: the vendor dir is

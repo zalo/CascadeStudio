@@ -39,6 +39,22 @@ export function resolvePySrc() {
   return 'auto';
 }
 
+/** Resolve the TOPOLOGY source layer for pysrc=upstream: 'lite' (default —
+ *  the seam re-exports lite's classes) or 'upstream' (the experimental
+ *  upstream-topology-over-OCP-shim spike: topology/utils.py + zero_d.py run
+ *  verbatim — see experiments/upstream-topology-spike/). `?pytopo=upstream`
+ *  or localStorage['cascade-py-topo']. */
+export function resolvePyTopo() {
+  const KNOWN = ['lite', 'upstream'];
+  try {
+    const fromURL = new URLSearchParams(window.location.search).get('pytopo');
+    if (fromURL && KNOWN.includes(fromURL)) { return fromURL; }
+    const stored = window.localStorage.getItem('cascade-py-topo');
+    if (KNOWN.includes(stored)) { return stored; }
+  } catch (e) { /* no URL/storage access — fall through to the default */ }
+  return 'lite';
+}
+
 /** Manages the Monaco code editor instance, mode switching, and code evaluation. */
 class EditorManager {
   constructor(app) {
@@ -236,6 +252,7 @@ class EditorManager {
       language: this.mode === 'python' ? 'python' : undefined,
       pyRuntime: this.mode === 'python' ? resolvePyRuntime() : undefined,
       pySrc: this.mode === 'python' ? resolvePySrc() : undefined,
+      pyTopo: this.mode === 'python' ? resolvePyTopo() : undefined,
     }).then((result) => {
       if (this._app.viewport && result.meshData) {
         this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);

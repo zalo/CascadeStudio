@@ -126,3 +126,4 @@ chess-pawn*.png
 vendor/*
 !vendor/build123d-0.11.1/
 __pycache__/
+experiments/upstream-topology-spike/.standard-library.bundle.mjs

@@ -351,6 +351,8 @@ class CascadeStudioWorker {
    *  the main thread exactly like JS-mode evaluation errors. */
   async _evaluatePython(payload) {
     try {
+      // topology-layer opt-in for the upstream-topology spike (default 'lite')
+      if (payload.pyTopo && !self._csPyTopo) { self._csPyTopo = payload.pyTopo; }
       const runtime = await ensurePythonRuntime(payload.pyRuntime, payload.pySrc);
       runtime.run(payload.code);
     } catch (e) {

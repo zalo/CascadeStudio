@@ -1,0 +1,10 @@
+# GENERATED OCP.STEPControl — proxies over the embind binding (gen-ocp-shim.mjs)
+from ocp_registry import STEPControl_Controller, STEPControl_StepModelType  # noqa: F401
+STEPControl_AsIs = STEPControl_StepModelType.STEPControl_AsIs
+STEPControl_ManifoldSolidBrep = STEPControl_StepModelType.STEPControl_ManifoldSolidBrep
+STEPControl_BrepWithVoids = STEPControl_StepModelType.STEPControl_BrepWithVoids
+STEPControl_FacetedBrep = STEPControl_StepModelType.STEPControl_FacetedBrep
+STEPControl_FacetedBrepAndBrepWithVoids = STEPControl_StepModelType.STEPControl_FacetedBrepAndBrepWithVoids
+STEPControl_ShellBasedSurfaceModel = STEPControl_StepModelType.STEPControl_ShellBasedSurfaceModel
+STEPControl_GeometricCurveSet = STEPControl_StepModelType.STEPControl_GeometricCurveSet
+STEPControl_Hybrid = STEPControl_StepModelType.STEPControl_Hybrid

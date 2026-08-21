@@ -1,0 +1,73 @@
+# anytree shim (pytopo=upstream) — upstream shape_core's Shape subclasses
+# anytree.NodeMixin for the assembly tree. Minimal parent/children semantics;
+# attributes are stored under the LITERAL mangled names ('_NodeMixin__...')
+# because (a) upstream code references them by string in copy_attributes_to
+# and (b) MicroPython does not implement name mangling.
+
+
+class NodeMixin:
+    separator = "/"
+
+    @property
+    def parent(self):
+        return getattr(self, '_NodeMixin__parent', None)
+
+    @parent.setter
+    def parent(self, value):
+        old = getattr(self, '_NodeMixin__parent', None)
+        if old is value:
+            return
+        if old is not None:
+            kids = list(getattr(old, '_NodeMixin__children', ()))
+            kids = [k for k in kids if k is not self]
+            setattr(old, '_NodeMixin__children', tuple(kids))
+        setattr(self, '_NodeMixin__parent', value)
+        if value is not None:
+            kids = list(getattr(value, '_NodeMixin__children', ()))
+            kids.append(self)
+            setattr(value, '_NodeMixin__children', tuple(kids))
+
+    @property
+    def children(self):
+        return tuple(getattr(self, '_NodeMixin__children', ()))
+
+    @children.setter
+    def children(self, value):
+        for c in self.children:
+            setattr(c, '_NodeMixin__parent', None)
+        setattr(self, '_NodeMixin__children', tuple(value))
+        for c in value:
+            setattr(c, '_NodeMixin__parent', self)
+
+    @property
+    def is_leaf(self):
+        return not getattr(self, '_NodeMixin__children', ())
+
+    @property
+    def is_root(self):
+        return getattr(self, '_NodeMixin__parent', None) is None
+
+    @property
+    def descendants(self):
+        out = []
+
+        def walk(n):
+            for c in getattr(n, '_NodeMixin__children', ()):
+                out.append(c)
+                walk(c)
+        walk(self)
+        return tuple(out)
+
+
+class RenderTree:
+    """Minimal pre-order iterator yielding (prefix, fill, node)."""
+
+    def __init__(self, node, **kwargs):
+        self.node = node
+
+    def __iter__(self):
+        def walk(n, depth):
+            yield ('    ' * depth, '    ' * depth, n)
+            for c in getattr(n, '_NodeMixin__children', ()):
+                yield from walk(c, depth + 1)
+        return walk(self.node, 0)

@@ -1,0 +1,200 @@
+// topo-poc.mjs — node inner loop for the UPSTREAM-TOPOLOGY-over-OCP-shim
+// spike. Unlike upstream-poc.mjs (semantic mock), this boots the REAL OCCT
+// wasm + the REAL worker StandardLibrary (lite backend) + MicroPython with
+// pysrc=upstream AND pytopo=upstream, then drives micro-tests through
+// upstream topology/utils.py + zero_d.py (verbatim, over the generated OCP
+// shim) interoperating with lite shapes.
+//
+//   node experiments/upstream-topology-spike/topo-poc.mjs [script.py]
+import fs from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, '..', '..');
+const B123D_SRC = process.env.B123D_SRC ||
+  join(process.env.HOME, 'Desktop', 'ocjs-deps', 'b123d-ref-venv', 'lib', 'python3.12', 'site-packages', 'build123d');
+
+globalThis.self = globalThis;
+self.postMessage = () => {};
+
+// ---- real OCCT wasm --------------------------------------------------- //
+const t0 = Date.now();
+const ocMod = await import(join(ROOT, 'node_modules', 'opencascade.js', 'dist', 'cascadestudio.js'));
+self.oc = await ocMod.default();
+console.log('[poc] OCCT wasm up in ' + (Date.now() - t0) + ' ms');
+
+// ---- real worker StandardLibrary (lite backend) ----------------------- //
+// (bundled first: quickhull3d ships extension-less ESM imports node can't
+// resolve raw; esbuild fixes that exactly like the real worker build does)
+const esbuild = await import(join(ROOT, 'node_modules', 'esbuild', 'lib', 'main.js'));
+const slBundle = join(HERE, '.standard-library.bundle.mjs');
+await esbuild.build({
+  entryPoints: [join(ROOT, 'packages', 'cascade-core', 'src', 'worker', 'StandardLibrary.js')],
+  bundle: true, format: 'esm', outfile: slBundle, logLevel: 'silent',
+});
+const { CascadeStudioStandardLibrary } = await import(slBundle);
+self.sceneShapes = [];
+self.GUIState = {};  // worker page state (Cache? off in node)
+self.standardLibrary = new CascadeStudioStandardLibrary();
+console.log('[poc] StandardLibrary attached');
+
+// ---- MicroPython (pysrc=upstream, pytopo=upstream) --------------------- //
+self._csPyTopo = process.env.CS_PYTOPO || 'upstream';
+self._csMicroPythonLocate = {
+  mjsURL: join(ROOT, 'packages', 'cascade-core', 'vendor', 'micropython-cs', 'micropython.mjs'),
+  wasmURL: join(ROOT, 'packages', 'cascade-core', 'vendor', 'micropython-cs', 'micropython.wasm'),
+  kind: 'custom',
+};
+self._csUpstreamFetchText = async (rel) => {
+  let p;
+  if (rel.startsWith('upstream/')) { p = join(B123D_SRC, rel.slice('upstream/'.length)); }
+  else { p = join(ROOT, 'packages', 'cascade-core', 'upstream-py', rel); }
+  return fs.readFileSync(p, 'utf8');
+};
+
+const { ensureMicroPythonRuntime } = await import(
+  join(ROOT, 'packages', 'cascade-core', 'src', 'worker', 'MicroPythonRuntime.js'));
+
+const t1 = Date.now();
+let runtime;
+try {
+  runtime = await ensureMicroPythonRuntime('upstream');
+} catch (e) {
+  console.error('BOOT FAILED:\n' + (e && e.stack ? e.stack : e));
+  process.exit(1);
+}
+console.log('[poc] python runtime up in ' + (Date.now() - t1) + ' ms');
+
+// ---- the micro-tests --------------------------------------------------- //
+const TESTS = {
+  't1-shim-smoke': `
+from OCP.gp import gp_Pnt, gp_Vec
+from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+from OCP.BRepGProp import BRepGProp
+from OCP.GProp import GProp_GProps
+from OCP.TopAbs import TopAbs_ShapeEnum
+from OCP.TopExp import TopExp_Explorer
+import OCP.TopAbs as ta
+from OCP.BRep import BRep_Tool
+from OCP.TopoDS import TopoDS
+from OCP.Geom import Geom_Plane, Geom_Surface
+
+p = gp_Pnt(1, 2, 3)
+assert (p.X(), p.Y(), p.Z()) == (1.0, 2.0, 3.0), 'gp_Pnt roundtrip'
+box = BRepPrimAPI_MakeBox(2, 3, 4).Shape()
+props = GProp_GProps()
+BRepGProp.VolumeProperties_s(box, props)   # 2 args: pybind DEFAULTS filled
+v = props.Mass()
+assert abs(v - 24.0) < 1e-9, 'volume ' + str(v)
+# enum identity + dict key (pybind parity bets)
+st = box.ShapeType()
+assert st == TopAbs_ShapeEnum.TopAbs_SOLID, 'enum =='
+assert st is TopAbs_ShapeEnum.TopAbs_SOLID or st == TopAbs_ShapeEnum.TopAbs_SOLID
+lut = {TopAbs_ShapeEnum.TopAbs_SOLID: 'solid', TopAbs_ShapeEnum.TopAbs_FACE: 'face'}
+assert lut[st] == 'solid', 'enum dict key'
+assert lut[ta.TopAbs_SOLID] == 'solid', 'module-level member alias'
+# explorer with DEFAULT ToAvoid (ctor default fill) + downcast + polymorphic
+ex = TopExp_Explorer(box, TopAbs_ShapeEnum.TopAbs_FACE)
+n = 0
+first_face = None
+while ex.More():
+    if first_face is None:
+        first_face = TopoDS.Face(ex.Current())
+    n += 1
+    ex.Next()
+assert n == 6, 'face count ' + str(n)
+surf = BRep_Tool.Surface_s(first_face)     # handle auto-deref
+assert isinstance(surf, Geom_Plane), 'polymorphic downcast: ' + str(type(surf))
+assert isinstance(surf, Geom_Surface), 'inheritance mirror'
+pln = surf.Pln()
+print('T1 OK volume', v, 'faces', n, 'surface', type(surf).__name__)
+`,
+  't2-upstream-utils': `
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon
+from OCP.gp import gp_Pnt
+from OCP.BRepGProp import BRepGProp
+from OCP.GProp import GProp_GProps
+from build123d.topology.utils import _make_topods_face_from_wires, _extrude_topods_shape, polar, tuplify, isclose_b
+
+poly = BRepBuilderAPI_MakePolygon()
+for x, y in ((0, 0), (4, 0), (4, 3), (0, 3)):
+    poly.Add(gp_Pnt(x, y, 0))
+poly.Close()
+wire = poly.Wire()
+face = _make_topods_face_from_wires(wire)          # upstream code, verbatim
+props = GProp_GProps()
+BRepGProp.SurfaceProperties_s(face, props)
+area = props.Mass()
+assert abs(area - 12.0) < 1e-9, 'face area ' + str(area)
+solid = _extrude_topods_shape(face, (0, 0, 5))     # lite Vector.wrapped bridge
+vprops = GProp_GProps()
+BRepGProp.VolumeProperties_s(solid, vprops)
+vol = vprops.Mass()
+assert abs(vol - 60.0) < 1e-9, 'prism volume ' + str(vol)
+assert polar(2.0, 90)[1] - 2.0 < 1e-9
+assert tuplify(1, 3) == (1, 1, 1)
+print('T2 OK area', area, 'volume', vol)
+`,
+  't3-zero-d-mixed': `
+from build123d import *
+from build123d.topology.zero_d import Vertex as UVertex, topo_explore_common_vertex
+
+# upstream Vertex standalone (constructed through the shim)
+uv = UVertex(1, 2, 3)
+assert (uv.X, uv.Y, uv.Z) == (1.0, 2.0, 3.0), 'upstream Vertex coords'
+uv2 = uv + (1, 1, 1)
+assert (uv2.X, uv2.Y, uv2.Z) == (2.0, 3.0, 4.0), 'Vertex add'
+assert tuple(uv.center()) == (1.0, 2.0, 3.0), 'center -> lite Vector'
+
+# MIXED MODE: lite-built shapes flow through upstream zero_d verbatim
+b = Box(2, 2, 2)
+edges = b.edges()
+e0 = edges[0]
+shared = None
+count = 0
+for e in edges[1:]:
+    v = topo_explore_common_vertex(e0, e)     # upstream code on lite Edges
+    if v is not None:
+        shared = v
+        count += 1
+assert shared is not None, 'no common vertex found'
+assert count >= 2, 'expected >=2 adjacent edges, got ' + str(count)
+c = tuple(shared.center())
+assert all(abs(abs(x) - 1.0) < 1e-9 for x in c), 'corner at ' + str(c)
+print('T3 OK upstream-Vertex + lite-edge common vertex at', c, 'adjacent', count)
+`,
+  't4-shape-core-import': `
+import b123d_shape_core_u as sc
+from build123d import *
+b = Box(2, 3, 4)
+# upstream ShapeList over LITE shapes (duck-typed members)
+sl = sc.ShapeList(b.faces())
+assert len(sl) == 6
+top = sl.sort_by(Axis.Z)[-1]
+assert abs(tuple(top.center())[2] - 2.0) < 1e-9, 'sort_by top face'
+groups = sl.group_by(Axis.Z)
+assert len(groups[-1]) == 1
+filtered = sl.filter_by(Plane.XY)
+assert len(filtered) == 2, 'filter_by Plane.XY: ' + str(len(filtered))
+print('T4 OK upstream ShapeList selectors over lite faces')
+`,
+};
+
+const only = process.argv[2];
+const scripts = only && TESTS[only] ? { [only]: TESTS[only] } :
+  (only ? { [only]: fs.readFileSync(only, 'utf8') } : TESTS);
+
+let failed = 0;
+for (const [name, code] of Object.entries(scripts)) {
+  console.log('\n=== ' + name + ' ===');
+  self.sceneShapes.length = 0;
+  try {
+    runtime.run(code);
+  } catch (e) {
+    failed++;
+    console.log('FAIL:\n' + (e && e.message ? e.message : e));
+  }
+}
+console.log(failed ? '\n' + failed + ' FAILED' : '\nALL OK');
+process.exit(failed ? 1 : 0);
