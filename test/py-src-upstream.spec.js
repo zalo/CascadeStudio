@@ -110,7 +110,9 @@ test('custom artifacts run upstream source with NATIVE metaclasses (enum/Generic
     { timeout: 90000 });
   const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
   expect(logs.find((l) => l.startsWith('METACHECK'))).toBe(
-    "METACHECK True True ['CENTER', 'MAX', 'MIN'] True True _GenericMeta True True");
+    // NONE = None IS a member in CPython's Enum (Align(None) -> Align.NONE);
+    // the shim skipped None-valued members until the Stage-3 round
+    "METACHECK True True ['CENTER', 'MAX', 'MIN', 'NONE'] True True _GenericMeta True True");
 });
 
 test('micropython defaults to upstream source; pysrc=lite opts back into lite', async ({ page }) => {
