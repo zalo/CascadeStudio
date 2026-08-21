@@ -43,7 +43,9 @@ import { bootstrapUpstreamB123d, PYTOPO_DEFAULT,
 /** MicroPython GC heap. Fixed at boot (it does not grow); build123d-lite +
  *  a typical model's Python-side bookkeeping fit comfortably — shapes
  *  themselves live in the OCCT wasm heap. */
-const MP_HEAP_BYTES = 16 * 1024 * 1024;
+const MP_HEAP_BYTES = (typeof process !== 'undefined' && process.env &&
+  process.env.CS_MP_HEAP) ? parseInt(process.env.CS_MP_HEAP, 10)
+  : 16 * 1024 * 1024;
 
 /** The Python side of the bridge, installed as the importable module
  *  `browser` (so `from browser import self as w` works unchanged). Kept in
@@ -124,10 +126,24 @@ else:
 class _CsWorkerError(RuntimeError):
     pass
 
+_ERRMARK = _js._CS_ERRMARK if hasattr(_js, '_CS_ERRMARK') else None
+
 class _Fn:
     def __init__(self, name):
         self._name = name
     def __call__(self, *args):
+        # FAST PATH: scalar/JsProxy args cross individually (no temporary
+        # list through the mp->js proxy registry); errors come back as the
+        # identity-stable sentinel. Container args take the deep to_js path.
+        if _ERRMARK is not None:
+            for a in args:
+                if isinstance(a, (list, tuple, dict)):
+                    break
+            else:
+                r = _js._csMpCallV(self._name, *args)
+                if r is _ERRMARK:
+                    raise _CsWorkerError(str(_js._csLastErr))
+                return r
         r = _js._csMpCall(self._name, jsffi.to_js(list(args)))
         if r.ok:
             return r.value
@@ -364,6 +380,33 @@ async function _bootstrap(srcKind) {
         msg = (e && e.message) ? String(e.message) : String(e);
       }
       return { ok: false, error: msg };
+    }
+  };
+  // Variadic FAST PATH of the guarded bridge. jsffi.to_js(list) proxies the
+  // temporary list through the mp->js registry (proxy_c_add_obj /
+  // check_existing + one EM_JS round-trip per registration — measured at
+  // ~38% of algebra_performance/b01), and the {ok, value} record costs two
+  // more JsProxy 'get' traps per call. Here every SCALAR/JsProxy argument
+  // converts individually (no list, no registry traffic) and errors are
+  // signalled by a sentinel return + self._csLastErr (read only on the
+  // error path). Python falls back to _csMpCall for list/tuple/dict args.
+  self._CS_ERRMARK = { _csErrMark: true };
+  self._csLastErr = null;
+  self._csMpCallV = function (name, ...args) {
+    try {
+      const fn = self[name];
+      if (typeof fn !== 'function') {
+        self._csLastErr = 'worker global ' + name + ' is not callable';
+        return self._CS_ERRMARK;
+      }
+      return fn.apply(self, args);
+    } catch (e) {
+      if (typeof e === 'number' && self.describeOCCTException) {
+        self._csLastErr = 'INTERNAL OPENCASCADE ERROR: ' + self.describeOCCTException(e);
+      } else {
+        self._csLastErr = (e && e.message) ? String(e.message) : String(e);
+      }
+      return self._CS_ERRMARK;
     }
   };
   self._csMpKind = function (name) {

@@ -22,6 +22,17 @@
 
 from browser import self as w
 from browser import _CsWorkerError
+from jsworker import self as _rawjs
+
+# The variadic FAST PATH (see OcpShim.js "guarded VARIADIC entries"):
+# scalar/JsProxy args cross the FFI individually — no temporary list rides
+# the mp->js proxy registry (jsffi.to_js was ~38% of hot-loop profiles) —
+# and errors come back as an identity-stable sentinel instead of an
+# {ok, value} record (two JsProxy 'get' traps per call).
+_ERRMARK = getattr(_rawjs, '_CS_ERRMARK', None)
+_OCP_NEW_V = getattr(_rawjs, '_csOcpNewV', None)
+_OCP_CALL_V = getattr(_rawjs, '_csOcpCallVar', None)
+_OCP_STATIC_V = getattr(_rawjs, '_csOcpStaticV', None)
 
 _registry = {}
 
@@ -83,13 +94,21 @@ _wrap_walk_cache = {}  # unregistered embind class name -> resolved proxy
                        # names hit _registry directly and never enter it)
 
 
+# wrap()'s helper calls go DIRECT to the jsworker functions (they are
+# guarded JS-side and never throw): no _Fn envelope on the hottest path.
+_KIND = _rawjs._csOcpKind
+_ITEM = _rawjs._csOcpItem
+_LEN = _rawjs._csOcpLen
+_PARENT = _rawjs._csOcpParent
+
+
 def wrap(v):
     if v is None or isinstance(v, (int, float, bool, str)):
         return v
-    kind = w._csOcpKind(v)
+    kind = _KIND(v)
     if kind == 'array':
-        n = int(w._csOcpLen(v))
-        return tuple(wrap(w._csOcpItem(v, i)) for i in range(n))
+        n = int(_LEN(v))
+        return tuple(wrap(_ITEM(v, i)) for i in range(n))
     if kind == 'plain' or kind == 'other':
         return v  # enum members / OCJS_Out records: raw identity-stable proxy
     # kind is an embind class name: find the nearest generated proxy class
@@ -97,12 +116,12 @@ def wrap(v):
     if cls is None:
         cls = _wrap_walk_cache.get(kind)
         if cls is None:
-            name = w._csOcpParent(kind)
+            name = _PARENT(kind)
             while name:
                 cls = _registry.get(name)
                 if cls is not None:
                     break
-                name = w._csOcpParent(name)
+                name = _PARENT(name)
             if cls is None:
                 cls = OcpObj
             _wrap_walk_cache[kind] = cls
@@ -133,6 +152,22 @@ class _BoundMethod:
     def __call__(self, *args, **kwargs):
         if self._name in _MUT_METHODS:
             return self._call_mut(args, kwargs)
+        if not kwargs and _OCP_CALL_V is not None:
+            conv = []
+            deep = False
+            for a in args:
+                if isinstance(a, OcpProxy):
+                    conv.append(a._ref)
+                elif isinstance(a, (list, tuple)):
+                    deep = True
+                    break
+                else:
+                    conv.append(a)
+            if not deep:
+                r = _OCP_CALL_V(self._owner._ref, self._name, *conv)
+                if r is _ERRMARK:
+                    _fail(str(_rawjs._csLastErr))
+                return wrap(r)
         try:
             r = w._csOcpCall(self._owner._ref, self._name,
                              [_unwrap(a) for a in args], _unwrap_kw(kwargs))
@@ -164,6 +199,23 @@ class OcpProxy:
         if len(args) == 2 and args[0] is _REF:
             self._ref = args[1]
             return
+        if not kwargs and _OCP_NEW_V is not None:
+            conv = []
+            deep = False
+            for a in args:
+                if isinstance(a, OcpProxy):
+                    conv.append(a._ref)
+                elif isinstance(a, (list, tuple)):
+                    deep = True
+                    break
+                else:
+                    conv.append(a)
+            if not deep:
+                r = _OCP_NEW_V(self._cs, *conv)
+                if r is _ERRMARK:
+                    _fail(str(_rawjs._csLastErr))
+                self._ref = r
+                return
         try:
             self._ref = w._csOcpNew(self._cs, [_unwrap(a) for a in args],
                                     _unwrap_kw(kwargs))
@@ -224,6 +276,22 @@ class _Static:
         self._name = name
 
     def __call__(self, *args, **kwargs):
+        if not kwargs and _OCP_STATIC_V is not None:
+            conv = []
+            deep = False
+            for a in args:
+                if isinstance(a, OcpProxy):
+                    conv.append(a._ref)
+                elif isinstance(a, (list, tuple)):
+                    deep = True
+                    break
+                else:
+                    conv.append(a)
+            if not deep:
+                r = _OCP_STATIC_V(self._cls, self._name, *conv)
+                if r is _ERRMARK:
+                    _fail(str(_rawjs._csLastErr))
+                return wrap(r)
         try:
             r = w._csOcpStatic(self._cls, self._name,
                                [_unwrap(a) for a in args], _unwrap_kw(kwargs))

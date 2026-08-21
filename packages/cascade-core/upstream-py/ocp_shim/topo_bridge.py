@@ -56,16 +56,27 @@ if not hasattr(_it, 'groupby'):
 import browser as _brmod
 
 
+_ERRMARK = getattr(_brmod._js, '_CS_ERRMARK', None)
+
+
 def _fn_call(self, *args):
     conv = []
+    deep = False
     for a in args:
         r = getattr(a, '_ref', None)
         if r is not None:
             conv.append(r)
         elif isinstance(a, (list, tuple)):
+            deep = True
             conv.append([getattr(x, '_ref', x) for x in a])
         else:
             conv.append(a)
+    if not deep and _ERRMARK is not None:
+        # variadic fast path: no temporary list through the proxy registry
+        r = _brmod._js._csMpCallV(self._name, *conv)
+        if r is _ERRMARK:
+            raise _brmod._CsWorkerError(str(_brmod._js._csLastErr))
+        return r
     res = _brmod.jsffi.to_js(conv)
     r = _brmod._js._csMpCall(self._name, res)
     if r.ok:

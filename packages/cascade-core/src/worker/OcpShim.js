@@ -1048,6 +1048,35 @@ export function installOcpShim(self, table) {
     return null;
   };
 
+  // ---- guarded VARIADIC entries (the ocp_core fast path) --------------- //
+  // Python calls these DIRECTLY on the jsworker module (no _Fn/_csMpCall
+  // envelope, no jsffi.to_js list registration): scalar/JsProxy args cross
+  // individually, errors return the sentinel + set _csLastErr (read only on
+  // the error path). ocp_core falls back to the classic entries for kwargs
+  // and container args.
+  const errText = (e) => {
+    if (typeof e === 'number' && self.describeOCCTException) {
+      return 'INTERNAL OPENCASCADE ERROR: ' + self.describeOCCTException(e);
+    }
+    return (e && e.message) ? String(e.message) : String(e);
+  };
+  if (!self._CS_ERRMARK) { self._CS_ERRMARK = { _csErrMark: true }; }
+  self._csOcpNewV = function (cls, ...args) {
+    try {
+      return self._csOcpNew(cls, args, null);
+    } catch (e) { self._csLastErr = errText(e); return self._CS_ERRMARK; }
+  };
+  self._csOcpCallVar = function (ref, name, ...args) {
+    try {
+      return self._csOcpCall(ref, name, args, null);
+    } catch (e) { self._csLastErr = errText(e); return self._CS_ERRMARK; }
+  };
+  self._csOcpStaticV = function (cls, name, ...args) {
+    try {
+      return self._csOcpStatic(cls, name, args, null);
+    } catch (e) { self._csLastErr = errText(e); return self._CS_ERRMARK; }
+  };
+
   self._csOcpEnum = function (en, member) {
     const e = oc[en];
     if (!e || e[member] === undefined) {
@@ -1056,15 +1085,28 @@ export function installOcpShim(self, table) {
     return e[member];
   };
 
+  // NOTE: these four are called DIRECTLY from Python (no guarded envelope)
+  // on the fast path, so they must never throw — a JS exception crossing
+  // the FFI raw would unwind the MicroPython VM uncatchably.
   self._csOcpKind = function (v) {
-    if (Array.isArray(v)) { return 'array'; }
-    if (isEmbind(v)) { return normCls(v.constructor.name); }
-    return 'plain';
+    try {
+      if (Array.isArray(v)) { return 'array'; }
+      if (isEmbind(v)) { return normCls(v.constructor.name); }
+      return 'plain';
+    } catch (e) { return 'plain'; }
   };
   self._csOcpParent = function (name) {
     const t = tableClass(name);
     return (t && t.parent) || null;
   };
-  self._csOcpItem = function (v, i) { return deref(v[i]); };
-  self._csOcpLen = function (v) { return v.length; };
+  self._csOcpItem = function (v, i) {
+    try {
+      return deref(v[i]);
+    } catch (e) { self._csLastErr = errText(e); return self._CS_ERRMARK; }
+  };
+  self._csOcpLen = function (v) {
+    try {
+      return v.length;
+    } catch (e) { return 0; }
+  };
 }

@@ -59,20 +59,25 @@ Build123dLite.js, so the stock artifacts keep working):
   `__mro_entries__`, metaclass `__instancecheck__`/`__subclasscheck__`,
   metaclass data descriptors intercepting class-attribute stores.
 
-9. **micropython.mjs (JS glue) hot-fix — integral-double truncation**
-   (applied DIRECTLY to the vendored artifact, no wasm rebuild: the bug is
-   in the JS-side `proxy_convert_js_to_mp_obj_jsside_helper`). Upstream
-   jsffi converts any JS number with `Number.isInteger(x)` through the
-   i32 path, so integral doubles ≥ 2^31 crossed into Python WRAPPED
-   (1e15 → -1530494976) and huge integral doubles as 0 (1e100 → 0 — which
-   silently degeneratd OCCT's ±Precision::Infinite parameter ranges,
-   found via upstream `Edge(Axis)` in Stage 3). The patch adds an int32
-   range check so out-of-range integral numbers take the DOUBLE path
-   (CPython/Pyodide semantics: they arrive as Python floats).
-   One-string edit, greppable:
-   `Number.isInteger(js_obj)&&js_obj>=-2147483648&&js_obj<=2147483647`.
-   Carry this patch forward on the next interpreter rebuild (or land it in
-   the micropython-cs source tree as a proper patch).
+9. `83f15505d` **ports/webassembly: Convert out-of-int32 integral JS
+   numbers as floats.** Upstream jsffi converts any JS number with
+   `Number.isInteger(x)` through the i32 proxy kind, so integral doubles
+   ≥ 2^31 crossed into Python WRAPPED (1e15 → -1530494976) and huge
+   integral doubles as 0 (1e100 → 0 — which silently degenerated OCCT's
+   ±Precision::Infinite parameter ranges, found via upstream `Edge(Axis)`
+   in Stage 3). Out-of-int32 integral numbers now take the DOUBLE path
+   (CPython/Pyodide semantics). Test: tests/ports/webassembly/
+   int_large.mjs. (First shipped as a hand-edit of the vendored artifact;
+   these artifacts are now built from the source commit.)
+10. `7f63764e9` **ports/webassembly: Append JSFLAGS_EXTRA to JSFLAGS.**
+   Build-machinery only (profiling builds pass --profiling-funcs without
+   overriding the port's required link flags).
+
+Measured and NOT adopted (2026-08-21 Stage-3 perf round):
+`-DMICROPY_OPT_COMPUTED_GOTO=1` (~4% on the b01 hot loop, br_table gains
+are small in wasm engines) and `-O3` over `-Os` (~3% more, +18% wasm
+size). The real hot-loop win was BRIDGE-protocol work in the app tree
+(the variadic no-proxy fast path — b01 148 s → 18 s), not codegen.
 
 ## Build command
 
@@ -110,4 +115,4 @@ Notes:
 
 MicroPython is MIT-licensed (Copyright (c) 2013-2025 Damien P. George and
 contributors); these artifacts are compiled from the base release plus the
-eight patches above and are redistributed under the same MIT license.
+patches above and are redistributed under the same MIT license.

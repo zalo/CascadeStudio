@@ -59,9 +59,13 @@ try {
 
 // ---- MicroPython (pysrc=upstream, pytopo=upstream) --------------------- //
 self._csPyTopo = process.env.CS_PYTOPO || 'upstream';
+// CS_MP_MJS/CS_MP_WASM point the poc at an EXPERIMENTAL interpreter build
+// (perf A/B without re-vendoring)
 self._csMicroPythonLocate = {
-  mjsURL: join(ROOT, 'packages', 'cascade-core', 'vendor', 'micropython-cs', 'micropython.mjs'),
-  wasmURL: join(ROOT, 'packages', 'cascade-core', 'vendor', 'micropython-cs', 'micropython.wasm'),
+  mjsURL: process.env.CS_MP_MJS ||
+    join(ROOT, 'packages', 'cascade-core', 'vendor', 'micropython-cs', 'micropython.mjs'),
+  wasmURL: process.env.CS_MP_WASM ||
+    join(ROOT, 'packages', 'cascade-core', 'vendor', 'micropython-cs', 'micropython.wasm'),
   kind: 'custom',
 };
 self._csUpstreamFetchText = async (rel) => {

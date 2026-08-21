@@ -670,15 +670,36 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       '    s = str(s)',
       '    return s + fill * max(0, n - len(s))',
       '_cs_bi2._cs_ljust = _cs_ljust',
-      // insertion-ordered dict helpers (MicroPython dicts are unordered;
-      // see the _topods_entities / dict.fromkeys transforms)
-      'from collections import OrderedDict as _CsOD',
-      '_cs_bi2._cs_odict = _CsOD',
+      // insertion-ordered dedup helpers (MicroPython dicts are unordered;
+      // see the _topods_entities / dict.fromkeys transforms). NOT
+      // collections.OrderedDict: MicroPython implements ordered maps with
+      // LINEAR lookup, which turned every faces()/edges() dedup into
+      // O(n^2) mp_map_lookup+mp_obj_equal (27%+15% of b01's profile).
+      // A plain (hash-bucketed) dict keyed on the value plus an insertion-
+      // order list gives O(1) inserts with the same semantics.
+      'class _CsOrderedStore:',
+      '    def __init__(self):',
+      '        self._d = {}',
+      '        self._vals = []',
+      '    def __setitem__(self, k, v):',
+      '        d = self._d',
+      '        i = d.get(k, -1)',
+      '        if i >= 0:',
+      '            self._vals[i] = v',
+      '        else:',
+      '            d[k] = len(self._vals)',
+      '            self._vals.append(v)',
+      '    def values(self):',
+      '        return self._vals',
+      '_cs_bi2._cs_odict = _CsOrderedStore',
       'def _cs_ordered_fromkeys(seq, value=None):',
-      '    d = _CsOD()',
+      '    seen = {}',
+      '    out = []',
       '    for k in seq:',
-      '        d[k] = value',
-      '    return d',
+      '        if k not in seen:',
+      '            seen[k] = True',
+      '            out.append(k)',
+      '    return out',
       '_cs_bi2._cs_ordered_fromkeys = _cs_ordered_fromkeys',
     ].join('\n'));
 
