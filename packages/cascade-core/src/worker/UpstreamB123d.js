@@ -309,15 +309,17 @@ export function rewriteListConcatCoercion(src) {
     }
     if (j >= src.length) { out += src[i++]; continue; }
     const display = src.slice(i, j + 1);
-    const rest = src.slice(j + 1);
-    const m = rest.match(/^ \+ ([A-Za-z_][\w.]*(?:\((?:[^()]|\([^()]*\))*\))*)/);
-    // only when the term ends the expression (not followed by [ or ( or .)
-    if (m && !/^[[(.\w]/.test(rest.slice(m[0].length))) {
-      out += display + ' + list(' + m[1] + ')';
-      i = j + 1 + m[0].length;
-    } else {
-      out += display;
-      i = j + 1;
+    out += display;
+    i = j + 1;
+    // wrap EVERY chained `+ term` (the first list() result is a plain list
+    // again, so `[a] + g.group(6) + g.group(5)` needs both terms coerced)
+    for (;;) {
+      const rest = src.slice(i);
+      const m = rest.match(/^ \+ ([A-Za-z_][\w.]*(?:\((?:[^()]|\([^()]*\))*\))*)/);
+      // only when the term ends there (not followed by [ ( . or word chars)
+      if (!m || /^[[(.\w]/.test(rest.slice(m[0].length))) { break; }
+      out += ' + list(' + m[1] + ')';
+      i += m[0].length;
     }
   }
   return out;
@@ -370,6 +372,13 @@ export function transformUpstreamSource(name, src, opts) {
   // ... and the DYNAMIC-spec form ({self.position:{spec}} inside the
   // geometry __format__ implementations)
   out = out.replace(/\{([^{}:]+):\{(\w+)\}\}/g, '{_cs_format($1, $2)}');
+  // MicroPython str has no ljust (shape_core._show_tree): f-string and
+  // dotted-name receivers become _cs_ljust(recv, ...) builtins calls
+  out = out.replace(/(f"[^"\n]*")\.ljust\(/g, '_cs_ljust($1, ');
+  out = out.replace(/([\w.]+)\.ljust\(/g, '_cs_ljust($1, ');
+  // MicroPython's collections.deque REQUIRES (iterable, maxlen); give the
+  // zero-arg form an unbounded backing (topo_distance_to's BFS frontier)
+  out = out.replace(/= deque\(\)/g, '= deque((), 4096)');
   // MicroPython sys has no float_info and sys is read-only (two_d uses .max)
   out = out.replace(/\bsys\.float_info\.max\b/g, '1.7976931348623157e+308');
   out = out.replace(/\bsys\.float_info\.epsilon\b/g, '2.220446049250313e-16');
@@ -656,6 +665,11 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       '    format',
       'except NameError:',
       '    _cs_bi2.format = _cs_format',
+      // str.ljust stand-in (MicroPython lacks it; _show_tree)
+      'def _cs_ljust(s, n, fill=" "):',
+      '    s = str(s)',
+      '    return s + fill * max(0, n - len(s))',
+      '_cs_bi2._cs_ljust = _cs_ljust',
       // insertion-ordered dict helpers (MicroPython dicts are unordered;
       // see the _topods_entities / dict.fromkeys transforms)
       'from collections import OrderedDict as _CsOD',

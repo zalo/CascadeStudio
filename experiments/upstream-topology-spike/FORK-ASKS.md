@@ -59,3 +59,19 @@ Every item is the same kind of small hand-registration as previous rounds
 Already covered, no ask: `Bnd_Box.Get` (CornerMin/Max glue),
 `GeomAPI_ProjectPointOnSurf.*` (existing OCJS_Out helpers), the whole
 Geom2dGcc Tangency family (existing helpers).
+
+## Stage-3 addendum (full upstream topology; each currently served by shim glue)
+
+Found while running geometry.py + the WHOLE topology package verbatim. All
+are glued/worked around in OcpShim.js (grep `fork ask` / COMPROMISE), so
+these are quality-of-life bindings, not blockers:
+
+| Ask | Blocked/glued feature | Current workaround |
+|---|---|---|
+| `Quantity_Color` class registration (SKIP its `NCollection_Vec3` ctor — that is what dropped the whole class) | geometry `Color` | COMPROMISE(quantity-color): plain-JS rgb stand-in + `Quantity_ColorRGBA_5`; `GetRGB` serves tracked channels; `ColorFromName` -> False (webcolors shim covers CSS3) |
+| `BOPAlgo_Options::SetFuzzyValue` / `SetNonDestructive` (+`SetRunParallel` for completeness) | upstream `Compound.__add__` fuses with fuzzy 1e-6; `Shape.fuse(tol=)` | COMPROMISE(fuzzy-value): no-ops — booleans run at default precision |
+| `Geom_ToroidalSurface`, `Geom_SphericalSurface`, `Geom_SurfaceOfRevolution` registrations | `Face.axis_of_rotation`, `is_circular_convex/concave` (embind polymorphic downcast lands on base `Geom_Surface`) | GLUE via `GeomAdaptor_Surface` (Torus/Position/Axis/Radius accessors) |
+| `TopTools_IndexedDataMapOfShapeListOfShape::Extent` (or `Size`) | `topo_distance_to` peer counting | GLUE counts by `FindKey` probing |
+| `ShapeAnalysis_FreeBounds::ConnectEdgesToWires` 4-arg out-HANDLE form semantics | `Wire.combine` / `edges_to_wires` (the out-handle is REASSIGNED in C++; embind passes a copy) | GLUE routes the returning overload and Appends into the caller's sequence |
+| `gp_Quaternion::GetEulerAngles` OCJS_Out helper | `Location.orientation` / `to_tuple` | JS matrix extraction (Intrinsic_XYZ only; SetEulerAngles round-trips exact) |
+| `TopTools_ListOfShape` per-index access or iterator | pybind iterates lists (`FindFromKey` results) | destructive First/RemoveFirst read with append-back restore |

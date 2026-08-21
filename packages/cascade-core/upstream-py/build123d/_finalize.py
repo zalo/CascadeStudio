@@ -81,9 +81,26 @@ if _PYTOPO == 'upstream':
                   'export_gltf', 'export_brep', 'import_brep', 'import_step',
                   'Mesher', '_cs_after_run'):
         setattr(_pkg, _name, getattr(_glue, _name))
-    for _name in ('ExportSVG', 'polar', 'delta', 'ArrowHead'):
+    for _name in ('ExportSVG', 'polar', 'delta'):
         if not hasattr(_pkg, _name) and hasattr(_lt, _name):
             setattr(_pkg, _name, getattr(_lt, _name))
+
+    # lite's ArrowHead (drafting) computed lite-side, adopted as an UPSTREAM
+    # Sketch (so Pos * head / .moved() work); enum kwargs translate by name
+    def _cs_arrowhead(size, head_type=None, rotation=0, mode=None):
+        import topo_glue as _g
+        ht = _lt.HeadType.CURVED if head_type is None else \
+            getattr(_lt.HeadType, getattr(head_type, 'name', ''), head_type)
+        res = _lt.ArrowHead(size, head_type=ht, rotation=rotation,
+                            mode=_lt.Mode.PRIVATE)
+        head = _g._from_raw(_lt._topo(res), _topology.Sketch)
+        ctx = _common.Builder._current.get(None)
+        if ctx is not None:
+            ctx._add_to_context(
+                head, mode=mode if mode is not None else _enums.Mode.ADD)
+        return head
+
+    _pkg.ArrowHead = _cs_arrowhead
 else:
     for _name in ('show', 'show_object', 'show_all', 'volume',
                   '_measure_globals_json', 'export_stl', 'export_step',

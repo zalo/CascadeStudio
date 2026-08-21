@@ -54,15 +54,23 @@ def _cs_attach_collection_protocols():
         cls = getattr(_reg, name, None)
         if cls is not None:
             cls.__call__ = _c._map_call
-    # pybind hasher functor: hasher(shape) -> int (topo_distance_to's
-    # peer lookup); serve through the same OCCT HashCode the proxies hash by
-    hasher = getattr(_reg, 'TopTools_ShapeMapHasher', None)
-    if hasher is not None:
-        def _hasher_call(self, s):
+    # pybind hasher functor: hasher(shape) -> int (topo_distance_to's peer
+    # lookup). MicroPython does not honor a POST-HOC class __call__ attach,
+    # so REBIND the name in the importing module to a Python functor class
+    # (same OCCT HashCode the proxies hash by).
+    class _CsShapeHasher:
+        def __init__(self, *a, **k):
+            pass
+
+        def __call__(self, s):
             raw = getattr(s, '_ref', s)
             h = w._csOcpHashCode(raw)
             return id(s) if h is None else int(h)
-        hasher.__call__ = _hasher_call
+
+    for _mod_name in ('build123d.topology.shape_core',):
+        _m = sys.modules.get(_mod_name)
+        if _m is not None and hasattr(_m, 'TopTools_ShapeMapHasher'):
+            _m.TopTools_ShapeMapHasher = _CsShapeHasher
 
 
 _cs_attach_collection_protocols()

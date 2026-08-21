@@ -39,6 +39,24 @@ self.GUIState = {};  // worker page state (Cache? off in node)
 self.standardLibrary = new CascadeStudioStandardLibrary();
 console.log('[poc] StandardLibrary attached');
 
+// ---- fonts (lite Text path; browser loads them in CascadeWorker) ------- //
+try {
+  const otMod = await import(join(ROOT, 'node_modules', 'opentype.js', 'dist', 'opentype.module.js'));
+  const opentype = otMod.default;
+  self.loadedFonts = {};
+  self.fontKernPairs = {};
+  const fontDir = join(ROOT, 'packages', 'cascade-core', 'fonts');
+  for (const f of fs.readdirSync(fontDir).filter((n) => n.endsWith('.ttf'))) {
+    const buf = fs.readFileSync(join(fontDir, f));
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    self.loadedFonts[f.replace('.ttf', '')] = opentype.parse(ab);
+    self.fontKernPairs[f.replace('.ttf', '')] = new Map();
+  }
+  console.log('[poc] fonts loaded: ' + Object.keys(self.loadedFonts).join(', '));
+} catch (e) {
+  console.log('[poc] fonts unavailable: ' + (e && e.message));
+}
+
 // ---- MicroPython (pysrc=upstream, pytopo=upstream) --------------------- //
 self._csPyTopo = process.env.CS_PYTOPO || 'upstream';
 self._csMicroPythonLocate = {
