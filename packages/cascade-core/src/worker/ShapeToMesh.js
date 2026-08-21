@@ -96,20 +96,52 @@ class CascadeStudioMesher {
       // Set up the Incremental Mesh builder, with a precision
       const _mark = (l) => {
         try {
+          if (self._csMemMark) { self._csMemMark(l); return; }
           if (!self._csMemSamples) { self._csMemSamples = []; }
           self._csMemSamples.push([l, self.ocMemory ? self.ocMemory.buffer.byteLength : 0]);
         } catch (e) { /* diagnostics */ }
       };
-      let mesher = new oc.BRepMesh_IncrementalMesh_2(shape, maxDeviation, false, maxDeviation * 5, false);
-      _mark('mesh-tri-done');
       const _del = CascadeStudioMesher._del;
+
+      // STREAMING MESHER: decompose compounds into their immediate children
+      // (recursively) and mesh → extract ONE chunk at a time, constructing
+      // and deleting the BRepMesh_IncrementalMesh algo per chunk. The
+      // kernel's internal meshing peak (measured: the ENTIRE ~140 MB
+      // heavy-model mesh transient sits inside the ctor; extraction adds
+      // zero high-water) then scales with the LARGEST chunk instead of the
+      // whole scene. TopoDS_Iterator visits children in insertion order —
+      // the same order TopExp_Explorer sweeps them — so facelist/edgeList
+      // emission (and the pick → line payload) is identical to
+      // whole-compound meshing. Triangulations stay ATTACHED until the
+      // single BRepTools.Clean at the end: a subshape shared by two chunks
+      // (e.g. General-Fuse contact faces) is meshed once and REUSED by the
+      // later chunk's algo, exactly like the old whole-compound pass — a
+      // per-chunk Clean would re-mesh it against only its own chunk and
+      // could change the tessellation. Non-compound inputs are one chunk.
+      const chunks = [];
+      const explode = (s, owned, depth) => {
+        if (depth < 8 && s.ShapeType().value === 0 /* TopAbs_COMPOUND */) {
+          const it = new oc.TopoDS_Iterator_2(s, true, true);
+          for (; it.More(); it.Next()) { explode(it.Value(), true, depth + 1); }
+          _del(it);
+          if (owned) { _del(s); }
+        } else {
+          chunks.push({ shape: s, owned: owned });
+        }
+      };
+      if (self._csMeshWhole) { chunks.push({ shape: shape, owned: false }); }
+      else { explode(shape, false, 0); }
 
       // Construct the edge hashes to assign proper indices to the edges
       let fullShapeEdgeHashes2 = {};
 
-      // Iterate through the faces and triangulate each one
       let triangulations = []; let uv_boxes = []; let curFace = 0;
-      CascadeStudioMesher.forEachFace(shape, (faceIndex, myFace) => {
+      for (let chunkInd = 0; chunkInd < chunks.length; chunkInd++) {
+      const chunkShape = chunks[chunkInd].shape;
+      let mesher = new oc.BRepMesh_IncrementalMesh_2(chunkShape, maxDeviation, false, maxDeviation * 5, false);
+
+      // Iterate through the faces and triangulate each one
+      CascadeStudioMesher.forEachFace(chunkShape, (faceIndex, myFace) => {
         let aLocation = new oc.TopLoc_Location_1();
         let myT = oc.BRep_Tool.Triangulation(myFace, aLocation, 0 /* Poly_MeshPurpose_NONE */);
         if (myT.IsNull()) { console.error("Encountered Null Face!"); for (let k in self.argCache) delete self.argCache[k]; _del(myT, aLocation); return; }
@@ -278,6 +310,16 @@ class CascadeStudioMesher {
         _del(faceTrsf, aLocation);
       });
 
+      // The incremental-mesh algo (and its internal model) dies with the
+      // chunk; the triangulations it attached to the TShapes stay for
+      // extraction reuse and are detached by the single Clean below.
+      _del(mesher);
+      if (self._csMemPerChunkMarks) {
+        _mark('mesh-chunk-' + (chunkInd + 1) + '/' + chunks.length + '-done');
+      }
+      } // end of chunk loop
+      _mark('mesh-tri-done');
+
       // Scale each face's UVs to Worldspace and pack them into a 0-1 Atlas with potpack
       let padding = 2;
       for (let f = 0; f < uv_boxes.length; f++) { uv_boxes[f].w += padding; uv_boxes[f].h += padding; }
@@ -297,6 +339,31 @@ class CascadeStudioMesher {
         }
       }
 
+      // Attribution census: how much wasm-side Poly_Triangulation data the
+      // extracted mesh represents (nodes: gp_Pnt 24B + UV 16B + normal 12B;
+      // triangles: 12B), plus the JS-side extraction-array footprint.
+      try {
+        if (self._csMemSamples) {
+          let nodes = 0, tris = 0, jsDoubles = 0;
+          for (const f of facelist) {
+            nodes += f.vertex_coord.length / 3; tris += f.number_of_triangles;
+            jsDoubles += f.vertex_coord.length + f.uv_coord.length +
+                         f.normal_coord.length + f.tri_indexes.length;
+          }
+          for (const e of edgeList) { jsDoubles += e.vertex_coord.length; }
+          // Chunk decomposition census: per-chunk face counts.
+          let chunkFaces = [];
+          const countFaces = (s) => { let n = 0; CascadeStudioMesher.forEachFace(s, () => n++); return n; };
+          for (const c of chunks) { chunkFaces.push(countFaces(c.shape)); }
+          chunkFaces.sort((a, b) => b - a);
+          _mark('mesh-census faces=' + facelist.length + ' nodes=' + nodes +
+            ' tris=' + tris + ' triWasmMB=' +
+            ((nodes * 52 + tris * 12) / 1048576).toFixed(1) +
+            ' jsArrMB=' + ((jsDoubles * 8) / 1048576).toFixed(1) +
+            ' chunks=' + chunkFaces.length +
+            ' topChunkFaces=' + chunkFaces.slice(0, 5).join('/'));
+        }
+      } catch (e) { /* diagnostics */ }
       _mark('mesh-faces-done');
       // Release the triangulations now that the buffers are extracted.
       // Nullify() only clears OUR handle copies — the TShapes keep theirs, so
@@ -317,6 +384,7 @@ class CascadeStudioMesher {
         try { (oc.BRepTools.Clean_1 || oc.BRepTools.Clean).call(oc.BRepTools, shape); }
         catch (e2) { /* keep going: Clean is an optimization */ }
       }
+      _mark('mesh-clean-done');
 
       // Get the free edges that aren't on any triangulated face/surface
       CascadeStudioMesher.forEachEdge(shape, (index, myEdge) => {
@@ -348,7 +416,10 @@ class CascadeStudioMesher {
           edgeList.push(this_edge);
         }
       });
-      _del(mesher);
+      // Release the owned per-chunk shape copies (the iterator Values).
+      for (const c of chunks) { if (c.owned) { _del(c.shape); } }
+      chunks.length = 0;
+      _mark('mesh-edges-done');
 
     } catch (err) {
       setTimeout(() => {

@@ -38,6 +38,9 @@ class CascadeStudioWorker {
     self.messageHandlers["combineAndRenderShapes"] = this.combineAndRenderShapes.bind(this);
     self.messageHandlers["meshHistoryStep"] = this.meshHistoryStep.bind(this);
     self.messageHandlers["memoryStats"] = this.memoryStats.bind(this);
+    // Shared labeled-memory-mark helper (mesh-phase attribution probes use
+    // it from ShapeToMesh; includes the optional free-space census).
+    self._csMemMark = CascadeStudioWorker._memMark;
   }
 
   /** Worker-side memory footprint, split by owner. Used by the Python

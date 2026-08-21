@@ -3,19 +3,22 @@ import { readFileSync } from 'node:fs';
 const manifest = JSON.parse(readFileSync('test/b123d-validation/manifest-all.json', 'utf8'));
 const HEAVY = manifest.find((e) => e.id === 'examples/heat_exchanger').code;
 const N = parseInt(process.argv[2] || '2', 10);
+const PORT = parseInt(process.env.CS_TEST_PORT || '8441', 10);
+const QUERY = process.env.CS_QUERY || 'mode=python&pyruntime=pyodide&pysrc=real';
 async function main() {
   const browser = await chromium.launch({ headless: !process.env.CS_TEST_HEADFUL,
     args: ['--use-gl=angle', '--use-angle=swiftshader'] });
   const page = await (await browser.newContext()).newPage();
   page.on('pageerror', () => {});
-  await page.goto('http://localhost:8441/?mode=python&pyruntime=pyodide&pysrc=real', { timeout: 60000 });
+  await page.goto(`http://localhost:${PORT}/?${QUERY}`, { timeout: 60000 });
   await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(), undefined, { timeout: 90000 });
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(), undefined, { timeout: 300000 });
-  await page.evaluate(async () => {
+  const FREE_PROBE = process.env.CS_FREE_PROBE === '1';
+  await page.evaluate(async (fp) => {
     window.CascadeAPI.setMode('cascadestudio');
-    await window.CascadeAPI.runCode('self._csMemFreeProbe=1; Box(1,1,1);');
+    await window.CascadeAPI.runCode((fp ? 'self._csMemFreeProbe=1; ' : '') + 'Box(1,1,1);');
     window.CascadeAPI.setMode('python');
-  });
+  }, FREE_PROBE);
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(), undefined, { timeout: 60000 });
   const TRIVIAL = 'from build123d import *\nb = Box(1, 1, 1)\nshow(b)\n';
   const seq = process.argv[3] === 'interleave' ? [HEAVY, TRIVIAL, HEAVY] : Array(N).fill(HEAVY);
