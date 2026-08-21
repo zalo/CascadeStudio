@@ -125,10 +125,11 @@ mattered, each measured in this bring-up:
 2. The guarded `{ok,value}` protocol collapsed to **direct calls with
    try/except JsException** on the deep path (kwargs/containers), with raw
    OCCT wasm-number decode via `describeOCCTException`. The variadic guarded
-   entries (`_csOcpNewV`/...) stay as the fast path — not for GC pressure
-   (Pyodide's `to_js` is cheap) but because they already decode OCCT
-   numbers; their sentinel is detected by its `_csErrMark` property (`is`
-   cannot work across conversions).
+   entries (`_csOcpNewV`/...) stay as the fast path — MEASURED at only
+   ~8-10% on the 54-hole grid (fast 492/617 ms vs deep-forced 548/663 ms:
+   Pyodide's `to_js` is cheap, unlike MicroPython's proxy registry), kept
+   because they also own the OCCT-number decode; their sentinel is detected
+   by its `_csErrMark` property (`is` cannot work across conversions).
 3. numpy scalars reaching the FFI coerce through `float()`
    (`numbers.Real`) — Pyodide would otherwise proxy them into JS where
    embind refuses them.
