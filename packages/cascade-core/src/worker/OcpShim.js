@@ -133,6 +133,22 @@ export function installOcpShim(self, table) {
     try { if (a && a.$$ !== undefined) { a._csHandled = 1; } } catch (e) { /* frozen */ }
     return a;
   };
+  // A handle wrapped around a PYTHON-OWNED raw transient is that object's
+  // ONLY refcount (raw ctors start at 0, and callees may COPY the curve
+  // instead of retaining the handle — Geom2d_TrimmedCurve does; measured:
+  // deleting the wrap-handle destroyed the user's circle). So wrap-handles
+  // ride on the raw and are released only when the raw's Python proxy dies.
+  const attachArgHandle = (a, h) => {
+    try {
+      if (a && a.$$ !== undefined) {
+        a._csHandled = 1;
+        (a._csArgH = a._csArgH || []).push(h);
+        return h;
+      }
+    } catch (e) { /* frozen raw */ }
+    keepAlive.push(h);
+    return h;
+  };
   const flushFrees = () => {
     if (!freeQueue.length) { return; }
     const protect = pinnedOps.size ? new Set(pinnedOps) : new Set();
@@ -154,6 +170,15 @@ export function installOcpShim(self, table) {
         if (h) {                                      // OWNING handle instead
           v._csOwnH = null;
           if (h.$$ && h.$$.ptr) { noteFreed(h); h.delete(); stats.freed++; }
+        }
+        const argH = v._csArgH;                       // arg-wrap handles: the
+        if (argH) {                                   // raw's only refcounts
+          v._csArgH = null;
+          for (const ah of argH) {
+            try {
+              if (ah.$$ && ah.$$.ptr) { noteFreed(ah); ah.delete(); stats.freed++; }
+            } catch (e2) { /* skip */ }
+          }
         }
         const cls = normCls(String(v.constructor.name));
         if (!canDelete(v, cls)) { continue; }
@@ -331,9 +356,7 @@ export function installOcpShim(self, table) {
       const H = oc[handleName + suffix];
       if (!H) { continue; }
       try {
-        const h = scratchNote(note(new H(a), 'int:'));
-        markHandled(a);
-        return h;
+        return attachArgHandle(a, note(new H(a), 'int:'));
       } catch (e) { /* next */ }
     }
     return null;
@@ -488,8 +511,7 @@ export function installOcpShim(self, table) {
         if (!H) { continue; }
         try {
           if (callArgs === args) { callArgs = args.slice(); }
-          callArgs[i] = scratchNote(note(new H(a), 'int:'));
-          markHandled(a);
+          callArgs[i] = attachArgHandle(a, note(new H(a), 'int:'));
         } catch (e) { /* leave raw; embind will report */ }
       }
     }
@@ -690,8 +712,8 @@ export function installOcpShim(self, table) {
       let edges = args[0];
       if (isEmbind(edges) &&
           String(edges.constructor.name).lastIndexOf('Handle_', 0) !== 0) {
-        markHandled(edges);
-        edges = new oc.Handle_TopTools_HSequenceOfShape_2(edges);
+        edges = attachArgHandle(edges,
+          new oc.Handle_TopTools_HSequenceOfShape_2(edges));
       }
       const res = oc.ShapeAnalysis_FreeBounds.ConnectEdgesToWires_1(
         edges, args[1], args[2]);
@@ -1038,7 +1060,8 @@ export function installOcpShim(self, table) {
       }
       if (an === 'Geom_Line' || an === 'Handle_Geom_Line') {
         const h = an === 'Geom_Line'
-          ? new oc.Handle_Geom_Curve_2(markHandled(args[0])) : args[0];
+          ? attachArgHandle(args[0], new oc.Handle_Geom_Curve_2(args[0]))
+          : args[0];
         return new oc.BRepBuilderAPI_MakeEdge_25(h, -1e100, 1e100);
       }
     }

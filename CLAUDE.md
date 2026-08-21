@@ -381,6 +381,27 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   `CS_PY_SRC=real` switches run-lite.mjs/probe.mjs/bench-runtime.mjs
   (`--pysrc real`); ledger/benchmarks/state in
   `experiments/pyodide-real/STATE.md` + runtime-comparison.md §11.
+- **Heavy-model memory (2026-08-21, runtime-comparison.md §12)**: the OCP
+  shim now frees kernel objects DETERMINISTICALLY on the Pyodide legs —
+  every embind object returned to Python is retained (`_csPy`);
+  `OcpProxy.__del__` balances it and OcpShim.js deletes unreachable objects
+  at op boundaries (protection: sceneShapes/history/externalShapes/argCache/
+  fuse-guard pins; raw `Standard_Transient` wrappers only via an allow-list —
+  `Handle.get()` returns NON-owning aliases, so blanket raw-transient
+  deletion use-after-frees). `?ocplt=leak` opts back into the old behavior
+  for A/B. ShapeToMesh deletes its per-node wrapper copies and calls
+  `BRepTools.Clean` after extraction (Nullify never detached triangulations;
+  cached shapes therefore remesh on re-evaluation). heat_exchanger OCCT
+  high-water: lite legs 165.6 → **138 MB**, pysrc=real 286.3 → **238.5 MB**
+  (alive embind objects 265,598 → ~5.6k, eval time unchanged);
+  mp+upstream stays 286.3 (MicroPython has no `__del__`; its 556-612 MB GC
+  arena is a port-level grow-on-burst ratchet — gc.threshold is compiled
+  out, explicit collects verified ineffective; needs a micropython-cs
+  patch). **`?lowmem=1`** (or localStorage `cascade-low-memory`='1'): the
+  worker keeps history step METADATA but drops the per-step shape refs
+  (timeline scrubbing logs a console note instead) and deletes pruned
+  argCache entries' kernel objects at end-of-evaluation — bounds retention
+  for iterative editing; single-run numbers are unchanged.
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,

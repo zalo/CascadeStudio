@@ -595,3 +595,91 @@ Recommendation unchanged: Brython+lite stays the default (size), the
 MicroPython+upstream stack stays the fidelity flag-leg at 1/9th the
 pyodide+real download; `pysrc=real` is the semantics REFERENCE — the leg you
 run when you need to know whether a divergence is ours or upstream's.
+
+## 12. Heavy-model memory (2026-08-21): deterministic embind lifetime
+
+OCCT wasm linear memory never shrinks, so a page's `occtWasm` is the
+high-water mark of everything that ran in it; freed embind objects DO reuse
+within the arena, which is the only lever. Attribution on
+`examples/heat_exchanger` (the corpus's heaviest model) found the whole
+286-vs-165 MB upstream-vs-lite delta was **embind object lifetime**: nothing
+in the stack ever called `.delete()` (embind's FinalizationRegistry attaches
+only to smart-ptr handles, and this build registers none), so `pysrc=real`
+leaked **265,598 embind objects per run** — 159k TopoDS wrappers pinning
+BRep structures, 602 `BRepBuilderAPI_Copy`, 161
+`ShapeUpgrade_UnifySameDomain`, 4.1k `BRepAdaptor_Curve`, ~90k `gp_*` values
+(identical count on the MicroPython leg: the shim owns the leak, not the
+interpreter). Cache/history pinned nothing on the shim legs (argCache 0,
+1 history ref); on lite legs they pin 607 entries / 107k step refs — JS-side
+references only, relevant as the *protection set* for the frees below.
+
+**The fix (default-ON for the shim legs)**: every embind object the OCP shim
+returns to Python is retained (`_csPy`); `OcpProxy.__del__`
+(ocp_core_pyodide.py — CPython refcounting makes this prompt) balances it;
+frees are queued and deleted at op boundaries unless the worker still
+reaches them (sceneShapes / modelHistory / externalShapes / argCache /
+pinned fuse-guard operands). Raw `Standard_Transient` wrappers are deleted
+only for an allow-listed adaptor/algorithm family — `Handle.get()` returns a
+NON-owning alias (measured), so deleting arbitrary raw transients
+use-after-frees; deref'd raws carry their owning handle (`_csOwnH`) and the
+flush releases the handle instead. Internal dispatch temporaries (progress
+pads, default fills, handle conversions) die with the dispatch. Opt-out for
+A/B: `?ocplt=leak`.
+
+**Mesher fixes (all legs)**: `ShapeToMesh` now deletes its per-node/per-face
+wrapper copies (hundreds of thousands per heavy run), the iso curves,
+adaptors, explorers and the mesher itself, and calls **`BRepTools.Clean`
+after extraction** — the old `Nullify()` never detached triangulations from
+the TShapes, so argCache pinned every cached shape's mesh forever and a
+REMESH of a still-triangulated shape (e.g. a MeshRes change) leaked the old
+mesh wholesale (measured: six remeshes of one sphere ratcheted 286→697 MB
+without Clean, dead flat with it). The previous run's `currentShape`
+compound is deleted at evaluate start. Trade-off: cached shapes remesh on
+re-evaluation (heat_exchanger re-eval +3 s; typical models are ms).
+
+**Measured matrix** (fresh page per cell, `CascadeAPI._memoryStats().occtWasm`
+after the model, MB; python wasm in parens; starter = PYTHON_STARTER_CODE,
+grid = 54-hole plate, heavy = heat_exchanger):
+
+| leg | starter | grid | heavy (was) | heavy (now) |
+|---|---|---|---|---|
+| brython+lite | 32.0 | 32.0 | 165.6 | **138.0** |
+| micropython+lite | 32.0 (19.5) | 32.0 (19.5) | 165.6 | **138.0** (39) |
+| micropython+upstream (default) | 32.0 (19.5) | 32.0 (19.5) | 286.3 | **286.3** (612) — no `__del__` on MicroPython; only the shared mesher/scratch fixes apply |
+| pyodide+lite | 32.0 (43.3) | 32.0 (43.3) | 165.6 | **138.0** (43.3) |
+| **pyodide+real** | 32.0 (51.9) | 32.0 (51.9) | 286.3 | **238.5** (51.9) — alive wrappers 265,598 → ~5.6k, eval time unchanged |
+
+All numbers sit on emscripten's ×1.2 geometric-growth ladder (…, 138, 165,
+198, 238, 286, 343, …): true demand is somewhere below each rung, and any
+shortfall costs a whole rung. `?lowmem=1` (history metadata-only + delete
+pruned argCache entries) does not move the single-run heavy numbers — on the
+real leg history pinned ~nothing, on lite legs nothing deletes user-held
+shapes — its value is bounded history/cache retention for iterative editing
+sessions; timeline scrubbing degrades with a console note.
+
+**Where the remaining 238.5-vs-138 gap lives** (in-worker phase marks +
+free-space probes): evaluation itself ends at 95.8 MB (vs lite's 48 — real
+upstream stacks bigger kernel transients: the 149-edge fillet, the
+mirror-fuse, `clean`/UnifySameDomain), and the mesh phase adds ~100-140 MB
+on EVERY leg (the `BRepMesh_IncrementalMesh` constructor's internal peak —
+kernel-internal, deviation-driven, not wrapper leakage). Cross-run repeats
+of the SAME heavy model still ratchet ~85-100 MB/run (lite: ~35/run):
+allocator fragmentation + the growth ladder against the per-run ~140 MB mesh
+transient; free-space probes show the freed memory exists but each run's
+mesh crosses another rung. Bounded improvements landed (Clean bought one
+rung from run 3), the rest is documented as a known limitation.
+
+**MicroPython arena (556-612 MB churn / ~1 MB live)**: verified NOT fixable
+from Python — explicit `gc.collect()` every 8192 proxy creations runs
+(32×/heavy, counted) and changes nothing; `gc.threshold` is compiled out
+(8 MB and 256 KB settings byte-identical to default). The wasm port grows
+its split GC heap on allocation bursts between any collect cadence reachable
+from Python. Bounding it needs an interpreter patch (micropython-cs
+follow-up: enable MICROPY_GC_ALLOC_THRESHOLD or collect-before-grow).
+
+Gates for this round: fast specs green; pyodide+real harness, micropython
+default harness, pyodide+lite + Brython controls, and the full suite —
+recorded in experiments/heavy-memory/STATE.md. Reproduce any cell with
+`experiments/heavy-memory/measure.mjs`; phase attribution with
+`probe-marks.mjs` (in-worker eval/mesh marks + optional free-space census
+via `self._csMemFreeProbe`).
