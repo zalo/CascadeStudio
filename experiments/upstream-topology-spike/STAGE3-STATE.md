@@ -38,24 +38,15 @@ connect_to's in-place locate() didn't move the new wrapper), and flap
 armor (gp_* ctor failures -> Standard_ConstructionError BY SITE;
 StandardUtils.Remove tolerates raising property traps).
 
-## Phase 4 gates (2026-08-21, all on this tree)
+## Final gate battery (2026-08-21, post-flip, all on this tree)
 
-- pytopo=upstream harness (r9): **210 PASS / 2 MISMATCH / 3 ERROR /
-  7 TIMEOUT** (`/tmp/pytopo-up-r9.{json,md}` at run time; progression below).
-- pytopo=lite NEUTRALITY harness (micropython, pysrc=upstream default,
-  no CS_PY_TOPO): **205 / 10 / 5 / 2 — per-script IDENTICAL to the
-  committed upstream-Level-A baseline set** (MM: joints x2, projection x2,
-  filter_all_edges_circle, tips/b04, objects_1d, tutorial_joints,
-  bicycle_tire, ex08_algebra; E: objects_2d, dual_color_3mf, sm_hanger,
-  curved_support, Buffer_Stand; T: spitfire, heat_exchanger) — despite the
-  shared-layer changes (jsffi patch 9, enum None-members, deepcopy memo,
-  2-D ConvexHull, collections.abc lazy iterators).
-- Full playwright suite: **96 passed / 1 skipped**. Fast gate green incl.
-  the native-metaclass spec (Align.__members__ now includes NONE — the
-  CPython surface; expectation updated).
-- Gotcha fixed en route: the USED_OCCT_SYMBOLS generator scans RAW TEXT
-  (comments included) — deliberately-absent-symbol probes must use
-  indirect lookups (`oc['Quantity_' + 'Color_1']`).
+| leg | classification | per-script |
+|---|---|---|
+| DEFAULT (micropython, pytopo=upstream) | **216 / 2 / 3 / 1** | non-PASS = the documented honest gaps ONLY: objects_1d + tips/b04 (residual MM), dual_color_3mf (lib3mf) + objects_2d (drafting, lands on 'NameError: Draft') + curved_support (sympy), spitfire (gordon TIMEOUT) |
+| pytopo=lite (CS_PY_TOPO=lite) | 206 / 10 / 5 / 1 | per-script = the committed upstream-Level-A set exactly; heat_exchanger lands PASS-side of its documented flap (faster bridge) |
+| pysrc=lite | 206 / 10 / 5 / 1 | per-script IDENTICAL to the committed lite set |
+| Brython control | 206 / 10 / 5 / 1 | per-script IDENTICAL to the committed lite set |
+| full playwright suite | **96 passed / 1 skipped** | two spec updates were REQUIRED-AND-HONEST: Curve.length was a lite-only extension (REAL 0.11.1 raises AttributeError — verified in the ref venv) and bbox tuples print ints for in-int32 integral jsffi numbers |
 
 ## Flip decision (this run): DEFAULT STAYS pytopo=lite
 

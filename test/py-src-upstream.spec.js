@@ -38,7 +38,12 @@ test('pysrc=upstream runs upstream BuildLine/BuildPart over lite\'s seam', async
     '    Line((10, 0), (10, 10))',
     'res = l.line',
     'bb = res.bounding_box()',
-    'print("POC1", round(res.length, 6), tuple(bb.min), tuple(bb.max))',
+    // NOTE: not res.length — upstream 0.11.1's Curve(Compound) has NO
+    // .length (verified against the reference venv); that was a lite-only
+    // extension the pytopo=upstream default no longer papers over
+    // float() per component: upstream geometry hands back the raw jsffi
+    // numbers, and in-int32 integral doubles arrive as Python ints
+    'print("POC1", round(sum(e.length for e in res.edges()), 6), tuple(float(c) for c in bb.min), tuple(float(c) for c in bb.max))',
   ].join('\n'));
   expect(r1.errors).toEqual([]);
   await page.waitForFunction(
@@ -54,7 +59,7 @@ test('pysrc=upstream runs upstream BuildLine/BuildPart over lite\'s seam', async
     'with BuildPart() as p:',
     '    Box(5, 5, 5)',
     'bb = p.part.bounding_box()',
-    'print("POC2", round(p.part.volume, 6), tuple(bb.min), tuple(bb.max))',
+    'print("POC2", round(p.part.volume, 6), tuple(float(c) for c in bb.min), tuple(float(c) for c in bb.max))',
     'show(p.part)',
   ].join('\n'));
   expect(r2.errors).toEqual([]);

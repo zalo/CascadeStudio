@@ -1,0 +1,944 @@
+{
+ "examples/python_logo": {
+  "status": "SKIP",
+  "reason": "reference no-shapes"
+ },
+ "examples/tea_cup": {
+  "status": "SKIP",
+  "reason": "reference error"
+ },
+ "general_examples_algebra/ex10": {
+  "status": "SKIP",
+  "reason": "reference error"
+ },
+ "docs/constraint_examples": {
+  "status": "SKIP",
+  "reason": "reference error"
+ },
+ "docs/line_types": {
+  "status": "SKIP",
+  "reason": "reference no-shapes"
+ },
+ "docs/rigid_joints_pipe": {
+  "status": "SKIP",
+  "reason": "reference error"
+ },
+ "docs/rod_end": {
+  "status": "SKIP",
+  "reason": "reference error"
+ },
+ "docs/technical_drawing": {
+  "status": "SKIP",
+  "reason": "reference error"
+ },
+ "docs-objects/text": {
+  "status": "SKIP",
+  "reason": "reference error"
+ },
+ "docs-selectors/sort_distance_from": {
+  "status": "SKIP",
+  "reason": "reference error"
+ },
+ "examples/boxes_on_faces": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "examples/boxes_on_faces_algebra": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "examples/build123d_customizable_logo_algebra": {
+  "status": "PASS",
+  "shapes": 13
+ },
+ "examples/build123d_customizable_logo": {
+  "status": "PASS",
+  "shapes": 14
+ },
+ "examples/build123d_logo": {
+  "status": "PASS",
+  "shapes": 13
+ },
+ "examples/build123d_logo_algebra": {
+  "status": "PASS",
+  "shapes": 12
+ },
+ "examples/canadian_flag_algebra": {
+  "status": "PASS",
+  "shapes": 25
+ },
+ "examples/canadian_flag": {
+  "status": "PASS",
+  "shapes": 20
+ },
+ "examples/circuit_board": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "examples/circuit_board_algebra": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "examples/cast_bearing_unit": {
+  "status": "PASS",
+  "shapes": 10
+ },
+ "examples/clock_algebra": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "examples/custom_sketch_objects": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "examples/custom_sketch_objects_algebra": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "examples/din_rail": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "examples/din_rail_algebra": {
+  "status": "PASS",
+  "shapes": 41
+ },
+ "examples/dual_color_3mf": {
+  "status": "ERROR",
+  "gap": "NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf",
+  "errors": [
+   "Line 11850: Uncaught Error: Python NotImplementedError: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf\\nTraceback (most recent call last):\\n  File \\\"/lib/browser.py\\\", line 188, in _cs_run_user\\n  File \\\"main\\\", line 39, in <module>\\n  File \\\"/lib/_cs_shim_topo_glue.py\\\", line 333, in write\\nNotImplementedError: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf"
+  ]
+ },
+ "examples/extrude": {
+  "status": "PASS",
+  "shapes": 10
+ },
+ "examples/clock": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "examples/extrude_algebra": {
+  "status": "PASS",
+  "shapes": 35
+ },
+ "examples/handle": {
+  "status": "PASS",
+  "shapes": 10
+ },
+ "examples/handle_algebra": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "examples/fast_grid_holes": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "examples/bicycle_tire": {
+  "status": "PASS",
+  "shapes": 102
+ },
+ "examples/holes": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "examples/holes_algebra": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "examples/intersecting_chamfers": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "examples/intersecting_chamfers_algebra": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "examples/bracelet": {
+  "status": "PASS",
+  "shapes": 16
+ },
+ "examples/intersecting_pipes": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "examples/joints_algebra": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "examples/joints": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "examples/key_cap_algebra": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "examples/key_cap": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "examples/lego_algebra": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "examples/lego": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "examples/loft": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "examples/loft_algebra": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "examples/mixed_algebra_context": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "examples/multiple_workplanes": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "examples/multiple_workplanes_algebra": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "examples/heat_exchanger_algebra": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "examples/pegboard_j_hook": {
+  "status": "PASS",
+  "shapes": 10
+ },
+ "examples/pegboard_j_hook_algebra": {
+  "status": "PASS",
+  "shapes": 11
+ },
+ "examples/pillow_block": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "examples/pillow_block_algebra": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "examples/platonic_solids": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "examples/packed_boxes": {
+  "status": "PASS",
+  "shapes": 100
+ },
+ "examples/playing_cards": {
+  "status": "PASS",
+  "shapes": 14
+ },
+ "examples/maker_coin": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "examples/roller_coaster": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "examples/roller_coaster_algebra": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "examples/shamrock": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "examples/stud_wall": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "examples/tea_cup_algebra": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "examples/heat_exchanger": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "examples/twist_extrude": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "examples/vase": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "examples/projection": {
+  "status": "PASS",
+  "shapes": 16
+ },
+ "general_examples/ex01": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples/ex02": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples/ex03": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex08": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "examples/toy_truck": {
+  "status": "PASS",
+  "shapes": 13
+ },
+ "general_examples/ex09": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "examples/vase_algebra": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "general_examples/ex10": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples/ex12": {
+  "status": "PASS",
+  "shapes": 7
+ },
+ "general_examples/ex14": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "general_examples/ex13": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples/ex15": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "general_examples/ex11": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex17": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex18": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples/ex19": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "general_examples/ex20": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples/ex21": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex22": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex23": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "general_examples/ex24": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "general_examples/ex25": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "general_examples/ex26": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex16": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "general_examples/ex27": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex30": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "general_examples/ex28": {
+  "status": "PASS",
+  "shapes": 7
+ },
+ "general_examples/ex31": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex29": {
+  "status": "PASS",
+  "shapes": 7
+ },
+ "examples/projection_algebra": {
+  "status": "PASS",
+  "shapes": 16
+ },
+ "general_examples/ex32": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "general_examples/ex35": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "general_examples/ex33": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "general_examples/ex37": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex01": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples_algebra/ex02": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples_algebra/ex03": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex08": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "general_examples_algebra/ex09": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples/ex34": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "general_examples_algebra/ex12": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "general_examples_algebra/ex14": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "general_examples_algebra/ex13": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples_algebra/ex11": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex15": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "general_examples_algebra/ex17": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples/ex36": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "general_examples_algebra/ex18": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex19": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "general_examples_algebra/ex20": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex16": {
+  "status": "PASS",
+  "shapes": 10
+ },
+ "general_examples_algebra/ex21": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples_algebra/ex23": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "general_examples_algebra/ex22": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex26": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex25": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "general_examples_algebra/ex24": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex27": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex30": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "general_examples_algebra/ex31": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples_algebra/ex32": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "general_examples_algebra/ex33": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "general_examples_algebra/ex35": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "general_examples_algebra/ex28": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs/center": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "general_examples_algebra/ex29": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "general_examples_algebra/ex34": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs/objects_1d_airfoil": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs/objects_1d_blend_curve": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "docs/objects_1d_bspline": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs/objects_1d_constrained": {
+  "status": "PASS",
+  "shapes": 7
+ },
+ "docs/objects_1d_ellipticalstartarc": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "docs/objects_1d": {
+  "status": "MISMATCH",
+  "problems": [
+   "'scene' bbox[0] -0.1822 vs -0.1700 (d=0.0122)"
+  ]
+ },
+ "docs/objects_1d_parabolic_hyperbolic": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "general_examples_algebra/ex36": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs/pack_demo": {
+  "status": "PASS",
+  "shapes": 12
+ },
+ "docs/selector_example": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs/objects_3d": {
+  "status": "PASS",
+  "shapes": 10
+ },
+ "docs/objects_2d": {
+  "status": "ERROR",
+  "gap": "NameError: Draft",
+  "errors": [
+   "Line 11850: Uncaught Error: Python NameError: name 'Draft' isn't defined\\nTraceback (most recent call last):\\n  File \\\"/lib/browser.py\\\", line 188, in _cs_run_user\\n  File \\\"main\\\", line 196, in <module>\\nNameError: name 'Draft' isn't defined",
+   "Line 11854: Uncaught PythonError: AttributeError: 'tuple' object has no attribute 'IsNull'\\n"
+  ]
+ },
+ "docs/heart_token": {
+  "status": "PASS",
+  "shapes": 16
+ },
+ "docs-selectors/filter_all_edges_circle": {
+  "status": "PASS",
+  "shapes": 12
+ },
+ "docs-selectors/filter_axisplane": {
+  "status": "PASS",
+  "shapes": 13
+ },
+ "docs-selectors/filter_geomtype": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs/slide_latch": {
+  "status": "PASS",
+  "shapes": 7
+ },
+ "docs-selectors/filter_nested": {
+  "status": "PASS",
+  "shapes": 7
+ },
+ "docs-selectors/filter_inner_wire_count": {
+  "status": "PASS",
+  "shapes": 53
+ },
+ "docs-selectors/filter_shape_properties": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "docs-selectors/group_hole_area": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs/tutorial_joints": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "docs-selectors/selectors_operators": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "docs-selectors/sort_along_wire": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-selectors/sort_axis": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "docs-selectors/group_properties_with_keys": {
+  "status": "PASS",
+  "shapes": 10
+ },
+ "docs-selectors/sort_sortby": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "ttt/ttt-23-t-24-curved_support": {
+  "status": "ERROR",
+  "gap": "AttributeError: symbols",
+  "errors": [
+   "Line 11850: Uncaught Error: Python AttributeError: module '_cs_shim_sympy' has no attribute 'symbols'\\nTraceback (most recent call last):\\n  File \\\"/lib/browser.py\\\", line 188, in _cs_run_user\\n  File \\\"main\\\", line 14, in <module>\\nAttributeError: module '_cs_shim_sympy' has no attribute 'symbols'",
+   "Line 11854: Uncaught Error: INTERNAL OPENCASCADE ERROR: the OCCT kernel threw 'There were no scene shapes returned!' (a raw wasm exception carrying no readable message — most likely an Emscripten abort rather than a Standard_Failure)"
+  ]
+ },
+ "ttt/ttt-24-SPO-06-Buffer_Stand": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "ttt/ttt-ppp0101": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "ttt/ttt-23-02-02-sm_hanger": {
+  "status": "PASS",
+  "shapes": 14
+ },
+ "ttt/ttt-ppp0102": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "docs-selectors/group_axis": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "ttt/ttt-ppp0103": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "ttt/ttt-ppp0104": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "ttt/ttt-ppp0106": {
+  "status": "PASS",
+  "shapes": 9
+ },
+ "ttt/ttt-ppp0105": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "ttt/ttt-ppp0108": {
+  "status": "PASS",
+  "shapes": 6
+ },
+ "ttt/ttt-ppp0109": {
+  "status": "PASS",
+  "shapes": 8
+ },
+ "docs-rst/OpenSCAD/b01": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/OpenSCAD/b02": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "ttt/ttt-ppp0110": {
+  "status": "PASS",
+  "shapes": 14
+ },
+ "docs-rst/OpenSCAD/all": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/algebra_performance/b03": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "ttt/ttt-ppp0107": {
+  "status": "PASS",
+  "shapes": 11
+ },
+ "docs-rst/build_sketch/b03": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/import_export/b01": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_algebra/b01": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/key_concepts_algebra/b02": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_algebra/b03": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_algebra/b04": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_algebra/b13": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b01": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "docs-rst/key_concepts_builder/b02": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b03": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b09": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/key_concepts_builder/b10": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b11": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b13": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/key_concepts_builder/b14": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b17": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b19": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b20": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/key_concepts_builder/b21": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/location_arithmetic/all": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/selectors/b02": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs-rst/selectors/all": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs-rst/tips/b01": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/tips/b04": {
+  "status": "MISMATCH",
+  "problems": [
+   "'vertical_sketch' bbox[1] -0.5000 vs -0.7000 (d=0.2000)"
+  ]
+ },
+ "docs-rst/tips/b05": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/topology_selection/b01": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/topology_selection/b03": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/topology_selection/b04": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/topology_selection/b05": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/topology_selection/b06": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/topology_selection/b07": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/topology_selection/b08": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs-rst/topology_selection/b09": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "docs-rst/topology_selection/b12": {
+  "status": "PASS",
+  "shapes": 14
+ },
+ "docs-rst/tutorial_constraints/b03": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/tutorial_constraints/b05": {
+  "status": "PASS",
+  "shapes": 4
+ },
+ "docs-rst/tutorial_constraints/b06": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs-rst/tutorial_constraints/b07": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs-rst/tutorial_constraints/b08": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs-rst/tutorial_constraints/b09": {
+  "status": "PASS",
+  "shapes": 5
+ },
+ "docs-rst/tutorial_constraints/b10": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/tutorial_constraints/b11": {
+  "status": "PASS",
+  "shapes": 2
+ },
+ "docs-rst/tutorial_constraints/b13": {
+  "status": "PASS",
+  "shapes": 7
+ },
+ "docs-rst/tutorial_design/b07": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs-rst/tutorial_stl_reconstruction/b03": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/tutorial_stl_reconstruction/b04": {
+  "status": "PASS",
+  "shapes": 26
+ },
+ "docs-rst/objects-text/b10": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/topology_selection-filter_examples/b01": {
+  "status": "PASS",
+  "shapes": 1
+ },
+ "docs-rst/algebra_performance/b01": {
+  "status": "PASS",
+  "shapes": 3
+ },
+ "docs-rst/algebra_performance/all": {
+  "status": "PASS",
+  "shapes": 67
+ },
+ "docs/spitfire_wing_gordon": {
+  "status": "TIMEOUT"
+ }
+}
