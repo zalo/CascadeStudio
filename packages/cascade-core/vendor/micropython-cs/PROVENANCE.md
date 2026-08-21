@@ -59,6 +59,21 @@ Build123dLite.js, so the stock artifacts keep working):
   `__mro_entries__`, metaclass `__instancecheck__`/`__subclasscheck__`,
   metaclass data descriptors intercepting class-attribute stores.
 
+9. **micropython.mjs (JS glue) hot-fix — integral-double truncation**
+   (applied DIRECTLY to the vendored artifact, no wasm rebuild: the bug is
+   in the JS-side `proxy_convert_js_to_mp_obj_jsside_helper`). Upstream
+   jsffi converts any JS number with `Number.isInteger(x)` through the
+   i32 path, so integral doubles ≥ 2^31 crossed into Python WRAPPED
+   (1e15 → -1530494976) and huge integral doubles as 0 (1e100 → 0 — which
+   silently degeneratd OCCT's ±Precision::Infinite parameter ranges,
+   found via upstream `Edge(Axis)` in Stage 3). The patch adds an int32
+   range check so out-of-range integral numbers take the DOUBLE path
+   (CPython/Pyodide semantics: they arrive as Python floats).
+   One-string edit, greppable:
+   `Number.isInteger(js_obj)&&js_obj>=-2147483648&&js_obj<=2147483647`.
+   Carry this patch forward on the next interpreter rebuild (or land it in
+   the micropython-cs source tree as a proper patch).
+
 ## Build command
 
 ```bash

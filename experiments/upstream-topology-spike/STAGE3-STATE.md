@@ -20,7 +20,16 @@ Branch `feat/upstream-full-topology`. Default pytopo stays `lite`
 |---|---|---|---|---|---|
 | r1 | 112 | 10 | 95 | 5 | the bring-up itself (202 s wall, 4 pages) |
 | r2 | 143 | 13 | 59 | 7 | ConnectEdgesToWires out-handle GLUE (every Polyline died -> 27 scripts), sum(start=), _GenericMeta `__or__`, list+ShapeList concat coercion, _cs_prop_get, structural-Iterable fixup, isEmbind hardening |
-| r3 | (running) | | | | OcpProxy.__hash__ = OCCT HashCode (explorer dedup — selectors were DOUBLED; fixed the 24-script fillet-vertex cluster), collection protocols on specific proxy classes, Quantity_Color stand-in, 2-D ConvexHull, sort_by(property), format() |
+| r3 | 180 | 12 | 24 | 6 | OcpProxy.__hash__ = OCCT HashCode (explorer dedup — selectors were DOUBLED; fixed the 24-script fillet-vertex cluster + selector inflation everywhere) |
+| r4 | 188 | 15 | 12 | 7 | anytree attach-hooks (Compound(children=) was EMPTY -> project_to_viewport family), Geom_Surface inspection GLUE (dropped concrete surface classes), AsGeomSurface deref, HArray2->Array2, enum ordering, float_info |
+| r5 | 203 | **1** | 11 | 7 | insertion-ordered dedup (MicroPython dicts are UNORDERED — faces()/edges() were SCRAMBLED: the whole ex33/ex34/logo MISMATCH family), glue enum bridge + align translation |
+| r6 | 204 | 1 | 12 | 5 | (r5's tree + ArrowHead/b12/b10-format/user-code-concat partials) |
+| r7 | (running) | | | | hasher functor rebind, deque(maxlen), ljust, ArrowHead-as-upstream-Sketch, chained concat, TypeMismatch/ConstructionError exception mapping |
+
+**The single r5+ MISMATCH is docs/objects_1d — the baseline residual
+(triad labels + DTA trim). Upstream topology FIXED lite's other residual
+mismatches (joints x2, projection x2, sort_axis, filter_all_edges_circle,
+tips/b04, sm_hanger — all PASS under pytopo=upstream).**
 
 ## Key architecture facts (for whoever resumes)
 

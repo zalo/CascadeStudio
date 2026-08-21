@@ -818,6 +818,23 @@ export function installOcpShim(self, table) {
         args[i] = arr;  // the args array is the bridge's own copy
       }
     }
+    // Unbounded-line MakeEdge: this wasm binding produces a DEGENERATE edge
+    // (range 0..0) for the curve-only forms, where pybind/native gives the
+    // unbounded parameter range (+-Precision::Infinite = 1e100). Substitute
+    // the ranged overload — upstream's is_infinite/trim_infinite handling
+    // expects exactly length > 1e100 (Edge(Axis) rides on this).
+    if (cls === 'BRepBuilderAPI_MakeEdge' && args.length === 1 && isEmbind(args[0])) {
+      const an = normCls(String(args[0].constructor.name));
+      
+      if (an === 'gp_Lin') {
+        return new oc.BRepBuilderAPI_MakeEdge_5(args[0], -1e100, 1e100);
+      }
+      if (an === 'Geom_Line' || an === 'Handle_Geom_Line') {
+        const h = an === 'Geom_Line'
+          ? new oc.Handle_Geom_Curve_2(args[0]) : args[0];
+        return new oc.BRepBuilderAPI_MakeEdge_25(h, -1e100, 1e100);
+      }
+    }
     // COMPROMISE(quantity-color) stand-ins (see mkFakeQC above)
     if (cls === 'Quantity_Color' && !oc.Quantity_Color_1) {
       if (args.length === 0) { return mkFakeQC(0, 0, 0); }

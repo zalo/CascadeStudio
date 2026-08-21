@@ -15,6 +15,7 @@ export const USED_OCCT_SYMBOLS = [
   "BRepBuilderAPI_MakeEdge_24",
   "BRepBuilderAPI_MakeEdge_25",
   "BRepBuilderAPI_MakeEdge_30",
+  "BRepBuilderAPI_MakeEdge_5",
   "BRepBuilderAPI_MakeEdge_8",
   "BRepBuilderAPI_MakeEdge_9",
   "BRepBuilderAPI_MakeFace_15",
