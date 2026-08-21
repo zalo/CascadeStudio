@@ -13,3 +13,8 @@ TopAbs_FORWARD = TopAbs_Orientation.TopAbs_FORWARD
 TopAbs_REVERSED = TopAbs_Orientation.TopAbs_REVERSED
 TopAbs_INTERNAL = TopAbs_Orientation.TopAbs_INTERNAL
 TopAbs_EXTERNAL = TopAbs_Orientation.TopAbs_EXTERNAL
+from ocp_registry import TopAbs_State  # noqa: F401
+TopAbs_IN = TopAbs_State.TopAbs_IN
+TopAbs_OUT = TopAbs_State.TopAbs_OUT
+TopAbs_ON = TopAbs_State.TopAbs_ON
+TopAbs_UNKNOWN = TopAbs_State.TopAbs_UNKNOWN

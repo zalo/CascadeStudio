@@ -33,6 +33,8 @@ class GeomAdaptor_TransformedSurface(Adaptor3d_Surface):
     _cs = 'GeomAdaptor_TransformedSurface'
 class BRepAdaptor_Surface(GeomAdaptor_TransformedSurface):
     _cs = 'BRepAdaptor_Surface'
+class BRepAlgo(_c.OcpProxy):
+    _cs = 'BRepAlgo'
 class BRepBuilderAPI_Command(_c.OcpProxy):
     _cs = 'BRepBuilderAPI_Command'
 class BRepBuilderAPI_MakeShape(BRepBuilderAPI_Command):
@@ -135,6 +137,8 @@ class BRepOffsetAPI_MakeThickSolid(BRepOffsetAPI_MakeOffsetShape):
     _cs = 'BRepOffsetAPI_MakeThickSolid'
 class BRepOffsetAPI_ThruSections(BRepBuilderAPI_MakeShape):
     _cs = 'BRepOffsetAPI_ThruSections'
+class BRepOffset_MakeOffset(_c.OcpProxy):
+    _cs = 'BRepOffset_MakeOffset'
 class BRepPrimAPI_MakeBox(BRepBuilderAPI_MakeShape):
     _cs = 'BRepPrimAPI_MakeBox'
 class BRepPrimAPI_MakeOneAxis(BRepBuilderAPI_MakeShape):
@@ -159,6 +163,8 @@ class BRepProj_Projection(_c.OcpProxy):
     _cs = 'BRepProj_Projection'
 class BRepTools(_c.OcpProxy):
     _cs = 'BRepTools'
+class BRepTools_History(Standard_Transient):
+    _cs = 'BRepTools_History'
 class BRepTools_ReShape(Standard_Transient):
     _cs = 'BRepTools_ReShape'
 class BRepTools_WireExplorer(_c.OcpProxy):
@@ -187,6 +193,10 @@ class CDM_Document(Standard_Transient):
     _cs = 'CDM_Document'
 class ChFi2d_FilletAlgo(_c.OcpProxy):
     _cs = 'ChFi2d_FilletAlgo'
+class Extrema_ExtPC(_c.OcpProxy):
+    _cs = 'Extrema_ExtPC'
+class Extrema_POnCurv(_c.OcpProxy):
+    _cs = 'Extrema_POnCurv'
 class Font_FontMgr(Standard_Transient):
     _cs = 'Font_FontMgr'
 class Font_SystemFont(Standard_Transient):
@@ -213,6 +223,8 @@ class GC_MakeSegment(GC_Root):
     _cs = 'GC_MakeSegment'
 class GProp_GProps(_c.OcpProxy):
     _cs = 'GProp_GProps'
+class GProp_PrincipalProps(_c.OcpProxy):
+    _cs = 'GProp_PrincipalProps'
 class Geom2dAPI_InterCurveCurve(_c.OcpProxy):
     _cs = 'Geom2dAPI_InterCurveCurve'
 class Geom2dAPI_ProjectPointOnCurve(_c.OcpProxy):
@@ -353,6 +365,8 @@ class LocOpe_DPrism(_c.OcpProxy):
     _cs = 'LocOpe_DPrism'
 class Message_ProgressRange(_c.OcpProxy):
     _cs = 'Message_ProgressRange'
+class NCollection_BaseMap(_c.OcpProxy):
+    _cs = 'NCollection_BaseMap'
 class Poly_PolygonOnTriangulation(Standard_Transient):
     _cs = 'Poly_PolygonOnTriangulation'
 class Poly_Triangle(_c.OcpProxy):
@@ -417,6 +431,8 @@ class TColStd_Array1OfReal(_c.OcpProxy):
     _cs = 'TColStd_Array1OfReal'
 class TColStd_HArray1OfBoolean(_c.OcpProxy):
     _cs = 'TColStd_HArray1OfBoolean'
+class TColStd_HArray2OfReal(_c.OcpProxy):
+    _cs = 'TColStd_HArray2OfReal'
 class TColgp_Array1OfPnt(_c.OcpProxy):
     _cs = 'TColgp_Array1OfPnt'
 class TColgp_Array1OfPnt2d(_c.OcpProxy):
@@ -427,6 +443,8 @@ class TColgp_Array2OfPnt(_c.OcpProxy):
     _cs = 'TColgp_Array2OfPnt'
 class TColgp_HArray1OfPnt(_c.OcpProxy):
     _cs = 'TColgp_HArray1OfPnt'
+class TColgp_HArray2OfPnt(_c.OcpProxy):
+    _cs = 'TColgp_HArray2OfPnt'
 class TCollection_ExtendedString(_c.OcpProxy):
     _cs = 'TCollection_ExtendedString'
 class TCollection_HAsciiString(Standard_Transient):
@@ -451,10 +469,16 @@ class TopExp_Explorer(_c.OcpProxy):
     _cs = 'TopExp_Explorer'
 class TopLoc_Location(_c.OcpProxy):
     _cs = 'TopLoc_Location'
+class TopTools_HSequenceOfShape(_c.OcpProxy):
+    _cs = 'TopTools_HSequenceOfShape'
 class TopTools_IndexedDataMapOfShapeListOfShape(_c.OcpProxy):
     _cs = 'TopTools_IndexedDataMapOfShapeListOfShape'
+class TopTools_IndexedMapOfShape(NCollection_BaseMap):
+    _cs = 'TopTools_IndexedMapOfShape'
 class TopTools_ListOfShape(_c.OcpProxy):
     _cs = 'TopTools_ListOfShape'
+class TopTools_SequenceOfShape(_c.OcpProxy):
+    _cs = 'TopTools_SequenceOfShape'
 class TopTools_ShapeMapHasher(_c.OcpProxy):
     _cs = 'TopTools_ShapeMapHasher'
 class TopoDS_Shape(_c.OcpProxy):
@@ -523,6 +547,8 @@ class gp_Lin(_c.OcpProxy):
     _cs = 'gp_Lin'
 class gp_Lin2d(_c.OcpProxy):
     _cs = 'gp_Lin2d'
+class gp_Mat(_c.OcpProxy):
+    _cs = 'gp_Mat'
 class gp_Parab(_c.OcpProxy):
     _cs = 'gp_Parab'
 class gp_Pln(_c.OcpProxy):
@@ -574,6 +600,18 @@ BRepAdaptor_Surface.get_type_name_s = _c.static('BRepAdaptor_Surface', 'get_type
 BRepAdaptor_Surface.get_type_name = BRepAdaptor_Surface.get_type_name_s
 BRepAdaptor_Surface.get_type_descriptor_s = _c.static('BRepAdaptor_Surface', 'get_type_descriptor')
 BRepAdaptor_Surface.get_type_descriptor = BRepAdaptor_Surface.get_type_descriptor_s
+BRepAlgo.ConcatenateWire_s = _c.static('BRepAlgo', 'ConcatenateWire')
+BRepAlgo.ConcatenateWire = BRepAlgo.ConcatenateWire_s
+BRepAlgo.ConcatenateWireC0_s = _c.static('BRepAlgo', 'ConcatenateWireC0')
+BRepAlgo.ConcatenateWireC0 = BRepAlgo.ConcatenateWireC0_s
+BRepAlgo.ConvertWire_s = _c.static('BRepAlgo', 'ConvertWire')
+BRepAlgo.ConvertWire = BRepAlgo.ConvertWire_s
+BRepAlgo.ConvertFace_s = _c.static('BRepAlgo', 'ConvertFace')
+BRepAlgo.ConvertFace = BRepAlgo.ConvertFace_s
+BRepAlgo.IsValid_s = _c.static('BRepAlgo', 'IsValid')
+BRepAlgo.IsValid = BRepAlgo.IsValid_s
+BRepAlgo.IsTopologicallyValid_s = _c.static('BRepAlgo', 'IsTopologicallyValid')
+BRepAlgo.IsTopologicallyValid = BRepAlgo.IsTopologicallyValid_s
 BRepBndLib.Add_s = _c.static('BRepBndLib', 'Add')
 BRepBndLib.Add = BRepBndLib.Add_s
 BRepBndLib.AddClose_s = _c.static('BRepBndLib', 'AddClose')
@@ -704,6 +742,12 @@ BRepTools.RemoveInternals_s = _c.static('BRepTools', 'RemoveInternals')
 BRepTools.RemoveInternals = BRepTools.RemoveInternals_s
 BRepTools.CheckLocations_s = _c.static('BRepTools', 'CheckLocations')
 BRepTools.CheckLocations = BRepTools.CheckLocations_s
+BRepTools_History.IsSupportedType_s = _c.static('BRepTools_History', 'IsSupportedType')
+BRepTools_History.IsSupportedType = BRepTools_History.IsSupportedType_s
+BRepTools_History.get_type_name_s = _c.static('BRepTools_History', 'get_type_name')
+BRepTools_History.get_type_name = BRepTools_History.get_type_name_s
+BRepTools_History.get_type_descriptor_s = _c.static('BRepTools_History', 'get_type_descriptor')
+BRepTools_History.get_type_descriptor = BRepTools_History.get_type_descriptor_s
 BRepTools_ReShape.get_type_name_s = _c.static('BRepTools_ReShape', 'get_type_name')
 BRepTools_ReShape.get_type_name = BRepTools_ReShape.get_type_name_s
 BRepTools_ReShape.get_type_descriptor_s = _c.static('BRepTools_ReShape', 'get_type_descriptor')
@@ -1606,6 +1650,12 @@ TopAbs_ShapeEnum.TopAbs_WIRE = _c.enum_member('TopAbs_ShapeEnum', 'TopAbs_WIRE')
 TopAbs_ShapeEnum.TopAbs_EDGE = _c.enum_member('TopAbs_ShapeEnum', 'TopAbs_EDGE')
 TopAbs_ShapeEnum.TopAbs_VERTEX = _c.enum_member('TopAbs_ShapeEnum', 'TopAbs_VERTEX')
 TopAbs_ShapeEnum.TopAbs_SHAPE = _c.enum_member('TopAbs_ShapeEnum', 'TopAbs_SHAPE')
+class TopAbs_State(_c.OcpEnum):
+    _cs = 'TopAbs_State'
+TopAbs_State.TopAbs_IN = _c.enum_member('TopAbs_State', 'TopAbs_IN')
+TopAbs_State.TopAbs_OUT = _c.enum_member('TopAbs_State', 'TopAbs_OUT')
+TopAbs_State.TopAbs_ON = _c.enum_member('TopAbs_State', 'TopAbs_ON')
+TopAbs_State.TopAbs_UNKNOWN = _c.enum_member('TopAbs_State', 'TopAbs_UNKNOWN')
 class XCAFDoc_ColorType(_c.OcpEnum):
     _cs = 'XCAFDoc_ColorType'
 XCAFDoc_ColorType.XCAFDoc_ColorGen = _c.enum_member('XCAFDoc_ColorType', 'XCAFDoc_ColorGen')

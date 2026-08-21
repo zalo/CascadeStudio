@@ -1,5 +1,16 @@
 # FORK-ASKS — bindings the upstream TOPOLOGY layer needs from opencascade.js
 
+> **STATUS: LANDED.** Every ask below shipped in fork commit
+> `05d088d36ba3b9d8690fb650d62289a9e4a471cd` (branch
+> cascadestudio-v3-occt801; d.ts 380→400 Handle_ classes, +43 classes,
+> zero removals, initial memory still 32 MB) — with ONE deliberate
+> exception: `NCollection_Utf8String` (kernel text) was skipped
+> permanently; `make_text` stays on lite's opentype.js path
+> (COMPROMISE(text) applies regardless — no system fonts in wasm).
+> `BRepExtrema_ParOnEdgeS1` was not asked and not bound (S2 is the billed
+> sibling); its shim hook stays PENDING_FORK_BINDING. Integration round:
+> every closed hook is exercised by `topo-poc.mjs` t8 with real geometry.
+
 Input for the fork's CHANGELOG pipeline (branch cascadestudio-v3-occt801).
 Derived from `ocp-method-bill.json` (73 of 2,205 call sites blocked, 14
 classes) and verified against `build/additionalBindCode/cascadestudio.js.cpp`.

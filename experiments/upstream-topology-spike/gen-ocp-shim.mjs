@@ -104,10 +104,23 @@ const { classes: dts, enums: dtsEnums } = parseDts(fs.readFileSync(DTS, 'utf8'))
 // hand-registered surface (additionalBindCode) — mirrors extract_ocp_bill.py
 const ARR1 = ['Size', 'Length', 'IsEmpty', 'Lower', 'Upper', 'IsDeletable', 'Resize', 'SetValue', 'Value'];
 const EXTRA = {
-  TopoDS_Cast: { statics: ['Vertex_1', 'Vertex_2', 'Edge_1', 'Edge_2', 'Wire_1', 'Wire_2', 'Face_1', 'Face_2', 'Shell_1', 'Shell_2', 'Solid_1', 'Solid_2', 'Compound_1', 'Compound_2'] },
+  TopoDS_Cast: { statics: ['Vertex_1', 'Vertex_2', 'Edge_1', 'Edge_2', 'Wire_1', 'Wire_2', 'Face_1', 'Face_2', 'Shell_1', 'Shell_2', 'Solid_1', 'Solid_2', 'Compound_1', 'Compound_2', 'CompSolid_1', 'CompSolid_2'] },
   OCJS: { statics: ['getStandard_FailureData', 'HashCode', 'BooleanCut', 'BooleanFuse', 'BooleanCommon'] },
-  OCJS_Out: { statics: ['Circ2d2TanRad_Tangency1', 'Circ2d2TanRad_Tangency2', 'Circ2d2TanOn_Tangency1', 'Circ2d2TanOn_Tangency2', 'Circ2d3Tan_Tangency1', 'Circ2d3Tan_Tangency2', 'Circ2d3Tan_Tangency3', 'Circ2dTanCen_Tangency1', 'Circ2dTanOnRad_Tangency1', 'Lin2dTanObl_Tangency1', 'FilletAlgo_Result', 'ProjectPointOnSurf_LowerDistanceParameters', 'ProjectPointOnSurf_Parameters'] },
-  TopTools_ListOfShape: { methods: ['Append', 'Size', 'Clear', 'First'], ctors: [[]] },
+  OCJS_Out: { statics: ['Circ2d2TanRad_Tangency1', 'Circ2d2TanRad_Tangency2', 'Circ2d2TanOn_Tangency1', 'Circ2d2TanOn_Tangency2', 'Circ2d3Tan_Tangency1', 'Circ2d3Tan_Tangency2', 'Circ2d3Tan_Tangency3', 'Circ2dTanCen_Tangency1', 'Circ2dTanOnRad_Tangency1', 'Lin2dTanObl_Tangency1', 'FilletAlgo_Result', 'ProjectPointOnSurf_LowerDistanceParameters', 'ProjectPointOnSurf_Parameters',
+    // fork 05d088d (the FORK-ASKS round):
+    'BRepTool_Range', 'BRepTools_UVBounds', 'BRepTool_CurveOnSurface',
+    'GProp_StaticMoments', 'PrincipalProps_Moments',
+    'BRepExtrema_ParOnEdgeS2', 'Geom2dAPI_ProjectPointOnCurve_Parameter',
+    'GeomAPI_ExtremaCurveCurve_Parameters'] },
+  // fork 05d088d hand-registered classes (additionalBindCode):
+  Extrema_ExtPC: { methods: ['Initialize', 'Perform', 'IsDone', 'NbExt', 'SquareDistance', 'IsMin', 'Point'],
+    ctors: [[], ['gp_Pnt', '?'], ['gp_Pnt', '?', 'double', 'double']] },
+  Extrema_POnCurv: { methods: ['Parameter', 'Value'], ctors: [[]] },
+  TopTools_HSequenceOfShape: { methods: ['Append', 'Length', 'Value'], ctors: [[]], bareCtor: true },
+  TopTools_SequenceOfShape: { methods: ['Append', 'Length', 'Value'], ctors: [[]], bareCtor: true },
+  TColgp_HArray2OfPnt: { methods: ['SetValue', 'Value', 'NbRows', 'NbColumns'], ctors: [['int', 'int', 'int', 'int']] },
+  TColStd_HArray2OfReal: { methods: ['SetValue', 'Value', 'NbRows', 'NbColumns'], ctors: [['int', 'int', 'int', 'int']] },
+  TopTools_ListOfShape: { methods: ['Append', 'Size', 'Clear', 'First', 'Extent', 'IsEmpty', 'Last', 'RemoveFirst'], ctors: [[]] },
   TopTools_IndexedDataMapOfShapeListOfShape: { methods: ['Extent', 'Contains', 'FindKey', 'FindFromIndex', 'FindFromKey', 'FindIndex', 'Clear'], ctors: [[]] },
   TColgp_Array1OfPnt: { methods: ARR1, ctors: [[], ['int', 'int']] },
   TColgp_Array1OfDir: { methods: ARR1, ctors: [[], ['int', 'int']] },
@@ -133,7 +146,14 @@ for (const [name, d] of Object.entries(EXTRA)) {
     (c.methods[m] = c.methods[m] || []).push({ static: true, params: null });
   }
   for (const [i, params] of (d.ctors || []).entries()) {
-    c.ctors.push({ js: d.ctors.length > 1 ? `${name}_${i + 1}` : `${name}_2`, params });
+    // bareCtor: some hand wrappers register the constructor on the BARE
+    // class name (TopTools_HSequenceOfShape); the older wrappers use the
+    // Name_2 / Name_1..N convention.
+    c.ctors.push({
+      js: d.bareCtor ? name
+        : (d.ctors.length > 1 ? `${name}_${i + 1}` : `${name}_2`),
+      params,
+    });
   }
 }
 // hand-bound Handle types (HANDLE_BINDINGS macro)
@@ -488,23 +508,14 @@ lines.push('');
 // --------------------------------------------------------------------- //
 // 6. Per-OCP-module files                                                //
 // --------------------------------------------------------------------- //
-// Classes the FORK ROUND registers (FORK-ASKS.md): their stubs raise with
-// a PENDING_FORK_BINDING marker so integration is a grep. Everything else
-// missing stays a plain "not in the generated shim" _Any.
+// All FORK-ASKS classes landed at fork 05d088d except NCollection_
+// Utf8String, which the fork round DELIBERATELY skipped: kernel text
+// stays on lite's opentype.js path (COMPROMISE(text) applies regardless —
+// no system fonts in wasm). Its stub keeps a PERMANENT-SKIP marker so the
+// grep still explains itself; nothing waits on it.
 const FORK_ASK_CLASSES = {
-  BRepOffset_MakeOffset: 'offset_topods_face; also retires COMPROMISE(thicken)',
-  Extrema_ExtPC: 'Wire.param_at (ExtPC over Adaptor3d_Curve)',
-  Extrema_POnCurv: 'Wire.param_at (Point/Parameter accessors)',
-  GProp_PrincipalProps: 'Shape.principal_properties',
-  gp_Mat: 'Shape.matrix_of_inertia (Value accessor)',
-  TopTools_IndexedMapOfShape: 'topo_explore_connected_faces (TopExp.MapShapes)',
-  TopTools_HSequenceOfShape: 'Wire.combine (ConnectEdgesToWires); also retires COMPROMISE(edges-to-wires)',
-  TopTools_SequenceOfShape: 'Shape.split bookkeeping',
-  TColgp_HArray2OfPnt: 'Face.make_bezier_surface',
-  TColStd_HArray2OfReal: 'Face.make_bezier_surface (weights)',
-  BRepTools_History: 'Solid.extrude_until history walk',
-  NCollection_Utf8String: 'kernel text (recommended: keep routing make_text to lite opentype.js)',
-  StdPrs_BRepTextBuilder: 'kernel text (same recommendation)',
+  NCollection_Utf8String: 'PERMANENT-SKIP — kernel text deliberately not '
+    + 'bound; make_text routes to lite opentype.js (fork 05d088d note)',
 };
 const moduleFiles = {};
 for (const [mod, names] of Object.entries(importMap)) {
@@ -540,7 +551,7 @@ for (const [mod, names] of Object.entries(importMap)) {
     for (const k of ['Vertex', 'Edge', 'Wire', 'Face', 'Shell', 'Solid', 'Compound']) {
       src.push(`    ${k} = ${k}_s = _c.topods_downcast('${k}')`);
     }
-    src.push("    CompSolid = CompSolid_s = _c.pending_fork_binding('TopoDS_Cast.CompSolid_1/_2 — one lut line in additionalBindCode')");
+    src.push("    CompSolid = CompSolid_s = _c.topods_downcast('CompSolid')");
   }
   // pybind exposes enum MEMBERS at module level too (ta.TopAbs_VERTEX)
   for (const e of neededEnums) {
@@ -560,11 +571,11 @@ for (const [mod, names] of Object.entries(importMap)) {
     for (const n of missing) {
       if (n === 'TopoDS' && mod === 'TopoDS') { continue; }
       if (FORK_ASK_CLASSES[n]) {
-        // the fork round registers these (FORK-ASKS.md) — greppable hook
+        // greppable, self-explaining stub (see FORK_ASK_CLASSES above)
         src.push(`class ${n}:`);
         src.push('    def __init__(self, *a, **k):');
         src.push('        raise NotImplementedError(');
-        src.push(`            'PENDING_FORK_BINDING: OCP.${mod}.${n} — ${FORK_ASK_CLASSES[n]}')`);
+        src.push(`            'OCP.${mod}.${n}: ${FORK_ASK_CLASSES[n]}')`);
         continue;
       }
       src.push(`class ${n}(_Any):`);

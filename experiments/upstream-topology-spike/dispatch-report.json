@@ -1,13 +1,13 @@
 {
  "note": "gen-ocp-shim.mjs self-check: per-(class,method,arity) dispatch. direct = build-time pinned; typed = runtime coarse-type match, statically guaranteed decisive; ambiguous = statically inseparable pair exists (or an unknown-sig hand-registered variant shadows) — the runtime REFUSES with the candidate list on a tie.",
  "totals": {
-  "directKeys": 5168,
-  "typedKeys": 188,
-  "ambiguousKeys": 53,
-  "unknownSigOnlyMethods": 180,
-  "deadUnboundVariants": 190,
-  "pinnedPrimTypeKeys": 2,
-  "billedAmbiguousKeys": 9
+  "directKeys": 5307,
+  "typedKeys": 190,
+  "ambiguousKeys": 58,
+  "unknownSigOnlyMethods": 202,
+  "deadUnboundVariants": 191,
+  "pinnedPrimTypeKeys": 4,
+  "billedAmbiguousKeys": 11
  },
  "billedAmbiguous": [
   {
@@ -87,6 +87,22 @@
     "BRepBuilderAPI_MakeEdge_25(?,n,n)",
     "BRepBuilderAPI_MakeEdge_26(?,c:gp_Pnt,c:gp_Pnt)",
     "BRepBuilderAPI_MakeEdge_27(?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Extrema_POnCurv.Parameter/0",
+   "kind": "ambiguous",
+   "cands": [
+    "Parameter()"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Extrema_POnCurv.Value/0",
+   "kind": "ambiguous",
+   "cands": [
+    "Value()"
    ],
    "billedSites": 1
   },
@@ -200,6 +216,22 @@
    "billedSites": 1
   },
   {
+   "key": "Extrema_POnCurv.Parameter/0",
+   "kind": "ambiguous",
+   "cands": [
+    "Parameter()"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Extrema_POnCurv.Value/0",
+   "kind": "ambiguous",
+   "cands": [
+    "Value()"
+   ],
+   "billedSites": 1
+  },
+  {
    "key": "Geom2dGcc_Circ2dTanOnRad.__init__/4",
    "kind": "ambiguous",
    "cands": [
@@ -267,6 +299,15 @@
     "SetRadius_4(c:TColgp_Array1OfPnt2d,n,n)",
     "SetRadius_5(n,n,c:TopoDS_Edge)",
     "SetRadius_6(n,n,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepTools_History.Merge/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Merge_1(?)",
+    "Merge_2(c:BRepTools_History)"
    ],
    "billedSites": 0
   },
@@ -625,6 +666,24 @@
    "cands": [
     "MapShapes_2(c:TopoDS_Shape,?,b,b)",
     "MapShapes_3(c:TopoDS_Shape,?,b,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TopTools_IndexedMapOfShape.Clear/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Clear_1(b)",
+    "Clear_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TopTools_IndexedMapOfShape.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "TopTools_IndexedMapOfShape_5(c:TopTools_ShapeMapHasher,n,?)",
+    "TopTools_IndexedMapOfShape_7(c:TopTools_ShapeMapHasher,n,?)"
    ],
    "billedSites": 0
   },
@@ -989,6 +1048,22 @@
    "cands": [
     "IsOut_1(c:Bnd_OBB)",
     "IsOut_2(c:gp_Pnt)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Extrema_POnCurv.Parameter/0",
+   "kind": "ambiguous",
+   "cands": [
+    "Parameter()"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Extrema_POnCurv.Value/0",
+   "kind": "ambiguous",
+   "cands": [
+    "Value()"
    ],
    "billedSites": 1
   },
@@ -1478,6 +1553,15 @@
     "Update_7(c:TopoDS_CompSolid)",
     "Update_8(c:TopoDS_Compound)",
     "Update_9(c:TopoDS_Shape)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepTools_History.Merge/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Merge_1(?)",
+    "Merge_2(c:BRepTools_History)"
    ],
    "billedSites": 0
   },
@@ -2284,6 +2368,24 @@
    "billedSites": 0
   },
   {
+   "key": "TopTools_IndexedMapOfShape.Clear/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Clear_1(b)",
+    "Clear_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TopTools_IndexedMapOfShape.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "TopTools_IndexedMapOfShape_5(c:TopTools_ShapeMapHasher,n,?)",
+    "TopTools_IndexedMapOfShape_7(c:TopTools_ShapeMapHasher,n,?)"
+   ],
+   "billedSites": 0
+  },
+  {
    "key": "XCAFDoc_ColorTool.AddColor/1",
    "kind": "typed",
    "cands": [
@@ -2734,6 +2836,24 @@
    "billedSites": 0
   },
   {
+   "key": "gp_Mat.Multiplied/1",
+   "kind": "typed",
+   "cands": [
+    "Multiplied_1(c:gp_Mat)",
+    "Multiplied_2(n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Mat.Multiply/1",
+   "kind": "typed",
+   "cands": [
+    "Multiply_1(c:gp_Mat)",
+    "Multiply_2(n)"
+   ],
+   "billedSites": 0
+  },
+  {
    "key": "gp_Parab.Mirror/1",
    "kind": "typed",
    "cands": [
@@ -2959,7 +3079,8 @@
    "kind": "typed",
    "cands": [
     "Multiplied_1(n)",
-    "Multiplied_2(c:gp_XYZ)"
+    "Multiplied_2(c:gp_XYZ)",
+    "Multiplied_3(c:gp_Mat)"
    ],
    "billedSites": 0
   },
@@ -2968,7 +3089,8 @@
    "kind": "typed",
    "cands": [
     "Multiply_1(n)",
-    "Multiply_2(c:gp_XYZ)"
+    "Multiply_2(c:gp_XYZ)",
+    "Multiply_3(c:gp_Mat)"
    ],
    "billedSites": 0
   }

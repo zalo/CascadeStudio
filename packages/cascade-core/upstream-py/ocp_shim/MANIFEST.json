@@ -3,6 +3,7 @@
   "BOPAlgo",
   "BRep",
   "BRepAdaptor",
+  "BRepAlgo",
   "BRepAlgoAPI",
   "BRepBndLib",
   "BRepBuilderAPI",
@@ -79,6 +80,6 @@
   "gce",
   "gp"
  ],
- "classCount": 271,
- "enumCount": 25
+ "classCount": 284,
+ "enumCount": 26
 }

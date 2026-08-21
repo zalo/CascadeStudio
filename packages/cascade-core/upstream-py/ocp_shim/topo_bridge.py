@@ -169,8 +169,7 @@ def downcast(obj):
         return None
     code = int(p.ShapeType().value)
     kind = _KIND_BY_CODE.get(code)
-    if kind is None or kind == 'CompSolid':
-        # TopoDS_Cast has no CompSolid downcast (fork ask) — keep the base
+    if kind is None:
         return p
     return _c.topods_downcast(kind)(p)
 

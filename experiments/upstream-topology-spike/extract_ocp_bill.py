@@ -582,7 +582,8 @@ _ARRAY1 = ["Size", "Length", "IsEmpty", "Lower", "Upper", "IsDeletable",
            "Resize", "SetValue", "Value"]
 EXTRA_SURFACE = {
     "TopoDS_Cast": _mk([], statics=[f"{k}_{i}" for k in
-        ["Vertex", "Edge", "Wire", "Face", "Shell", "Solid", "Compound"]
+        ["Vertex", "Edge", "Wire", "Face", "Shell", "Solid", "Compound",
+         "CompSolid"]
         for i in (1, 2)], ctors=[0]),
     "OCJS": _mk([], statics=["getStandard_FailureData", "HashCode",
         "BooleanCut", "BooleanFuse", "BooleanCommon"], ctors=[0]),
@@ -593,8 +594,25 @@ EXTRA_SURFACE = {
         "Circ2dTanCen_Tangency1", "Circ2dTanOnRad_Tangency1",
         "Lin2dTanObl_Tangency1", "FilletAlgo_Result",
         "ProjectPointOnSurf_LowerDistanceParameters",
-        "ProjectPointOnSurf_Parameters"], ctors=[0]),
-    "TopTools_ListOfShape": _mk(["Append", "Size", "Clear", "First"],
+        "ProjectPointOnSurf_Parameters",
+        # fork 05d088d (the FORK-ASKS round):
+        "BRepTool_Range", "BRepTools_UVBounds", "BRepTool_CurveOnSurface",
+        "GProp_StaticMoments", "PrincipalProps_Moments",
+        "BRepExtrema_ParOnEdgeS2", "Geom2dAPI_ProjectPointOnCurve_Parameter",
+        "GeomAPI_ExtremaCurveCurve_Parameters"], ctors=[0]),
+    # fork 05d088d hand-registered classes (additionalBindCode):
+    "Extrema_ExtPC": _mk(["Initialize", "Perform", "IsDone", "NbExt",
+                          "SquareDistance", "IsMin", "Point"],
+                         ctors=[0, 2, 4]),
+    "Extrema_POnCurv": _mk(["Parameter", "Value"], ctors=[0]),
+    "TopTools_HSequenceOfShape": _mk(["Append", "Length", "Value"], ctors=[0]),
+    "TopTools_SequenceOfShape": _mk(["Append", "Length", "Value"], ctors=[0]),
+    "TColgp_HArray2OfPnt": _mk(["SetValue", "Value", "NbRows", "NbColumns"],
+                               ctors=[4]),
+    "TColStd_HArray2OfReal": _mk(["SetValue", "Value", "NbRows", "NbColumns"],
+                                 ctors=[4]),
+    "TopTools_ListOfShape": _mk(["Append", "Size", "Clear", "First",
+                                 "Extent", "IsEmpty", "Last", "RemoveFirst"],
                                 ctors=[0]),
     "TopTools_IndexedDataMapOfShapeListOfShape": _mk(
         ["Extent", "Contains", "FindKey", "FindFromIndex", "FindFromKey",
@@ -785,7 +803,8 @@ def classify(usage: Usage, dts_classes, dts_enums):
         # systematic rename: OCP's TopoDS.Xxx_s downcasts are our hand-bound
         # TopoDS_Cast.Xxx_1/_2 statics
         if cls == "TopoDS" and base in ("Vertex", "Edge", "Wire", "Face",
-                                        "Shell", "Solid", "Compound"):
+                                        "Shell", "Solid", "Compound",
+                                        "CompSolid"):
             mrec["status"] = "CONVENTION-GAP(rename:TopoDS_Cast." + base + "_N)"
             continue
         if cls == "?":

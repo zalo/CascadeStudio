@@ -220,20 +220,20 @@ BRepGProp.LinearProperties_s(fe, props2)
 import math
 assert abs(props2.Mass() - 2.0 * math.pi / 2 * 1.0) < 0.5, 'fillet arc length ' + str(props2.Mass())
 
-# PENDING_FORK_BINDING hooks raise loudly, with the marker in the message
-from OCP.BRepOffset import BRepOffset_MakeOffset
+# the one still-pending hook (unbilled ParOnEdgeS1) raises with the marker;
+# everything else the fork 05d088d round closed is exercised in t8
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+v1 = BRepBuilderAPI_MakeVertex(gp_Pnt(0, 0, 5)).Vertex()
+e2b = BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(4, 0, 0)).Edge()
+dss5 = BRepExtrema_DistShapeShape(e2b, v1)
+assert dss5.IsDone()
 try:
-    BRepOffset_MakeOffset()
-    raise AssertionError('BRepOffset_MakeOffset should raise')
-except NotImplementedError as e:
-    assert 'PENDING_FORK_BINDING' in str(e), str(e)
-props3 = GProp_GProps()
-try:
-    props3.StaticMoments()
-    raise AssertionError('StaticMoments should raise')
+    dss5.ParOnEdgeS1(1)
+    raise AssertionError('ParOnEdgeS1 should raise (no helper bound)')
 except Exception as e:
     assert 'PENDING_FORK_BINDING' in str(e), str(e)
-print('T5 OK tangency tuple+mutation, ProjectPointOnCurve.Parameter, FilletAlgo.Result rebinding, PENDING hooks')
+print('T5 OK tangency tuple+mutation, ProjectPointOnCurve.Parameter, FilletAlgo.Result rebinding, PENDING hook (ParOnEdgeS1)')
 `,
   't6-numpy-micro': `
 # pytopo=upstream serves the numpy MICRO-shim (billed surface only):
@@ -303,6 +303,162 @@ compare('oriented lines',
         Edge.make_constrained_lines(e1, Axis.X, angle=30),
         _topo._edge_make_constrained_lines(_lt.Edge, e1, Axis.X, angle=30))
 print('T7 OK verbatim constrained_lines agrees with the lite kernel path (6 families)')
+`,
+  't8-fork-05d088d-bindings': `
+# Integration round for fork 05d088d: every closed PENDING_FORK_BINDING
+# hook exercised with real geometry through the shim.
+import math
+from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+from OCP.TopExp import TopExp_Explorer
+from OCP.TopAbs import TopAbs_ShapeEnum
+from OCP.TopoDS import TopoDS, TopoDS_CompSolid
+from OCP.BRep import BRep_Tool, BRep_Builder
+from OCP.BRepTools import BRepTools
+from OCP.BRepGProp import BRepGProp
+from OCP.GProp import GProp_GProps
+
+box = BRepPrimAPI_MakeBox(2, 3, 4).Shape()
+ex = TopExp_Explorer(box, TopAbs_ShapeEnum.TopAbs_FACE)
+face = TopoDS.Face(ex.Current())
+ex2 = TopExp_Explorer(face, TopAbs_ShapeEnum.TopAbs_EDGE)
+edge = TopoDS.Edge(ex2.Current())
+
+# BRep_Tool.Range_s — 1-arg AND (E, F) forms via the exact helper
+first, last = BRep_Tool.Range_s(edge)
+assert abs(last - first - 4.0) < 1e-9, 'Range ' + str((first, last))
+f2, l2 = BRep_Tool.Range_s(edge, face)
+assert (f2, l2) == (first, last), 'Range(E,F)'
+
+# BRepTools.UVBounds_s
+umin, umax, vmin, vmax = BRepTools.UVBounds_s(face)
+assert abs((umax - umin) * (vmax - vmin) - 12.0) < 1e-9, 'UVBounds area'
+
+# BRep_Tool.CurveOnSurface_s (upstream's 4-arg form returns the pcurve)
+pcurve = BRep_Tool.CurveOnSurface_s(edge, face, first, last)
+assert pcurve is not None, 'CurveOnSurface pcurve'
+d0 = pcurve.Value(first)
+assert hasattr(d0, 'X'), 'pcurve Value'
+
+# GProp: StaticMoments + PrincipalProps.Moments + gp_Mat.Value
+props = GProp_GProps()
+BRepGProp.VolumeProperties_s(box, props)
+ix, iy, iz = props.StaticMoments()
+assert abs(ix - 24.0) < 1e-6 and abs(iy - 36.0) < 1e-6 and abs(iz - 48.0) < 1e-6, \\
+    'StaticMoments ' + str((ix, iy, iz))
+pp = props.PrincipalProperties()
+m1, m2, m3 = pp.Moments()
+assert abs(sorted([m1, m2, m3])[0] - 26.0) < 1e-6, 'principal moments ' + str((m1, m2, m3))
+ax1 = pp.FirstAxisOfInertia()
+assert abs(ax1.X() ** 2 + ax1.Y() ** 2 + ax1.Z() ** 2 - 1.0) < 1e-9, 'axis unit'
+mat = props.MatrixOfInertia()
+assert abs(mat.Value(1, 1) - 50.0) < 1e-6, 'gp_Mat.Value ' + str(mat.Value(1, 1))
+
+# TopoDS.CompSolid downcast (new lut entries)
+builder = BRep_Builder()
+cs = TopoDS_CompSolid()
+builder.MakeCompSolid(cs)
+builder.Add(cs, box)
+generic = TopExp_Explorer(cs, TopAbs_ShapeEnum.TopAbs_COMPSOLID).Current()
+casted = TopoDS.CompSolid_s(generic)
+assert casted.ShapeType() == TopAbs_ShapeEnum.TopAbs_COMPSOLID, 'CompSolid cast'
+
+# Extrema_ExtPC over an adaptor ('unbindable for a year' #1) — upstream
+# Wire.param_at's exact call shape, incl. Extrema_POnCurv accessors
+from OCP.BRepAdaptor import BRepAdaptor_Curve
+from OCP.gp import gp_Pnt
+ad = BRepAdaptor_Curve(edge)
+extrema = None
+from OCP.Extrema import Extrema_ExtPC
+extrema = Extrema_ExtPC(gp_Pnt(0.5, 0.1, 0.1), ad)
+assert extrema.IsDone() and extrema.NbExt() >= 1, 'ExtPC NbExt'
+best = None
+for i in range(1, extrema.NbExt() + 1):
+    d = extrema.SquareDistance(i)
+    if best is None or d < best[0]:
+        best = (d, extrema.Point(i).Parameter(), extrema.Point(i).Value())
+assert best is not None and abs(best[0] - 0.26) < 1e-9, 'ExtPC sqdist ' + str(best[0])  # edge runs along Z at (0,0): closest (0,0,0.1)
+assert hasattr(best[2], 'X'), 'POnCurv.Value gp_Pnt'
+
+# BRepOffset_MakeOffset ('unbindable for a year' #2) — upstream
+# offset_topods_face's exact call shape: kwargs Initialize + enum default
+from OCP.BRepOffset import BRepOffset_MakeOffset
+offsetor = BRepOffset_MakeOffset()
+offsetor.Initialize(face, Offset=0.5, Tol=1e-6)
+offsetor.MakeOffsetShape()
+off = offsetor.Shape()
+oprops = GProp_GProps()
+BRepGProp.SurfaceProperties_s(off, oprops)
+assert abs(oprops.Mass() - 12.0) < 1e-6, 'offset face area ' + str(oprops.Mass())
+
+# BRepExtrema_DistShapeShape.ParOnEdgeS2 (helper glue)
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeEdge
+v = BRepBuilderAPI_MakeVertex(gp_Pnt(1.0, -2.0, 0.0)).Vertex()
+e_line = BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(4, 0, 0)).Edge()
+dss = BRepExtrema_DistShapeShape(v, e_line)
+assert dss.IsDone() and dss.NbSolution() >= 1
+(t_par,) = dss.ParOnEdgeS2(1)
+assert abs(t_par - 1.0) < 1e-9, 'ParOnEdgeS2 ' + str(t_par)
+
+# GeomAPI_ExtremaCurveCurve.Parameters (helper glue)
+from OCP.GeomAPI import GeomAPI_ExtremaCurveCurve
+from OCP.Geom import Geom_Line
+from OCP.gp import gp_Dir
+l1 = Geom_Line(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0))
+l2 = Geom_Line(gp_Pnt(2, 5, 3), gp_Dir(0, 1, 0))
+ecc = GeomAPI_ExtremaCurveCurve(l1, l2)
+assert ecc.NbExtrema() >= 1
+u1, u2 = ecc.Parameters(1)
+assert abs(u1 - 2.0) < 1e-9 and abs(u2 + 5.0) < 1e-9, 'ECC params ' + str((u1, u2))
+
+# TopTools_HSequenceOfShape + ShapeAnalysis_FreeBounds.ConnectEdgesToWires
+# (the binding COMPROMISE(edges-to-wires) waited for)
+from OCP.TopTools import TopTools_HSequenceOfShape
+from OCP.ShapeAnalysis import ShapeAnalysis_FreeBounds
+seq = TopTools_HSequenceOfShape()
+seq.Append(BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(1, 0, 0)).Edge())
+seq.Append(BRepBuilderAPI_MakeEdge(gp_Pnt(1, 0, 0), gp_Pnt(1, 1, 0)).Edge())
+assert seq.Length() == 2
+wires_out = ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(seq, 1e-6, False)
+assert wires_out is not None and wires_out.Length() == 1, 'ConnectEdgesToWires'
+w0 = TopoDS.Wire(wires_out.Value(1))
+wprops = GProp_GProps()
+BRepGProp.LinearProperties_s(w0, wprops)
+assert abs(wprops.Mass() - 2.0) < 1e-9, 'joined wire length'
+
+# HArray2 pair (Face.make_bezier_surface inputs)
+from OCP.TColgp import TColgp_HArray2OfPnt
+from OCP.TColStd import TColStd_HArray2OfReal
+pts = TColgp_HArray2OfPnt(1, 2, 1, 2)
+for r in (1, 2):
+    for c in (1, 2):
+        pts.SetValue(r, c, gp_Pnt(float(r), float(c), 0.0))
+assert pts.NbRows() == 2 and pts.NbColumns() == 2
+assert pts.Value(2, 1).X() == 2.0
+ws = TColStd_HArray2OfReal(1, 2, 1, 2)
+ws.SetValue(1, 1, 2.5)
+assert abs(ws.Value(1, 1) - 2.5) < 1e-12
+
+# TopTools_SequenceOfShape + IndexedMapOfShape (topo_explore_connected_faces)
+from OCP.TopTools import TopTools_SequenceOfShape, TopTools_IndexedMapOfShape
+sq = TopTools_SequenceOfShape()
+sq.Append(box)
+assert sq.Length() == 1
+imap = TopTools_IndexedMapOfShape()
+from OCP.TopExp import TopExp
+TopExp.MapShapes_s(box, TopAbs_ShapeEnum.TopAbs_FACE, imap)
+assert imap.Extent() == 6, 'IndexedMap faces ' + str(imap.Extent())
+
+# NCollection_Utf8String stays a PERMANENT-SKIP (deliberate)
+from OCP.NCollection import NCollection_Utf8String
+try:
+    NCollection_Utf8String()
+    raise AssertionError('Utf8String should raise')
+except NotImplementedError as e:
+    assert 'PERMANENT-SKIP' in str(e), str(e)
+print('T8 OK fork 05d088d: Range/UVBounds/CurveOnSurface/StaticMoments/'
+      'PrincipalProps/gp_Mat/CompSolid/ExtPC/MakeOffset/ParOnEdgeS2/'
+      'ECC.Parameters/HSequence+ConnectEdges/HArray2/Seq+IndexedMap')
 `,
   't4-shape-core-import': `
 import b123d_shape_core_u as sc

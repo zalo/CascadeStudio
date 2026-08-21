@@ -6,4 +6,4 @@ class _Any:
 class NCollection_Utf8String:
     def __init__(self, *a, **k):
         raise NotImplementedError(
-            'PENDING_FORK_BINDING: OCP.NCollection.NCollection_Utf8String — kernel text (recommended: keep routing make_text to lite opentype.js)')
+            'OCP.NCollection.NCollection_Utf8String: PERMANENT-SKIP — kernel text deliberately not bound; make_text routes to lite opentype.js (fork 05d088d note)')

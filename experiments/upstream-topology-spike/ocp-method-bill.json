@@ -2,7 +2,8 @@
  "generated": "extract_ocp_bill.py over build123d 0.11.1 geometry.py+topology/*.py vs cascadestudio.d.ts",
  "summary": {
   "unique_items": {
-   "CONVENTION-GAP(out-params)": 20,
+   "CONVENTION-GAP(out-params)": 21,
+   "CONVENTION-GAP(rename:TopoDS_Cast.CompSolid_N)": 1,
    "CONVENTION-GAP(rename:TopoDS_Cast.Compound_N)": 1,
    "CONVENTION-GAP(rename:TopoDS_Cast.Edge_N)": 1,
    "CONVENTION-GAP(rename:TopoDS_Cast.Face_N)": 1,
@@ -10,24 +11,23 @@
    "CONVENTION-GAP(rename:TopoDS_Cast.Solid_N)": 1,
    "CONVENTION-GAP(rename:TopoDS_Cast.Vertex_N)": 1,
    "CONVENTION-GAP(rename:TopoDS_Cast.Wire_N)": 1,
-   "EXACT": 340,
+   "EXACT": 364,
    "EXACT-ENUM": 44,
    "EXACT-NARROWED": 3,
    "HEURISTIC-RECEIVER-FOUND": 2,
-   "MISSING": 7,
-   "MISSING-CLASS": 25,
-   "OVERLOAD-MAPPABLE": 93,
+   "MISSING": 3,
+   "OVERLOAD-MAPPABLE": 96,
    "UNATTRIBUTED-FOUND": 64,
    "UNATTRIBUTED-MISSING": 3,
-   "ctor:EXACT": 35,
-   "ctor:MISSING-CLASS": 8,
-   "ctor:OVERLOAD-MAPPABLE": 120,
-   "enum:EXACT-ENUM": 29,
-   "enum:EXACT-ENUM-TYPE": 2,
-   "enum:MISSING": 1
+   "ctor:EXACT": 39,
+   "ctor:MISSING-CLASS": 1,
+   "ctor:OVERLOAD-MAPPABLE": 123,
+   "enum:EXACT-ENUM": 30,
+   "enum:EXACT-ENUM-TYPE": 2
   },
   "call_sites": {
-   "CONVENTION-GAP(out-params)": 43,
+   "CONVENTION-GAP(out-params)": 44,
+   "CONVENTION-GAP(rename:TopoDS_Cast.CompSolid_N)": 1,
    "CONVENTION-GAP(rename:TopoDS_Cast.Compound_N)": 8,
    "CONVENTION-GAP(rename:TopoDS_Cast.Edge_N)": 28,
    "CONVENTION-GAP(rename:TopoDS_Cast.Face_N)": 20,
@@ -35,21 +35,19 @@
    "CONVENTION-GAP(rename:TopoDS_Cast.Solid_N)": 36,
    "CONVENTION-GAP(rename:TopoDS_Cast.Vertex_N)": 8,
    "CONVENTION-GAP(rename:TopoDS_Cast.Wire_N)": 14,
-   "EXACT": 762,
+   "EXACT": 808,
    "EXACT-ENUM": 77,
    "EXACT-NARROWED": 4,
    "HEURISTIC-RECEIVER-FOUND": 4,
-   "MISSING": 18,
-   "MISSING-CLASS": 36,
-   "OVERLOAD-MAPPABLE": 279,
+   "MISSING": 3,
+   "OVERLOAD-MAPPABLE": 282,
    "UNATTRIBUTED-FOUND": 195,
    "UNATTRIBUTED-MISSING": 3,
-   "ctor:EXACT": 78,
-   "ctor:MISSING-CLASS": 15,
-   "ctor:OVERLOAD-MAPPABLE": 463,
-   "enum:EXACT-ENUM": 97,
-   "enum:EXACT-ENUM-TYPE": 2,
-   "enum:MISSING": 1
+   "ctor:EXACT": 87,
+   "ctor:MISSING-CLASS": 2,
+   "ctor:OVERLOAD-MAPPABLE": 467,
+   "enum:EXACT-ENUM": 98,
+   "enum:EXACT-ENUM-TYPE": 2
   }
  },
  "per_file_call_sites": {
@@ -72,27 +70,25 @@
   },
   "topology/one_d.py": {
    "total": 919,
-   "OK": 864,
-   "GLUE": 28,
-   "BLOCKED": 27
+   "OK": 891,
+   "GLUE": 28
   },
   "topology/shape_core.py": {
    "total": 701,
-   "OK": 655,
-   "GLUE": 25,
-   "BLOCKED": 21
+   "OK": 671,
+   "GLUE": 27,
+   "BLOCKED": 3
   },
   "topology/three_d.py": {
    "total": 288,
-   "OK": 237,
+   "OK": 245,
    "GLUE": 42,
-   "BLOCKED": 9
+   "BLOCKED": 1
   },
   "topology/two_d.py": {
    "total": 475,
-   "OK": 423,
-   "GLUE": 40,
-   "BLOCKED": 12
+   "OK": 435,
+   "GLUE": 40
   },
   "topology/utils.py": {
    "total": 97,
@@ -109,47 +105,10 @@
   "?.Curve3D x1 (topology/shape_core.py:3202)",
   "?.IsCurve3D x1 (topology/shape_core.py:3200)",
   "?.NullHandler x1 (geometry.py:90)",
-  "BRepAlgo.ConvertFace_s x2 (topology/two_d.py:2476)",
   "BRepAlgoAPI_Common.History x1 (topology/three_d.py:1261)",
   "BRepAlgoAPI_Fuse.SetGlue x1 (topology/shape_core.py:1407)",
-  "BRepOffset_MakeOffset.Initialize x2 (topology/one_d.py:4679)",
-  "BRepOffset_MakeOffset.MakeOffsetShape x2 (topology/one_d.py:4680)",
-  "BRepOffset_MakeOffset.Shape x2 (topology/one_d.py:4682)",
-  "BRepOffset_MakeOffset.__init__ x2",
-  "BRepTools_History.Modified x1 (topology/three_d.py:1266)",
   "Bnd_Box.ShapeType x1 (geometry.py:3314)",
-  "Extrema_ExtPC.IsDone x1 (topology/one_d.py:4202)",
-  "Extrema_ExtPC.NbExt x2 (topology/one_d.py:4202)",
-  "Extrema_ExtPC.Point x2 (topology/one_d.py:4212)",
-  "Extrema_ExtPC.SquareDistance x1 (topology/one_d.py:4209)",
-  "Extrema_ExtPC.__init__ x1",
-  "Extrema_POnCurv.Parameter x1 (topology/one_d.py:4213)",
-  "Extrema_POnCurv.Value x1 (topology/one_d.py:4212)",
-  "GProp_PrincipalProps.FirstAxisOfInertia x1 (topology/shape_core.py:613)",
-  "GProp_PrincipalProps.Moments x1 (topology/shape_core.py:611)",
-  "GProp_PrincipalProps.SecondAxisOfInertia x1 (topology/shape_core.py:614)",
-  "GProp_PrincipalProps.ThirdAxisOfInertia x1 (topology/shape_core.py:615)",
-  "NCollection_Utf8String.__init__ x2",
-  "TColStd_HArray2OfReal.SetValue x1 (topology/two_d.py:1390)",
-  "TColStd_HArray2OfReal.__init__ x1",
-  "TColgp_HArray2OfPnt.SetValue x2 (topology/two_d.py:1384)",
-  "TColgp_HArray2OfPnt.__init__ x2",
-  "TopAbs::TopAbs_IN x1",
-  "TopTools_HSequenceOfShape.Append x2 (topology/one_d.py:3708)",
-  "TopTools_HSequenceOfShape.Length x2 (topology/one_d.py:3713)",
-  "TopTools_HSequenceOfShape.Value x2 (topology/one_d.py:3714)",
-  "TopTools_HSequenceOfShape.__init__ x4",
-  "TopTools_IndexedMapOfShape.Add x1 (topology/one_d.py:4774)",
-  "TopTools_IndexedMapOfShape.Extent x1 (topology/one_d.py:4775)",
-  "TopTools_IndexedMapOfShape.__init__ x1",
-  "TopTools_ListOfShape.Extent x4 (topology/shape_core.py:446)",
-  "TopTools_ListOfShape.IsEmpty x6 (topology/shape_core.py:2518)",
-  "TopTools_ListOfShape.Last x2 (topology/one_d.py:4009)",
-  "TopTools_ListOfShape.RemoveFirst x3 (topology/shape_core.py:2191)",
-  "TopTools_SequenceOfShape.Append x2 (topology/shape_core.py:2222)",
-  "TopTools_SequenceOfShape.__init__ x2",
-  "TopoDS.CompSolid x1 (topology/shape_core.py:230)",
-  "gp_Mat.Value x1 (topology/shape_core.py:555)"
+  "NCollection_Utf8String.__init__ x2"
  ],
  "per_class": {
   "?": {
@@ -589,7 +548,7 @@
      "sig_sites": {
       "0:": 3
      },
-     "dts_holders": 92
+     "dts_holders": 96
     },
     "IsPeriodic": {
      "count": 2,
@@ -1033,7 +992,7 @@
       "1:c:gp_Quaternion": 1,
       "2:c:gp_Ax1,?": 1
      },
-     "dts_holders": 2
+     "dts_holders": 3
     },
     "SetTranslationPart": {
      "count": 1,
@@ -1065,7 +1024,7 @@
      "sig_sites": {
       "3:?,?,?": 1
      },
-     "dts_holders": 19
+     "dts_holders": 22
     },
     "SetXDirection": {
      "count": 1,
@@ -1129,7 +1088,7 @@
      "sig_sites": {
       "1:c:gp_Pnt": 1
      },
-     "dts_holders": 9
+     "dts_holders": 10
     },
     "ToCString": {
      "count": 3,
@@ -1219,7 +1178,7 @@
       "1:?": 5,
       "1:n": 6
      },
-     "dts_holders": 43
+     "dts_holders": 49
     },
     "Weight": {
      "count": 4,
@@ -1672,7 +1631,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.TopoDS.TopoDS_Face"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "2:c:TopoDS_Face,?": 1
@@ -5071,7 +5030,7 @@
       "overloads": 1,
       "ret": "None"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "3:c:TopoDS_Face|kw:Offset,Tol": 1,
@@ -5092,7 +5051,7 @@
       "overloads": 1,
       "ret": "None"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 2
@@ -5112,7 +5071,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.TopoDS.TopoDS_Shape"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 2
@@ -5124,7 +5083,7 @@
     "arities": {
      "0": 2
     },
-    "status": "MISSING-CLASS",
+    "status": "OVERLOAD-MAPPABLE",
     "sites": [
      "topology/one_d.py:4678",
      "topology/three_d.py:1773"
@@ -5717,7 +5676,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.TopTools.TopTools_ListOfShape"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "1:c:TopoDS_Face": 1
@@ -6705,7 +6664,7 @@
       "overloads": 1,
       "ret": "bool"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 1
@@ -6725,7 +6684,7 @@
       "overloads": 1,
       "ret": "int"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 2
@@ -6745,7 +6704,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.Extrema.Extrema_POnCurv"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "1:?": 2
@@ -6764,7 +6723,7 @@
       "overloads": 1,
       "ret": "float"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "1:?": 1
@@ -6776,7 +6735,7 @@
     "arities": {
      "2": 1
     },
-    "status": "MISSING-CLASS",
+    "status": "OVERLOAD-MAPPABLE",
     "sites": [
      "topology/one_d.py:4201"
     ],
@@ -6803,7 +6762,7 @@
       "overloads": 1,
       "ret": "float"
      },
-     "status": "MISSING-CLASS",
+     "status": "OVERLOAD-MAPPABLE",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 1
@@ -6822,7 +6781,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.gp.gp_Pnt"
      },
-     "status": "MISSING-CLASS",
+     "status": "OVERLOAD-MAPPABLE",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 1
@@ -7348,7 +7307,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.gp.gp_Vec"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 1
@@ -7367,7 +7326,7 @@
       "overloads": 1,
       "ret": "tuple[float, float, float]"
      },
-     "status": "MISSING-CLASS",
+     "status": "CONVENTION-GAP(out-params)",
      "tuple_ret": true,
      "sig_sites": {
       "0:": 1
@@ -7386,7 +7345,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.gp.gp_Vec"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 1
@@ -7405,7 +7364,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.gp.gp_Vec"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 1
@@ -11558,7 +11517,7 @@
       "overloads": 1,
       "ret": "None"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "3:?,?,n": 1
@@ -11570,7 +11529,7 @@
     "arities": {
      "4": 1
     },
-    "status": "MISSING-CLASS",
+    "status": "EXACT",
     "sites": [
      "topology/two_d.py:1387"
     ],
@@ -11723,7 +11682,7 @@
       "overloads": 1,
       "ret": "None"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "3:?,?,?": 2
@@ -11735,7 +11694,7 @@
     "arities": {
      "4": 2
     },
-    "status": "MISSING-CLASS",
+    "status": "EXACT",
     "sites": [
      "topology/two_d.py:1381",
      "topology/two_d.py:1694"
@@ -12236,7 +12195,7 @@
       "overloads": 2,
       "ret": "None"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "1:c:TopoDS_Shape": 2
@@ -12256,7 +12215,7 @@
       "overloads": 1,
       "ret": "int"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 2
@@ -12276,7 +12235,7 @@
       "overloads": 1,
       "ret": "OCP.OCP.TopoDS.TopoDS_Shape"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "1:?": 2
@@ -12288,7 +12247,7 @@
     "arities": {
      "0": 4
     },
-    "status": "MISSING-CLASS",
+    "status": "EXACT",
     "sites": [
      "topology/one_d.py:3703",
      "topology/one_d.py:3704",
@@ -12450,7 +12409,7 @@
       "overloads": 1,
       "ret": "int"
      },
-     "status": "MISSING-CLASS",
+     "status": "OVERLOAD-MAPPABLE",
      "tuple_ret": false,
      "sig_sites": {
       "1:?": 1
@@ -12469,7 +12428,7 @@
       "overloads": 1,
       "ret": "int"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 1
@@ -12481,7 +12440,7 @@
     "arities": {
      "0": 1
     },
-    "status": "MISSING-CLASS",
+    "status": "OVERLOAD-MAPPABLE",
     "sites": [
      "topology/one_d.py:4770"
     ],
@@ -12536,7 +12495,7 @@
       "overloads": 1,
       "ret": "int"
      },
-     "status": "MISSING",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 4
@@ -12584,7 +12543,7 @@
       "overloads": 1,
       "ret": "bool"
      },
-     "status": "MISSING",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 6
@@ -12604,7 +12563,7 @@
       "overloads": 2,
       "ret": "OCP.OCP.TopoDS.TopoDS_Shape"
      },
-     "status": "MISSING",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 2
@@ -12625,7 +12584,7 @@
       "overloads": 1,
       "ret": "None"
      },
-     "status": "MISSING",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "0:": 3
@@ -12690,7 +12649,7 @@
       "overloads": 2,
       "ret": "None"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "1:c:TopoDS_Shape": 2
@@ -12702,7 +12661,7 @@
     "arities": {
      "0": 2
     },
-    "status": "MISSING-CLASS",
+    "status": "EXACT",
     "sites": [
      "topology/shape_core.py:2218",
      "topology/two_d.py:337"
@@ -12749,7 +12708,7 @@
       "overloads": 2,
       "ret": "OCP.OCP.TopoDS.TopoDS_CompSolid"
      },
-     "status": "MISSING-CLASS",
+     "status": "CONVENTION-GAP(rename:TopoDS_Cast.CompSolid_N)",
      "tuple_ret": false,
      "sig_sites": {}
     },
@@ -14024,8 +13983,10 @@
     },
     "TopAbs_IN": {
      "count": 1,
-     "status": "MISSING",
-     "dts_enums": [],
+     "status": "EXACT-ENUM",
+     "dts_enums": [
+      "TopAbs_State"
+     ],
      "sites": [
       "topology/three_d.py:549"
      ]
@@ -15283,7 +15244,7 @@
       "overloads": 1,
       "ret": "float"
      },
-     "status": "MISSING-CLASS",
+     "status": "EXACT",
      "tuple_ret": false,
      "sig_sites": {
       "2:?,?": 1

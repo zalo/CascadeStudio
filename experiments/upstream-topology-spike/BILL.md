@@ -1,5 +1,17 @@
 # BILL — upstream build123d 0.11.1 TOPOLOGY layer over our OCCT wasm binding
 
+> **STATUS UPDATE (fork 05d088d integration):** the MISSING list below is
+> HISTORICAL — all 44 asks landed (see FORK-ASKS.md). Re-billing against
+> the new d.ts: **7 MISSING unique items remain** (was 44): the two
+> `BRep_TEdge.Curves()` unattributed leftovers, `BRepAlgoAPI_Common
+> .History` + `BRepAlgoAPI_Fuse.SetGlue` (the accessor/base-chain pieces —
+> `BRepTools_History` and `BOPAlgo_Builder.SetGlue` themselves ARE bound),
+> `NCollection_Utf8String` (PERMANENT-SKIP: kernel text stays on
+> opentype.js), and two dataflow false-positives (`?.NullHandler`,
+> `Bnd_Box.ShapeType`). The 20 out-param CONVENTION-GAP items are all
+> served: 12 original helpers + the 8 new fork helpers/glue (only the
+> unbilled ParOnEdgeS1 keeps a PENDING hook).
+
 The static Phase-1 bill for running upstream `geometry.py` + `topology/*.py`
 (~19.8k lines) VERBATIM over the opencascade.js fork (embind, OCCT 8.0.1),
 replacing build123d-lite's topology. Produced by

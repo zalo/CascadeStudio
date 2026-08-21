@@ -26,6 +26,17 @@
 > committed baselines (upstream 205/10/5/2 incl. the documented
 > heat_exchanger contention flap; lite 206/10/5/1); full suite 95
 > passed / 1 skipped.
+>
+> **Integration round (fork 05d088d)**: the repin landed all 44 FORK-ASKS
+> bindings; every PENDING_FORK_BINDING hook is closed against the real
+> helpers/classes (exercised with real geometry in topo-poc t8 — incl.
+> the two year-long "unbindables", Extrema_ExtPC and
+> BRepOffset_MakeOffset with kwargs Initialize + enum-default fill) except
+> the deliberate NCollection_Utf8String PERMANENT-SKIP and the unbilled
+> ParOnEdgeS1. Re-billed MISSING: 44 → 7 unique items (see BILL.md
+> status). Dispatch after regeneration: 5,307 direct / 190 typed / 58
+> ambiguous (11 billed) / 191 dead-unbound dropped; defaults: 735 lit /
+> 81 enum / 128 ctor0.
 
 Companion to `BILL.md` (Phase 1, the static method bill). This records what
 the Phase-2 prototype PROVED, the shim pattern that emerged, and the honest

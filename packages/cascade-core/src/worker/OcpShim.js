@@ -426,20 +426,40 @@ export function installOcpShim(self, table) {
   };
 
   // ---- glue: out-param methods pybind serves as tuple returns ---------- //
+  // The OCJS_Out helpers below landed in fork 05d088d (the FORK-ASKS round).
   const GLUE = {
-    // PENDING_FORK_BINDING(optional-exactness: OCJS_Out.BRepTool_Range):
-    // the adaptor reports the same range; a helper would skip the alloc
+    // exact helper; accepts pybind's (E) and (E, F) forms
     'BRep_Tool.Range': (args) => {
-      const a = new oc.BRepAdaptor_Curve_2(args[0]);
-      return [a.FirstParameter(), a.LastParameter()];
+      const r = oc.OCJS_Out.BRepTool_Range.apply(oc.OCJS_Out, args);
+      return [r.first, r.last];
     },
-    // PENDING_FORK_BINDING(optional-exactness: OCJS_Out.BRepTools_UVBounds):
-    // pybind UVBounds_s(face) -> (umin, umax, vmin, vmax); the bound
-    // BRepAdaptor_Surface (restriction=true) reports the same bounds
     'BRepTools.UVBounds': (args) => {
-      const s = new oc.BRepAdaptor_Surface_2(args[0], true);
-      return [s.FirstUParameter(), s.LastUParameter(),
-        s.FirstVParameter(), s.LastVParameter()];
+      const r = oc.OCJS_Out.BRepTools_UVBounds(args[0]);
+      return [r.umin, r.umax, r.vmin, r.vmax];
+    },
+    // pybind CurveOnSurface_s(E, F, First, Last[, theIsStored]) returns the
+    // pcurve (the float args are value-passed dummies; upstream reads the
+    // range from Range_s) — the helper also reports first/last for the
+    // 2-arg convenience form
+    'BRep_Tool.CurveOnSurface': (args, ref) => {
+      const r = oc.OCJS_Out.BRepTool_CurveOnSurface(args[0], args[1]);
+      return deref(r.curve2d);
+    },
+    'GProp_GProps.StaticMoments': (args, ref) => {
+      const r = oc.OCJS_Out.GProp_StaticMoments(ref);
+      return [r.ix, r.iy, r.iz];
+    },
+    'GProp_PrincipalProps.Moments': (args, ref) => {
+      const r = oc.OCJS_Out.PrincipalProps_Moments(ref);
+      return [r.ixx, r.iyy, r.izz];
+    },
+    'BRepExtrema_DistShapeShape.ParOnEdgeS2': (args, ref) => {
+      const r = oc.OCJS_Out.BRepExtrema_ParOnEdgeS2(ref, args[0]);
+      return [r.t];
+    },
+    'GeomAPI_ExtremaCurveCurve.Parameters': (args, ref) => {
+      const r = oc.OCJS_Out.GeomAPI_ExtremaCurveCurve_Parameters(ref, args[0]);
+      return [r.u1, r.u2];
     },
     'Bnd_Box.Get': (args, ref) => {
       const mn = ref.CornerMin(), mx = ref.CornerMax();
@@ -486,19 +506,11 @@ export function installOcpShim(self, table) {
       return [rec.parSol, rec.parArg];
     };
   }
-  // out-param cases with NO helper bound yet (the fork round adds them —
-  // integration is `grep PENDING_FORK_BINDING`):
+  // The one out-param case the fork round did NOT cover (unbilled;
+  // ParOnEdgeS2 is the billed sibling and landed):
   const PENDING_FORK = {
-    'BRep_Tool.CurveOnSurface':
-      'OCJS_Out.BRepTool_CurveOnSurface(edge, face) -> {curve2d, first, last}',
-    'GProp_GProps.StaticMoments':
-      'OCJS_Out.GProp_StaticMoments(props) -> {ix, iy, iz}',
     'BRepExtrema_DistShapeShape.ParOnEdgeS1':
       'OCJS_Out.BRepExtrema_ParOnEdgeS1(dss, i) -> {t}',
-    'BRepExtrema_DistShapeShape.ParOnEdgeS2':
-      'OCJS_Out.BRepExtrema_ParOnEdgeS2(dss, i) -> {t}',
-    'GeomAPI_ExtremaCurveCurve.Parameters':
-      'OCJS_Out.GeomAPI_ExtremaCurveCurve_Parameters(ecc, i) -> {u1, u2}',
   };
   for (const [key, ask] of Object.entries(PENDING_FORK)) {
     GLUE[key] = () => {

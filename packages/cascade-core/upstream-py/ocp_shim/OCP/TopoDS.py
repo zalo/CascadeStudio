@@ -9,7 +9,7 @@ class TopoDS:
     Shell = Shell_s = _c.topods_downcast('Shell')
     Solid = Solid_s = _c.topods_downcast('Solid')
     Compound = Compound_s = _c.topods_downcast('Compound')
-    CompSolid = CompSolid_s = _c.pending_fork_binding('TopoDS_Cast.CompSolid_1/_2 — one lut line in additionalBindCode')
+    CompSolid = CompSolid_s = _c.topods_downcast('CompSolid')
 class _Any:
     def __init__(self, *a, **k):
         raise NotImplementedError(

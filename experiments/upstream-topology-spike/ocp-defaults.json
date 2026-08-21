@@ -2272,7 +2272,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d2c870>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020597b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -2861,7 +2861,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c13cf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01f32eb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -2883,7 +2883,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5374a70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0227b070>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -3400,7 +3400,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d2c870>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020597b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -4338,7 +4338,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f611f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020a4ef0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -4360,7 +4360,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5374a70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0227b070>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -5094,7 +5094,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c13cf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01f32eb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -5116,7 +5116,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5374a70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0227b070>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -7941,7 +7941,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -8142,7 +8142,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a9fdf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0269b670>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -8639,7 +8639,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ad58f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0268a830>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -9052,7 +9052,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e999b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af021f70f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -9076,7 +9076,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ca5bb0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01e3adb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -9104,7 +9104,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a9fdf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0269b670>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -9593,7 +9593,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4affcb0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d62df0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -9623,7 +9623,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b48f6d70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0223db30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -9651,7 +9651,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a9fdf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0269b670>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -10140,7 +10140,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d4d8b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d1d070>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -10164,7 +10164,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ad5ab0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af029fecf0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -10192,7 +10192,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a9fdf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0269b670>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -10829,7 +10829,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a287f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020a51f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -11470,7 +11470,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b50fc930>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0276f830>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -12092,7 +12092,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -12301,7 +12301,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -13053,7 +13053,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -13869,7 +13869,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -14234,7 +14234,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -14412,7 +14412,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -14614,7 +14614,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -14740,7 +14740,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -14985,7 +14985,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -15152,7 +15152,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -15900,7 +15900,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5506c70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af029356b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -16298,7 +16298,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -16900,7 +16900,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b57d2270>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af029529f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -16944,7 +16944,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b554e070>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02998230>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -17117,7 +17117,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b554e7f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af029994f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -17372,7 +17372,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -17742,7 +17742,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -18323,7 +18323,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ad5f30>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01e7a1f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -18690,7 +18690,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -19163,7 +19163,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f12030>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02461af0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -19856,7 +19856,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5275af0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02279a70>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -20808,7 +20808,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b55a1430>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af027177b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -23240,7 +23240,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5391570>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0268a9f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -23364,7 +23364,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c31470>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02917130>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -23554,7 +23554,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5772cb0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01f51730>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -23570,7 +23570,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b557bcf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01f33db0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -23730,7 +23730,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8f970>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01f33f30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -24116,7 +24116,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5377570>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02058730>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -24469,7 +24469,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5117430>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af022340f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -24691,7 +24691,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d6ca30>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01fb03f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -24851,7 +24851,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4daff70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af021a63b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -24944,7 +24944,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b54604b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af026d8130>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -25171,7 +25171,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d6eb30>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0210cdf0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -25655,7 +25655,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ca4d70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020a4d70>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -25803,7 +25803,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d2f0b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01fb20b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -25907,7 +25907,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4daff70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af021a63b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -26018,7 +26018,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4df6a70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af025d22f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -26457,7 +26457,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e9bc70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af026736b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -26699,7 +26699,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ca4030>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020a52f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -26717,7 +26717,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ca4130>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02688530>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -26928,7 +26928,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5360470>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0241f170>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -27280,7 +27280,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0226aa30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -27512,7 +27512,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0226aa30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -27700,7 +27700,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -27834,7 +27834,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0226aa30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -28041,7 +28041,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b513a5b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02278930>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -28243,7 +28243,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f61df0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af029998b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -28647,7 +28647,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0226aa30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -28825,7 +28825,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02953570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -29128,7 +29128,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0226aa30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -29408,7 +29408,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b57d00b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af022353b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -30079,7 +30079,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f63e30>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0254eb70>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -30103,7 +30103,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5117270>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af024060f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -30387,7 +30387,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b50fe0f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02906c70>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -30419,7 +30419,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f3c730>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02237a70>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -30439,7 +30439,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b554c530>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0254fdb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -30471,7 +30471,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b55787b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af026da830>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -36181,7 +36181,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f12430>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02793fb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -36246,7 +36246,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b52762b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0223e370>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -36282,7 +36282,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f13270>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0243dfb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -81961,7 +81961,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b48f5130>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d1e9b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -81997,7 +81997,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4b78530>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d61230>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -83358,6 +83358,86 @@
 }
 }
 },
+"Message_ProgressRange": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.Message.Message_ProgressRange"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"Close": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsActive": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"More": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"UserBreak": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+}
+}
+},
 "NCollection_Utf8String": {
 "ctor": [
 {
@@ -84081,6 +84161,116 @@
 "params": [],
 "ret": "str",
 "static_form": true
+}
+],
+"tuple_ret": false
+}
+}
+},
+"Poly_Triangle": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theN1",
+"type": "int"
+},
+{
+"name": "theN2",
+"type": "int"
+},
+{
+"name": "theN3",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"ChangeValue": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theIndex",
+"type": "int"
+}
+],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Get": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "tuple[int, int, int]",
+"static_form": false
+}
+],
+"tuple_ret": true
+},
+"Set": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theN1",
+"type": "int"
+},
+{
+"name": "theN2",
+"type": "int"
+},
+{
+"name": "theN3",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theIndex",
+"type": "int"
+},
+{
+"name": "theNode",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Value": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theIndex",
+"type": "int"
+}
+],
+"ret": "int",
+"static_form": false
 }
 ],
 "tuple_ret": false
@@ -87523,7 +87713,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c31ef0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01fb08f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -87559,7 +87749,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4b78530>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d61230>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -88133,7 +88323,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c31ef0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01fb08f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -88169,7 +88359,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4b78530>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d61230>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -89624,7 +89814,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b56c7430>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0207b730>",
 "default_ctor0": "Message_ProgressRange"
 },
 {
@@ -91619,7 +91809,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b54eeef0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0257d570>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -92226,7 +92416,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5e37570>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af025d2770>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -96098,7 +96288,7 @@
 {
 "name": "thePenLoc",
 "type": "OCP.gp.gp_Ax3",
-"default": "<OCP.OCP.gp.gp_Ax3 object at 0x7d48b4b35ef0>",
+"default": "<OCP.OCP.gp.gp_Ax3 object at 0x74af01fb2d70>",
 "default_ctor0": "gp_Ax3"
 }
 ],
@@ -96118,7 +96308,7 @@
 {
 "name": "thePenLoc",
 "type": "OCP.gp.gp_Ax3",
-"default": "<OCP.OCP.gp.gp_Ax3 object at 0x7d48b5734770>",
+"default": "<OCP.OCP.gp.gp_Ax3 object at 0x74af0241cdb0>",
 "default_ctor0": "gp_Ax3"
 },
 {
@@ -98633,6 +98823,325 @@
 }
 }
 },
+"TColgp_Array1OfPnt2d": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theLower",
+"type": "int"
+},
+{
+"name": "theUpper",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theAlloc",
+"type": "NCollection_Allocator<gp_Pnt2d>"
+},
+{
+"name": "theLower",
+"type": "int"
+},
+{
+"name": "theUpper",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.TColgp.TColgp_Array1OfPnt2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"Assign": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.TColgp.TColgp_Array1OfPnt2d"
+}
+],
+"ret": "OCP.TColgp.TColgp_Array1OfPnt2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ChangeFirst": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Pnt2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ChangeLast": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Pnt2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ChangeValue": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theIndex",
+"type": "int"
+}
+],
+"ret": "OCP.gp.gp_Pnt2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"First": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Pnt2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Init": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theValue",
+"type": "OCP.gp.gp_Pnt2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsDeletable": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsEmpty": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Last": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Pnt2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Length": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Lower": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Move": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.TColgp.TColgp_Array1OfPnt2d"
+}
+],
+"ret": "OCP.TColgp.TColgp_Array1OfPnt2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Resize": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theLower",
+"type": "int"
+},
+{
+"name": "theUpper",
+"type": "int"
+},
+{
+"name": "theToCopyData",
+"type": "bool"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetValue": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theIndex",
+"type": "int"
+},
+{
+"name": "theItem",
+"type": "OCP.gp.gp_Pnt2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Size": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"UpdateLowerBound": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theLower",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"UpdateUpperBound": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theUpper",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Upper": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Value": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theIndex",
+"type": "int"
+}
+],
+"ret": "OCP.gp.gp_Pnt2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+}
+}
+},
 "TColgp_Array1OfVec": {
 "ctor": [
 {
@@ -98945,6 +99454,395 @@
 }
 ],
 "ret": "OCP.gp.gp_Vec",
+"static_form": false
+}
+],
+"tuple_ret": false
+}
+}
+},
+"TColgp_Array2OfPnt": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theRowLower",
+"type": "int"
+},
+{
+"name": "theRowUpper",
+"type": "int"
+},
+{
+"name": "theColLower",
+"type": "int"
+},
+{
+"name": "theColUpper",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theAlloc",
+"type": "NCollection_Allocator<gp_Pnt>"
+},
+{
+"name": "theRowLower",
+"type": "int"
+},
+{
+"name": "theRowUpper",
+"type": "int"
+},
+{
+"name": "theColLower",
+"type": "int"
+},
+{
+"name": "theColUpper",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.TColgp.TColgp_Array2OfPnt"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theBegin",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theRowLower",
+"type": "int"
+},
+{
+"name": "theRowUpper",
+"type": "int"
+},
+{
+"name": "theColLower",
+"type": "int"
+},
+{
+"name": "theColUpper",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"Assign": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.TColgp.TColgp_Array2OfPnt"
+}
+],
+"ret": "OCP.TColgp.TColgp_Array2OfPnt",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"BeginPosition_s": {
+"static": true,
+"sigs": [
+{
+"params": [
+{
+"name": "theRowLower",
+"type": "int"
+},
+{
+"name": "arg1",
+"type": "int"
+},
+{
+"name": "theColLower",
+"type": "int"
+},
+{
+"name": "theColUpper",
+"type": "int"
+}
+],
+"ret": "int",
+"static_form": true
+}
+],
+"tuple_ret": false
+},
+"ChangeValue": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRow",
+"type": "int"
+},
+{
+"name": "theCol",
+"type": "int"
+}
+],
+"ret": "OCP.gp.gp_Pnt",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ColLength": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"LastPosition_s": {
+"static": true,
+"sigs": [
+{
+"params": [
+{
+"name": "theRowLower",
+"type": "int"
+},
+{
+"name": "theRowUpper",
+"type": "int"
+},
+{
+"name": "theColLower",
+"type": "int"
+},
+{
+"name": "theColUpper",
+"type": "int"
+}
+],
+"ret": "int",
+"static_form": true
+}
+],
+"tuple_ret": false
+},
+"Length": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"LowerCol": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"LowerRow": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Move": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.TColgp.TColgp_Array2OfPnt"
+}
+],
+"ret": "OCP.TColgp.TColgp_Array2OfPnt",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"NbColumns": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"NbRows": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Resize": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRowLower",
+"type": "int"
+},
+{
+"name": "theRowUpper",
+"type": "int"
+},
+{
+"name": "theColLower",
+"type": "int"
+},
+{
+"name": "theColUpper",
+"type": "int"
+},
+{
+"name": "theToCopyData",
+"type": "bool"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"RowLength": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetValue": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRow",
+"type": "int"
+},
+{
+"name": "theCol",
+"type": "int"
+},
+{
+"name": "theItem",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Size": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"UpperCol": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"UpperRow": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Value": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRow",
+"type": "int"
+},
+{
+"name": "theCol",
+"type": "int"
+}
+],
+"ret": "OCP.gp.gp_Pnt",
 "static_form": false
 }
 ],
@@ -99969,6 +100867,684 @@
 "params": [],
 "ret": "str",
 "static_form": true
+}
+],
+"tuple_ret": false
+}
+}
+},
+"TCollection_ExtendedString": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "astring",
+"type": "str"
+},
+{
+"name": "isMultiByte",
+"type": "bool",
+"default": "False",
+"default_lit": false
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "astring",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theStringUtf",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "aChar",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "aChar",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "length",
+"type": "int"
+},
+{
+"name": "filler",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "value",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "value",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "astring",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "astring",
+"type": "OCP.TCollection.TCollection_AsciiString"
+},
+{
+"name": "isMultiByte",
+"type": "bool",
+"default": "True",
+"default_lit": true
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"AssignCat": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "other",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theChar",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Cat": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "other",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "OCP.TCollection.TCollection_ExtendedString",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ChangeAll": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "aChar",
+"type": "str"
+},
+{
+"name": "NewChar",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Clear": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Copy": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "fromwhere",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"EndsWith": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theEndString",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"HashCode": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Insert": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "where",
+"type": "int"
+},
+{
+"name": "what",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "where",
+"type": "int"
+},
+{
+"name": "what",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsAscii": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsDifferent": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "other",
+"type": "str"
+}
+],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "other",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsEmpty": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsEqual": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "other",
+"type": "str"
+}
+],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "other",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsEqual_s": {
+"static": true,
+"sigs": [
+{
+"params": [
+{
+"name": "theString1",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+},
+{
+"name": "theString2",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "bool",
+"static_form": true
+}
+],
+"tuple_ret": false
+},
+"IsGreater": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "other",
+"type": "str"
+}
+],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "other",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsLess": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "other",
+"type": "str"
+}
+],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "other",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Length": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"LengthOfCString": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Print": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "astream",
+"type": "io.BytesIO"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Remove": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "where",
+"type": "int"
+},
+{
+"name": "ahowmany",
+"type": "int",
+"default": "1",
+"default_lit": 1
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"RemoveAll": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "what",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Search": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "what",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SearchFromEnd": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "what",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetValue": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "where",
+"type": "int"
+},
+{
+"name": "what",
+"type": "str"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "where",
+"type": "int"
+},
+{
+"name": "what",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Split": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "where",
+"type": "int"
+}
+],
+"ret": "OCP.TCollection.TCollection_ExtendedString",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"StartsWith": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theStartString",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Swap": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.TCollection.TCollection_ExtendedString"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ToExtString": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "str",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Token": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "separators",
+"type": "str"
+},
+{
+"name": "whichone",
+"type": "int",
+"default": "1",
+"default_lit": 1
+}
+],
+"ret": "OCP.TCollection.TCollection_ExtendedString",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Trunc": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "ahowmany",
+"type": "int"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Value": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "where",
+"type": "int"
+}
+],
+"ret": "str",
+"static_form": false
 }
 ],
 "tuple_ret": false
@@ -101853,6 +103429,571 @@
 "params": [],
 "ret": "str",
 "static_form": true
+}
+],
+"tuple_ret": false
+}
+}
+},
+"TDF_Label": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"AddAttribute": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "anAttribute",
+"type": "OCP.TDF.TDF_Attribute"
+},
+{
+"name": "append",
+"type": "bool",
+"default": "True",
+"default_lit": true
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"AttributesModified": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Data": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.TDF.TDF_Data",
+"static_form": false
+},
+{
+"params": [],
+"ret": "OCP.TDF.TDF_Data",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Depth": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Dump": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "anOS",
+"type": "io.BytesIO"
+}
+],
+"ret": "io.BytesIO",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"EntryDump": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "anOS",
+"type": "io.BytesIO"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ExtendedDump": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "anOS",
+"type": "io.BytesIO"
+},
+{
+"name": "aFilter",
+"type": "OCP.TDF.TDF_IDFilter"
+},
+{
+"name": "aMap",
+"type": "OCP.TDF.TDF_AttributeIndexedMap"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Father": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.TDF.TDF_Label",
+"static_form": false
+},
+{
+"params": [],
+"ret": "OCP.TDF.TDF_Label",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"FindAttribute": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "GUID",
+"type": "OCP.Standard.Standard_GUID"
+},
+{
+"name": "Attribute",
+"type": "OCP.TDF.TDF_Attribute"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"FindChild": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "aTag",
+"type": "int"
+},
+{
+"name": "create",
+"type": "bool",
+"default": "True",
+"default_lit": true
+}
+],
+"ret": "OCP.TDF.TDF_Label",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ForgetAllAttributes": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "clearChildren",
+"type": "bool",
+"default": "True",
+"default_lit": true
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ForgetAttribute": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "anAttribute",
+"type": "OCP.TDF.TDF_Attribute"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "aguid",
+"type": "OCP.Standard.Standard_GUID"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"HasAttribute": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"HasChild": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"HasGreaterNode": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "otherLabel",
+"type": "OCP.TDF.TDF_Label"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"HasLowerNode": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "otherLabel",
+"type": "OCP.TDF.TDF_Label"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Imported": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "aStatus",
+"type": "bool"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsAttribute": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "anID",
+"type": "OCP.Standard.Standard_GUID"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsDescendant": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "aLabel",
+"type": "OCP.TDF.TDF_Label"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsDifferent": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "aLabel",
+"type": "OCP.TDF.TDF_Label"
+}
+],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "aLabel",
+"type": "OCP.TDF.TDF_Label"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsEqual": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "aLabel",
+"type": "OCP.TDF.TDF_Label"
+}
+],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "aLabel",
+"type": "OCP.TDF.TDF_Label"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsImported": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsNull": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsRoot": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"MayBeModified": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"NbAttributes": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"NbChildren": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"NewChild": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.TDF.TDF_Label",
+"static_form": false
+},
+{
+"params": [],
+"ret": "OCP.TDF.TDF_Label",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Nullify": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"ResumeAttribute": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "anAttribute",
+"type": "OCP.TDF.TDF_Attribute"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Root": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.TDF.TDF_Label",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Tag": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
+},
+{
+"params": [],
+"ret": "int",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transaction": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "int",
+"static_form": false
 }
 ],
 "tuple_ret": false
@@ -104712,7 +106853,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e49db0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d1e270>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -104732,7 +106873,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f62e70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01f330f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -104756,7 +106897,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e4a0b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d1caf0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -104776,7 +106917,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d6e7b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020358f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -104808,7 +106949,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f12430>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02793fb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -104900,7 +107041,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b52762b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0223e370>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -104936,7 +107077,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f13270>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0243dfb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -104958,7 +107099,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b513bc70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01ee1c70>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -104978,7 +107119,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e99ef0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01e79470>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -105004,7 +107145,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4be2470>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01e3a330>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -105024,7 +107165,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8d970>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02235a30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -105048,7 +107189,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d1acf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0207a6f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -105072,7 +107213,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a2b330>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af021218b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -117552,7 +119693,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d19330>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020a4530>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -117574,7 +119715,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8da70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02b55e30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -118969,7 +121110,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d19330>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020a4530>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -118991,7 +121132,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8da70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02b55e30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119651,7 +121792,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e49db0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d1e270>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119671,7 +121812,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f62e70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01f330f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119695,7 +121836,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e4a0b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d1caf0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119715,7 +121856,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d6e7b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020358f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119747,7 +121888,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f12430>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02793fb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119839,7 +121980,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b52762b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0223e370>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119875,7 +122016,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f13270>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0243dfb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119897,7 +122038,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b513bc70>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01ee1c70>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119917,7 +122058,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e99ef0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01e79470>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119943,7 +122084,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4be2470>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01e3a330>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119963,7 +122104,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8d970>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02235a30>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -119987,7 +122128,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d1acf0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af0207a6f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -120011,7 +122152,7 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a2b330>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af021218b0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -125380,7 +127521,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d198f0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d63030>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -125416,7 +127557,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4b78530>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d61230>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -128512,7 +130653,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4aff0b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af020595f0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -128530,7 +130671,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ab47b0>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af02078eb0>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -128580,7 +130721,7 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5116830>",
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x74af01d1cd70>",
 "default_ctor0": "Message_ProgressRange"
 }
 ],
@@ -132185,6 +134326,497 @@
 {
 "params": [],
 "ret": "OCP.gp.gp_Ax2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+}
+}
+},
+"gp_Cylinder": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA3",
+"type": "OCP.gp.gp_Ax3"
+},
+{
+"name": "theRadius",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"Axis": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax1",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Coefficients": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "tuple[float, float, float, float, float, float, float, float, float, float]",
+"static_form": false
+}
+],
+"tuple_ret": true
+},
+"Direct": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Location": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Pnt",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Mirror": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA2",
+"type": "OCP.gp.gp_Ax2"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Mirrored": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA2",
+"type": "OCP.gp.gp_Ax2"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Position": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax3",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Radius": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Rotate": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+},
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Rotated": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+},
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Scale": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Scaled": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetAxis": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetLocation": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theLoc",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetPosition": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA3",
+"type": "OCP.gp.gp_Ax3"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetRadius": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theR",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transform": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transformed": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Translate": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Vec"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP1",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theP2",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Translated": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Vec"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP1",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theP2",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "OCP.gp.gp_Cylinder",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"UReverse": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"VReverse": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"XAxis": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax1",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"YAxis": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax1",
 "static_form": false
 }
 ],
@@ -140104,6 +142736,1041 @@
 }
 }
 },
+"gp_Sphere": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA3",
+"type": "OCP.gp.gp_Ax3"
+},
+{
+"name": "theRadius",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"Area": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Coefficients": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "tuple[float, float, float, float, float, float, float, float, float, float]",
+"static_form": false
+}
+],
+"tuple_ret": true
+},
+"Direct": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Location": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Pnt",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Mirror": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA2",
+"type": "OCP.gp.gp_Ax2"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Mirrored": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA2",
+"type": "OCP.gp.gp_Ax2"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Position": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax3",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Radius": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Rotate": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+},
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Rotated": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+},
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Scale": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Scaled": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetLocation": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theLoc",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetPosition": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA3",
+"type": "OCP.gp.gp_Ax3"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetRadius": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theR",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transform": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transformed": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Translate": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Vec"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP1",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theP2",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Translated": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Vec"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP1",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theP2",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "OCP.gp.gp_Sphere",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"UReverse": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"VReverse": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Volume": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"XAxis": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax1",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"YAxis": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax1",
+"static_form": false
+}
+],
+"tuple_ret": false
+}
+}
+},
+"gp_Torus": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA3",
+"type": "OCP.gp.gp_Ax3"
+},
+{
+"name": "theMajorRadius",
+"type": "float"
+},
+{
+"name": "theMinorRadius",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"Area": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Axis": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax1",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Coefficients": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theCoef",
+"type": "OCP.TColStd.TColStd_Array1OfReal"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Direct": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Location": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Pnt",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"MajorRadius": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"MinorRadius": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Mirror": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA2",
+"type": "OCP.gp.gp_Ax2"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Mirrored": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA2",
+"type": "OCP.gp.gp_Ax2"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Position": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax3",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Rotate": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+},
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Rotated": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+},
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Scale": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Scaled": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetAxis": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax1"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetLocation": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theLoc",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetMajorRadius": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theMajorRadius",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetMinorRadius": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theMinorRadius",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetPosition": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA3",
+"type": "OCP.gp.gp_Ax3"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transform": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transformed": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Translate": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Vec"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP1",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theP2",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Translated": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Vec"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP1",
+"type": "OCP.gp.gp_Pnt"
+},
+{
+"name": "theP2",
+"type": "OCP.gp.gp_Pnt"
+}
+],
+"ret": "OCP.gp.gp_Torus",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"UReverse": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"VReverse": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Volume": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"XAxis": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax1",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"YAxis": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Ax1",
+"static_form": false
+}
+],
+"tuple_ret": false
+}
+}
+},
 "gp_Trsf": {
 "ctor": [
 {
@@ -141857,6 +145524,847 @@
 }
 }
 },
+"gp_Vec2d": {
+"ctor": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Dir2d"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theCoord",
+"type": "OCP.gp.gp_XY"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theXv",
+"type": "float"
+},
+{
+"name": "theYv",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theP1",
+"type": "OCP.gp.gp_Pnt2d"
+},
+{
+"name": "theP2",
+"type": "OCP.gp.gp_Pnt2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"methods": {
+"Add": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Added": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Angle": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Coord": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theIndex",
+"type": "int"
+}
+],
+"ret": "float",
+"static_form": false
+},
+{
+"params": [],
+"ret": "tuple[float, float]",
+"static_form": false
+}
+],
+"tuple_ret": true
+},
+"CrossMagnitude": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRight",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"CrossSquareMagnitude": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRight",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Crossed": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRight",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Divide": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theScalar",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Divided": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theScalar",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Dot": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"GetNormal": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsEqual": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theLinearTolerance",
+"type": "float"
+},
+{
+"name": "theAngularTolerance",
+"type": "float"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsNormal": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theAngularTolerance",
+"type": "float"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsOpposite": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theAngularTolerance",
+"type": "float"
+}
+],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theAngularTolerance",
+"type": "float"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"IsParallel": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theAngularTolerance",
+"type": "float"
+}
+],
+"ret": "bool",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theOther",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theAngularTolerance",
+"type": "float"
+}
+],
+"ret": "bool",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Magnitude": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Mirror": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Mirrored": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theV",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "OCP.gp.gp_Ax2d"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Multiplied": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theScalar",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Multiply": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theScalar",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Normalize": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Normalized": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+},
+{
+"params": [],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Reverse": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Reversed": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Rotate": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Rotated": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theAng",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Scale": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Scaled": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theS",
+"type": "float"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetCoord": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theIndex",
+"type": "int"
+},
+{
+"name": "theXi",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theXv",
+"type": "float"
+},
+{
+"name": "theYv",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetLinearForm": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theA1",
+"type": "float"
+},
+{
+"name": "theV1",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theA2",
+"type": "float"
+},
+{
+"name": "theV2",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theV3",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "float"
+},
+{
+"name": "theV1",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theA2",
+"type": "float"
+},
+{
+"name": "theV2",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theA1",
+"type": "float"
+},
+{
+"name": "theV1",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theV2",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "None",
+"static_form": false
+},
+{
+"params": [
+{
+"name": "theV1",
+"type": "OCP.gp.gp_Vec2d"
+},
+{
+"name": "theV2",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetX": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theX",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetXY": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theCoord",
+"type": "OCP.gp.gp_XY"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SetY": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theY",
+"type": "float"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"SquareMagnitude": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Subtract": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRight",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Subtracted": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theRight",
+"type": "OCP.gp.gp_Vec2d"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transform": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf2d"
+}
+],
+"ret": "None",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Transformed": {
+"static": false,
+"sigs": [
+{
+"params": [
+{
+"name": "theT",
+"type": "OCP.gp.gp_Trsf2d"
+}
+],
+"ret": "OCP.gp.gp_Vec2d",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"X": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"XY": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "OCP.gp.gp_XY",
+"static_form": false
+}
+],
+"tuple_ret": false
+},
+"Y": {
+"static": false,
+"sigs": [
+{
+"params": [],
+"ret": "float",
+"static_form": false
+}
+],
+"tuple_ret": false
+}
+}
+},
 "gp_XYZ": {
 "ctor": [
 {
@@ -142724,19 +147232,19 @@
 }
 },
 "__meta__": {
-"defaults": 937,
-"classes_requested": 311,
+"defaults": 944,
+"classes_requested": 321,
 "classes_not_importable": [
 "GeomAdaptor_TransformedCurve",
 "GeomAdaptor_TransformedSurface",
 "MoniTool_TypedValue"
 ],
-"methods": 7291,
+"methods": 7516,
 "methods_without_sigs": 13,
-"sigs": 8859,
+"sigs": 9150,
 "text_signature_fallbacks": 42,
 "default_ctor0": 128,
-"default_lit": 728,
+"default_lit": 735,
 "default_enum": 81
 }
 }
