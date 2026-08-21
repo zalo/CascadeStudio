@@ -48,19 +48,6 @@ StandardUtils.Remove tolerates raising property traps).
 | Brython control | 206 / 10 / 5 / 1 | per-script IDENTICAL to the committed lite set |
 | full playwright suite | **96 passed / 1 skipped** | two spec updates were REQUIRED-AND-HONEST: Curve.length was a lite-only extension (REAL 0.11.1 raises AttributeError — verified in the ref venv) and bbox tuples print ints for in-int32 integral jsffi numbers |
 
-## Flip decision (this run): DEFAULT STAYS pytopo=lite
-
-pytopo=upstream EXCEEDS the baseline on fidelity (+9 scripts incl. lite's
-entire COMPROMISE(edge-orientation)/(traversal-order) residual set; only
-2 MISMATCH / 3 ERROR, all baseline-family). The honest shortfall is PERF:
-4 scripts regress PASS/MM -> TIMEOUT (clock, algebra_performance b01+all,
-bicycle_tire — bicycle_tire is 4m10s solo vs the 60 s budget;
-b01 is 148 s vs 15 s under pytopo=lite because upstream's own
-Compound.__add__ re-fuses ALL top-level shapes each step and the
-FFI-envelope multiplies the quadratic Python term). Profiles show
-MicroPython VM self-time dominating (~70%), not the shim dispatch.
-Flip when the perf work lands (see next actions).
-
 ## Phase log
 
 | Phase | Status |
@@ -68,8 +55,8 @@ Flip when the perf work lands (see next actions).
 | 0 — merge feat/micropython-metaclasses | DONE. Conflicts per plan; enum shim's JsProxy member handling ported into BOTH EnumMeta and the fallback (topo-poc t7 caught it). Metaclass probe green in the worker. |
 | 1 — upstream geometry.py verbatim | DONE (landed with Phase 2 as a unit). numpy micro-shim serves `Axis._intersect_axis`/`color_wheel`; AxisMeta/PlaneMeta run natively; new transforms: multi-line TypeAlias blanking, value/tuple-capture match patterns (multi-line guards, walrus binding), general PEP-448 list-splat displays, PEP-604 `isinstance(x, A | B)` tuples. topo-poc t9 covers Vector/Axis-intersect/Plane round-trips/Location-Euler/Rotation/Matrix/BoundBox. |
 | 2 — topology as a unit + worker glue | DONE (bring-up). All 8 upstream topology modules + verbatim `topology/__init__.py` registered bottom-up under pytopo=upstream; seam adapters now load ONLY under pytopo=lite. Worker glue `ocp_shim/topo_glue.py`: show()/sceneShapes (raw-TopoDS unwrap, lite semantics), implicit post-run scene (`_cs_after_run`), `_measure_globals_json` (harness contract), export_stl/brep + import_step/brep + Mesher, `Compound.make_text` -> lite opentype path, `Face.make_gordon_surface` -> GordonSurface.js. History seam: `StandardUtils.recordExternalOp` + OCP-shim op-family recording (BRepPrimAPI/BRepAlgoAPI/... ctors) + TopoDS return tagging (`producingLine` -> pick->line works). Kernel-guard ported to the shim's Fuse path (SetArguments/SetTools operand tracking, Shape() volume guard, GF rebuild on drop/raise). |
-| 3 — the grind | IN PROGRESS, see score progression. |
-| 4 — gates + flip decision | NOT STARTED. |
+| 3 — the grind | DONE (r1 112 -> r11 215; see score progression). |
+| 4 — gates + FLIP | DONE. pytopo=upstream is the default; final gate battery above. |
 
 ## Harness score progression (222 scored; baselines: lite 206/10/5/1, upstream-Level-A-over-lite 205/10/5/2)
 
@@ -84,13 +71,9 @@ Flip when the perf work lands (see next actions).
 | r7 | **209** | 3 | 5 | 5 | hasher functor rebind, deque(maxlen), ljust, ArrowHead-as-upstream-Sketch, chained concat |
 | r8 | 210 | 3 | 3 | 6 | TypeMismatch/ConstructionError exception mapping (twist_extrude, slide_latch), **the jsffi integral-double FFI fix** (PROVENANCE patch 9: integral JS doubles >= 2^31 crossed into Python WRAPPED to int32 — 1e15 -> -1530494976, 1e100 -> 0; found via Edge(Axis) parameter ranges), MakeEdge unbounded-line glue (b10) |
 | r9 | **210** | **2** | **3** | 7 | None-valued enum members (Align.NONE = None IS a member — objects_sketch defaults) |
-
-**Final r9 per-script classification**: MISMATCH = objects_1d,
-tutorial_joints (both baseline-family). ERROR = dual_color_3mf, objects_2d,
-curved_support (exactly 3 of the baseline's 5 — toy_truck and ttt-ppp0110
-now PASS). TIMEOUT = heat_exchanger + spitfire (the baseline TIMEOUT set)
-+ bicycle_tire/clock/algebra_performance-b01/all (PERF — the honest
-shortfall) + selectors_operators (one-run contention flap; PASS in r7/r8).
+| r10 | 215 | 3 | 3 | 1 | **the perf round** (variadic no-proxy bridge fast path + _CsOrderedStore) — ALL four perf TIMEOUTs cleared incl. heat_exchanger; 158 s wall |
+| r11 | 215 | 2 | 4 | 1 | Compound(joints=) reparenting (tutorial_joints FIXED); slide_latch/objects_2d flapped (armored after) |
+| flip | **216** | **2** | **3** | **1** | the DEFAULT leg post-flip (flap armor in): the non-PASS set is exactly the documented honest gaps |
 
 **The single r5+ MISMATCH is docs/objects_1d — the baseline residual
 (triad labels + DTA trim). Upstream topology FIXED lite's other residual
