@@ -37,6 +37,7 @@
 //    the logging swallower).
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
+import { bootstrapPyodideRealB123d } from './PyodideRealB123d.js';
 
 /** The module name user scripts execute under (frame walks look for it). */
 const PY_USER_MODULE = 'main';
@@ -48,14 +49,35 @@ const PY_USER_MODULE = 'main';
 const PYODIDE_SHIMS = ['logging', '_scipy_shim', 'scipy', 'scipy.optimize',
   'scipy.spatial', 'pytest'];
 
-let _runtimePromise = null;
+/** pysrc=real (REAL build123d 0.11.1 over the OCP shim) drops the logging
+ *  swallower: real CPython logging runs for real — build123d's module
+ *  loggers write nothing without handlers, and stderr streams to the console
+ *  as '[py-stderr]' lines instead of being replayed through console.error
+ *  (which rethrows). The scipy/pytest shims stay: they are POLICY (the
+ *  validated Nelder-Mead/quickhull/approx substitutes; the real scipy wheel
+ *  is a measured 20x-payload non-default, see runtime-comparison.md). */
+const PYODIDE_REAL_SHIMS = ['_scipy_shim', 'scipy', 'scipy.optimize',
+  'scipy.spatial', 'pytest'];
 
-/** Lazily bootstrap Pyodide + build123d-lite. Same contract as
- *  ensurePythonRuntime(): resolves to an object with `run(code)`. */
-export function ensurePyodideRuntime() {
+let _runtimePromise = null;
+let _bootedPySrc = null;
+
+/** Lazily bootstrap Pyodide + build123d-lite (or, with pySrc === 'real',
+ *  REAL build123d 0.11.1 over the OCP shim — see PyodideRealB123d.js).
+ *  Same contract as ensurePythonRuntime(): resolves to an object with
+ *  `run(code)`. One worker session boots ONE source mode. */
+export function ensurePyodideRuntime(pySrc) {
+  const srcKind = pySrc === 'real' ? 'real' : 'lite';
+  if (_runtimePromise && _bootedPySrc && _bootedPySrc !== srcKind) {
+    return Promise.reject(new Error(
+      'the Pyodide runtime is already booted with pysrc=' + _bootedPySrc +
+      '; reload the page to switch to pysrc=' + srcKind));
+  }
   if (!_runtimePromise) {
-    _runtimePromise = _bootstrap().catch((e) => {
+    _bootedPySrc = srcKind;
+    _runtimePromise = _bootstrap(srcKind).catch((e) => {
       _runtimePromise = null; // allow a retry on the next evaluation
+      _bootedPySrc = null;
       throw e;
     });
   }
@@ -239,6 +261,13 @@ def run_user(source):
         return ''.join(traceback.format_exception_only(type(exc), exc))
     try:
         exec(code, module.__dict__)
+        # pysrc=real: populate the implicit scene from module globals when
+        # the script never called show() (real build123d builds through the
+        # OCP shim, so the glue assembles the scene after the run). The
+        # attribute does not exist on build123d-lite — a no-op there.
+        _hook = getattr(sys.modules.get('build123d'), '_cs_after_run', None)
+        if _hook is not None:
+            _hook(module.__dict__)
     except BaseException as exc:
         # Drop this function's own frame from the traceback.
         tb = exc.__traceback__.tb_next if exc.__traceback__ else None
@@ -255,7 +284,8 @@ def reset_state():
         pass
 `;
 
-async function _bootstrap() {
+async function _bootstrap(srcKind) {
+  const isReal = srcKind === 'real';
   const t0 = performance.now();
   // Dual-path like brython.js: the build copies the vendored core
   // distribution next to the worker bundle.
@@ -284,9 +314,14 @@ async function _bootstrap() {
     indexURL,
     // Python print() lands in the worker console exactly like Brython's.
     stdout: (line) => { console.log(line); },
-    // The worker's console.error override RETHROWS, so stderr is buffered
-    // and replayed by run() only when the evaluation survived.
-    stderr: (line) => { stderrBuffer.push(line); },
+    // The worker's console.error override RETHROWS, so lite buffers stderr
+    // and replays it only when the evaluation survived. pysrc=real streams
+    // it as prefixed console.log lines instead: REAL build123d emits benign
+    // stderr (warnings.warn, logging lastResort) that must never masquerade
+    // as an evaluation error.
+    stderr: isReal
+      ? (line) => { console.log('[py-stderr] ' + line); }
+      : (line) => { stderrBuffer.push(line); },
   });
 
   const tInitialized = performance.now();
@@ -298,10 +333,16 @@ async function _bootstrap() {
   const resetState = bridge.get('reset_state');
   const userLine = bridge.get('get_python_user_line');
 
-  for (const name of PYODIDE_SHIMS) {
+  for (const name of (isReal ? PYODIDE_REAL_SHIMS : PYODIDE_SHIMS)) {
     if (PY_SHIM_MODULES[name]) { registerModule(name, PY_SHIM_MODULES[name]); }
   }
-  registerModule('build123d', BUILD123D_LITE_PY);
+  if (isReal) {
+    // REAL build123d 0.11.1 over the OCP shim (wheels + OCP proxies +
+    // third-party stubs + worker glue) — see PyodideRealB123d.js.
+    await bootstrapPyodideRealB123d(pyodide, registerModule, indexURL);
+  } else {
+    registerModule('build123d', BUILD123D_LITE_PY);
+  }
 
   // Same split as the Brython path: fetching the interpreter, bringing it
   // up, compiling build123d-lite. `initMs` covers loadPyodide, which does
@@ -310,6 +351,7 @@ async function _bootstrap() {
   const tDone = performance.now();
   self._pythonBootTiming = {
     runtime: 'pyodide',
+    pySrc: srcKind,
     version: pyodide.version,
     fetchMs: +(tImported - t0).toFixed(1),
     initMs: +(tInitialized - tImported).toFixed(1),
@@ -327,6 +369,7 @@ async function _bootstrap() {
       // switched mid-session) must not keep Brython's frame walker.
       self.getPythonUserLine = () => userLine();
       self._pythonRuntimeKind = 'pyodide';
+      self._pythonSrcKind = srcKind;
       self._b123dSceneDefined = false;
       stderrBuffer.length = 0;
 

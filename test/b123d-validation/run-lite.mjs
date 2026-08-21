@@ -58,10 +58,11 @@ const PAGES = parseInt(argVal('--pages', '4'), 10);
 // or 'pyodide' / 'micropython' (CS_PY_RUNTIME=<name> / --pyruntime).
 const PY_RUNTIME = argVal('--pyruntime', process.env.CS_PY_RUNTIME || 'brython');
 const PY_RUNTIME_QUERY = ['pyodide', 'micropython'].includes(PY_RUNTIME) ? '?pyruntime=' + PY_RUNTIME : '';
-// Python SOURCE layer (CS_PY_SRC=lite|upstream): micropython now DEFAULTS to
-// upstream; pysrc=lite pins the lite layer for A/B harness runs.
+// Python SOURCE layer (CS_PY_SRC=lite|upstream|real): micropython now
+// DEFAULTS to upstream; pysrc=lite pins the lite layer for A/B harness runs;
+// pysrc=real (pyodide only) runs REAL build123d 0.11.1 over the OCP shim.
 const PY_SRC_ENV = process.env.CS_PY_SRC || '';
-const PY_SRC_QUERY = ['lite', 'upstream'].includes(PY_SRC_ENV)
+const PY_SRC_QUERY = ['lite', 'upstream', 'real'].includes(PY_SRC_ENV)
   ? (PY_RUNTIME_QUERY ? '&' : '?') + 'pysrc=' + PY_SRC_ENV : '';
 // Topology layer (CS_PY_TOPO=lite|upstream / --pytopo): upstream (the
 // Stage-3 default — upstream geometry+topology verbatim over the OCP shim)

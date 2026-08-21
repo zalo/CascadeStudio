@@ -45,7 +45,12 @@ export function ensurePythonRuntime(kind, pySrc) {
       'pysrc=upstream (upstream build123d source) requires '
       + '?pyruntime=micropython — the other runtimes run build123d-lite only'));
   }
-  if (kind === 'pyodide') { return ensurePyodideRuntime(); }
+  if (pySrc === 'real' && kind !== 'pyodide') {
+    return Promise.reject(new Error(
+      'pysrc=real (REAL build123d 0.11.1 over the OCP shim) requires '
+      + '?pyruntime=pyodide — it runs on real CPython only'));
+  }
+  if (kind === 'pyodide') { return ensurePyodideRuntime(pySrc); }
   if (kind === 'micropython') { return ensureMicroPythonRuntime(pySrc); }
   if (!_runtimePromise) {
     _runtimePromise = _bootstrap().catch((e) => {

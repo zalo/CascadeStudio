@@ -22,14 +22,17 @@ export function resolvePyRuntime() {
 }
 
 /** Resolve the Python SOURCE layer: 'lite' (Build123dLite.js — what Brython
- *  and Pyodide always run), 'upstream' (UPSTREAM build123d 0.11.1 Level-A
- *  source — requires `?pyruntime=micropython` and the vendored payload, see
- *  UpstreamB123d.js), or 'auto' (the no-flag default): the MicroPython
- *  runtime prefers upstream and falls back to lite with a console warning
- *  when the payload is missing; the other runtimes run lite. Explicit choice
- *  via `?pysrc=` or, so it survives reloads, localStorage['cascade-py-src']. */
+ *  and Pyodide run by default), 'upstream' (UPSTREAM build123d 0.11.1
+ *  Level-A source — requires `?pyruntime=micropython` and the vendored
+ *  payload, see UpstreamB123d.js), 'real' (REAL, unmodified build123d 0.11.1
+ *  wheel over the OCP shim — requires `?pyruntime=pyodide` and the vendored
+ *  wheels, see PyodideRealB123d.js), or 'auto' (the no-flag default): the
+ *  MicroPython runtime prefers upstream and falls back to lite with a
+ *  console warning when the payload is missing; the other runtimes run lite.
+ *  Explicit choice via `?pysrc=` or, so it survives reloads,
+ *  localStorage['cascade-py-src']. */
 export function resolvePySrc() {
-  const KNOWN = ['lite', 'upstream'];
+  const KNOWN = ['lite', 'upstream', 'real'];
   try {
     const fromURL = new URLSearchParams(window.location.search).get('pysrc');
     if (fromURL && KNOWN.includes(fromURL)) { return fromURL; }

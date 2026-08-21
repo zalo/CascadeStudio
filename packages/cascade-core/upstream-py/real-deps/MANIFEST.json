@@ -1,0 +1,25 @@
+{
+  "comment": "Import-satisfying dependency stubs for pysrc=real on Pyodide (PyodideRealB123d.js). Order matters: parents before submodules. file=null registers an empty ('pass') package module. Paths are relative to upstream-py/ (dist/upstream-b123d/).",
+  "modules": [
+    { "name": "ezdxf",                        "file": "real-deps/ezdxf_stub.py" },
+    { "name": "ezdxf.units",                  "file": "real-deps/ezdxf_units.py" },
+    { "name": "ezdxf.colors",                 "file": "real-deps/ezdxf_colors.py" },
+    { "name": "ezdxf.zoom",                   "file": "real-deps/ezdxf_zoom.py" },
+    { "name": "ezdxf.math",                   "file": "real-deps/ezdxf_math.py" },
+    { "name": "ezdxf.entities",               "file": "real-deps/ezdxf_entities.py" },
+    { "name": "ezdxf.entities.boundary_paths","file": "real-deps/ezdxf_boundary_paths.py" },
+    { "name": "svgpathtools",                 "file": "real-deps/svgpathtools_stub.py" },
+    { "name": "ocpsvg",                       "file": "real-deps/ocpsvg_stub.py" },
+    { "name": "fontTools",                    "file": null },
+    { "name": "fontTools.ttLib",              "file": "real-deps/fonttools_ttlib_stub.py" },
+    { "name": "lib3mf",                       "file": "real-deps/lib3mf_stub.py" },
+    { "name": "sklearn",                      "file": null },
+    { "name": "sklearn.cluster",              "file": "real-deps/sklearn_cluster_stub.py" },
+    { "name": "requests",                     "file": "real-deps/requests_stub.py" },
+    { "name": "IPython",                      "file": null },
+    { "name": "IPython.lib",                  "file": null },
+    { "name": "IPython.lib.pretty",           "file": "ocp_shim/ipython_pretty.py" },
+    { "name": "sympy",                        "file": "shims/sympy.py" },
+    { "name": "ocp_gordon",                   "file": "shims/ocp_gordon.py" }
+  ]
+}

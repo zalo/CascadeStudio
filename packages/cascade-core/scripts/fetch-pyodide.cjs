@@ -32,7 +32,41 @@ const RUNTIME_FILES = [
   'pyodide-lock.json',
 ];
 
+// pysrc=real (REAL build123d 0.11.1 over the OCP shim on Pyodide —
+// PyodideRealB123d.js) additionally needs these wheels next to the core
+// files. numpy/typing_extensions come from the Pyodide CDN matching the
+// vendored version; the pure wheels come from PyPI via `pip download`
+// (version-pinned; PyodideRealB123d.REAL_WHEELS lists the same names).
+const CDN_WHEELS = [
+  'numpy-2.4.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl',
+  'typing_extensions-4.15.0-py3-none-any.whl',
+];
+const PYPI_WHEELS = {
+  'build123d-0.11.1-py3-none-any.whl': 'build123d==0.11.1',
+  'anytree-2.13.0-py3-none-any.whl': 'anytree==2.13.0',
+  'webcolors-24.8.0-py3-none-any.whl': 'webcolors==24.8.0',
+  'trianglesolver-1.2-py3-none-any.whl': 'trianglesolver==1.2',
+};
+
+function fetchWheels() {
+  const cdnBase = 'https://cdn.jsdelivr.net/pyodide/v' + VERSION + '/full/';
+  for (const wheel of CDN_WHEELS) {
+    const dst = path.join(vendorDir, wheel);
+    if (fs.existsSync(dst)) { continue; }
+    console.log('[pyodide] downloading ' + cdnBase + wheel);
+    execFileSync('curl', ['-sL', cdnBase + wheel, '-o', dst], { stdio: 'inherit' });
+  }
+  const missing = Object.entries(PYPI_WHEELS)
+    .filter(([wheel]) => !fs.existsSync(path.join(vendorDir, wheel)));
+  if (missing.length > 0) {
+    console.log('[pyodide] pip download ' + missing.map(([, s]) => s).join(' '));
+    execFileSync('pip', ['download', '--no-deps', '-d', vendorDir,
+      ...missing.map(([, spec]) => spec)], { stdio: 'inherit' });
+  }
+}
+
 if (RUNTIME_FILES.every((f) => fs.existsSync(path.join(vendorDir, f)))) {
+  fetchWheels();
   console.log('[pyodide] already present in ' + vendorDir);
   process.exit(0);
 }
@@ -55,6 +89,7 @@ for (const file of RUNTIME_FILES) {
 }
 fs.rmSync(extractDir, { recursive: true, force: true });
 fs.rmSync(tmp, { force: true });
+fetchWheels();
 
 let total = 0;
 for (const file of RUNTIME_FILES) { total += fs.statSync(path.join(vendorDir, file)).size; }
