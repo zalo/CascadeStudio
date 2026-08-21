@@ -158,10 +158,21 @@ self._csMockMissing = new Set();
 // ---------------------------------------------------------------------- //
 // Boot the real runtime (pysrc=upstream)                                  //
 // ---------------------------------------------------------------------- //
-self._csMicroPythonLocate = {
-  mjsURL: join(MP_DIR, 'micropython.mjs'),
-  wasmURL: join(MP_DIR, 'micropython-settrace.wasm'),
-};
+// CS_MP_ARTIFACTS=stock forces the npm settrace pair (the metaclass-free
+// fallback leg); the default is the vendored custom micropython-cs pair,
+// matching MicroPythonRuntime's own boot preference.
+const CUSTOM_DIR = join(ROOT, 'packages', 'cascade-core', 'vendor', 'micropython-cs');
+self._csMicroPythonLocate = process.env.CS_MP_ARTIFACTS === 'stock'
+  ? {
+      mjsURL: join(MP_DIR, 'micropython.mjs'),
+      wasmURL: join(MP_DIR, 'micropython-settrace.wasm'),
+      kind: 'stock-settrace',
+    }
+  : {
+      mjsURL: join(CUSTOM_DIR, 'micropython.mjs'),
+      wasmURL: join(CUSTOM_DIR, 'micropython.wasm'),
+      kind: 'custom',
+    };
 self._csUpstreamFetchText = async (rel) => {
   let p;
   if (rel.startsWith('upstream/')) { p = join(B123D_SRC, rel.slice('upstream/'.length)); }
