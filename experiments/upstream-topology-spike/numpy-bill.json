@@ -1,0 +1,64 @@
+{
+ "calls": {
+  "array": {
+   "count": 5,
+   "sites": [
+    "geometry.py:967",
+    "geometry.py:968",
+    "geometry.py:969",
+    "geometry.py:970",
+    "geometry.py:972"
+   ]
+  },
+  "cross": {
+   "count": 1,
+   "sites": [
+    "geometry.py:972"
+   ]
+  },
+  "linalg.lstsq": {
+   "count": 1,
+   "sites": [
+    "geometry.py:974"
+   ]
+  },
+  "linspace": {
+   "count": 2,
+   "sites": [
+    "geometry.py:1510",
+    "topology/one_d.py:832"
+   ]
+  }
+ },
+ "attrs": {
+  "array": {
+   "count": 5,
+   "sites": [
+    "geometry.py:967",
+    "geometry.py:968",
+    "geometry.py:969",
+    "geometry.py:970",
+    "geometry.py:972"
+   ]
+  },
+  "cross": {
+   "count": 1,
+   "sites": [
+    "geometry.py:972"
+   ]
+  },
+  "linalg": {
+   "count": 1,
+   "sites": [
+    "geometry.py:974"
+   ]
+  },
+  "linspace": {
+   "count": 2,
+   "sites": [
+    "geometry.py:1510",
+    "topology/one_d.py:832"
+   ]
+  }
+ }
+}
