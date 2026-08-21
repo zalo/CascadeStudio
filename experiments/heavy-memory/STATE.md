@@ -159,3 +159,54 @@ The first harness pass surfaced two ENVIRONMENTAL failures (import_step
 assets: /tmp/b123d had been tmp-cleaned — restored as a symlink to
 ~/Desktop/build123d; run.sh/collect.py expect that clone) and ONE real
 regression (arg-wrap handle lifetime, fixed above).
+
+---
+
+# Mesh-transients round — state (2026-08-21, branch feat/mesh-transients)
+
+Full story + final matrix in runtime-comparison.md §13. Short version:
+
+1. **Attribution**: the whole ~140 MB heavy mesh transient is INSIDE the
+   BRepMesh_IncrementalMesh ctor (marks: eval-end → mesh-tri-done carries
+   it all; extraction/normals/isos/Clean add zero high-water; retained
+   triangulations ~9 MB; JS extraction arrays ~14 MB JS-heap). Census is
+   emitted per run in the `mesh-census` mark.
+2. **Streaming mesher landed** (commit 8c27269): mesh → extract per
+   compound child, algo deleted per chunk, single end-of-mesh Clean (so
+   shared subshapes are meshed once — per-chunk Clean would re-mesh them
+   differently). Payload emission-order and hash IDENTICAL (mesh-sig.mjs).
+   Multi-solid scenes: 365→78 MB. heat_exchanger = one chunk: unchanged.
+3. **The ratchet was NEVER the growth ladder**: 0.05 growth step (fork
+   6eeb02f) bought one rung (238.5→207.5 single) but repeats still
+   ratcheted ~85/run; 64 KB free census showed the space genuinely gone;
+   dlmalloc == emmalloc creep (mimalloc worse floor — rejected, reverted).
+4. **ROOT CAUSE: upstream ocjs generator no-ops raw_destructor<T> for any
+   class with a 2-arg operator delete — DEFINE_STANDARD_ALLOC matches on
+   ~every OCCT class ⇒ .delete() NEVER freed method-returned values**
+   (heap-byte proof in probe-free4/5/6; per-pattern reuse in
+   probe-stride). Only ctor-overload subclasses (gp_Pnt_1...) ever freed.
+   Fork fix 3767f28 (bindings.py): no-op only for non-public dtors /
+   placement-only deletes; nested select_overload return types qualified
+   (Bnd_Box::Limits — regen used to silently drop the class). 2,044
+   classes now really destruct. d.ts identical, 400 handles, wasm +349 B.
+5. **Results** (pyodide+real heavy): single 238.5 → **175.9 MB** (target
+   ≤180 MET), ratchet 85-105 → **18-24 MB/run** (target ≤20 ~met), eval
+   time unchanged. JS-mode cached-scene repeats now DEAD FLAT. Lite legs:
+   137.8 single / ~24.6 per-run (glue-side retention — future round).
+   mp+upstream unchanged (no __del__ — interpreter follow-up).
+6. **Gates**: mesh-sig 5/5 identical; specs 16/16; suite 101; harness
+   pyodide+real 217/2/2/1 = committed per-script except tips/b04
+   MISMATCH→PASS (documented complete-tie traversal flap, PASS-ward);
+   mp 216/2/3/1 (subset of documented band); brython exactly 206/10/5/1.
+7. **Ownership rules verified before enabling real frees** (probe-own):
+   embind COPIES const-ref class returns (Current/Nodes/XYZ are owned
+   copies — safe to delete); Handle.get() raws stay non-owning (never
+   delete — now a REAL double-free). All existing delete-sites audited
+   clean.
+
+New tools: mesh-sig.mjs (payload-equivalence gate), probe-stream.mjs
+(streaming A/B), probe-meshiso*.mjs (leak bisection), probe-pair/ptr/
+stride/free3-7/own/delcheck*/jsfree/embind (the discovery chain), shot.mjs
+(starter screenshot). probe-marks/free2 now take CS_TEST_PORT; probe-marks
+free census is opt-in (CS_FREE_PROBE=1 — the census itself forces growth
+rungs).

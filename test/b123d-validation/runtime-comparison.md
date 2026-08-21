@@ -686,3 +686,102 @@ experiments/heavy-memory/STATE.md. Reproduce any cell with
 `experiments/heavy-memory/measure.mjs`; phase attribution with
 `probe-marks.mjs` (in-worker eval/mesh marks + optional free-space census
 via `self._csMemFreeProbe`).
+
+## 13. Mesh transients & the embind destructor fault (2026-08-21)
+
+This round set out to shrink the mesher's ~100-140 MB transient and the
+~85-100 MB/run same-model repeat ratchet. It ended somewhere better: the
+ratchet turned out not to be an allocator/rung problem at all but a
+**binding-generator fault that made `.delete()` a silent no-op on most of
+the OCCT surface**, fixed at the fork.
+
+**Attribution** (new in-mesh phase marks + census, `probe-marks.mjs`):
+the ENTIRE heavy-model mesh transient sits inside the
+`BRepMesh_IncrementalMesh` constructor — extraction, `ComputeNormals`, iso
+curves and `Clean` add ZERO wasm high-water; the retained triangulations
+are ~9 MB (52 B/node + 12 B/tri, census printed per run) and the JS-side
+extraction arrays (~14 MB on heat_exchanger) live on the JS heap, not the
+arena.
+
+**Streaming mesher** (`ShapeToMesh.js`): compounds are decomposed into
+their immediate children (recursively, `TopoDS_Iterator` — the same
+traversal order `TopExp_Explorer` uses, so the payload is emission-order
+identical) and the incremental-mesh algo is constructed + deleted PER
+CHUNK; triangulations stay attached until the single end-of-mesh Clean so
+a subshape shared by two chunks (General-Fuse contact faces) is meshed
+once and reused. Kernel peak now scales with the largest chunk instead of
+the scene: a 10×Text3D multi-solid scene went 365.3 → 77.9 MB high-water
+(final build), eval time unchanged. heat_exchanger is ONE fused 1486-face
+solid = one chunk, so its transient is untouched by streaming.
+`self._csMeshWhole=1` keeps the old path for A/B. Full-payload hashes
+(every vertex/normal/uv/tri/edge buffer + face/edge/shape indices +
+shapeLines — `mesh-sig.mjs`) are IDENTICAL on js-multi/js-edgy/
+py-starter/py-grid/py-heavy.
+
+**The growth ladder was mostly innocent.** `-sMEMORY_GROWTH_GEOMETRIC_STEP
+=0.05` (fork 6eeb02f; link-only, wasm byte-identical) tracks true demand
+within 5% instead of 20% — it bought 238.5 → 207.5 on the heavy single
+run, but the repeat ratchet stayed ~85/run, and free-space censuses at
+64 KB granularity showed the "freed" memory was NOT there. mimalloc and
+emmalloc relinks reproduced the same average creep (mimalloc: worse floor
+and 36 MB segment quanta — rejected; emmalloc: byte-identical creep —
+allocator-independent ⇒ real leak).
+
+**Root cause** (`probe-pair/ptr/stride/free4-7.mjs`, heap-byte level):
+upstream opencascade.js emits a NO-OP `raw_destructor<T>` specialization
+for any class with ANY 2-arg `operator delete` — and OCCT's
+`DEFINE_STANDARD_ALLOC` gives every kernel class a placement
+`operator delete(void*, void*)` next to a perfectly usable usual delete.
+So every embind object returned BY VALUE from a bound method (gp_Pnt
+copies from `Poly_Triangulation::Node`, TopoDS_Shape copies — incl. their
+TShape refcounts — from `Explorer.Current`/casts, gp_Trsf from
+`Location.Transformation`, ...) NEVER freed, even under `.delete()`; only
+the generated ctor-overload subclasses (`gp_Pnt_1` & co.) ever freed.
+The mesher extraction alone churns ~90k such returns per heavy run
+(~0.6-0.9 KB/node/run = the exact measured ratchet), and the pysrc=real
+eval phase carried ~40 MB more of it. Fork fix (3767f28): the no-op is
+now limited to non-public destructors and placement-ONLY deletes; 2,044
+generated classes switched to real destruction; `select_overload` return
+types nested in the class (`Bnd_Box::Limits`) are now qualified so
+regeneration is idempotent. Ownership rules for callers are unchanged
+(verified: embind COPIES class-type const-ref returns — `Explorer.
+Current()`, `Polygon.Nodes()` etc. are owned copies; `Handle.get()` raws
+remain non-owning and must never be deleted, as the worker already
+enforced).
+
+**Measured matrix** (fixed build = streaming + 0.05 step + destructor fix;
+fresh page per cell; heavy = heat_exchanger; "×5" = same model five times
+in one page, high-water after run 5):
+
+| leg | starter | grid | heavy | was | heavy ×5 (per-run) | was (per-run) |
+|---|---|---|---|---|---|---|
+| brython+lite | 32.0 | 32.0 | 137.8 | 138.0 | 236.1 (~24.6) | ~35 |
+| pyodide+lite | 32.0 | 32.0 | 137.8 | 138.0 | 236.1 (~24.6) | ~35 |
+| micropython+upstream (default) | 32.0 | 32.0 | 265.0 | 286.3 | 739.4 (~119) | ~100 |
+| **pyodide+real** | 32.0 | 32.0 | **175.9** | 238.5 | **247.7 (~18.0)** | ~88 |
+
+Phase marks on pyodide+real: eval-end 95.8 → **55.1 MB**, mesh-end 238.5 →
+**175.9** (per-run series 175.9/193.9/213.9/235.9/260.1). JS-mode repeats
+of a cached scene are now DEAD FLAT (77.9/77.9/77.9 on the Text3D A/B —
+the whole JS-mode ratchet was this leak). Eval time is unchanged
+(heavy 16.9 s first / ~21 s repeats vs 16.2/21.6 before — the remesh cost
+of Clean, not the frees; grid 419-522 ms in line with baselines).
+The residual python-leg ratchet (lite ~25/run, real ~18-24/run) is
+glue-side per-run wrapper retention (lite never deletes; real's protection
+set + the ~450 alive-growth/run of `Plane(face)` surface handles), plus
+one-two 5% rungs of fragmentation — a future lite-glue lifetime round
+could shrink it further. mp+upstream still leaks its 265k wrappers/run
+(no `__del__` on MicroPython — unchanged, needs the interpreter
+finalizer follow-up).
+
+**Gates** (all on the final build): mesh payload hashes identical on all 5
+corpus models; starter screenshot correct; fast specs 16/16; full suite
+**101 passed**; harness pyodide+real **217/2/2/1 — per-script identical to
+the committed results.json except `docs-rst/tips/b04` MISMATCH→PASS** (the
+documented COMPROMISE(traversal-order) complete-tie flap: real memory
+reuse changes pointer-hash enumeration; it moved PASS-ward); micropython
+default 216/2/3/1 (non-PASS strict subset of the documented 216-band:
+objects_2d, dual_color_3mf, curved_support, tips/b04, objects_1d,
+spitfire); Brython control 206/10/5/1 with EXACTLY the documented
+non-PASS set. Fork commits 6eeb02f (growth step) + 3767f28 (destructor
+fix), worktree repinned.

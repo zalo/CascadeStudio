@@ -99,6 +99,8 @@ async function main() {
     };
   });
 
+  // settle: let any late starter render land before sampling counts
+  await new Promise((r) => setTimeout(r, 2000));
   const results = {};
   for (const m of MODELS) {
     const code = m.code || await page.evaluate(() =>

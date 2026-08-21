@@ -7,10 +7,10 @@ async function main() {
     args: ['--use-gl=angle', '--use-angle=swiftshader'] });
   const page = await (await browser.newContext()).newPage();
   page.on('pageerror', () => {});
-  await page.goto('http://localhost:8441/?mode=python&pyruntime=pyodide&pysrc=real', { timeout: 60000 });
+  await page.goto('http://localhost:8452/?mode=python&pyruntime=pyodide&pysrc=real', { timeout: 60000 });
   await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(), undefined, { timeout: 90000 });
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(), undefined, { timeout: 300000 });
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 4; i++) {
     await page.evaluate(async (c) => window.CascadeAPI.runCode(c), HEAVY);
     await page.waitForFunction(() => !window.CascadeAPI.isWorking(), undefined, { timeout: 600000 });
     const s = await page.evaluate(() => window.CascadeAPI._memoryStats());

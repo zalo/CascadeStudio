@@ -33,10 +33,10 @@ async function main() {
   const page = await (await browser.newContext()).newPage();
   page.on('pageerror', () => {});
   page.on('console', (m) => { const t = m.text(); if (t.includes('FREEMB:')) console.log('SAMPLE ' + t); });
-  await page.goto('http://localhost:8441/?mode=python&pyruntime=pyodide&pysrc=real', { timeout: 60000 });
+  await page.goto(`http://localhost:${process.env.CS_TEST_PORT || '8441'}/?mode=python&pyruntime=pyodide&pysrc=real`, { timeout: 60000 });
   await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(), undefined, { timeout: 90000 });
   await page.waitForFunction(() => !window.CascadeAPI.isWorking(), undefined, { timeout: 300000 });
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     await page.evaluate(async (c) => { window.CascadeAPI.setMode('python'); return window.CascadeAPI.runCode(c); }, HEAVY);
     await page.waitForFunction(() => !window.CascadeAPI.isWorking(), undefined, { timeout: 600000 });
     await page.evaluate(async (c) => {
