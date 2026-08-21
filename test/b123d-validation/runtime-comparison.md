@@ -489,3 +489,55 @@ basics+misc+float 623/623). NOT implemented (documented divergences):
 `__instancecheck__`/`__subclasscheck__`, metaclass data descriptors
 intercepting class-attribute stores, and `type(name, bases, ns)` 3-arg always
 uses `type` itself as the metaclass.
+
+## 10. Stage 3 (2026-08-21): upstream TOPOLOGY as the default layer + the bridge-protocol perf round
+
+Under `pytopo=upstream` (the DEFAULT since the Stage-3 flip; `?pytopo=lite`
+opts out) upstream 0.11.1's geometry.py + the whole topology package run
+VERBATIM over the OCP-over-embind shim — see
+`experiments/upstream-topology-spike/STAGE3-STATE.md` for the round-by-round
+grind (112 -> 215 PASS) and CLAUDE.md for the architecture.
+
+**The perf finding that made the flip possible**: the hot loops were NOT
+MicroPython bytecode execution — a symbolized profile (new JSFLAGS_EXTRA
+hook + --profiling-funcs) showed `mp_map_lookup` 27% + `mp_obj_equal` 15%
+under `mp_jsffi_to_js` and the mp->js proxy registry
+(`proxy_c_add_obj`/`check_existing`, one EM_JS round-trip per registration):
+every guarded bridge call built a temporary Python list, registered it as a
+PyProxy, deep-converted it element-by-element through 'get' traps, and read
+`{ok, value}` back through two more traps. Interpreter codegen levers
+measured almost nothing (computed goto ~4%, -O3 ~3% more at +18% wasm
+size, 256 MB heap ~4% — all NOT adopted). The fix is the variadic
+no-proxy fast path (`_csMpCallV` + `_csOcpNewV/CallVar/StaticV`, sentinel
+error returns): scalar/JsProxy args cross individually, container/kwargs
+calls keep the deep path. MicroPython's OrderedDict (linear lookup) also
+had to leave the ordered-dedup transforms (`_CsOrderedStore`).
+
+| script (solo, node inner loop) | before | after |
+|---|---|---|
+| algebra_performance/b01 | 148 s | **18 s** |
+| bicycle_tire | 250 s | **29 s** |
+| group_axis | 34 s | 7.7 s |
+| clock | TIMEOUT | 21.6 s |
+
+Full-harness legs (4 pages, this machine):
+
+| leg | classification | wall |
+|---|---|---|
+| micropython + upstream topo (r10/r11, pre-flip flag) | **215 PASS / 2-3 MM / 3-4 E / 1 T** of 222 | **158 s** |
+| (for comparison: the seam-over-lite baseline) | 205 / 10 / 5 / 2 | ~150-175 s |
+
+The 215-band beats every previous configuration ON FIDELITY as well:
+upstream traversal resolves lite's residual COMPROMISE(edge-orientation)/
+(traversal-order) mismatch families (joints x2, projection x2, sort_axis,
+filter_all_edges_circle, sm_hanger, toy_truck, ttt-ppp0110), and the
+remaining non-PASS set is baseline-family (objects_1d, tips/b04 flap,
+dual_color_3mf, objects_2d drafting, curved_support sympy, spitfire
+TIMEOUT). Boot cost of the layer: libMs ~600 ms and ~1.7 MB extra payload
+(table.json + registry + glue) on top of the seam layer; interpreter wasm
+unchanged (486 KB — cgoto/-O3 rejected).
+
+jsffi patches this stage (micropython-cs, carried as real commits):
+`83f1550` out-of-int32 integral JS numbers convert as floats (1e15 crossed
+WRAPPED, 1e100 as 0 — corrupted OCCT's +-Precision::Infinite ranges),
+`7f63764` JSFLAGS_EXTRA.
