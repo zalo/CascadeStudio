@@ -66,12 +66,21 @@ show(part)
   const stats = await page.evaluate(() => window.CascadeAPI._memoryStats());
   expect(stats.pyRuntime).toBe('micropython');
   expect(stats.bootTiming.runtime).toBe('micropython');
+  // The CUSTOM micropython-cs artifacts are vendored + committed, so a
+  // normal build always prefers them, and they provide sys._getframe (the
+  // frame hooks run with NO trace function installed). The stock npm
+  // settrace artifacts remain the runtime fallback when the pair is absent
+  // from dist (feature-detected in browser.py; artifact 'stock-settrace',
+  // getframe false — everything below still passes on that path).
+  expect(stats.bootTiming.artifact).toBe('custom');
+  expect(stats.bootTiming.getframe).toBe(true);
   // The whole interpreter (GC heap included) stays a fraction of Pyodide's:
   // ~20 MB wasm heap vs Pyodide's ~45 MB (and Brython's JS-heap footprint).
   expect(stats.pythonWasm).toBeGreaterThan(8 * 1024 * 1024);
   expect(stats.pythonWasm).toBeLessThan(32 * 1024 * 1024);
 
-  // History steps carry user line numbers (the settrace frame hooks).
+  // History steps carry user line numbers (the frame hooks — sys._getframe
+  // on the custom artifacts, the settrace tracker on stock).
   const historyResult = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
     'from build123d import *',
     'b = Box(3, 3, 3)',
