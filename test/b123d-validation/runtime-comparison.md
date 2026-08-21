@@ -677,9 +677,12 @@ its split GC heap on allocation bursts between any collect cadence reachable
 from Python. Bounding it needs an interpreter patch (micropython-cs
 follow-up: enable MICROPY_GC_ALLOC_THRESHOLD or collect-before-grow).
 
-Gates for this round: fast specs green; pyodide+real harness, micropython
-default harness, pyodide+lite + Brython controls, and the full suite —
-recorded in experiments/heavy-memory/STATE.md. Reproduce any cell with
+Gates for this round (all green): fast specs 14/14; pyodide+real harness
+**216/3/2/1 per-script identical to the committed results.json**;
+micropython default harness 217/1/3/1 (strict subset of the documented
+216-band non-PASS set); pyodide+lite and Brython controls both the exact
+committed 206/10/5/1; full playwright suite 101 passed — details in
+experiments/heavy-memory/STATE.md. Reproduce any cell with
 `experiments/heavy-memory/measure.mjs`; phase attribution with
 `probe-marks.mjs` (in-worker eval/mesh marks + optional free-space census
 via `self._csMemFreeProbe`).

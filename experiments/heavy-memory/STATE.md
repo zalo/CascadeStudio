@@ -145,4 +145,17 @@ symlink to ~/Desktop/build123d.)
 
 - Fast specs (python-mode, py-runtime, py-src-upstream, py-src-real): 14/14
   green post-change.
-- Harnesses + full suite: see the follow-up commit recording their results.
+- pyodide+real harness: **216/3/2/1 — per-script IDENTICAL to the committed
+  results.json** (148 s, 4 pages).
+- micropython default harness: **217/1/3/1** — strictly in the documented
+  216-band (non-PASS set = {dual_color_3mf, objects_2d, curved_support,
+  objects_1d, spitfire}: a strict SUBSET of the committed set; the known
+  flaps — twist_extrude, tips/b04, heat_exchanger — all landed PASS-ward).
+- pyodide+lite AND Brython control: **206/10/5/1 — the exact committed
+  sets**, both.
+- Full playwright suite: **101 passed** (2.1 m).
+
+The first harness pass surfaced two ENVIRONMENTAL failures (import_step
+assets: /tmp/b123d had been tmp-cleaned — restored as a symlink to
+~/Desktop/build123d; run.sh/collect.py expect that clone) and ONE real
+regression (arg-wrap handle lifetime, fixed above).
