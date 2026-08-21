@@ -478,13 +478,39 @@ lines.push('');
 // --------------------------------------------------------------------- //
 // 6. Per-OCP-module files                                                //
 // --------------------------------------------------------------------- //
+// Classes the FORK ROUND registers (FORK-ASKS.md): their stubs raise with
+// a PENDING_FORK_BINDING marker so integration is a grep. Everything else
+// missing stays a plain "not in the generated shim" _Any.
+const FORK_ASK_CLASSES = {
+  BRepOffset_MakeOffset: 'offset_topods_face; also retires COMPROMISE(thicken)',
+  Extrema_ExtPC: 'Wire.param_at (ExtPC over Adaptor3d_Curve)',
+  Extrema_POnCurv: 'Wire.param_at (Point/Parameter accessors)',
+  GProp_PrincipalProps: 'Shape.principal_properties',
+  gp_Mat: 'Shape.matrix_of_inertia (Value accessor)',
+  TopTools_IndexedMapOfShape: 'topo_explore_connected_faces (TopExp.MapShapes)',
+  TopTools_HSequenceOfShape: 'Wire.combine (ConnectEdgesToWires); also retires COMPROMISE(edges-to-wires)',
+  TopTools_SequenceOfShape: 'Shape.split bookkeeping',
+  TColgp_HArray2OfPnt: 'Face.make_bezier_surface',
+  TColStd_HArray2OfReal: 'Face.make_bezier_surface (weights)',
+  BRepTools_History: 'Solid.extrude_until history walk',
+  NCollection_Utf8String: 'kernel text (recommended: keep routing make_text to lite opentype.js)',
+  StdPrs_BRepTextBuilder: 'kernel text (same recommendation)',
+};
 const moduleFiles = {};
 for (const [mod, names] of Object.entries(importMap)) {
   // Standard/StdFail names appear in `except` clauses: they must stay the
   // loader's real-Exception stubs, and ocp_core raises through them.
   if (mod === 'Standard' || mod === 'StdFail') { continue; }
   const have = names.filter((n) => closure.has(n) || neededEnums.has(n));
-  if (!have.length) { continue; }
+  const modEnums = [...neededEnums].filter((e) => e.startsWith(mod + '_'));
+  // emit a module with NOTHING in closure when it holds fork-ask classes
+  // (their PENDING_FORK_BINDING stubs must beat the loader's silently-
+  // constructing inert _Any placeholders) or registered enums whose
+  // MEMBERS build123d imports (GccEnt: upstream passes them into shim
+  // ctors, which need the real embind values — the loader's int stubs
+  // only serve the lite seam, which translates Tangency members by NAME)
+  if (!have.length && !names.some((n) => FORK_ASK_CLASSES[n])
+      && !modEnums.length) { continue; }
   const enumMemberNames = new Set(
     [...neededEnums].filter((e) => e.startsWith(mod + '_'))
       .flatMap((e) => dtsEnums[e]));
@@ -492,8 +518,10 @@ for (const [mod, names] of Object.entries(importMap)) {
     && !enumMemberNames.has(n));
   const src = [
     `# GENERATED OCP.${mod} — proxies over the embind binding (gen-ocp-shim.mjs)`,
-    `from ocp_registry import ${have.join(', ')}  # noqa: F401`,
   ];
+  if (have.length) {
+    src.push(`from ocp_registry import ${have.join(', ')}  # noqa: F401`);
+  }
   if (mod === 'TopoDS') {
     // OCP exposes the TopoDS *utility* class whose statics are our
     // hand-bound TopoDS_Cast; synthesize it
@@ -502,7 +530,7 @@ for (const [mod, names] of Object.entries(importMap)) {
     for (const k of ['Vertex', 'Edge', 'Wire', 'Face', 'Shell', 'Solid', 'Compound']) {
       src.push(`    ${k} = ${k}_s = _c.topods_downcast('${k}')`);
     }
-    src.push("    CompSolid = CompSolid_s = _c.topods_downcast('CompSolid')  # raises: not in TopoDS_Cast (fork ask)");
+    src.push("    CompSolid = CompSolid_s = _c.pending_fork_binding('TopoDS_Cast.CompSolid_1/_2 — one lut line in additionalBindCode')");
   }
   // pybind exposes enum MEMBERS at module level too (ta.TopAbs_VERTEX)
   for (const e of neededEnums) {
@@ -521,6 +549,14 @@ for (const [mod, names] of Object.entries(importMap)) {
     src.push(`            'OCP.${mod}.' + self.__class__.__name__ + ' is not in the generated shim')`);
     for (const n of missing) {
       if (n === 'TopoDS' && mod === 'TopoDS') { continue; }
+      if (FORK_ASK_CLASSES[n]) {
+        // the fork round registers these (FORK-ASKS.md) — greppable hook
+        src.push(`class ${n}:`);
+        src.push('    def __init__(self, *a, **k):');
+        src.push('        raise NotImplementedError(');
+        src.push(`            'PENDING_FORK_BINDING: OCP.${mod}.${n} — ${FORK_ASK_CLASSES[n]}')`);
+        continue;
+      }
       src.push(`class ${n}(_Any):`);
       src.push('    pass');
     }

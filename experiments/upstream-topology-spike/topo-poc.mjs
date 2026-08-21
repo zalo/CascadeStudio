@@ -164,6 +164,77 @@ c = tuple(shared.center())
 assert all(abs(abs(x) - 1.0) < 1e-9 for x in c), 'corner at ' + str(c)
 print('T3 OK upstream-Vertex + lite-edge common vertex at', c, 'adjacent', count)
 `,
+  't5-out-param-glue': `
+# The convention-glue round: Tangency-family OCJS_Out glue (tuple return +
+# PntSol MUTATION), ChFi2d_FilletAlgo.Result (by-ref TopoDS out-params via
+# proxy rebinding), the bound Geom2dAPI_ProjectPointOnCurve.Parameter
+# alternative, and a PENDING_FORK_BINDING hook raising loudly.
+from OCP.gp import gp_Pnt2d, gp_Dir2d, gp_Ax2d, gp_Lin2d, gp_Pnt, gp_Dir, gp_Pln
+from OCP.Geom2d import Geom2d_Line
+from OCP.Geom2dAdaptor import Geom2dAdaptor_Curve
+from OCP.Geom2dGcc import Geom2dGcc_QualifiedCurve, Geom2dGcc_Circ2d2TanRad
+from OCP.GccEnt import GccEnt_Position
+from OCP.Geom2dAPI import Geom2dAPI_ProjectPointOnCurve
+
+def qline(px, py, dx, dy):
+    lin = gp_Lin2d(gp_Ax2d(gp_Pnt2d(px, py), gp_Dir2d(dx, dy)))
+    ad = Geom2dAdaptor_Curve(Geom2d_Line(lin.Position()))
+    return Geom2dGcc_QualifiedCurve(ad, GccEnt_Position.GccEnt_unqualified)
+
+gcc = Geom2dGcc_Circ2d2TanRad(qline(0, 0, 1, 0), qline(0, 0, 0, 1), 5.0, 1e-9)
+assert gcc.IsDone() and gcc.NbSolutions() > 0, 'no tangent circles'
+p1 = gp_Pnt2d(99.0, 99.0)
+res = gcc.Tangency1(1, p1)
+assert isinstance(res, tuple) and len(res) == 2, 'Tangency1 tuple: ' + str(res)
+assert abs(abs(p1.X()) - 5.0) < 1e-7 or abs(abs(p1.Y()) - 5.0) < 1e-7, \\
+    'PntSol not mutated: ' + str((p1.X(), p1.Y()))
+
+# ProjectPointOnCurve.Parameter: the float-returning bound overload
+line2d = Geom2d_Line(gp_Lin2d(gp_Ax2d(gp_Pnt2d(0, 0), gp_Dir2d(1, 0))).Position())
+proj = Geom2dAPI_ProjectPointOnCurve(gp_Pnt2d(3, 4), line2d)
+assert proj.NbPoints() >= 1
+u = proj.Parameter(1)
+assert abs(u - 3.0) < 1e-9, 'Parameter(1) = ' + str(u)
+
+# FilletAlgo.Result mutates the two passed TopoDS_Edge proxies
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+from OCP.ChFi2d import ChFi2d_FilletAlgo
+from OCP.TopoDS import TopoDS_Edge
+from OCP.BRepGProp import BRepGProp
+from OCP.GProp import GProp_GProps
+e1 = BRepBuilderAPI_MakeEdge(gp_Pnt(10, 0, 0), gp_Pnt(0, 0, 0)).Edge()
+e2 = BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(0, 10, 0)).Edge()
+algo = ChFi2d_FilletAlgo()
+algo.Init(e1, e2, gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)))
+assert algo.Perform(2.0), 'fillet Perform failed'
+corner = gp_Pnt(0, 0, 0)
+assert algo.NbResults(corner) >= 1
+t0, t1 = TopoDS_Edge(), TopoDS_Edge()
+fe = algo.Result(corner, t0, t1)
+props = GProp_GProps()
+BRepGProp.LinearProperties_s(t0, props)
+l0 = props.Mass()
+assert abs(l0 - 8.0) < 1e-6, 'trimmed edge0 length ' + str(l0)
+props2 = GProp_GProps()
+BRepGProp.LinearProperties_s(fe, props2)
+import math
+assert abs(props2.Mass() - 2.0 * math.pi / 2 * 1.0) < 0.5, 'fillet arc length ' + str(props2.Mass())
+
+# PENDING_FORK_BINDING hooks raise loudly, with the marker in the message
+from OCP.BRepOffset import BRepOffset_MakeOffset
+try:
+    BRepOffset_MakeOffset()
+    raise AssertionError('BRepOffset_MakeOffset should raise')
+except NotImplementedError as e:
+    assert 'PENDING_FORK_BINDING' in str(e), str(e)
+props3 = GProp_GProps()
+try:
+    props3.StaticMoments()
+    raise AssertionError('StaticMoments should raise')
+except Exception as e:
+    assert 'PENDING_FORK_BINDING' in str(e), str(e)
+print('T5 OK tangency tuple+mutation, ProjectPointOnCurve.Parameter, FilletAlgo.Result rebinding, PENDING hooks')
+`,
   't4-shape-core-import': `
 import b123d_shape_core_u as sc
 from build123d import *

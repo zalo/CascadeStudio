@@ -85,18 +85,46 @@ def _unwrap_kw(kwargs):
     return {k: _unwrap(v) for k, v in kwargs.items()}
 
 
+# Method names whose pybind form MUTATES class-typed arguments by
+# reference (TopoDS out-params, e.g. ChFi2d_FilletAlgo.Result fills the two
+# trimmed edges). These route through _csOcpCallMut, which returns a flat
+# [ret, i1, new1, ...] array; the caller's proxies are rebound to the new
+# raw objects — pybind's in-place mutation, at the proxy level. The JS side
+# falls back to a normal call when the receiver's class has no mut-glue
+# (ShapeFix_Face.Result is a plain getter).
+_MUT_METHODS = ('Result',)
+
+
 class _BoundMethod:
     def __init__(self, owner, name):
         self._owner = owner
         self._name = name
 
     def __call__(self, *args, **kwargs):
+        if self._name in _MUT_METHODS:
+            return self._call_mut(args, kwargs)
         try:
             r = w._csOcpCall(self._owner._ref, self._name,
                              [_unwrap(a) for a in args], _unwrap_kw(kwargs))
         except _CsWorkerError as e:
             _fail(str(e))
         return wrap(r)
+
+    def _call_mut(self, args, kwargs):
+        try:
+            arr = w._csOcpCallMut(self._owner._ref, self._name,
+                                  [_unwrap(a) for a in args],
+                                  _unwrap_kw(kwargs))
+        except _CsWorkerError as e:
+            _fail(str(e))
+        n = int(w._csOcpLen(arr))
+        for k in range(1, n - 1, 2):
+            i = int(w._csOcpItem(arr, k))
+            new_raw = w._csOcpItem(arr, k + 1)
+            target = args[i]
+            if isinstance(target, OcpProxy):
+                target._ref = new_raw
+        return wrap(w._csOcpItem(arr, 0))
 
 
 class OcpProxy:
@@ -156,3 +184,11 @@ def enum_member(enum, member):
 
 def topods_downcast(kind):
     return _Static('TopoDS_Cast', kind)
+
+
+def pending_fork_binding(what):
+    """A callable placeholder for a binding the fork round adds; the marker
+    makes integration a grep (PENDING_FORK_BINDING)."""
+    def _raise(*a, **k):
+        raise NotImplementedError('PENDING_FORK_BINDING: ' + what)
+    return _raise

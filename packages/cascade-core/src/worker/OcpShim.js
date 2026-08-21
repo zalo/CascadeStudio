@@ -402,13 +402,16 @@ export function installOcpShim(self, table) {
 
   // ---- glue: out-param methods pybind serves as tuple returns ---------- //
   const GLUE = {
+    // PENDING_FORK_BINDING(optional-exactness: OCJS_Out.BRepTool_Range):
+    // the adaptor reports the same range; a helper would skip the alloc
     'BRep_Tool.Range': (args) => {
       const a = new oc.BRepAdaptor_Curve_2(args[0]);
       return [a.FirstParameter(), a.LastParameter()];
     },
+    // PENDING_FORK_BINDING(optional-exactness: OCJS_Out.BRepTools_UVBounds):
+    // pybind UVBounds_s(face) -> (umin, umax, vmin, vmax); the bound
+    // BRepAdaptor_Surface (restriction=true) reports the same bounds
     'BRepTools.UVBounds': (args) => {
-      // pybind UVBounds_s(face) -> (umin, umax, vmin, vmax); the bound
-      // BRepAdaptor_Surface (restriction=true) reports the same bounds
       const s = new oc.BRepAdaptor_Surface_2(args[0], true);
       return [s.FirstUParameter(), s.LastUParameter(),
         s.FirstVParameter(), s.LastVParameter()];
@@ -424,6 +427,68 @@ export function installOcpShim(self, table) {
     'GeomAPI_ProjectPointOnSurf.Parameters': (args, ref) => {
       const uv = oc.OCJS_Out.ProjectPointOnSurf_Parameters(ref, args[0]);
       return [uv.u, uv.v];
+    },
+    // pybind Parameter(Index) has a plain float-returning overload; the
+    // embind Parameter_1 IS that overload (the tuple form is Parameter_2)
+    'Geom2dAPI_ProjectPointOnCurve.Parameter': (args, ref) =>
+      ref.Parameter_1(args[0]),
+  };
+  // The Geom2dGcc Tangency family: pybind Tangency{1,2,3}(Index, PntSol)
+  // -> (ParSol, ParArg), MUTATING the caller's PntSol. The fork's OCJS_Out
+  // helpers return {parSol, parArg, x, y}; the raw gp_Pnt2d the caller
+  // passed is shared with its Python proxy, so SetX/SetY IS the pybind
+  // mutation.
+  const TANGENCY_HELPERS = {
+    'Geom2dGcc_Circ2d2TanRad.Tangency1': 'Circ2d2TanRad_Tangency1',
+    'Geom2dGcc_Circ2d2TanRad.Tangency2': 'Circ2d2TanRad_Tangency2',
+    'Geom2dGcc_Circ2d2TanOn.Tangency1': 'Circ2d2TanOn_Tangency1',
+    'Geom2dGcc_Circ2d2TanOn.Tangency2': 'Circ2d2TanOn_Tangency2',
+    'Geom2dGcc_Circ2d3Tan.Tangency1': 'Circ2d3Tan_Tangency1',
+    'Geom2dGcc_Circ2d3Tan.Tangency2': 'Circ2d3Tan_Tangency2',
+    'Geom2dGcc_Circ2d3Tan.Tangency3': 'Circ2d3Tan_Tangency3',
+    'Geom2dGcc_Circ2dTanCen.Tangency1': 'Circ2dTanCen_Tangency1',
+    'Geom2dGcc_Circ2dTanOnRad.Tangency1': 'Circ2dTanOnRad_Tangency1',
+    'Geom2dGcc_Lin2dTanObl.Tangency1': 'Lin2dTanObl_Tangency1',
+  };
+  for (const [key, helper] of Object.entries(TANGENCY_HELPERS)) {
+    GLUE[key] = (args, ref) => {
+      const rec = oc.OCJS_Out[helper](ref, args[0]);
+      const pnt = args[1];
+      if (pnt && typeof pnt.SetX === 'function') {
+        pnt.SetX(rec.x);
+        pnt.SetY(rec.y);
+      }
+      return [rec.parSol, rec.parArg];
+    };
+  }
+  // out-param cases with NO helper bound yet (the fork round adds them —
+  // integration is `grep PENDING_FORK_BINDING`):
+  const PENDING_FORK = {
+    'BRep_Tool.CurveOnSurface':
+      'OCJS_Out.BRepTool_CurveOnSurface(edge, face) -> {curve2d, first, last}',
+    'GProp_GProps.StaticMoments':
+      'OCJS_Out.GProp_StaticMoments(props) -> {ix, iy, iz}',
+    'BRepExtrema_DistShapeShape.ParOnEdgeS1':
+      'OCJS_Out.BRepExtrema_ParOnEdgeS1(dss, i) -> {t}',
+    'BRepExtrema_DistShapeShape.ParOnEdgeS2':
+      'OCJS_Out.BRepExtrema_ParOnEdgeS2(dss, i) -> {t}',
+    'GeomAPI_ExtremaCurveCurve.Parameters':
+      'OCJS_Out.GeomAPI_ExtremaCurveCurve_Parameters(ecc, i) -> {u1, u2}',
+  };
+  for (const [key, ask] of Object.entries(PENDING_FORK)) {
+    GLUE[key] = () => {
+      throw new Error('ocp_shim: PENDING_FORK_BINDING(' + key + ') — needs '
+        + ask);
+    };
+  }
+  // ---- glue that MUTATES caller arguments (pybind by-ref TopoDS out-  ---- //
+  // params; served through the _csOcpCallMut protocol: the Python side
+  // rebinds the passed proxies' _ref). Returns [ret, i1, new1, i2, new2...].
+  const GLUE_MUT = {
+    'ChFi2d_FilletAlgo.Result': (args, ref) => {
+      // pybind Result(thePoint, theEdge1, theEdge2, iSolution=-1) -> Edge
+      const out = oc.OCJS_Out.FilletAlgo_Result(ref, args[0]);
+      return [out.fillet, 1, out.trimmed1, 2, out.trimmed2];
     },
   };
 
@@ -575,6 +640,23 @@ export function installOcpShim(self, table) {
       + ', pybind: ' + (m ? 'yes' : 'no') + ')';
     throw new Error(lastErr ? base + ' — last: ' + (lastErr.message || lastErr)
       : base);
+  };
+
+  /** Methods whose pybind form MUTATES class-typed args by reference
+   *  (TopoDS_Edge out-params). The Python proxy layer routes calls to
+   *  method names in GLUE_MUT here; the return is a flat array
+   *  [ret, i1, new1, i2, new2, ...] and ocp_core rebinds args[i]._ref.
+   *  Falls back to the normal call when the receiver's class has no
+   *  mut-glue (e.g. ShapeFix_Face.Result is a plain getter). */
+  self._csOcpCallMut = function (ref, name, args, kwargs) {
+    let cn = normCls(ref && ref.constructor && ref.constructor.name);
+    while (cn) {
+      const g = GLUE_MUT[cn + '.' + name];
+      if (g) { return g(args, ref); }
+      const t = tableClass(cn);
+      cn = t ? t.parent : null;
+    }
+    return [self._csOcpCall(ref, name, args, kwargs)];
   };
 
   self._csOcpEnum = function (en, member) {

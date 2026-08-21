@@ -4,5 +4,7 @@ class _Any:
     def __init__(self, *a, **k):
         raise NotImplementedError(
             'OCP.TColgp.' + self.__class__.__name__ + ' is not in the generated shim')
-class TColgp_HArray2OfPnt(_Any):
-    pass
+class TColgp_HArray2OfPnt:
+    def __init__(self, *a, **k):
+        raise NotImplementedError(
+            'PENDING_FORK_BINDING: OCP.TColgp.TColgp_HArray2OfPnt — Face.make_bezier_surface')
