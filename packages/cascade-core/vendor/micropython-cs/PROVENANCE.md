@@ -23,6 +23,8 @@ in `dist/` (see the build script's copy step and the runtime's probe).
 | `68d0e32` | py/objfloat: Fold high float bits into the hash on narrow mp_int_t. |
 | `2a4a92e` | py/objtype: Support custom metaclasses (subclasses of type). |
 | `9e360ce` | py/modbuiltins: Support metaclass= and class keywords in __build_class__. |
+| `83f1550` | ports/webassembly: Convert out-of-int32 integral JS numbers as floats. |
+| `7f63764` | ports/webassembly: Append JSFLAGS_EXTRA to JSFLAGS. |
 
 What they give this runtime (each feature-detected in browser.py /
 Build123dLite.js, so the stock artifacts keep working):
@@ -59,19 +61,19 @@ Build123dLite.js, so the stock artifacts keep working):
   `__mro_entries__`, metaclass `__instancecheck__`/`__subclasscheck__`,
   metaclass data descriptors intercepting class-attribute stores.
 
-9. `83f15505d` **ports/webassembly: Convert out-of-int32 integral JS
-   numbers as floats.** Upstream jsffi converts any JS number with
-   `Number.isInteger(x)` through the i32 proxy kind, so integral doubles
-   ≥ 2^31 crossed into Python WRAPPED (1e15 → -1530494976) and huge
-   integral doubles as 0 (1e100 → 0 — which silently degenerated OCCT's
-   ±Precision::Infinite parameter ranges, found via upstream `Edge(Axis)`
-   in Stage 3). Out-of-int32 integral numbers now take the DOUBLE path
-   (CPython/Pyodide semantics). Test: tests/ports/webassembly/
-   int_large.mjs. (First shipped as a hand-edit of the vendored artifact;
-   these artifacts are now built from the source commit.)
-10. `7f63764e9` **ports/webassembly: Append JSFLAGS_EXTRA to JSFLAGS.**
-   Build-machinery only (profiling builds pass --profiling-funcs without
-   overriding the port's required link flags).
+- **Out-of-int32 integral JS numbers convert as floats** (`83f1550`):
+  upstream jsffi converts any JS number with `Number.isInteger(x)` through
+  the i32 proxy kind, so integral doubles >= 2^31 crossed into Python
+  WRAPPED (1e15 -> -1530494976) and huge integral doubles as 0 (1e100 -> 0
+  -- which silently degenerated OCCT's +-Precision::Infinite parameter
+  ranges, found via upstream `Edge(Axis)` in Stage 3). Out-of-int32
+  integral numbers now take the DOUBLE path (CPython/Pyodide semantics).
+  Test: tests/ports/webassembly/int_large.mjs. (First shipped as a
+  hand-edit of the vendored artifact; the artifacts are now built from the
+  source commit.)
+- **JSFLAGS_EXTRA** (`7f63764`): build-machinery only (profiling builds
+  pass --profiling-funcs without overriding the port's required link
+  flags).
 
 Measured and NOT adopted (2026-08-21 Stage-3 perf round):
 `-DMICROPY_OPT_COMPUTED_GOTO=1` (~4% on the b01 hot loop, br_table gains
