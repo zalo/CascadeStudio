@@ -10142,6 +10142,16 @@ def copy(x):
 
 
 def deepcopy(x, memo=None):
+    # CPython-parity memo semantics: a dict is always passed down and an
+    # already-copied object is returned from it (upstream Shape.__deepcopy__
+    # pre-seeds memo[id(self.wrapped)] with the BRepBuilderAPI_Copy so the
+    # kernel shape is copied exactly once).
+    if memo is None:
+        memo = {}
+    try:
+        return memo[id(x)]
+    except (KeyError, TypeError):
+        pass
     if hasattr(x, '_lite_copy'):
         return x._lite_copy()
     if hasattr(x, '__deepcopy__'):
@@ -10154,6 +10164,16 @@ def deepcopy(x, memo=None):
         return dict((deepcopy(k, memo), deepcopy(v, memo)) for k, v in x.items())
     if isinstance(x, set):
         return set(deepcopy(v, memo) for v in x)
+    if hasattr(x, '__dict__') and not isinstance(x, type):
+        # plain instance: CPython deepcopies attribute-by-attribute
+        try:
+            dup = object.__new__(type(x))
+        except Exception:
+            return x
+        memo[id(x)] = dup
+        for k in x.__dict__:
+            setattr(dup, k, deepcopy(x.__dict__[k], memo))
+        return dup
     return x
 `,
   typing: `

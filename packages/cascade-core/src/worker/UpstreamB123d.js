@@ -308,6 +308,16 @@ export function transformUpstreamSource(name, src, opts) {
   out = rewriteMatchStatements(out, name);
   out = rewriteDataclassFields(out);
   out = rewriteListSplats(out);
+  // MicroPython classes have no bound __new__ attribute; the one corpus
+  // call site (Shape.__deepcopy__) constructs through object.__new__
+  out = out.replace(/\bcls\.__new__\(cls\)/g, 'object.__new__(cls)');
+  // PEP 604 runtime unions in isinstance (`isinstance(x, Location | Plane)`)
+  // — MicroPython types have no __or__; rewrite the union to a tuple. Only
+  // the simple-name form appears in the corpus (4 sites, all Location|Plane).
+  out = out.replace(
+    /isinstance\((\w+), ([A-Za-z_][\w.]*(?:\s*\|\s*[A-Za-z_][\w.]*)+)\)/g,
+    (m2, v, union) => 'isinstance(' + v + ', (' +
+      union.split('|').map((s) => s.trim()).join(', ') + '))');
   // this MicroPython build has no sys.exc_info and sys is read-only; the
   // loader installs a builtins._cs_exc_info that reports "not handling an
   // exception" (build123d only uses it to soften errors during unwinding)
