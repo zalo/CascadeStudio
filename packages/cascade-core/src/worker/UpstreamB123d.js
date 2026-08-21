@@ -617,6 +617,13 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       "        stack.extend(getattr(k, '__bases__', ()))",
       "    raise AttributeError('property not found on ' + type(obj).__name__)",
       '_cs_bi2._cs_prop_get = _cs_prop_get',
+      // MicroPython has no builtin format() (geometry hex-color paths)
+      'try:',
+      '    format',
+      'except NameError:',
+      "    def _cs_format(v, spec=''):",
+      "        return ('{:' + spec + '}').format(v) if spec else str(v)",
+      '    _cs_bi2.format = _cs_format',
     ].join('\n'));
 
     const topoTransform = (name, raw) => {

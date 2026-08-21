@@ -36,6 +36,29 @@ Face = _topo_pkg.Face
 Vertex = _topo_pkg.Vertex
 
 
+# pybind collection protocols on the specific proxy classes upstream
+# topology iterates/calls (see ocp_core._seq_iter/_list_iter/_map_call)
+def _cs_attach_collection_protocols():
+    import ocp_registry as _reg
+    for name in ('TopTools_HSequenceOfShape', 'TColStd_HSequenceOfReal',
+                 'TColgp_HSequenceOfPnt'):
+        cls = getattr(_reg, name, None)
+        if cls is not None:
+            cls.__iter__ = _c._seq_iter
+    for name in ('TopTools_ListOfShape',):
+        cls = getattr(_reg, name, None)
+        if cls is not None:
+            cls.__iter__ = _c._list_iter
+    for name in ('TopTools_IndexedMapOfShape',
+                 'TopTools_IndexedDataMapOfShapeListOfShape'):
+        cls = getattr(_reg, name, None)
+        if cls is not None:
+            cls.__call__ = _c._map_call
+
+
+_cs_attach_collection_protocols()
+
+
 def _raw(obj):
     """Raw JS TopoDS object of an upstream Shape (or shim proxy / lite shape /
     raw), for w.* JS calls and sceneShapes membership."""

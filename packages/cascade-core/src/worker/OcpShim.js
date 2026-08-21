@@ -532,6 +532,26 @@ export function installOcpShim(self, table) {
       return [alpha, beta, gamma];
     },
   };
+  // ---- COMPROMISE(quantity-color): Quantity_Color did not survive the
+  // fork build (its NCollection_Vec3 ctor is unbound and the whole class
+  // was dropped — only Quantity_ColorRGBA + the enums exist). geometry.py's
+  // Color rides on it, so the shim serves a PLAIN-JS stand-in carrying the
+  // rgb channels; Quantity_ColorRGBA construction maps onto the bound
+  // _5(r,g,b,a) form and GetRGB returns the tracked stand-in. Candidate
+  // fork ask: bind Quantity_Color (skip the Vec3 ctor).
+  const mkFakeQC = (r, g, b) => ({
+    _csQC: 1, _r: r, _g: g, _b: b,
+    Red: () => r, Green: () => g, Blue: () => b,
+    Values: () => [r, g, b],
+    IsEqual: (o) => !!(o && o._csQC && o._r === r && o._g === g && o._b === b),
+  });
+  const rgbaChannels = new WeakMap();
+  GLUE['Quantity_ColorRGBA.GetRGB'] = (args, ref) => {
+    const c = rgbaChannels.get(ref);
+    return c ? mkFakeQC(c[0], c[1], c[2]) : mkFakeQC(0, 0, 0);
+  };
+  GLUE['Quantity_Color.ColorFromName'] = () => false; // webcolors shim covers CSS3
+
   // ---- kernel-guard (COMPROMISE(kernel-guard), ported to the upstream
   // topology path): this OCCT 8.0.1 wasm build's BRepAlgoAPI_Fuse can
   // silently DROP an operand (coplanar faces meeting along BSpline edges)
@@ -722,6 +742,17 @@ export function installOcpShim(self, table) {
     if (HISTORY_FAMILIES.test(cls) && typeof self.recordExternalOp === 'function') {
       self.recordExternalOp(historyName(cls));
     }
+    // COMPROMISE(quantity-color) stand-ins (see mkFakeQC above)
+    if (cls === 'Quantity_Color' && !oc.Quantity_Color_1) {
+      if (args.length === 0) { return mkFakeQC(0, 0, 0); }
+      return mkFakeQC(+args[0] || 0, +args[1] || 0, +args[2] || 0);
+    }
+    if (cls === 'Quantity_ColorRGBA' && args.length && args[0] && args[0]._csQC) {
+      const a = args.length > 1 ? +args[1] : 1.0;
+      const inst = new oc.Quantity_ColorRGBA_5(args[0]._r, args[0]._g, args[0]._b, a);
+      rgbaChannels.set(inst, [args[0]._r, args[0]._g, args[0]._b]);
+      return inst;
+    }
     const t = tableClass(cls);
     // 1. pinned dispatch (build-time resolved; refuses on ambiguity)
     let r = dispatchPhases(t && t.cdispatch, ocCtor, null, args, kwargs,
@@ -906,6 +937,19 @@ export function installOcpShim(self, table) {
       cn = t ? t.parent : null;
     }
     return [self._csOcpCall(ref, name, args, kwargs)];
+  };
+
+  // pybind hashes TopoDS_Shape by OCCT HashCode (TShape + Location) — the
+  // dedup upstream _topods_entities rides on (`out[hash(item)] = item`).
+  // Fork helper OCJS.HashCode serves it; non-shapes return null (Python
+  // falls back to identity).
+  self._csOcpHashCode = function (ref) {
+    if (ref && ref.constructor &&
+        String(ref.constructor.name).lastIndexOf('TopoDS_', 0) === 0 &&
+        oc.OCJS && typeof oc.OCJS.HashCode === 'function') {
+      return oc.OCJS.HashCode(ref, 2147483647);
+    }
+    return null;
   };
 
   self._csOcpEnum = function (en, member) {

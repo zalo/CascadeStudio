@@ -10770,17 +10770,41 @@ class _IndexRows(list):
 
 
 class ConvexHull:
-    """3-D convex hull computed by the worker's bundled quickhull3d.
-    Only the attributes the examples use are provided: .points,
-    .simplices (triangulated facets, scipy convention) and .vertices.
-    2-D hulls are not implemented (scipy uses qhull; the 2-D case in
-    lite is served by make_hull's own Andrew-monotone hull)."""
+    """Convex hull with scipy's attribute conventions: .points, .simplices
+    (facets as index rows) and .vertices. 3-D hulls are computed by the
+    worker's bundled quickhull3d; 2-D hulls by Andrew's monotone chain
+    (vertices CCW like qhull; simplices = consecutive hull-edge pairs —
+    upstream Wire.make_convex_hull consumes them)."""
 
     def __init__(self, points, *args, **kwargs):
         pts = [[float(c) for c in p] for p in points]
+        if len(pts) > 0 and len(pts[0]) == 2:
+            idx = _stable_sorted(range(len(pts)),
+                                 key=lambda i: (pts[i][0], pts[i][1]))
+
+            def cross(o, a, b):
+                return ((pts[a][0] - pts[o][0]) * (pts[b][1] - pts[o][1]) -
+                        (pts[a][1] - pts[o][1]) * (pts[b][0] - pts[o][0]))
+            lower = []
+            for i in idx:
+                while len(lower) >= 2 and cross(lower[-2], lower[-1], i) <= 0:
+                    lower.pop()
+                lower.append(i)
+            upper = []
+            for i in reversed(idx):
+                while len(upper) >= 2 and cross(upper[-2], upper[-1], i) <= 0:
+                    upper.pop()
+                upper.append(i)
+            hull = lower[:-1] + upper[:-1]   # CCW, no repeated endpoint
+            self.points = pts
+            self.vertices = _IndexRows(hull)
+            self.simplices = _IndexRows(
+                _IndexRows((hull[k], hull[(k + 1) % len(hull)]))
+                for k in range(len(hull)))
+            return
         if len(pts) == 0 or len(pts[0]) != 3:
             raise NotImplementedError(
-                'scipy shim: only 3-D ConvexHull is supported in '
+                'scipy shim: only 2-D and 3-D ConvexHull are supported in '
                 'build123d-lite')
         from browser import self as _w
         tris = _w.ConvexHull3D(pts)

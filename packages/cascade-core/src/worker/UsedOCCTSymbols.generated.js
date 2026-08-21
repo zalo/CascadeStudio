@@ -135,6 +135,8 @@ export const USED_OCCT_SYMBOLS = [
   "Message_ProgressRange_1",
   "OCJS",
   "OCJS_Out",
+  "Quantity_ColorRGBA_5",
+  "Quantity_Color_1",
   "STEPControl_Reader_1",
   "STEPControl_StepModelType",
   "STEPControl_Writer_1",

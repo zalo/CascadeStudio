@@ -176,6 +176,17 @@ class OcpProxy:
     def __neg__(self):
         return _BoundMethod(self, 'Reversed')()
 
+    def __hash__(self):
+        # pybind parity: TopoDS shapes hash by OCCT HashCode (TShape +
+        # Location) so explorer pseudo-duplicates collapse in dict/set
+        # dedup (upstream _topods_entities). Non-shapes hash by identity.
+        h = getattr(self, '_cs_hash', None)
+        if h is None:
+            h = w._csOcpHashCode(self._ref)
+            h = id(self) if h is None else int(h)
+            self._cs_hash = h
+        return h
+
     def __repr__(self):
         return '<ocp_shim ' + str(self._cs) + '>'
 
@@ -213,6 +224,40 @@ def enum_member(enum, member):
 
 def topods_downcast(kind):
     return _Static('TopoDS_Cast', kind)
+
+
+# pybind collection protocols, attached to SPECIFIC proxy classes only
+# (a generic OcpProxy.__iter__/__call__ would flip callable()/iter() duck-
+# typing branches all over upstream code). Used by topo_glue at boot.
+def _seq_iter(self):
+    """sequences: Length()/Value(i), 1-based"""
+    n = int(_BoundMethod(self, 'Length')())
+    value = _BoundMethod(self, 'Value')
+    for i in range(1, n + 1):
+        yield value(i)
+
+
+def _list_iter(self):
+    """lists (TopTools_ListOfShape — no index access bound): destructive
+    First/RemoveFirst read, APPENDING BACK to restore (FindFromKey and
+    friends return value copies through embind)"""
+    is_empty = _BoundMethod(self, 'IsEmpty')
+    first = _BoundMethod(self, 'First')
+    remove_first = _BoundMethod(self, 'RemoveFirst')
+    append = _BoundMethod(self, 'Append')
+    items = []
+    while not is_empty():
+        items.append(first())
+        remove_first()
+    for it in items:
+        append(it)
+    for it in items:
+        yield it
+
+
+def _map_call(self, *args):
+    """pybind operator() (TopTools_IndexedMapOfShape(i) -> FindKey(i))"""
+    return _BoundMethod(self, 'FindKey')(*args)
 
 
 def pending_fork_binding(what):
