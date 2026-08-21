@@ -506,6 +506,98 @@ export function installOcpShim(self, table) {
       return [alpha, beta, gamma];
     },
   };
+  // ---- kernel-guard (COMPROMISE(kernel-guard), ported to the upstream
+  // topology path): this OCCT 8.0.1 wasm build's BRepAlgoAPI_Fuse can
+  // silently DROP an operand (coplanar faces meeting along BSpline edges)
+  // or RAISE on shared internal walls, while the General-Fuse SPLIT phase
+  // is correct on the same inputs. Upstream _bool_op runs Fuse through the
+  // shim (SetArguments/SetTools/Build/Shape), so the guard hooks those:
+  // operands are tracked through the ListOfShape Append glue, and Shape()
+  // on a Fuse validates the result volume against the largest input,
+  // rebuilding from the GF partition when the kernel dropped/raised.
+  const _qVol = (shape) => {
+    try {
+      const props = new oc.GProp_GProps_1();
+      oc.BRepGProp.VolumeProperties_1(shape, props, false, false, false);
+      return Math.abs(props.Mass());
+    } catch (e) { return 0; }
+  };
+  const _rebuildFuseFromGF = (shapes) => {
+    try {
+      const op = new oc.BOPAlgo_Builder_1();
+      for (const s of shapes) { op.AddArgument(s); }
+      op.Perform(new oc.Message_ProgressRange_1());
+      if (op.HasErrors()) { return null; }
+      const gf = op.Shape();
+      const ex = new oc.TopExp_Explorer_2(gf, oc.TopAbs_ShapeEnum.TopAbs_SOLID,
+        oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+      return ex.More() ? gf : null;
+    } catch (e) { return null; }
+  };
+  const listContents = new WeakMap();
+  const fuseOperands = new WeakMap();
+  GLUE['TopTools_ListOfShape.Append'] = (args, ref) => {
+    let arr = listContents.get(ref);
+    if (!arr) { arr = []; listContents.set(ref, arr); }
+    arr.push(args[0]);
+    return ref.Append(args[0]);
+  };
+  const isFuse = (ref) => normCls(String(ref.constructor.name)) === 'BRepAlgoAPI_Fuse';
+  GLUE['BRepAlgoAPI_BuilderAlgo.SetArguments'] = (args, ref) => {
+    if (isFuse(ref)) {
+      const info = fuseOperands.get(ref) || {};
+      info.args = (listContents.get(args[0]) || []).slice();
+      fuseOperands.set(ref, info);
+    }
+    return ref.SetArguments(args[0]);
+  };
+  GLUE['BRepAlgoAPI_BooleanOperation.SetTools'] = (args, ref) => {
+    if (isFuse(ref)) {
+      const info = fuseOperands.get(ref) || {};
+      info.tools = (listContents.get(args[0]) || []).slice();
+      fuseOperands.set(ref, info);
+    }
+    return ref.SetTools(args[0]);
+  };
+  GLUE['BRepAlgoAPI_BooleanOperation.Build'] = (args, ref) => {
+    const callArgs = args.length ? args : [new oc.Message_ProgressRange_1()];
+    try {
+      return ref.Build.apply(ref, callArgs);
+    } catch (e) {
+      const info = isFuse(ref) ? fuseOperands.get(ref) : null;
+      if (info && (info.args || []).length + (info.tools || []).length > 1) {
+        info.buildError = e;  // Shape() decides: GF rebuild or rethrow
+        return undefined;
+      }
+      throw e;
+    }
+  };
+  GLUE['BRepAlgoAPI_Algo.Shape'] = (args, ref) => {
+    const info = isFuse(ref) ? fuseOperands.get(ref) : null;
+    if (!info) { return tagTopoDS(ref.Shape()); }
+    const operands = (info.args || []).concat(info.tools || []);
+    if (info.buildError) {
+      const rebuilt = _rebuildFuseFromGF(operands);
+      if (!rebuilt) { throw info.buildError; }
+      console.log('ocp_shim fuse guard: BRepAlgoAPI_Fuse raised (known OCCT '
+        + '8.0.1 wasm fault family); rebuilt from the General-Fuse partition.');
+      return tagTopoDS(rebuilt);
+    }
+    const raw = ref.Shape();
+    if (operands.length < 2) { return tagTopoDS(raw); }
+    const maxInput = Math.max(...operands.map(_qVol));
+    if (maxInput > 1e-6 && _qVol(raw) < maxInput * 0.999 - 1e-9) {
+      const rebuilt = _rebuildFuseFromGF(operands);
+      if (rebuilt && _qVol(rebuilt) >= maxInput * 0.999 - 1e-9) {
+        console.log('ocp_shim fuse guard: BRepAlgoAPI_Fuse dropped an operand '
+          + '(known OCCT 8.0.1 wasm fault); rebuilt from the General-Fuse '
+          + 'partition.');
+        return tagTopoDS(rebuilt);
+      }
+    }
+    return tagTopoDS(raw);
+  };
+
   // The Geom2dGcc Tangency family: pybind Tangency{1,2,3}(Index, PntSol)
   // -> (ParSol, ParArg), MUTATING the caller's PntSol. The fork's OCJS_Out
   // helpers return {parSol, parArg, x, y}; the raw gp_Pnt2d the caller
@@ -580,8 +672,30 @@ export function installOcpShim(self, table) {
       sets: [hasKw ? null : args, ...sets] };
   };
 
+  // ---- history seam (pytopo=upstream): lite's CacheOp tagged shapes with
+  // the producing editor line; upstream topology calls the shim instead, so
+  // the SHIM records history at operation-family granularity (the
+  // BRepPrimAPI/BRepAlgoAPI/... constructions — not every gp_Pnt) and tags
+  // every TopoDS_* return with the line recorded by the most recent op, so
+  // pick -> line mapping (combineAndRenderShapes reads .producingLine off
+  // sceneShapes members) keeps resolving.
+  const HISTORY_FAMILIES = /^(BRepPrimAPI_|BRepAlgoAPI_|BRepOffsetAPI_|BRepFilletAPI_|BRepFeat_|BRepOffset_Make|LocOpe_|ChFi2d_)/;
+  const historyName = (cls) => cls.replace(HISTORY_FAMILIES, '')
+    .replace(/^Make/, '') || cls;
+  const tagTopoDS = (v) => {
+    if (v && typeof v === 'object' && v.$$ !== undefined && v.constructor &&
+        String(v.constructor.name).lastIndexOf('TopoDS_', 0) === 0 &&
+        self.currentLineNumber) {
+      try { v.producingLine = self.currentLineNumber; } catch (e) { /* frozen */ }
+    }
+    return v;
+  };
+
   self._csOcpNew = function (cls, args, kwargs) {
     kwargs = normKw(kwargs);
+    if (HISTORY_FAMILIES.test(cls) && typeof self.recordExternalOp === 'function') {
+      self.recordExternalOp(historyName(cls));
+    }
     const t = tableClass(cls);
     // 1. pinned dispatch (build-time resolved; refuses on ambiguity)
     let r = dispatchPhases(t && t.cdispatch, ocCtor, null, args, kwargs,
@@ -652,7 +766,7 @@ export function installOcpShim(self, table) {
     // 1. pinned dispatch
     let r = dispatchPhases(m && m.dispatch, methodOn(holder), holder,
       args, kwargs, m && m.pybind, m && m.variants, cls + '.' + name);
-    if (r.done) { return deref(r.value); }
+    if (r.done) { return tagTopoDS(deref(r.value)); }
     const sets = r.sets || [args];
     const tieInfo = r.tie;
     let lastErr = r.err;
@@ -673,7 +787,7 @@ export function installOcpShim(self, table) {
     }
     if (cands.length) {
       r = tryCall(cands, holder, sets);
-      if (r.done) { return deref(r.value); }
+      if (r.done) { return tagTopoDS(deref(r.value)); }
       lastErr = r.err || lastErr;
     }
     if (tieInfo) { refuseTie(cls + '.' + name, tieInfo); }
@@ -714,7 +828,7 @@ export function installOcpShim(self, table) {
     // 1. pinned dispatch
     let r = dispatchPhases(m && m.dispatch, methodOn(ref), ref, args,
       kwargs, m && m.pybind, m && m.variants, (mcls || cn0) + '.' + name);
-    if (r.done) { return deref(r.value); }
+    if (r.done) { return tagTopoDS(deref(r.value)); }
     const sets = r.sets || [args];
     const tieInfo = r.tie;
     let lastErr = r.err;
@@ -739,7 +853,7 @@ export function installOcpShim(self, table) {
     }
     if (cands.length) {
       r = tryCall(cands, ref, sets);
-      if (r.done) { return deref(r.value); }
+      if (r.done) { return tagTopoDS(deref(r.value)); }
       lastErr = r.err || lastErr;
     }
     if (tieInfo) { refuseTie((mcls || cn0) + '.' + name, tieInfo); }

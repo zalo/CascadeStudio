@@ -22,6 +22,7 @@ class CascadeStudioUtils {
     self.opNumber = this.opNumber;
     self.modelHistory = this.modelHistory;
     self.CacheOp = this.CacheOp.bind(this);
+    self.recordExternalOp = this.recordExternalOp.bind(this);
     self.CheckCache = this.CheckCache.bind(this);
     self.AddToCache = this.AddToCache.bind(this);
     self.ComputeHash = this.ComputeHash.bind(this);
@@ -106,6 +107,26 @@ class CascadeStudioUtils {
 
     postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber, "opType": null } });
     return toReturn;
+  }
+
+  /** History bookkeeping for geometry-producing operations that do NOT go
+   *  through CacheOp — the pytopo=upstream OCP shim calls this when a
+   *  BRepPrimAPI/BRepAlgoAPI/... operation class is constructed (see
+   *  OcpShim.js). Mirrors CacheOp's history/progress protocol (fnName +
+   *  Python user line) without the cache. */
+  recordExternalOp(fnName) {
+    this.flushHistoryStep();
+    this.currentOp = fnName;
+    self.currentOp = fnName;
+    this.currentLineNumber =
+      (self.evalLanguage === 'python' && self.getPythonUserLine)
+        ? self.getPythonUserLine() : 0;
+    self.currentLineNumber = this.currentLineNumber;
+    postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber++, "opType": fnName } });
+    self.opNumber = this.opNumber;
+    this._pendingHistoryOp = { fnName, lineNumber: this.currentLineNumber };
+    postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber, "opType": null } });
+    return this.currentLineNumber;
   }
 
   /** Flush the pending history step by snapshotting the current sceneShapes.
