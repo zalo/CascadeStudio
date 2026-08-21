@@ -289,6 +289,40 @@ export function rewriteDataclassFields(src) {
   return lines.join('\n');
 }
 
+export function rewriteListConcatCoercion(src) {
+  // MicroPython's list.__add__ REFUSES a list SUBCLASS on the right
+  // (`[outer_wire] + inner_wires` with a ShapeList raises "unsupported
+  // types for __add__: 'list', 'list'"; subclass-on-the-LEFT works).
+  // Coerce the right-hand term to list() when the LEFT is a list DISPLAY
+  // (preceded by a non-identifier char, so subscripts are untouched) and
+  // the right is a name/attribute/call chain.
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    if (src[i] !== '[') { out += src[i++]; continue; }
+    const before = i === 0 ? ' ' : src[i - 1];
+    if (/[A-Za-z0-9_)\]'"]/.test(before)) { out += src[i++]; continue; } // subscript
+    let d = 0, j = i;
+    for (; j < src.length; j++) {
+      if ('([{'.indexOf(src[j]) !== -1) { d++; }
+      else if (')]}'.indexOf(src[j]) !== -1) { d--; if (d === 0) { break; } }
+    }
+    if (j >= src.length) { out += src[i++]; continue; }
+    const display = src.slice(i, j + 1);
+    const rest = src.slice(j + 1);
+    const m = rest.match(/^ \+ ([A-Za-z_][\w.]*(?:\((?:[^()]|\([^()]*\))*\))*)/);
+    // only when the term ends the expression (not followed by [ or ( or .)
+    if (m && !/^[[(.\w]/.test(rest.slice(m[0].length))) {
+      out += display + ' + list(' + m[1] + ')';
+      i = j + 1 + m[0].length;
+    } else {
+      out += display;
+      i = j + 1;
+    }
+  }
+  return out;
+}
+
 export function transformUpstreamSource(name, src, opts) {
   let out = src;
   out = stripTypeAliases(out);
@@ -308,9 +342,14 @@ export function transformUpstreamSource(name, src, opts) {
   out = rewriteMatchStatements(out, name);
   out = rewriteDataclassFields(out);
   out = rewriteListSplats(out);
+  out = rewriteListConcatCoercion(out);
   // MicroPython classes have no bound __new__ attribute; the one corpus
   // call site (Shape.__deepcopy__) constructs through object.__new__
   out = out.replace(/\bcls\.__new__\(cls\)/g, 'object.__new__(cls)');
+  // MicroPython property objects have no __get__ (nor .fget); shape_core's
+  // filter_by/group_by(property) evaluate through a builtins helper that
+  // finds the property on the instance's class by IDENTITY and getattrs it
+  out = out.replace(/(\w+)\.__get__\((\w+)\)/g, '_cs_prop_get($1, $2)');
   // PEP 604 runtime unions in isinstance (`isinstance(x, Location | Plane)`)
   // — MicroPython types have no __or__; rewrite the union to a tuple. Only
   // the simple-name form appears in the corpus (4 sites, all Location|Plane).
@@ -557,6 +596,27 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       '        return r(n) if n is not None else r()',
       '    return _cs_orig_round(x) if n is None else _cs_orig_round(x, n)',
       '_cs_bi2.round = _cs_round',
+      // MicroPython's sum() rejects the start KEYWORD (one_d.common_plane
+      // sums Vectors with start=Vector(0,0,0)); positional start works
+      '_cs_orig_sum = _cs_bi2.sum',
+      'def _cs_sum(it, start=0):',
+      '    return _cs_orig_sum(it, start)',
+      '_cs_bi2.sum = _cs_sum',
+      // property evaluation for ShapeList.filter_by/group_by(property):
+      // MicroPython property objects have no __get__/.fget — find the
+      // property on the instance's class chain BY IDENTITY and getattr it
+      'def _cs_prop_get(prop, obj):',
+      '    stack = [type(obj)]',
+      '    while stack:',
+      '        k = stack.pop()',
+      "        d = getattr(k, '__dict__', None)",
+      '        if d:',
+      '            for name in d:',
+      '                if d[name] is prop:',
+      '                    return getattr(obj, name)',
+      "        stack.extend(getattr(k, '__bases__', ()))",
+      "    raise AttributeError('property not found on ' + type(obj).__name__)",
+      '_cs_bi2._cs_prop_get = _cs_prop_get',
     ].join('\n'));
 
     const topoTransform = (name, raw) => {

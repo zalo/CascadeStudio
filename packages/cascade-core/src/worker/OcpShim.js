@@ -34,8 +34,15 @@ export function installOcpShim(self, table) {
   };
   const keepAlive = []; // handles whose .get() results are live
 
-  const isEmbind = (v) => v && typeof v === 'object' && v.constructor &&
-    typeof v.constructor.name === 'string' && v.$$ !== undefined;
+  const isEmbind = (v) => {
+    // guarded: a Python-object PyProxy raises AttributeError from inside
+    // its attribute trap when probed for '$$' (e.g. a Vector reaching a
+    // dispatch arg through a user error) — report "not embind", never throw
+    try {
+      return v && typeof v === 'object' && v.constructor &&
+        typeof v.constructor.name === 'string' && v.$$ !== undefined;
+    } catch (e) { return false; }
+  };
 
   const deref = (v) => {
     if (!isEmbind(v)) { return v; }
@@ -205,7 +212,7 @@ export function installOcpShim(self, table) {
     if (t === 'object') {
       const en = enumMap.get(a);
       if (en) { return 'e:' + en; }
-      if (a.$$ !== undefined && a.constructor) {
+      if (isEmbind(a)) {
         return 'c:' + normCls(a.constructor.name);
       }
     }
@@ -487,6 +494,25 @@ export function installOcpShim(self, table) {
     'BRepAlgoAPI_Algo.SetRunParallel': () => undefined,
     'BRepAlgoAPI_Algo.SetFuzzyValue': () => undefined,
     'BRepAlgoAPI_BuilderAlgo.SetNonDestructive': () => undefined,
+    // pybind ConnectEdgesToWires(edges, tol, shared, wires&) REASSIGNS the
+    // out-HANDLE to a fresh sequence; embind passes a handle copy, so the
+    // caller's sequence stays empty. Route through the RETURNING overload
+    // (ConnectEdgesToWires_1) and Append into the caller's sequence.
+    'ShapeAnalysis_FreeBounds.ConnectEdgesToWires': (args) => {
+      let edges = args[0];
+      if (isEmbind(edges) &&
+          String(edges.constructor.name).lastIndexOf('Handle_', 0) !== 0) {
+        edges = new oc.Handle_TopTools_HSequenceOfShape_2(edges);
+      }
+      const res = oc.ShapeAnalysis_FreeBounds.ConnectEdgesToWires_1(
+        edges, args[1], args[2]);
+      const out = deref(res);
+      if (args.length !== 4) { return out; }
+      if (out && typeof out.Length === 'function') {
+        for (let i = 1; i <= out.Length(); i++) { args[3].Append(out.Value(i)); }
+      }
+      return undefined;
+    },
     // pybind GetEulerAngles(seq) -> (alpha, beta, gamma); the embind variant
     // value-passes the three Standard_Real& outs. Extracted from the bound
     // rotation matrix instead. build123d calls ONLY gp_Intrinsic_XYZ

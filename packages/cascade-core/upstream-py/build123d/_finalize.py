@@ -213,6 +213,53 @@ _common.LocationList.__mul__ = _loclist_mul
 _common.LocationList.__rmul__ = _loclist_rmul
 
 
+# CPython's collections.abc.Iterable is STRUCTURAL (any class with __iter__
+# passes isinstance); the MicroPython shim is a type TUPLE of builtins. The
+# upstream bottom layer isinstance-checks Iterable against its OWN classes
+# (Vertex(Vector), build_common flattening over Compound/ShapeList/GroupBy
+# ...), so extend the tuple with every build123d class that defines __iter__
+# and rebind the name in every module that imported the OLD tuple.
+if _PYTOPO == 'upstream':
+    # the shim registers under the dotted name in sys.modules (aliased);
+    # `import collections.abc` would need a real collections package
+    _cabc = sys.modules['collections.abc']
+
+    _old_iterable = _cabc.Iterable
+
+    def _has_instance_iter(cls):
+        # __iter__ defined on the class CHAIN itself (a metaclass __iter__ —
+        # EnumMeta — makes the CLASS iterable, not its instances)
+        stack = [cls]
+        while stack:
+            k = stack.pop()
+            d = getattr(k, '__dict__', None)
+            if d and '__iter__' in d:
+                return True
+            stack.extend(getattr(k, '__bases__', ()))
+        return False
+
+    _extra = []
+    for _mname, _mod in list(sys.modules.items()):
+        if not _mname.startswith('build123d'):
+            continue
+        for _attr in dir(_mod):
+            _val = getattr(_mod, _attr, None)
+            if isinstance(_val, type) and _has_instance_iter(_val) \
+                    and not issubclass(_val, _old_iterable) \
+                    and _val not in _extra:
+                _extra.append(_val)
+    if _extra:
+        _new_iterable = _old_iterable + tuple(_extra)
+        _cabc.Iterable = _new_iterable
+        for _mod in list(sys.modules.values()):
+            try:
+                _cur = getattr(_mod, 'Iterable', None)
+            except Exception:
+                continue  # raising module __getattr__ (numpy micro-shim)
+            if _cur is _old_iterable:
+                _mod.Iterable = _new_iterable
+
+
 def _reset_state():
     """Called by the worker (browser._cs_run_user) before every evaluation:
     clear lite's builder stacks AND every upstream ContextVar (a JS-level

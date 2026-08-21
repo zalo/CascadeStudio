@@ -54,6 +54,18 @@ if _cs_probe_metaclasses():
         def __getitem__(cls, item):
             return cls
 
+        # PEP 604 runtime unions BETWEEN classes (tcast(Edge | Wire, ...)):
+        # a tuple serves every runtime use (isinstance classinfo, cast tag)
+        def __or__(cls, other):
+            if isinstance(other, tuple):
+                return (cls,) + other
+            return (cls, other)
+
+        def __ror__(cls, other):
+            if isinstance(other, tuple):
+                return other + (cls,)
+            return (other, cls)
+
     class Generic(metaclass=_GenericMeta):
         pass
 else:
