@@ -122,7 +122,12 @@ def _scene_len():
 
 
 def _push_scene(raw):
-    rid = raw.js_id
+    # membership by js_id (Pyodide mints a fresh JsProxy per conversion, so
+    # `is` cannot work). A non-JS object (show() was handed an Axis/Plane/
+    # number — _raw passes those through) has no js_id and is not renderable.
+    rid = getattr(raw, 'js_id', None)
+    if rid is None:
+        return
     for existing in w.sceneShapes:
         try:
             if existing.js_id == rid:

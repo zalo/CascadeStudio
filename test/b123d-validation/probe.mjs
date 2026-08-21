@@ -19,10 +19,10 @@ const PORT = parseInt(process.env.CS_TEST_PORT || '8517', 10);
 // CS_PY_RUNTIME=pyodide|micropython runs the script on that runtime
 // (needs the vendored Pyodide core — see PyodideRuntime.js).
 const PY_RUNTIME_QUERY = ['pyodide', 'micropython'].includes(process.env.CS_PY_RUNTIME) ? '?pyruntime=' + process.env.CS_PY_RUNTIME : '';
-// Python SOURCE layer (CS_PY_SRC=lite|upstream): micropython now DEFAULTS to
+// Python SOURCE layer (CS_PY_SRC=lite|upstream|real): micropython DEFAULTS to
 // upstream; pysrc=lite pins the lite layer for A/B harness runs.
 const PY_SRC_ENV = process.env.CS_PY_SRC || '';
-const PY_SRC_QUERY = ['lite', 'upstream'].includes(PY_SRC_ENV)
+const PY_SRC_QUERY = ['lite', 'upstream', 'real'].includes(PY_SRC_ENV)
   ? (PY_RUNTIME_QUERY ? '&' : '?') + 'pysrc=' + PY_SRC_ENV : '';
 
 const args = process.argv.slice(2);
