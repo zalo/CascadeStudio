@@ -1,18 +1,26 @@
-# Metaclass-free `enum` shim (MicroPython has no custom metaclasses, so
-# EnumMeta cannot exist). Members declared as `auto()` (or plain int/str
-# UPPER_CASE class attributes) are converted into bound member objects by a
-# post-import pass: _finalize_enums(module) — called by the upstream-b123d
-# loader right after `build123d.build_enums` is registered.
+# `enum` shim for running UPSTREAM build123d source on MicroPython.
 #
-# Fidelity vs CPython enum (audited against build123d Level-A usage):
+# TWO implementations, feature-detected at import (the custom micropython-cs
+# interpreter supports custom metaclasses; the stock npm artifacts do not):
+#
+#   * metaclass path — a real EnumMeta: members are realized AT CLASS
+#     CREATION as instances of their enum class, and the class object itself
+#     supports iteration (`for m in Mode`), `Cls[name]`, `x in Cls`,
+#     `len(Cls)` and value lookup `Cls(value)` through the metaclass.  No
+#     post-import pass is needed (the upstream-b123d loader detects the
+#     capability and skips `_finalize_enums`).
+#   * fallback path (metaclass-free) — members declared as `auto()` (or
+#     plain int/str UPPER_CASE class attributes) are converted into bound
+#     member objects by a post-import pass: _finalize_enums(module), called
+#     by the loader right after `build123d.build_enums` is registered.
+#     Iteration over the CLASS and value lookup `Cls(value)` are NOT
+#     supported there (build123d Level A avoids them except geometry's
+#     to_align_offset, which lite's adapter geometry module reimplements).
+#
+# Common fidelity (audited against build123d Level-A usage):
 #   Member.name / Member.value / repr()       -> supported
 #   identity comparison (mode != Mode.PRIVATE)-> supported (singletons)
-#   Cls.__members__ / Cls._member_names_      -> supported (set by finalize)
-#   iteration over the CLASS (for m in Mode)  -> NOT supported (needs a
-#       metaclass); use Cls.__members__.values()
-#   value lookup Cls(value)                   -> NOT supported (class call
-#       constructs); build123d Level A avoids it except geometry's
-#       to_align_offset, which lite's adapter geometry module reimplements.
+#   Cls.__members__ / Cls._member_names_      -> supported
 
 
 # Bridge to build123d-lite's plain-class "enums": the seam (lite methods)
@@ -21,6 +29,8 @@
 # same Class.NAME through a lookup the topology adapter installs, so e.g.
 # upstream Kind.INTERSECTION == lite Kind.INTERSECTION is True on both sides
 # (Python falls back to the reflected __eq__ for lite_value == member).
+# On the metaclass path Enum SUBCLASSES _Member, so the seam's
+# `isinstance(v, enum._Member)` checks cover both implementations.
 _LITE_LOOKUP = [None]
 
 
@@ -75,58 +85,135 @@ def unique(cls):
     return cls
 
 
-class Enum:
-    pass
+def _cs_probe_metaclasses():
+    class _M(type):
+        pass
+    try:
+        exec("class _C(metaclass=_M):\n    pass", {'_M': _M})
+        return True
+    except TypeError:
+        return False
 
 
-class IntEnum(Enum):
-    pass
+_HAS_METACLASSES = _cs_probe_metaclasses()
 
 
-class Flag(Enum):
-    pass
+if _HAS_METACLASSES:
+    class EnumMeta(type):
+        def __new__(mcs, name, bases, ns):
+            cls = super().__new__(mcs, name, bases, ns)
+            members = {}
+            order = []
+            for k in ns:
+                if k.startswith('_'):
+                    continue
+                v = ns[k]
+                if isinstance(v, _Member):
+                    value = v._value_          # auto() sentinel: keep its value
+                elif (isinstance(v, (int, float, str, tuple))
+                      or type(v).__name__ == 'JsProxy') and k.upper() == k:
+                    # JsProxy: pytopo=upstream serves OCP enum members as
+                    # embind proxies (build_enums Tangency.X = GccEnt_*);
+                    # .value must be the MEMBER proxy (pybind semantics) — a
+                    # bare proxy's .value would read embind's int instead
+                    value = v
+                else:
+                    continue                   # methods, properties, ...
+                m = object.__new__(cls)
+                m._name_ = k
+                m._value_ = value
+                m._cls_name_ = name
+                setattr(cls, k, m)
+                members[k] = m
+                order.append(k)
+            order.sort()
+            cls.__members__ = members
+            cls._member_names_ = order
+            return cls
 
+        def __iter__(cls):
+            return iter([cls.__members__[k] for k in cls._member_names_])
 
-class IntFlag(Enum):
-    pass
+        def __getitem__(cls, name):
+            return cls.__members__[name]
 
+        def __contains__(cls, member):
+            for m in cls.__members__.values():
+                if member is m or member == m:
+                    return True
+            return False
 
-def _finalize_enum_class(cls):
-    members = {}
-    order = []
-    for k in dir(cls):
-        if k.startswith('_'):
-            continue
-        v = getattr(cls, k)
-        if isinstance(v, _Member):
-            v._name_ = k
-            v._cls_name_ = cls.__name__
-            members[k] = v
-            order.append(k)
-        elif (isinstance(v, (int, float, str, tuple))
-              or type(v).__name__ == 'JsProxy') and k.upper() == k:
-            # JsProxy: pytopo=upstream serves OCP enum members as embind
-            # proxies (e.g. build_enums Tangency.X = GccEnt_*); they must
-            # become _Members so .name exists (the lite seam translates by
-            # name) and .value is the MEMBER (pybind semantics) — a bare
-            # proxy's .value would read embind's int instead
-            inst = _Member()
-            inst._name_ = k
-            inst._cls_name_ = cls.__name__
-            inst._value_ = v
-            setattr(cls, k, inst)
-            members[k] = inst
-            order.append(k)
-    order.sort()
-    cls.__members__ = members
-    cls._member_names_ = order
-    return cls
+        def __len__(cls):
+            return len(cls._member_names_)
 
+        def __call__(cls, value):
+            # value lookup: Cls(value) -> the member; Cls(member) -> member
+            for m in cls.__members__.values():
+                if value is m or m._value_ == value:
+                    return m
+            raise ValueError(repr(value) + ' is not a valid ' + cls.__name__)
 
-def _finalize_enums(mod):
-    # MicroPython has no metaclasses: convert class attributes after import
-    for attr in dir(mod):
-        cls = getattr(mod, attr)
-        if isinstance(cls, type) and issubclass(cls, Enum) \
-                and cls not in (Enum, IntEnum, Flag, IntFlag):
-            _finalize_enum_class(cls)
+    class Enum(_Member, metaclass=EnumMeta):
+        pass
+
+    class IntEnum(Enum):
+        pass
+
+    class Flag(Enum):
+        pass
+
+    class IntFlag(Enum):
+        pass
+
+    def _finalize_enums(mod):
+        # kept for interface compatibility; members are realized by EnumMeta
+        pass
+
+else:
+    class Enum:
+        pass
+
+    class IntEnum(Enum):
+        pass
+
+    class Flag(Enum):
+        pass
+
+    class IntFlag(Enum):
+        pass
+
+    def _finalize_enum_class(cls):
+        members = {}
+        order = []
+        for k in dir(cls):
+            if k.startswith('_'):
+                continue
+            v = getattr(cls, k)
+            if isinstance(v, _Member):
+                v._name_ = k
+                v._cls_name_ = cls.__name__
+                members[k] = v
+                order.append(k)
+            elif (isinstance(v, (int, float, str, tuple))
+                  or type(v).__name__ == 'JsProxy') and k.upper() == k:
+                # JsProxy: see the metaclass path's note (pytopo=upstream
+                # OCP enum members as embind proxies)
+                inst = _Member()
+                inst._name_ = k
+                inst._cls_name_ = cls.__name__
+                inst._value_ = v
+                setattr(cls, k, inst)
+                members[k] = inst
+                order.append(k)
+        order.sort()
+        cls.__members__ = members
+        cls._member_names_ = order
+        return cls
+
+    def _finalize_enums(mod):
+        # MicroPython without metaclasses: convert class attrs after import
+        for attr in dir(mod):
+            cls = getattr(mod, attr)
+            if isinstance(cls, type) and issubclass(cls, Enum) \
+                    and cls not in (Enum, IntEnum, Flag, IntFlag):
+                _finalize_enum_class(cls)

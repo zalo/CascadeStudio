@@ -436,3 +436,56 @@ every worker call through a JS-side try/catch bridge (`_csMpCall`) and
 converts container arguments with `jsffi.to_js`. All of these are
 behavior-preserving on Brython/Pyodide (the full Brython suite and frozen
 examples stayed green throughout).
+
+### Metaclass round (2026-08-20 — micropython-cs: custom metaclasses, patches 7+8)
+
+The interpreter grew `MICROPY_PY_METACLASSES` (micropython-cs commits
+`2a4a92e` py/objtype + `9e360ce` py/modbuiltins): `class M(type)` builds a
+real metatype whose instances are types, `class X(B, metaclass=M)` works
+(explicit kwarg wins, else CPython's most-derived rule; extra class keywords
+reach the metaclass), class creation runs the metaclass
+`__call__`/`__new__`/`__init__` chain (with `type.__new__`/`__call__`/
+`__init__` in type's locals as the terminal supers), and class-level
+attribute/subscript/iteration/`in`/`len` fall back to the metaclass with the
+descriptor protocol — metaclass properties are class properties. wasm cost
++3067 B raw (+0.63%, gzip band unchanged at ~207 KB); unix-port
+micro-benchmarks of NORMAL class creation, instance/class attr lookup,
+isinstance and instantiation are within run-to-run noise (the hot paths are
+untouched; the only added work on non-metaclass code is a flag test on the
+already-failing side of two identity checks).
+
+What it retired in the upstream-b123d layer (each independently
+feature-detected; the stock settrace artifacts keep the old paths — proven
+in-browser by hiding the custom pair):
+
+- shims/enum.py: real metaclass `EnumMeta` — members ARE instances of their
+  enum class, `for m in Cls` / `Cls[name]` / `x in Cls` / `len(Cls)` /
+  `Cls(value)` work on the class object, and the `_finalize_enums`
+  post-import pass is skipped (Enum subclasses `_Member`, so the seam's
+  `isinstance(v, enum._Member)` bridge is untouched).
+- shims/typing.py: `Generic` is a class whose metaclass `__getitem__`
+  returns the class — `class Builder(ABC, Generic[T])` and
+  `class BuildPart(Builder[Part])` run as written.
+- UpstreamB123d.js: `cleanClassBases` (class-base subscripts +
+  `Generic[...]` stripping) no longer applies on metaclass-capable
+  interpreters; `stripRuntimeGenerics` stays (builtin generics cannot grow
+  metaclasses).
+
+Validation (same day, --pages 4, B123D_SRC assets from the dev clone):
+
+| leg | classification | wall |
+|---|---|---|
+| micropython + upstream (default) | 204/10/5/3 — identical per-script to the committed 205/10/5/2 except examples/clock landing on the TIMEOUT side of its documented contention flap (passes solo, 71 s incl. boot) | 175 s |
+| micropython + lite | **206/10/5/1 — per-script identical to committed** | 138 s |
+| Brython control | **206/10/5/1 — committed sets reproduced exactly** (heat_exchanger on the PASS side of its flap) | 147 s |
+
+Frozen by the new "NATIVE metaclasses" test in test/py-src-upstream.spec.js
+(boot-log marker, EnumMeta behaviors, `_GenericMeta` on Builder,
+`Builder[int] is Builder`, `BuildPart.__bases__ == (Builder,)`).
+Interpreter-side conformance lives in micropython-cs
+tests/basics/metaclass*.py (output-identical to CPython; unix suite
+basics+misc+float 623/623). NOT implemented (documented divergences):
+`__init_subclass__`, `__mro_entries__`, metaclass
+`__instancecheck__`/`__subclasscheck__`, metaclass data descriptors
+intercepting class-attribute stores, and `type(name, bases, ns)` 3-arg always
+uses `type` itself as the metaclass.

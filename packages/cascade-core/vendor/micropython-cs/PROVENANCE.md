@@ -21,6 +21,8 @@ in `dist/` (see the build script's copy step and the runtime's probe).
 | `0c13823` | py/modsys: Add sys._getframe(), with frames built on demand. |
 | `75cfbb6` | ports/webassembly: Append CFLAGS_EXTRA to CFLAGS. |
 | `68d0e32` | py/objfloat: Fold high float bits into the hash on narrow mp_int_t. |
+| `2a4a92e` | py/objtype: Support custom metaclasses (subclasses of type). |
+| `9e360ce` | py/modbuiltins: Support metaclass= and class keywords in __build_class__. |
 
 What they give this runtime (each feature-detected in browser.py /
 Build123dLite.js, so the stock artifacts keep working):
@@ -40,6 +42,22 @@ Build123dLite.js, so the stock artifacts keep working):
 - **Stable `list.sort()`/`sorted()`** (bottom-up merge sort, key called once
   per element) — `_stable_sorted`'s probe detects this and takes the native
   path.
+- **Custom metaclasses** (`MICROPY_PY_METACLASSES`, on at the pyscript ROM
+  level): `class M(type)` creates a real metatype whose instances are types,
+  `class X(B, metaclass=M)` works (explicit kwarg wins, else CPython's
+  most-derived rule over the bases; extra class keywords reach the
+  metaclass), class creation runs through the metaclass
+  `__call__`/`__new__`/`__init__` chain (`type.__new__`/`__call__`/
+  `__init__` exist as the terminal supers), and class-level attribute/
+  subscript/iteration/`in`/`len` dispatch falls back to the metaclass with
+  the descriptor protocol (metaclass properties = class properties).  With
+  it, the upstream-b123d shims switch to a real metaclass `enum.EnumMeta`
+  and a `Generic` whose metaclass `__getitem__` makes `class B(Builder[T])`
+  legal, retiring the class-base-subscript transform and the
+  `_finalize_enums` post-import pass (both feature-detected — the stock
+  artifacts keep the old paths).  Out of scope: `__init_subclass__`,
+  `__mro_entries__`, metaclass `__instancecheck__`/`__subclasscheck__`,
+  metaclass data descriptors intercepting class-attribute stores.
 
 ## Build command
 
@@ -70,11 +88,11 @@ Notes:
 | file | raw | gzip -9 |
 |---|---|---|
 | micropython.mjs | 108 KB | 30 KB |
-| micropython.wasm | 483 KB | 207 KB |
+| micropython.wasm | 486 KB (483 KB before metaclasses: +3067 B, +0.63%) | 207 KB |
 | (npm settrace pair for comparison) | 108 + 489 KB | ~228 KB combined |
 
 ## License
 
 MicroPython is MIT-licensed (Copyright (c) 2013-2025 Damien P. George and
 contributors); these artifacts are compiled from the base release plus the
-six patches above and are redistributed under the same MIT license.
+eight patches above and are redistributed under the same MIT license.

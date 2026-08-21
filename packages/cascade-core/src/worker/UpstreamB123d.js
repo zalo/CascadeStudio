@@ -13,14 +13,19 @@
 //                              b123d.cjs; absent from a plain checkout)
 //   ocp_import_map.json      - OCP names build123d imports (per module)
 //
-// The upstream sources are transformed at registration time with FOUR
-// mechanical, version-robust rewrites (all line-count preserving except the
-// multi-line TypeAlias collapse, which only affects library tracebacks):
+// The upstream sources are transformed at registration time with mechanical,
+// version-robust rewrites (all line-count preserving except the multi-line
+// TypeAlias collapse, which only affects library tracebacks):
 //   1. module-level `X: TypeAlias = ...`  ->  `X = object`
 //   2. runtime builtin-generic subscripts stripped (list[...] -> list; plus
 //      ShapeList[...], which MicroPython cannot subscript at runtime)
 //   3. class bases: `class B(Builder[Part])` -> `class B(Builder)`;
-//      `Generic[...]` dropped from bases
+//      `Generic[...]` dropped from bases.  RETIRED when the interpreter
+//      supports custom metaclasses (the custom micropython-cs build): the
+//      typing shim's Generic then carries a metaclass whose __getitem__
+//      returns the class, so `class Builder(ABC, Generic[T])` and
+//      `class B(Builder[Part])` run as-written (probed at load; the stock
+//      artifacts keep the transform)
 //   4. `match X:` -> `for _cs_match_ in [X]:` with `case A() | B():` ->
 //      `if/elif isinstance(_cs_match_, (A, B)):` and `case _:` -> `else:`
 //      (ONLY simple class patterns and the wildcard are supported; any other
@@ -194,12 +199,16 @@ export function rewriteDataclassFields(src) {
   return lines.join('\n');
 }
 
-export function transformUpstreamSource(name, src) {
+export function transformUpstreamSource(name, src, opts) {
   let out = src;
   out = stripTypeAliases(out);
   out = copyNamedPlaneAliases(out);
   out = stripRuntimeGenerics(out);
-  out = cleanClassBases(out);
+  if (!(opts && opts.metaclasses)) {
+    // without interpreter metaclasses, class-base subscripts and Generic[...]
+    // bases must be rewritten away (see the header comment)
+    out = cleanClassBases(out);
+  }
   out = rewriteMatchStatements(out, name);
   out = rewriteDataclassFields(out);
   out = rewriteListSplats(out);
@@ -261,6 +270,26 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
 
   const runPy = (code) => mp.runPython(code);
   runPy(REG_ALIAS_PY.replace(/^/, '')); // define _cs_register_alias in globals
+
+  // Interpreter capability probe: custom metaclasses (the custom
+  // micropython-cs artifacts have them; the stock npm settrace pair raises
+  // TypeError on the metaclass= class keyword). With them, the typing shim's
+  // Generic and the enum shim's EnumMeta are REAL metaclass-based
+  // implementations, the class-base-subscript transform is retired, and the
+  // _finalize_enums post-import pass is not needed. Every capability is
+  // feature-detected independently on the Python side too, so a mixed state
+  // cannot break the fallback.
+  let hasMetaclasses = false;
+  try {
+    runPy('class _CsMetaProbe(type):\n    pass\n'
+      + 'class _CsMetaProbed(metaclass=_CsMetaProbe):\n    pass\n'
+      + 'del _CsMetaProbe, _CsMetaProbed');
+    hasMetaclasses = true;
+  } catch (e) {
+    hasMetaclasses = false;
+  }
+  self._csMpHasMetaclasses = hasMetaclasses;
+  const transformOpts = { metaclasses: hasMetaclasses };
 
   const registerAlias = (name, src) => {
     mp.globals.set('_CS_N', name);
@@ -360,19 +389,22 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
   // 4. the build123d package: placeholder init, then seam adapters
   br._cs_register_module('build123d', await fetchText('build123d/__init__.py'), true);
 
-  // 5. upstream build_enums first (geometry imports Align from it), then
-  //    finalize its metaclass-free enums
+  // 5. upstream build_enums first (geometry imports Align from it); on the
+  //    metaclass-free fallback, finalize its enums with the post-import pass
+  //    (the metaclass EnumMeta realizes members at class creation instead)
   const regUpstream = async (name) => {
     const raw = await fetchText('upstream/' + name + '.py');
-    const src = transformUpstreamSource(name, raw);
+    const src = transformUpstreamSource(name, raw, transformOpts);
     br._cs_register_module('build123d.' + name, src, false);
   };
   await regUpstream('build_enums');
-  runPy([
-    'import enum as _cs_enum',
-    'import sys as _cs_sys',
-    "_cs_enum._finalize_enums(_cs_sys.modules['build123d.build_enums'])",
-  ].join('\n'));
+  if (!hasMetaclasses) {
+    runPy([
+      'import enum as _cs_enum',
+      'import sys as _cs_sys',
+      "_cs_enum._finalize_enums(_cs_sys.modules['build123d.build_enums'])",
+    ].join('\n'));
+  }
 
   // 6. seam adapters
   br._cs_register_module('build123d.geometry', await fetchText('build123d/geometry.py'), false);
@@ -400,6 +432,12 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     registerAlias('numpy', await fetchText('ocp_shim/numpy_micro.py'));
     const regUpstreamTopo = async (name, asName) => {
       const raw = await fetchText('upstream/topology/' + name + '.py');
+      // NOTE: no transformOpts — while the topology seam is still lite's
+      // shape_core, upstream topo modules subscript SEAM classes
+      // (class Vertex(Shape[TopoDS_Vertex])) that carry no Generic
+      // metaclass, so cleanClassBases must stay applied here even on the
+      // metaclass-capable interpreter. Revisit when upstream shape_core
+      // becomes build123d.topology.shape_core (Stage 3 Phase 2).
       let src = transformUpstreamSource(name, raw);
       // topology-only extra strips: module-level type-alias factories built
       // on the isinstance-tuple collections.abc shim (Callable[[...], X])
@@ -454,5 +492,7 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
   br._cs_register_module('build123d._finalize', await fetchText('build123d/_finalize.py'), false);
 
   console.log('[pysrc=upstream] upstream build123d Level-A registered'
+    + (hasMetaclasses ? ' (metaclasses: native enum/Generic, no base-subscript transform)'
+      : ' (no interpreter metaclasses: transform + _finalize_enums fallback)')
     + (stretchLoaded.length ? ' (+ ' + stretchLoaded.join(', ') + ')' : ''));
 }

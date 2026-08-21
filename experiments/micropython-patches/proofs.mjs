@@ -1,5 +1,5 @@
-// proofs.mjs — node micro-proofs for the four micropython-cs interpreter
-// patches (see packages/cascade-core/vendor/micropython-cs/PROVENANCE.md).
+// proofs.mjs — node micro-proofs for the micropython-cs interpreter patches
+// (see packages/cascade-core/vendor/micropython-cs/PROVENANCE.md).
 // Runs the VENDORED custom artifacts and, for comparison, the stock npm
 // settrace artifacts. Usage:  node experiments/micropython-patches/proofs.mjs
 import { dirname, join } from 'node:path';
@@ -80,6 +80,93 @@ data = [((i * 137) % 997, i) for i in range(4000)]
 t0 = time.time()
 sorted(data, key=lambda t: t[0])
 print('sorted 4000 w/key ms:', round((time.time() - t0) * 1000.0, 1))
+
+# ---- patch 5: custom metaclasses (feature-detected like the CS shims) ----
+class _PM(type):
+    pass
+try:
+    exec("class _PC(metaclass=_PM):\\n    pass")
+    _has_meta = True
+except TypeError:
+    _has_meta = False
+print('metaclasses present:', _has_meta)
+if _has_meta:
+    # AxisMeta-style class properties
+    class AxisMeta(type):
+        @property
+        def X(cls):
+            return cls((1, 0, 0))
+    src = '''
+class Axis(metaclass=AxisMeta):
+    def __init__(self, d):
+        self.d = d
+print('meta class-property:', Axis.X.d, Axis.X is not Axis.X, type(Axis) is AxisMeta)
+
+# BaseObjectMeta-style __call__ firewall + super().__call__
+class Fire(type):
+    seen = []
+    def __call__(cls, *a, **k):
+        Fire.seen.append(cls.__name__)
+        return super().__call__(*a, **k)
+class FObj(metaclass=Fire):
+    def __init__(self, v=0):
+        self.v = v
+class FBox(FObj):
+    pass
+b = FBox(7)
+print('meta call-firewall:', b.v, Fire.seen, type(FBox) is Fire)
+
+# EnumMeta-style __new__ synthesis + class __getitem__/__iter__/__contains__
+class EMeta(type):
+    def __new__(mcs, name, bases, ns):
+        cls = super().__new__(mcs, name, bases, ns)
+        cls._members_ = {}
+        for k in sorted(ns):
+            if not k.startswith('_') and isinstance(ns[k], int):
+                m = object.__new__(cls)
+                m._name_ = k
+                setattr(cls, k, m)
+                cls._members_[k] = m
+        return cls
+    def __getitem__(cls, k):
+        return cls._members_[k]
+    def __iter__(cls):
+        return iter(sorted(cls._members_))
+    def __contains__(cls, m):
+        return m in cls._members_.values()
+class Color(metaclass=EMeta):
+    RED = 1
+    GREEN = 2
+print('meta enum-style:', Color['RED'] is Color.RED, list(Color),
+      Color.GREEN in Color, isinstance(Color.RED, Color))
+
+# Generic[T]-style base-list subscription via metaclass __getitem__
+class GMeta(type):
+    def __getitem__(cls, item):
+        return cls
+class Generic(metaclass=GMeta):
+    pass
+class Builder(Generic):
+    pass
+class BuildPart(Builder[int]):
+    pass
+print('meta base-subscript:', BuildPart.__bases__ == (Builder,),
+      type(BuildPart) is GMeta)
+
+# metaclass inheritance + most-derived rule + conflicts
+class M2(Fire):
+    pass
+class D(FBox, metaclass=M2):
+    pass
+print('meta most-derived:', type(D) is M2)
+try:
+    class Bad(FObj, metaclass=GMeta):
+        pass
+    print('meta conflict: FAIL')
+except TypeError:
+    print('meta conflict: TypeError')
+'''
+    exec(src)
 `;
 
 for (const [name, mjs, wasm] of [
