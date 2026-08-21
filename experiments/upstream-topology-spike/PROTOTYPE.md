@@ -1,5 +1,32 @@
 # PROTOTYPE — upstream build123d TOPOLOGY over our OCCT wasm (the OCP shim spike, Phase 2)
 
+> **Hardening round (Stage 2) landed on this branch** — the six work items
+> and their gates:
+> 1. Static overload pinning: build-time dispatch classification in
+>    table.json — 5,168 direct pins / 188 typed (coarse-type match,
+>    statically decisive) / 53 ambiguous (9 billed; runtime REFUSES with
+>    the candidate list on a score tie — never guesses) / 190 dead
+>    unbound-type variants dropped. Self-check: `dispatch-report.json`.
+> 2. Explicit pybind defaults table: 937 defaults (728 literal, 81 enum,
+>    128 fresh-construct Message_ProgressRange), 0 opaque, cached in
+>    ocp-defaults.json — regeneration does not need the venv.
+> 3. numpy micro-shim (pytopo=upstream only): billed surface exactly;
+>    lstsq validated vs real numpy to 3.5e-13 over 502 axis intersections
+>    (`validate-numpy-micro.py`).
+> 4. Convention glue: 12 OCJS_Out out-param helpers glued (Tangency
+>    family with PntSol mutation, FilletAlgo.Result via proxy-_ref
+>    rebinding); the rest are greppable `PENDING_FORK_BINDING` hooks.
+> 5. Perf: see "Perf pass" below — dispatched calls 1.2–1.3x the bridge
+>    envelope floor (target ≤2x).
+> 6. Stretch: upstream `topology/constrained_lines.py` runs VERBATIM
+>    behind lite Edge.make_constrained_arcs/lines (constrained_bridge.py);
+>    all 12 constrained harness scripts classify identically.
+>
+> End gates: topo-poc 7/7; harnesses per-script identical to the
+> committed baselines (upstream 205/10/5/2 incl. the documented
+> heat_exchanger contention flap; lite 206/10/5/1); full suite 95
+> passed / 1 skipped.
+
 Companion to `BILL.md` (Phase 1, the static method bill). This records what
 the Phase-2 prototype PROVED, the shim pattern that emerged, and the honest
 cost model for full topology adoption.
