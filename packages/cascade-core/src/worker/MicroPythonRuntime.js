@@ -284,9 +284,9 @@ async function _bootstrap(srcKind) {
   // Otherwise PREFER the custom-patched micropython-cs artifacts (vendored
   // in packages/cascade-core/vendor/micropython-cs/, copied to dist as
   // micropython-cs.mjs/.wasm when present — sys._getframe, nested-tuple
-  // isinstance, distributed float hash, stable sort; see its
-  // PROVENANCE.md), falling back to the stock npm settrace artifacts so a
-  // checkout without the vendored pair keeps working.
+  // isinstance, distributed float hash, stable sort, custom metaclasses;
+  // see its PROVENANCE.md), falling back to the stock npm settrace
+  // artifacts so a checkout without the vendored pair keeps working.
   const locate = self._csMicroPythonLocate || null;
   const stockBase = isBuilt
     ? './'

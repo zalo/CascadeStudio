@@ -209,8 +209,8 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   Pyodide's ~45 MB), aimed at memory-budgeted headless execution.
   **The interpreter is a CUSTOM-PATCHED build (micropython-cs)**: vendored +
   committed in `packages/cascade-core/vendor/micropython-cs/` (PROVENANCE.md:
-  base v1.28.0 tag e0e9fbb, six patch SHAs, build command), copied to dist as
-  `micropython-cs.mjs/.wasm` and PREFERRED at boot; the stock npm settrace
+  base v1.28.0 tag e0e9fbb, eight patch SHAs, build command), copied to dist
+  as `micropython-cs.mjs/.wasm` and PREFERRED at boot; the stock npm settrace
   pair remains the feature-detected fallback (everything works on both —
   `_pythonBootTiming.artifact/getframe` says which booted, frozen in
   test/py-runtime.spec.js). The patches: `sys._getframe` built on demand
@@ -223,7 +223,34 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   set-probing degradation; lite's integer-key vertex equality is
   belt-and-braces now), and a STABLE native list.sort/sorted with
   key-called-once (lite's `_stable_sorted` probe takes the native path; the
-  upstream seam no longer overrides builtins.sorted). Full-harness walls
+  upstream seam no longer overrides builtins.sorted), and — since the
+  metaclass round — **CUSTOM METACLASSES** (`MICROPY_PY_METACLASSES`:
+  `class M(type)` creates a real metatype whose instances are types,
+  `class X(B, metaclass=M)` works with CPython's most-derived rule, class
+  creation runs the metaclass `__call__`/`__new__`/`__init__` chain with
+  `type.__new__`/`__call__`/`__init__` as the terminal supers, and class
+  attr/subscript/iter/`in`/`len` fall back to the metaclass with the
+  descriptor protocol, i.e. metaclass properties are class properties).
+  With metaclasses the upstream-b123d loader takes NATIVE paths, all
+  independently feature-detected so the stock pair keeps the old behavior
+  (proven in-browser by hiding the custom pair): the enum shim becomes a
+  real metaclass `EnumMeta` (members ARE instances of their enum class,
+  `for m in Cls` / `Cls[name]` / `x in Cls` / `len(Cls)` / `Cls(value)`
+  work; the `_finalize_enums` post-import pass is skipped; `Enum`
+  subclasses `_Member` so the seam's `isinstance(v, enum._Member)` bridge
+  is unchanged), the typing shim's `Generic` carries a metaclass
+  `__getitem__` returning the class (so `class Builder(ABC, Generic[T])`
+  and `class BuildPart(Builder[Part])` run AS WRITTEN and subclasses
+  inherit the metaclass), and `transformUpstreamSource` RETIRES the
+  class-base-subscript/`Generic[...]` transform (`cleanClassBases` only
+  applies on metaclass-free interpreters; `stripRuntimeGenerics` stays —
+  builtins can't grow metaclasses). Frozen in test/py-src-upstream.spec.js
+  ("NATIVE metaclasses"); node micro-proofs in
+  experiments/micropython-patches/proofs.mjs (metaclass section);
+  interpreter-side tests in micropython-cs tests/basics/metaclass*.py
+  (CPython-output-identical). NOT implemented (documented): `__init_subclass__`,
+  `__mro_entries__`, metaclass `__instancecheck__`/`__subclasscheck__`,
+  metaclass data descriptors intercepting class-attr stores. Full-harness walls
   improved (upstream 200→171 s, lite 148→142 s) with BOTH legs classifying
   per-script IDENTICALLY to the committed baselines. Known open item: on
   the two guard/boolean-heavy giants (clock, heat_exchanger) in upstream
