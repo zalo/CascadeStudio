@@ -37,7 +37,8 @@
 //    and remapped via sys.modules; the rest import normally from /lib.
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
-import { bootstrapUpstreamB123d } from './UpstreamB123d.js';
+import { bootstrapUpstreamB123d, PYTOPO_DEFAULT,
+  rewriteListConcatCoercion } from './UpstreamB123d.js';
 
 /** MicroPython GC heap. Fixed at boot (it does not grow); build123d-lite +
  *  a typical model's Python-side bookkeeping fit comfortably — shapes
@@ -508,6 +509,14 @@ async function _bootstrap(srcKind) {
       self._pythonRuntimeKind = 'micropython';
       self._pythonSrcKind = effectiveSrc;
       self._b123dSceneDefined = false;
+      if (effectiveSrc === 'upstream' &&
+          (self._csPyTopo || PYTOPO_DEFAULT) === 'upstream') {
+        // USER code runs verbatim over upstream ShapeLists; MicroPython's
+        // list.__add__ refuses list subclasses on the right, so the same
+        // line-preserving coercion the library sources get applies here
+        // (`[part] + group` — docs-selectors/group_properties_with_keys)
+        code = rewriteListConcatCoercion(code);
+      }
       const err = br._cs_run_user(code);
       if (err) { throw new Error(String(err)); }
     }

@@ -81,7 +81,7 @@ if _PYTOPO == 'upstream':
                   'export_gltf', 'export_brep', 'import_brep', 'import_step',
                   'Mesher', '_cs_after_run'):
         setattr(_pkg, _name, getattr(_glue, _name))
-    for _name in ('ExportSVG', 'polar', 'delta'):
+    for _name in ('ExportSVG', 'polar', 'delta', 'ArrowHead'):
         if not hasattr(_pkg, _name) and hasattr(_lt, _name):
             setattr(_pkg, _name, getattr(_lt, _name))
 else:

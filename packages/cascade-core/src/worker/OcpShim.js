@@ -559,6 +559,17 @@ export function installOcpShim(self, table) {
   };
   GLUE['Quantity_Color.ColorFromName'] = () => false; // webcolors shim covers CSS3
 
+  // the hand-bound IndexedDataMap has FindKey/FindFromIndex but no Extent —
+  // count by probing (fork ask: bind Extent/Size)
+  GLUE['TopTools_IndexedDataMapOfShapeListOfShape.Extent'] = (args, ref) => {
+    let n = 0;
+    for (;;) {
+      try { ref.FindKey(n + 1); n++; } catch (e) { break; }
+      if (n > 1e7) { break; }
+    }
+    return n;
+  };
+
   // Concrete Geom surface classes the fork build DROPPED (Toroidal/
   // Spherical/SurfaceOfRevolution are unregistered, so embind's polymorphic
   // downcast returns the BASE Geom_Surface). Upstream face-inspection

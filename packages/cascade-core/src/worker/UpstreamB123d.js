@@ -360,6 +360,16 @@ export function transformUpstreamSource(name, src, opts) {
   out = out.replace(/\bout = \{\}  # using dict to prevent duplicates/,
     'out = _cs_odict()  # ordered dedup (MicroPython dicts are unordered)');
   out = out.replace(/\bdict\.fromkeys\(/g, '_cs_ordered_fromkeys(');
+  // MicroPython f-strings do not dispatch __format__ for format SPECS on
+  // objects (geometry's Vector/Axis/Location/Plane __repr__/__str__ format
+  // themselves with ':.6g'/'.13g'); route through the builtins _cs_format
+  // helper, which does
+  out = out.replace(/\{([^{}:]+):\.\{TOL_DIGITS\}g\}/g,
+    "{_cs_format($1, '.6g')}");
+  out = out.replace(/\{([^{}:]+):\.13g\}/g, "{_cs_format($1, '.13g')}");
+  // ... and the DYNAMIC-spec form ({self.position:{spec}} inside the
+  // geometry __format__ implementations)
+  out = out.replace(/\{([^{}:]+):\{(\w+)\}\}/g, '{_cs_format($1, $2)}');
   // MicroPython sys has no float_info and sys is read-only (two_d uses .max)
   out = out.replace(/\bsys\.float_info\.max\b/g, '1.7976931348623157e+308');
   out = out.replace(/\bsys\.float_info\.epsilon\b/g, '2.220446049250313e-16');
@@ -641,6 +651,7 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       '        except (TypeError, NotImplementedError):',
       '            pass',
       "    return ('{:' + spec + '}').format(v) if spec else str(v)",
+      '_cs_bi2._cs_format = _cs_format',
       'try:',
       '    format',
       'except NameError:',

@@ -68,6 +68,22 @@ class NodeMixin:
         return getattr(self, '_NodeMixin__parent', None) is None
 
     @property
+    def height(self):
+        kids = getattr(self, '_NodeMixin__children', ())
+        if not kids:
+            return 0
+        return 1 + max(k.height for k in kids)
+
+    @property
+    def depth(self):
+        d = 0
+        p = getattr(self, '_NodeMixin__parent', None)
+        while p is not None:
+            d += 1
+            p = getattr(p, '_NodeMixin__parent', None)
+        return d
+
+    @property
     def descendants(self):
         out = []
 
