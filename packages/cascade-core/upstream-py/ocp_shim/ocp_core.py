@@ -44,11 +44,23 @@ def register_classes(g):
             _registry[name] = obj
 
 
-def _fail(msg):
+def _fail(msg, cls=None):
     try:
         from OCP.Standard import Standard_Failure
     except Exception:
         raise RuntimeError(msg)
+    if cls is not None and cls.startswith('gp_'):
+        # gp_* constructors raise Standard_ConstructionError almost
+        # exclusively (gp_Ax3's CrossCross degenerate-frame case etc.);
+        # classify by SITE because the raw wasm pointer is not always
+        # decodable into the message the string matches below need
+        # (build_common CATCHES ConstructionError for the BuildSketch
+        # plane-alignment fallback — slide_latch)
+        try:
+            from OCP.Standard import Standard_ConstructionError
+            raise Standard_ConstructionError(msg)
+        except ImportError:
+            pass
     if 'not done' in msg:
         try:
             from OCP.StdFail import StdFail_NotDone
@@ -213,14 +225,14 @@ class OcpProxy:
             if not deep:
                 r = _OCP_NEW_V(self._cs, *conv)
                 if r is _ERRMARK:
-                    _fail(str(_rawjs._csLastErr))
+                    _fail(str(_rawjs._csLastErr), self._cs)
                 self._ref = r
                 return
         try:
             self._ref = w._csOcpNew(self._cs, [_unwrap(a) for a in args],
                                     _unwrap_kw(kwargs))
         except _CsWorkerError as e:
-            _fail(str(e))
+            _fail(str(e), self._cs)
 
     def __getattr__(self, name):
         # OCCT methods never start with '_'; refusing them keeps _ref lookups

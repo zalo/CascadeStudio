@@ -33,14 +33,16 @@
 
 import { installOcpShim } from './OcpShim.js';
 
-/** The upstream-TOPOLOGY spike (experiments/upstream-topology-spike/):
- *  'upstream' additionally boots the generated OCP-over-embind shim
- *  (upstream-py/ocp_shim/) and registers upstream topology/utils.py +
- *  zero_d.py VERBATIM (plus shape_core.py best-effort under an alias),
- *  interoperating with lite shapes through topo_bridge.py. Default OFF so
- *  mainline classification cannot move; opt in with ?pytopo=upstream
- *  (self._csPyTopo). */
-export const PYTOPO_DEFAULT = 'lite';
+/** The TOPOLOGY layer under pysrc=upstream (Stage 3,
+ *  experiments/upstream-topology-spike/STAGE3-STATE.md): 'upstream' boots
+ *  the generated OCP-over-embind shim (upstream-py/ocp_shim/) and runs
+ *  upstream 0.11.1's geometry.py + the WHOLE topology package VERBATIM,
+ *  with ocp_shim/topo_glue.py as the worker glue. DEFAULT since the
+ *  Stage-3 flip (harness 215/3/3/1 vs the seam's 205/10/5/2, full gates
+ *  green); `?pytopo=lite` (localStorage 'cascade-py-topo') opts back into
+ *  the seam-over-lite layer, and a missing ocp_shim payload warns and
+ *  falls back to lite rather than failing the boot. */
+export const PYTOPO_DEFAULT = 'upstream';
 
 /** Upstream Level-A modules, in dependency order. objects_part/objects_curve
  *  are the object layers over the builders; joints/pack/operations_sketch are
@@ -447,7 +449,22 @@ if _cs_os_shim is not None and not hasattr(_cs_os_shim, 'fspath'):
  *  @param fetchText async (relativePath) => string  — reads dist/upstream-b123d files
  */
 export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
-  const pytopo = pytopoOpt || self._csPyTopo || PYTOPO_DEFAULT;
+  let pytopo = pytopoOpt || self._csPyTopo || PYTOPO_DEFAULT;
+  if (pytopo === 'upstream') {
+    // the upstream-topology payload (generated OCP shim + glue) rides in
+    // dist/upstream-b123d/ocp_shim/; when a checkout lacks it, warn and
+    // fall back to the seam-over-lite layer rather than failing the boot
+    try {
+      await fetchText('ocp_shim/MANIFEST.json');
+    } catch (probeErr) {
+      console.warn('[pytopo] upstream-topology payload unavailable — '
+        + 'falling back to pytopo=lite ('
+        + String((probeErr && probeErr.message) || probeErr).split('\n')[0]
+        + ')');
+      pytopo = 'lite';
+    }
+  }
+  self._csPyTopoEffective = pytopo;
   const manifest = JSON.parse(await fetchText('manifest.json'));
 
   const runPy = (code) => mp.runPython(code);

@@ -63,12 +63,12 @@ const PY_RUNTIME_QUERY = ['pyodide', 'micropython'].includes(PY_RUNTIME) ? '?pyr
 const PY_SRC_ENV = process.env.CS_PY_SRC || '';
 const PY_SRC_QUERY = ['lite', 'upstream'].includes(PY_SRC_ENV)
   ? (PY_RUNTIME_QUERY ? '&' : '?') + 'pysrc=' + PY_SRC_ENV : '';
-// Topology layer (CS_PY_TOPO=upstream / --pytopo): the OCP-shim spike's
-// upstream topology modules; default OFF so mainline classification
-// cannot move.
+// Topology layer (CS_PY_TOPO=lite|upstream / --pytopo): upstream (the
+// Stage-3 default — upstream geometry+topology verbatim over the OCP shim)
+// or lite (the seam re-exports; the A/B baseline leg).
 const PY_TOPO = argVal('--pytopo', process.env.CS_PY_TOPO || '');
-const PY_TOPO_QUERY = PY_TOPO === 'upstream'
-  ? ((PY_RUNTIME_QUERY || PY_SRC_QUERY) ? '&' : '?') + 'pytopo=upstream' : '';
+const PY_TOPO_QUERY = ['lite', 'upstream'].includes(PY_TOPO)
+  ? ((PY_RUNTIME_QUERY || PY_SRC_QUERY) ? '&' : '?') + 'pytopo=' + PY_TOPO : '';
 
 const VOL_REL_TOL = 0.005;    // 0.5% relative volume tolerance
 const VOL_ZERO_ABS = 1e-6;    // "zero volume" threshold for 2D/1D shapes

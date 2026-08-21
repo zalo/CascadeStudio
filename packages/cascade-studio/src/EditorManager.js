@@ -39,11 +39,14 @@ export function resolvePySrc() {
   return 'auto';
 }
 
-/** Resolve the TOPOLOGY source layer for pysrc=upstream: 'lite' (default —
- *  the seam re-exports lite's classes) or 'upstream' (the experimental
- *  upstream-topology-over-OCP-shim spike: topology/utils.py + zero_d.py run
- *  verbatim — see experiments/upstream-topology-spike/). `?pytopo=upstream`
- *  or localStorage['cascade-py-topo']. */
+/** Resolve the TOPOLOGY source layer for pysrc=upstream: 'upstream' (the
+ *  DEFAULT since the Stage-3 flip — upstream 0.11.1 geometry.py + the whole
+ *  topology package run verbatim over the OCP-over-embind shim; see
+ *  experiments/upstream-topology-spike/STAGE3-STATE.md) or 'lite' (the
+ *  seam re-exports over lite's classes). `?pytopo=lite` or
+ *  localStorage['cascade-py-topo'] opt back into the seam; the worker
+ *  falls back to lite with a console warning when the ocp_shim payload is
+ *  missing from the build. */
 export function resolvePyTopo() {
   const KNOWN = ['lite', 'upstream'];
   try {
@@ -52,7 +55,7 @@ export function resolvePyTopo() {
     const stored = window.localStorage.getItem('cascade-py-topo');
     if (KNOWN.includes(stored)) { return stored; }
   } catch (e) { /* no URL/storage access — fall through to the default */ }
-  return 'lite';
+  return 'upstream';
 }
 
 /** Manages the Monaco code editor instance, mode switching, and code evaluation. */

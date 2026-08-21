@@ -276,8 +276,14 @@ class CascadeStudioUtils {
   /** This function returns a version of the `inputArray` without the `objectToRemove`. */
   static Remove(inputArray, objectToRemove) {
     return inputArray.filter((el) => {
-      return el.hash !== objectToRemove.hash ||
-             el.ptr  !== objectToRemove.ptr;
+      try {
+        return el.hash !== objectToRemove.hash ||
+               el.ptr  !== objectToRemove.ptr;
+      } catch (e) {
+        // a foreign entry (e.g. a PyProxy) whose property trap RAISES must
+        // not abort the whole evaluation — keep it (it is not the target)
+        return true;
+      }
     });
   }
 
