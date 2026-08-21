@@ -44,6 +44,24 @@ def _fail(msg):
             raise StdFail_NotDone(msg)
         except ImportError:
             pass
+    if ('ConstructionError' in msg or 'CrossCross' in msg
+            or 'zero norm' in msg):
+        # gp_* construction faults are Standard_ConstructionError upstream
+        # (build_common CATCHES it: the BuildSketch plane-alignment fallback)
+        try:
+            from OCP.Standard import Standard_ConstructionError
+            raise Standard_ConstructionError(msg)
+        except ImportError:
+            pass
+    if 'TopoDS::' in msg:
+        # a failed TopoDS_Cast downcast raises Standard_TypeMismatch with
+        # the cast's name as message (upstream excepts EXACTLY that type:
+        # extrude_linear_with_rotation's compound-unwrap fallback)
+        try:
+            from OCP.Standard import Standard_TypeMismatch
+            raise Standard_TypeMismatch(msg)
+        except ImportError:
+            pass
     raise Standard_Failure(msg)
 
 
