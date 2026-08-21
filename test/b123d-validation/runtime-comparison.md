@@ -541,3 +541,57 @@ jsffi patches this stage (micropython-cs, carried as real commits):
 `83f1550` out-of-int32 integral JS numbers convert as floats (1e15 crossed
 WRAPPED, 1e100 as 0 — corrupted OCCT's +-Precision::Infinite ranges),
 `7f63764` JSFLAGS_EXTRA.
+
+## 11. The final crossover (2026-08-21): REAL build123d 0.11.1 on Pyodide — `?pyruntime=pyodide&pysrc=real`
+
+The reference leg the whole comparison was building toward: the ACTUAL
+build123d 0.11.1 wheel (real CPython 3.14 semantics, real numpy, native
+metaclasses/typing — zero source transforms, zero stdlib shims) on Pyodide,
+with the OCP-over-embind shim as the ONLY substitution. Architecture,
+import-chain ledger, bridge notes and gates: `experiments/pyodide-real/
+STATE.md`; the Pyodide call layer is `upstream-py/ocp_shim/
+ocp_core_pyodide.py` under the SAME generated proxies/table as the
+MicroPython leg. Default-OFF by design.
+
+**Harness: 216 PASS / 3 MISMATCH / 2 ERROR / 1 TIMEOUT (222 scored, 148 s
+wall)** — PASS-parity with the Stage-3 MicroPython default (216), and the
+non-PASS set is strictly no worse: docs/objects_2d moves ERROR -> MISMATCH
+(25 µm) because **REAL drafting (Draft/DimensionLine/ExtensionLine/
+TechnicalDrawing) RUNS on this leg** over the make_text glue — the ~450-line
+drafting port priced for the other legs is unnecessary here. The
+interpreter-semantics finding is a clean NULL: real CPython + real numpy
+reproduce the transformed-MicroPython classification on every script.
+
+Five-way table (same session, bench-runtime.mjs + warm in-browser grid runs,
+idle machine; medians of 3):
+
+| | brython+lite (default) | micropython+upstream | pyodide+lite | **pyodide+real** |
+|---|---|---|---|---|
+| runtime assets over HTTP (raw) | 1.38 MB | 0.60 MB (+103 KB gz upstream payload in libMs) | 13.52 MB | **18.62 MB** |
+| cold first eval | ~0.49 s | ~1.00 s | ~1.27 s | ~2.16 s |
+| warm trivial eval | ~59 ms | ~63 ms | ~58 ms | **~58 ms** |
+| starter eval | ~302 ms | ~348 ms | ~310 ms | ~335 ms |
+| 54-hole grid model (warm) | 459 ms | 792 ms | 403 ms | **461 ms** |
+| interpreter wasm heap after starter | 0 (JS heap) | 19.5 MB | 43.2 MB | 51.9 MB |
+| OCCT wasm floor | 32.0 MB | 32.0 MB | 32.0 MB | 32.0 MB |
+| harness classification | 206/10/5/1 | 216/2/3/1 band | 206/10/5/1 | **216/3/2/1** |
+| harness wall (4 pages) | — | 160 s | 142 s | 148 s |
+
+What `pysrc=real` adds to a deploy on top of the pyodide runtime: 3.39 MB of
+vendored wheels (numpy 2.92 dominates; build123d itself is 368 KB) + the
+OCP-shim payload it shares with the MicroPython leg (~130 KB gz) + ~11 KB gz
+of bridge/glue. `fetch-pyodide.cjs` vendors everything; nothing touches the
+network at runtime.
+
+The one FFI landmine worth remembering: **Pyodide 314's JsProxy is
+unhashable and freshly minted per conversion** — embind enum members had to
+become interned Python-side wrappers (`OcpEnumMember`, hash/eq by `js_id`)
+before upstream's enum-keyed dicts (`shape_LUT`) would work. Everything else
+the MicroPython bridge needed (guarded call protocol, variadic fast path,
+proxy-registry economics) either collapsed to idiomatic try/except
+JsException or carried over unchanged.
+
+Recommendation unchanged: Brython+lite stays the default (size), the
+MicroPython+upstream stack stays the fidelity flag-leg at 1/9th the
+pyodide+real download; `pysrc=real` is the semantics REFERENCE — the leg you
+run when you need to know whether a divergence is ours or upstream's.

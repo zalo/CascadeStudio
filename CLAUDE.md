@@ -353,6 +353,34 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   TShape identity across selector calls; hash = rounded-bbox key).
   Bookkeeping that MEANS identity (parent/children links, sceneShapes)
   uses explicit `is` scans — keep it that way when touching those paths.
+- **`?pyruntime=pyodide&pysrc=real` — REAL, UNMODIFIED build123d 0.11.1 on
+  Pyodide (the reference/crossover leg, default-OFF)**: the actual PyPI
+  wheel (real CPython 3.14 semantics, real numpy 2.4.3, native
+  metaclasses/typing — ZERO source transforms, ZERO stdlib shims) runs with
+  the OCP-over-embind shim as the ONLY substitution.
+  `packages/cascade-core/src/worker/PyodideRealB123d.js` boots it (vendored
+  wheels — `fetch-pyodide.cjs` now fetches numpy/typing_extensions from the
+  Pyodide CDN and build123d/anytree/webcolors/trianglesolver from PyPI —
+  inert OCP stubs + the SHARED generated proxies over
+  `upstream-py/ocp_shim/ocp_core_pyodide.py`, import stubs in
+  `upstream-py/real-deps/` for ezdxf/svgpathtools/ocpsvg/fontTools/lib3mf/
+  sklearn/requests, lite as `build123d_lite`, then `import build123d` +
+  `real_glue.py`/`real_preglue.py` worker glue). Pyodide FFI landmine: its
+  JsProxy is UNHASHABLE and freshly minted per conversion — embind enum
+  members are interned `OcpEnumMember` wrappers (hash/eq by js_id), show()
+  membership compares js_id. Harness **216 PASS / 3 MISMATCH / 2 ERROR /
+  1 TIMEOUT** (148 s wall) — PASS-parity with the Stage-3 default and
+  **REAL drafting (Draft/DimensionLine) RUNS on this leg** (objects_2d is a
+  25 µm font-metric MISMATCH here instead of an ERROR); interpreter
+  semantics finding: a clean NULL (no divergence vs the transformed
+  MicroPython stack anywhere in the corpus). Costs vs pyodide+lite:
+  +3.4 MB wheels (18.6 MB assets total), boot 2.1 s vs 1.3 s
+  (`import build123d` is 0.52 s of it), interpreter heap 51.9 vs 43.2 MB;
+  warm evals identical, 54-hole grid 461 ms (faster than
+  micropython+upstream's 792 ms). Frozen by `test/py-src-real.spec.js`;
+  `CS_PY_SRC=real` switches run-lite.mjs/probe.mjs/bench-runtime.mjs
+  (`--pysrc real`); ledger/benchmarks/state in
+  `experiments/pyodide-real/STATE.md` + runtime-comparison.md §11.
 
 **build123d-lite coverage** (vs real build123d 0.11.1 — validated by running
 EVERY runnable script in the upstream `examples/` and `docs/` trees through both,

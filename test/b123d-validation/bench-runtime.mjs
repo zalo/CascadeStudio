@@ -48,6 +48,11 @@ const WITH_CORPUS = args.includes('--corpus');
 const CORPUS_TIMEOUT = parseInt(argVal('--script-timeout', '30000'), 10);
 const OUT = argVal('--out', `/tmp/bench-${RUNTIME}.json`);
 
+// Python SOURCE layer (--pysrc / CS_PY_SRC): '' (runtime default), 'lite',
+// 'upstream' (micropython), or 'real' (pyodide: REAL build123d 0.11.1 over
+// the OCP shim — PyodideRealB123d.js).
+const PY_SRC = argVal('--pysrc', process.env.CS_PY_SRC || '');
+
 const RUNTIME_ASSETS = {
   brython: ['brython.js'],
   pyodide: ['pyodide/pyodide.mjs', 'pyodide/pyodide.asm.mjs',
@@ -55,6 +60,23 @@ const RUNTIME_ASSETS = {
     'pyodide/pyodide-lock.json'],
   micropython: ['micropython.mjs', 'micropython-settrace.wasm'],
 };
+if (RUNTIME === 'pyodide' && PY_SRC === 'real') {
+  // what pysrc=real ADDS to the pyodide download: the wheels + the shared
+  // OCP-shim payload (table/registry/OCP modules are fetched individually at
+  // boot; the table+registry dominate — the per-module files are counted via
+  // the manifest at runtime and are small)
+  RUNTIME_ASSETS.pyodide = RUNTIME_ASSETS.pyodide.concat([
+    'pyodide/numpy-2.4.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl',
+    'pyodide/typing_extensions-4.15.0-py3-none-any.whl',
+    'pyodide/build123d-0.11.1-py3-none-any.whl',
+    'pyodide/anytree-2.13.0-py3-none-any.whl',
+    'pyodide/webcolors-24.8.0-py3-none-any.whl',
+    'pyodide/trianglesolver-1.2-py3-none-any.whl',
+    'upstream-b123d/ocp_shim/table.json',
+    'upstream-b123d/ocp_shim/_registry.py',
+    'upstream-b123d/ocp_import_map.json',
+  ]);
+}
 
 const TRIVIAL = `from build123d import *
 b = Box(1, 1, 1)
@@ -79,7 +101,8 @@ async function ensureServer() {
 async function newJsModePage(context) {
   const page = await context.newPage();
   page.on('pageerror', () => {});
-  const query = `?mode=cascadestudio${RUNTIME !== 'brython' ? '&pyruntime=' + RUNTIME : ''}`;
+  const query = `?mode=cascadestudio${RUNTIME !== 'brython' ? '&pyruntime=' + RUNTIME : ''}` +
+    (['lite', 'upstream', 'real'].includes(PY_SRC) ? '&pysrc=' + PY_SRC : '');
   await page.goto(`http://localhost:${PORT}/${query}`, { timeout: 60000 });
   await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(),
     undefined, { timeout: 90000 });

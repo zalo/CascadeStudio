@@ -1,0 +1,419 @@
+{
+ "runtime": "pyodide",
+ "runs": [
+  {
+   "index": 0,
+   "baseline": {
+    "pyRuntime": null,
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 0,
+    "bootTiming": null,
+    "rendererRssKb": 688560
+   },
+   "coldFirstEvalMs": 2272,
+   "afterBoot": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 3.8,
+     "initMs": 1118.1,
+     "libMs": 1083.8,
+     "totalMs": 2205.7
+    },
+    "rendererRssKb": 1267812
+   },
+   "warmEvalMs": 58,
+   "starterEvalMs": 336,
+   "afterStarter": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 3.8,
+     "initMs": 1118.1,
+     "libMs": 1083.8,
+     "totalMs": 2205.7
+    },
+    "rendererRssKb": 1243156
+   },
+   "baselineWarm": {
+    "pyRuntime": null,
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 0,
+    "bootTiming": null,
+    "rendererRssKb": 1402208
+   },
+   "warmFirstEvalMs": 2263,
+   "afterWarmBoot": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 4.3,
+     "initMs": 1142.1,
+     "libMs": 1048.8,
+     "totalMs": 2195.2
+    },
+    "rendererRssKb": 2013360
+   },
+   "assetsCold": {
+    "totalMs": 109.3,
+    "totalBytes": 18622453,
+    "files": {
+     "pyodide/pyodide.mjs": {
+      "ms": 3.5,
+      "bytes": 17931
+     },
+     "pyodide/pyodide.asm.mjs": {
+      "ms": 9.2,
+      "bytes": 1249500
+     },
+     "pyodide/pyodide.asm.wasm": {
+      "ms": 39.2,
+      "bytes": 9596386
+     },
+     "pyodide/python_stdlib.zip": {
+      "ms": 18.4,
+      "bytes": 2545198
+     },
+     "pyodide/pyodide-lock.json": {
+      "ms": 3.6,
+      "bytes": 113804
+     },
+     "pyodide/numpy-2.4.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl": {
+      "ms": 12.7,
+      "bytes": 2916023
+     },
+     "pyodide/typing_extensions-4.15.0-py3-none-any.whl": {
+      "ms": 2.1,
+      "bytes": 44613
+     },
+     "pyodide/build123d-0.11.1-py3-none-any.whl": {
+      "ms": 2.3,
+      "bytes": 368081
+     },
+     "pyodide/anytree-2.13.0-py3-none-any.whl": {
+      "ms": 2.9,
+      "bytes": 45077
+     },
+     "pyodide/webcolors-24.8.0-py3-none-any.whl": {
+      "ms": 1.6,
+      "bytes": 15027
+     },
+     "pyodide/trianglesolver-1.2-py3-none-any.whl": {
+      "ms": 3.9,
+      "bytes": 5377
+     },
+     "upstream-b123d/ocp_shim/table.json": {
+      "ms": 6.3,
+      "bytes": 1593146
+     },
+     "upstream-b123d/ocp_shim/_registry.py": {
+      "ms": 2.2,
+      "bytes": 105039
+     },
+     "upstream-b123d/ocp_import_map.json": {
+      "ms": 1.4,
+      "bytes": 7251
+     }
+    }
+   }
+  },
+  {
+   "index": 1,
+   "baseline": {
+    "pyRuntime": null,
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 0,
+    "bootTiming": null,
+    "rendererRssKb": 696544
+   },
+   "coldFirstEvalMs": 2129,
+   "afterBoot": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 6.4,
+     "initMs": 1055.1,
+     "libMs": 996.3,
+     "totalMs": 2057.8
+    },
+    "rendererRssKb": 1266168
+   },
+   "warmEvalMs": 58,
+   "starterEvalMs": 333,
+   "afterStarter": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 6.4,
+     "initMs": 1055.1,
+     "libMs": 996.3,
+     "totalMs": 2057.8
+    },
+    "rendererRssKb": 1250772
+   },
+   "baselineWarm": {
+    "pyRuntime": null,
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 0,
+    "bootTiming": null,
+    "rendererRssKb": 1412988
+   },
+   "warmFirstEvalMs": 2218,
+   "afterWarmBoot": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 4.8,
+     "initMs": 1119.5,
+     "libMs": 1022.7,
+     "totalMs": 2147
+    },
+    "rendererRssKb": 2029440
+   },
+   "assetsCold": {
+    "totalMs": 86.8,
+    "totalBytes": 18622453,
+    "files": {
+     "pyodide/pyodide.mjs": {
+      "ms": 3,
+      "bytes": 17931
+     },
+     "pyodide/pyodide.asm.mjs": {
+      "ms": 6.6,
+      "bytes": 1249500
+     },
+     "pyodide/pyodide.asm.wasm": {
+      "ms": 29.9,
+      "bytes": 9596386
+     },
+     "pyodide/python_stdlib.zip": {
+      "ms": 9.2,
+      "bytes": 2545198
+     },
+     "pyodide/pyodide-lock.json": {
+      "ms": 2.4,
+      "bytes": 113804
+     },
+     "pyodide/numpy-2.4.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl": {
+      "ms": 16.8,
+      "bytes": 2916023
+     },
+     "pyodide/typing_extensions-4.15.0-py3-none-any.whl": {
+      "ms": 2.2,
+      "bytes": 44613
+     },
+     "pyodide/build123d-0.11.1-py3-none-any.whl": {
+      "ms": 2.4,
+      "bytes": 368081
+     },
+     "pyodide/anytree-2.13.0-py3-none-any.whl": {
+      "ms": 1.6,
+      "bytes": 45077
+     },
+     "pyodide/webcolors-24.8.0-py3-none-any.whl": {
+      "ms": 1.2,
+      "bytes": 15027
+     },
+     "pyodide/trianglesolver-1.2-py3-none-any.whl": {
+      "ms": 1.2,
+      "bytes": 5377
+     },
+     "upstream-b123d/ocp_shim/table.json": {
+      "ms": 6.2,
+      "bytes": 1593146
+     },
+     "upstream-b123d/ocp_shim/_registry.py": {
+      "ms": 2.6,
+      "bytes": 105039
+     },
+     "upstream-b123d/ocp_import_map.json": {
+      "ms": 1.5,
+      "bytes": 7251
+     }
+    }
+   }
+  },
+  {
+   "index": 2,
+   "baseline": {
+    "pyRuntime": null,
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 0,
+    "bootTiming": null,
+    "rendererRssKb": 686652
+   },
+   "coldFirstEvalMs": 2159,
+   "afterBoot": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 3.9,
+     "initMs": 1031.8,
+     "libMs": 1057,
+     "totalMs": 2092.7
+    },
+    "rendererRssKb": 1262568
+   },
+   "warmEvalMs": 58,
+   "starterEvalMs": 336,
+   "afterStarter": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 3.9,
+     "initMs": 1031.8,
+     "libMs": 1057,
+     "totalMs": 2092.7
+    },
+    "rendererRssKb": 1237188
+   },
+   "baselineWarm": {
+    "pyRuntime": null,
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 0,
+    "bootTiming": null,
+    "rendererRssKb": 1393776
+   },
+   "warmFirstEvalMs": 2013,
+   "afterWarmBoot": {
+    "pyRuntime": "pyodide",
+    "jsHeapUsed": 0,
+    "jsHeapTotal": 0,
+    "occtWasm": 33554432,
+    "pythonWasm": 54460416,
+    "bootTiming": {
+     "runtime": "pyodide",
+     "pySrc": "real",
+     "version": "314.0.4",
+     "fetchMs": 4.4,
+     "initMs": 982.2,
+     "libMs": 960,
+     "totalMs": 1946.6
+    },
+    "rendererRssKb": 2004780
+   },
+   "assetsCold": {
+    "totalMs": 81,
+    "totalBytes": 18622453,
+    "files": {
+     "pyodide/pyodide.mjs": {
+      "ms": 3.2,
+      "bytes": 17931
+     },
+     "pyodide/pyodide.asm.mjs": {
+      "ms": 4.6,
+      "bytes": 1249500
+     },
+     "pyodide/pyodide.asm.wasm": {
+      "ms": 25.9,
+      "bytes": 9596386
+     },
+     "pyodide/python_stdlib.zip": {
+      "ms": 20,
+      "bytes": 2545198
+     },
+     "pyodide/pyodide-lock.json": {
+      "ms": 2.5,
+      "bytes": 113804
+     },
+     "pyodide/numpy-2.4.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl": {
+      "ms": 9.2,
+      "bytes": 2916023
+     },
+     "pyodide/typing_extensions-4.15.0-py3-none-any.whl": {
+      "ms": 1.8,
+      "bytes": 44613
+     },
+     "pyodide/build123d-0.11.1-py3-none-any.whl": {
+      "ms": 2,
+      "bytes": 368081
+     },
+     "pyodide/anytree-2.13.0-py3-none-any.whl": {
+      "ms": 1.1,
+      "bytes": 45077
+     },
+     "pyodide/webcolors-24.8.0-py3-none-any.whl": {
+      "ms": 1.1,
+      "bytes": 15027
+     },
+     "pyodide/trianglesolver-1.2-py3-none-any.whl": {
+      "ms": 0.9,
+      "bytes": 5377
+     },
+     "upstream-b123d/ocp_shim/table.json": {
+      "ms": 5.4,
+      "bytes": 1593146
+     },
+     "upstream-b123d/ocp_shim/_registry.py": {
+      "ms": 2,
+      "bytes": 105039
+     },
+     "upstream-b123d/ocp_import_map.json": {
+      "ms": 1.3,
+      "bytes": 7251
+     }
+    }
+   }
+  }
+ ]
+}
