@@ -392,7 +392,23 @@ async function _bootstrap(srcKind) {
   // error path). Python falls back to _csMpCall for list/tuple/dict args.
   self._CS_ERRMARK = { _csErrMark: true };
   self._csLastErr = null;
+  // Heavy-model memory attribution: sample both wasm heaps every N bridge
+  // calls (the worker thread is synchronous during an evaluation, so
+  // messages cannot sample mid-run). Read via self._csMemSamples.
+  self._csMemSamples = [];
+  let _csCallCount = 0;
+  const _csSample = () => {
+    try {
+      self._csMemSamples.push([
+        _csCallCount,
+        mp._module && mp._module.HEAPU8 ? mp._module.HEAPU8.length : 0,
+        self.ocMemory ? self.ocMemory.buffer.byteLength : 0,
+      ]);
+      if (self._csMemSamples.length > 4000) { self._csMemSamples.splice(0, 2000); }
+    } catch (e) { /* sampling must never break the bridge */ }
+  };
   self._csMpCallV = function (name, ...args) {
+    if ((++_csCallCount & 8191) === 0) { _csSample(); }
     try {
       const fn = self[name];
       if (typeof fn !== 'function') {

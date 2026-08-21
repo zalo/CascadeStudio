@@ -23,6 +23,48 @@
 
 export function installOcpShim(self, table) {
   const oc = self.oc;
+  // ---- lifetime attribution (heavy-model memory work) ------------------ //
+  // Counts every embind object the shim mints into JS visibility (dispatch
+  // returns, item access, internal temporaries). `freed` counts explicit
+  // .delete()s. Read via memoryStats().ocpStats.
+  const stats = self._csOcpStats = self._csOcpStats ||
+    { created: 0, freed: 0, byClass: Object.create(null),
+      freedByClass: Object.create(null) };
+  const noteFreed = (v) => {
+    try {
+      const n = normCls(String(v.constructor.name));
+      stats.freedByClass[n] = (stats.freedByClass[n] || 0) + 1;
+    } catch (e) { /* attribution only */ }
+  };
+  const note = (v, tag) => {
+    try {
+      if (v && typeof v === 'object' && v.$$ !== undefined && v.constructor) {
+        stats.created++;
+        const n = (tag || '') + normCls(String(v.constructor.name));
+        stats.byClass[n] = (stats.byClass[n] || 0) + 1;
+        if ((stats.created & (self._csMemSampleMask || 8191)) === 0) {
+          // diagnostic: JS GC hint mid-run (only effective under
+          // --js-flags=--expose-gc; used to attribute the MicroPython arena
+          // ratchet to JS-pinned bridge proxies vs MP-internal fragmentation)
+          if (self._csMemGcHint && typeof globalThis.gc === 'function') {
+            try { globalThis.gc(); } catch (e3) { /* diagnostic only */ }
+          }
+          // mid-run wasm-heap curve (the worker cannot answer messages while
+          // an evaluation runs) — [createdCount, pyWasm, occtWasm]
+          let pyWasm = 0;
+          try {
+            const it = self._csMpInterpreter || self._pyodideRuntime;
+            if (it && it._module && it._module.HEAPU8) { pyWasm = it._module.HEAPU8.length; }
+          } catch (e2) { /* best effort */ }
+          if (!self._csMemSamples) { self._csMemSamples = []; }
+          self._csMemSamples.push([stats.created, stats.freed, pyWasm,
+            self.ocMemory ? self.ocMemory.buffer.byteLength : 0]);
+          if (self._csMemSamples.length > 4000) { self._csMemSamples.splice(0, 2000); }
+        }
+      }
+    } catch (e) { /* attribution must never break dispatch */ }
+    return v;
+  };
   const normKw = (kwargs) => {
     if (!kwargs) { return null; }
     if (kwargs instanceof Map) {
@@ -32,7 +74,131 @@ export function installOcpShim(self, table) {
     }
     return kwargs;
   };
-  const keepAlive = []; // handles whose .get() results are live
+  const keepAlive = []; // fallback pin for frozen deref results (see deref)
+
+  // ---- deterministic embind lifetime ----------------------------------- //
+  // Nothing in this wasm build auto-frees embind objects (no smart-ptr
+  // policies, so embind's FinalizationRegistry never attaches): without
+  // explicit .delete() every returned wrapper leaks its C++ object, and on
+  // heavy models that is the difference between 165 MB and 286 MB of OCCT
+  // wasm (heat_exchanger leaks ~265k objects, 159k of them TopoDS wrappers
+  // pinning BRep structures). The scheme:
+  //  * every embind object returned to Python is RETAINED (`_csPy` count,
+  //    set here so the Python side pays no extra FFI call);
+  //  * the Python proxy layer calls _csOcpFree from __del__ (CPython
+  //    refcounting makes that deterministic and prompt);
+  //  * frees are QUEUED and flushed at op boundaries (recordExternalOp) so
+  //    an object can never be deleted in the middle of the operation that
+  //    is still using it;
+  //  * the flush skips everything still reachable by the worker
+  //    (sceneShapes / modelHistory / externalShapes / argCache / pinned
+  //    fuse operands) and every class whose embind delete() would BYPASS a
+  //    Standard_Transient refcount (raw Geom_*/HArray wrappers: measured —
+  //    Handle.get() returns a NON-owning alias, so deleting the raw wrapper
+  //    double-frees; deleting the Handle_* wrapper is the correct
+  //    decrement).
+  // Opt-out for A/B: self._csOcpLifetime = 'leak' (?ocplt=leak).
+  const freeQueue = [];
+  const pinnedOps = new Set();   // fuse-guard operands, pinned Append->Shape
+  const retain = (v) => {
+    try {
+      if (v && typeof v === 'object' && v.$$ !== undefined) {
+        v._csPy = (v._csPy | 0) + 1;
+      }
+    } catch (e) { /* frozen object: stays foreign, never freed */ }
+    return v;
+  };
+  // Is this wrapper safe to delete? Handle_* wrappers always are (deleting
+  // one is the correct refcount decrement). A raw Standard_Transient-derived
+  // wrapper is safe ONLY while no Handle_ references its pointee: the shim
+  // marks the raw (`_csHandled`) at every site that wraps one into a handle,
+  // and `.get()` deref results (non-owning aliases) carry `_csOwnH`. An
+  // unmarked transient still has refcount 0, so embind's rawDestructor is
+  // exactly what a releasing handle would do.
+  const TRANSIENT_DELETABLE = /^(BRepAdaptor_|GeomAdaptor_|Geom2dAdaptor_|ShapeUpgrade_UnifySameDomain$|ShapeFix_Shape$|ShapeFix_Wire$|ShapeFix_Face$|ShapeFix_Solid$)/;
+  const canDelete = (v, cls) => {
+    if (cls.lastIndexOf('Handle_', 0) === 0) { return true; }
+    if (v._csHandled || v._csOwnH) { return false; }
+    if (chainHas(cls, 'Standard_Transient')) {
+      // refcount-managed family: only algorithm/adaptor classes that OCCT
+      // never re-handles internally are safe to raw-delete (a blanket rule
+      // use-after-freed a face's surface — measured)
+      return TRANSIENT_DELETABLE.test(cls);
+    }
+    if (/_H(Array|Sequence)/.test(cls)) { return false; }
+    if (/^(Geom|Poly_|Law_|Font_)/.test(cls)) { return false; }
+    return true;
+  };
+  const markHandled = (a) => {
+    try { if (a && a.$$ !== undefined) { a._csHandled = 1; } } catch (e) { /* frozen */ }
+    return a;
+  };
+  const flushFrees = () => {
+    if (!freeQueue.length) { return; }
+    const protect = pinnedOps.size ? new Set(pinnedOps) : new Set();
+    for (const s of (self.sceneShapes || [])) { protect.add(s); }
+    for (const step of (self.modelHistory || [])) {
+      if (step && step.shapes) { for (const s of step.shapes) { protect.add(s); } }
+    }
+    const ext = self.externalShapes || {};
+    for (const k in ext) { protect.add(ext[k]); }
+    const cache = self.argCache || {};
+    for (const k in cache) { protect.add(cache[k]); }
+    const keep = [];
+    for (const v of freeQueue) {
+      try {
+        if (!v.$$ || !v.$$.ptr) { continue; }        // already deleted
+        if (v._csPy > 0) { continue; }               // re-retained since
+        if (protect.has(v)) { keep.push(v); continue; }
+        const h = v._csOwnH;                          // deref'd raw: free the
+        if (h) {                                      // OWNING handle instead
+          v._csOwnH = null;
+          if (h.$$ && h.$$.ptr) { noteFreed(h); h.delete(); stats.freed++; }
+        }
+        const cls = normCls(String(v.constructor.name));
+        if (!canDelete(v, cls)) { continue; }
+        noteFreed(v);
+        v.delete();
+        stats.freed++;
+      } catch (e) { /* skip anything that refuses */ }
+    }
+    freeQueue.length = 0;
+    for (const v of keep) { freeQueue.push(v); }
+  };
+  self._csOcpFlushFrees = flushFrees;
+  self._csOcpEvalReset = () => { pinnedOps.clear(); flushFrees(); };
+  self._csOcpFree = function (v) {
+    try {
+      if (!v || typeof v !== 'object' || v.$$ === undefined) { return; }
+      const n = v._csPy;
+      if (!(n > 0)) { return; }   // foreign object (never shim-retained)
+      v._csPy = n - 1;
+      if (v._csPy === 0 && self._csOcpLifetime !== 'leak') {
+        freeQueue.push(v);
+        if (freeQueue.length >= 4096) { flushFrees(); }
+      }
+    } catch (e) { /* lifetime must never break the caller */ }
+  };
+  // per-dispatch scratch: internal temporaries (progress pads, default
+  // fills, handle conversions) deleted as soon as the dispatch returns
+  let scratch = null;
+  const scratchNote = (v) => {
+    if (scratch && v && typeof v === 'object' && v.$$ !== undefined) {
+      scratch.push(v);
+    }
+    return v;
+  };
+  const scratchSweep = (list, result) => {
+    for (const t of list) {
+      try {
+        if (t === result || !t.$$ || !t.$$.ptr) { continue; }
+        if (!canDelete(t, normCls(String(t.constructor.name)))) { continue; }
+        noteFreed(t);
+        t.delete();
+        stats.freed++;
+      } catch (e) { /* skip */ }
+    }
+  };
 
   const isEmbind = (v) => {
     // guarded: a Python-object PyProxy raises AttributeError from inside
@@ -52,13 +218,23 @@ export function installOcpShim(self, table) {
       // Handle_Geom_BSplineSurface: the fork binds AsGeomSurface for
       // EXACTLY this — .get() on the surface handle is unsafe in this
       // build (see CLAUDE.md make_surface_from_array_of_points note)
+      // The deref'd raw is a NON-owning alias of the handle's pointee
+      // (measured: same ptr, fresh $$), so the HANDLE must outlive it. Tie
+      // the two: the handle rides on the raw wrapper and is deleted by
+      // flushFrees when the raw's Python proxy dies. (A frozen wrapper
+      // falls back to the permanent keepAlive pin.)
       if (typeof v.AsGeomSurface === 'function') {
-        keepAlive.push(v);
-        return v.AsGeomSurface();
+        const raw = v.AsGeomSurface();
+        note(v, 'int:');
+        try { raw._csOwnH = v; } catch (e) { keepAlive.push(v); }
+        return raw;
       }
       if (typeof v.get === 'function') {
-        keepAlive.push(v);
-        return v.get();
+        const raw = v.get();
+        note(v, 'int:');
+        try { if (raw) { raw._csOwnH = v; } else { keepAlive.push(v); } }
+        catch (e) { keepAlive.push(v); }
+        return raw;
       }
     }
     return v;
@@ -70,11 +246,11 @@ export function installOcpShim(self, table) {
     const t = table.classes[cn];
     if (t) {
       const zero = t.ctors.find((c) => c.params && c.params.length === 0);
-      if (zero && oc[zero.js]) { return { v: new oc[zero.js]() }; }
+      if (zero && oc[zero.js]) { return { v: scratchNote(note(new oc[zero.js](), 'int:')) }; }
     }
     for (const js of [cn + '_1', cn]) {
       if (oc[js]) {
-        try { return { v: new oc[js]() }; } catch (e) { /* fall */ }
+        try { return { v: scratchNote(note(new oc[js](), 'int:')) }; } catch (e) { /* fall */ }
       }
     }
     return { miss: true };
@@ -138,7 +314,7 @@ export function installOcpShim(self, table) {
       if (!ps || ps.length <= args.length) { continue; }
       const extra = ps.slice(args.length);
       if (extra.every((t) => String(t).indexOf('Message_ProgressRange') !== -1)) {
-        return args.concat(extra.map(() => new oc.Message_ProgressRange_1()));
+        return args.concat(extra.map(() => scratchNote(note(new oc.Message_ProgressRange_1(), 'int:'))));
       }
     }
     return null;
@@ -154,7 +330,11 @@ export function installOcpShim(self, table) {
     for (const suffix of ['_2', '_3']) {
       const H = oc[handleName + suffix];
       if (!H) { continue; }
-      try { return new H(a); } catch (e) { /* next */ }
+      try {
+        const h = scratchNote(note(new H(a), 'int:'));
+        markHandled(a);
+        return h;
+      } catch (e) { /* next */ }
     }
     return null;
   };
@@ -308,7 +488,8 @@ export function installOcpShim(self, table) {
         if (!H) { continue; }
         try {
           if (callArgs === args) { callArgs = args.slice(); }
-          callArgs[i] = new H(a);
+          callArgs[i] = scratchNote(note(new H(a), 'int:'));
+          markHandled(a);
         } catch (e) { /* leave raw; embind will report */ }
       }
     }
@@ -509,6 +690,7 @@ export function installOcpShim(self, table) {
       let edges = args[0];
       if (isEmbind(edges) &&
           String(edges.constructor.name).lastIndexOf('Handle_', 0) !== 0) {
+        markHandled(edges);
         edges = new oc.Handle_TopTools_HSequenceOfShape_2(edges);
       }
       const res = oc.ShapeAnalysis_FreeBounds.ConnectEdgesToWires_1(
@@ -576,6 +758,7 @@ export function installOcpShim(self, table) {
   // (axis_of_rotation, is_circular_*) calls the concrete accessors — serve
   // them through the bound GeomAdaptor_Surface.
   const surfAdaptor = (ref) => {
+    markHandled(ref);
     const h = new oc.Handle_Geom_Surface_2(ref);
     return new oc.GeomAdaptor_Surface_2(h);
   };
@@ -617,23 +800,36 @@ export function installOcpShim(self, table) {
   // on a Fuse validates the result volume against the largest input,
   // rebuilding from the GF partition when the kernel dropped/raised.
   const _qVol = (shape) => {
+    let props = null;
     try {
-      const props = new oc.GProp_GProps_1();
+      if (!shape || !shape.$$ || !shape.$$.ptr) { return 0; } // freed operand
+      props = new oc.GProp_GProps_1();
       oc.BRepGProp.VolumeProperties_1(shape, props, false, false, false);
       return Math.abs(props.Mass());
     } catch (e) { return 0; }
+    finally { try { if (props) { props.delete(); } } catch (e) { /* skip */ } }
   };
   const _rebuildFuseFromGF = (shapes) => {
+    let op = null, pr = null, ex = null;
     try {
-      const op = new oc.BOPAlgo_Builder_1();
-      for (const s of shapes) { op.AddArgument(s); }
-      op.Perform(new oc.Message_ProgressRange_1());
+      op = new oc.BOPAlgo_Builder_1();
+      for (const s of shapes) {
+        if (!s || !s.$$ || !s.$$.ptr) { return null; } // freed operand
+        op.AddArgument(s);
+      }
+      pr = new oc.Message_ProgressRange_1();
+      op.Perform(pr);
       if (op.HasErrors()) { return null; }
       const gf = op.Shape();
-      const ex = new oc.TopExp_Explorer_2(gf, oc.TopAbs_ShapeEnum.TopAbs_SOLID,
+      ex = new oc.TopExp_Explorer_2(gf, oc.TopAbs_ShapeEnum.TopAbs_SOLID,
         oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
       return ex.More() ? gf : null;
     } catch (e) { return null; }
+    finally {
+      for (const t of [ex, pr, op]) {
+        try { if (t) { t.delete(); } } catch (e) { /* skip */ }
+      }
+    }
   };
   const listContents = new WeakMap();
   const fuseOperands = new WeakMap();
@@ -649,6 +845,9 @@ export function installOcpShim(self, table) {
       const info = fuseOperands.get(ref) || {};
       info.args = (listContents.get(args[0]) || []).slice();
       fuseOperands.set(ref, info);
+      // pin the operands so the free queue cannot delete them before the
+      // Shape() guard is done volume-checking them
+      for (const s of info.args) { pinnedOps.add(s); }
     }
     return ref.SetArguments(args[0]);
   };
@@ -657,11 +856,13 @@ export function installOcpShim(self, table) {
       const info = fuseOperands.get(ref) || {};
       info.tools = (listContents.get(args[0]) || []).slice();
       fuseOperands.set(ref, info);
+      for (const s of info.tools) { pinnedOps.add(s); }
     }
     return ref.SetTools(args[0]);
   };
   GLUE['BRepAlgoAPI_BooleanOperation.Build'] = (args, ref) => {
-    const callArgs = args.length ? args : [new oc.Message_ProgressRange_1()];
+    const pad = args.length ? null : new oc.Message_ProgressRange_1();
+    const callArgs = args.length ? args : [pad];
     try {
       return ref.Build.apply(ref, callArgs);
     } catch (e) {
@@ -671,32 +872,38 @@ export function installOcpShim(self, table) {
         return undefined;
       }
       throw e;
+    } finally {
+      try { if (pad) { pad.delete(); } } catch (e) { /* skip */ }
     }
   };
   GLUE['BRepAlgoAPI_Algo.Shape'] = (args, ref) => {
     const info = isFuse(ref) ? fuseOperands.get(ref) : null;
     if (!info) { return tagTopoDS(ref.Shape()); }
     const operands = (info.args || []).concat(info.tools || []);
-    if (info.buildError) {
-      const rebuilt = _rebuildFuseFromGF(operands);
-      if (!rebuilt) { throw info.buildError; }
-      console.log('ocp_shim fuse guard: BRepAlgoAPI_Fuse raised (known OCCT '
-        + '8.0.1 wasm fault family); rebuilt from the General-Fuse partition.');
-      return tagTopoDS(rebuilt);
-    }
-    const raw = ref.Shape();
-    if (operands.length < 2) { return tagTopoDS(raw); }
-    const maxInput = Math.max(...operands.map(_qVol));
-    if (maxInput > 1e-6 && _qVol(raw) < maxInput * 0.999 - 1e-9) {
-      const rebuilt = _rebuildFuseFromGF(operands);
-      if (rebuilt && _qVol(rebuilt) >= maxInput * 0.999 - 1e-9) {
-        console.log('ocp_shim fuse guard: BRepAlgoAPI_Fuse dropped an operand '
-          + '(known OCCT 8.0.1 wasm fault); rebuilt from the General-Fuse '
-          + 'partition.');
+    try {
+      if (info.buildError) {
+        const rebuilt = _rebuildFuseFromGF(operands);
+        if (!rebuilt) { throw info.buildError; }
+        console.log('ocp_shim fuse guard: BRepAlgoAPI_Fuse raised (known OCCT '
+          + '8.0.1 wasm fault family); rebuilt from the General-Fuse partition.');
         return tagTopoDS(rebuilt);
       }
+      const raw = ref.Shape();
+      if (operands.length < 2) { return tagTopoDS(raw); }
+      const maxInput = Math.max(...operands.map(_qVol));
+      if (maxInput > 1e-6 && _qVol(raw) < maxInput * 0.999 - 1e-9) {
+        const rebuilt = _rebuildFuseFromGF(operands);
+        if (rebuilt && _qVol(rebuilt) >= maxInput * 0.999 - 1e-9) {
+          console.log('ocp_shim fuse guard: BRepAlgoAPI_Fuse dropped an operand '
+            + '(known OCCT 8.0.1 wasm fault); rebuilt from the General-Fuse '
+            + 'partition.');
+          return tagTopoDS(rebuilt);
+        }
+      }
+      return tagTopoDS(raw);
+    } finally {
+      for (const s of operands) { pinnedOps.delete(s); }
     }
-    return tagTopoDS(raw);
   };
 
   // The Geom2dGcc Tangency family: pybind Tangency{1,2,3}(Index, PntSol)
@@ -831,7 +1038,7 @@ export function installOcpShim(self, table) {
       }
       if (an === 'Geom_Line' || an === 'Handle_Geom_Line') {
         const h = an === 'Geom_Line'
-          ? new oc.Handle_Geom_Curve_2(args[0]) : args[0];
+          ? new oc.Handle_Geom_Curve_2(markHandled(args[0])) : args[0];
         return new oc.BRepBuilderAPI_MakeEdge_25(h, -1e100, 1e100);
       }
     }
@@ -1064,12 +1271,23 @@ export function installOcpShim(self, table) {
   self._csOcpNewV = function (cls, ...args) {
     try {
       return self._csOcpNew(cls, args, null);
-    } catch (e) { self._csLastErr = errText(e); return self._CS_ERRMARK; }
+    } catch (e) {
+      stats.errs = (stats.errs || 0) + 1;
+      if (!stats.errBy) { stats.errBy = {}; }
+      stats.errBy[cls] = (stats.errBy[cls] || 0) + 1;
+      self._csLastErr = errText(e); return self._CS_ERRMARK;
+    }
   };
   self._csOcpCallVar = function (ref, name, ...args) {
     try {
       return self._csOcpCall(ref, name, args, null);
-    } catch (e) { self._csLastErr = errText(e); return self._CS_ERRMARK; }
+    } catch (e) {
+      stats.errs = (stats.errs || 0) + 1;
+      if (!stats.errBy) { stats.errBy = {}; }
+      const k = ((ref && ref.constructor && ref.constructor.name) || '?') + '.' + name;
+      stats.errBy[k] = (stats.errBy[k] || 0) + 1;
+      self._csLastErr = errText(e); return self._CS_ERRMARK;
+    }
   };
   self._csOcpStaticV = function (cls, name, ...args) {
     try {
@@ -1108,5 +1326,36 @@ export function installOcpShim(self, table) {
     try {
       return v.length;
     } catch (e) { return 0; }
+  };
+
+  // ---- lifetime/attribution wrappers around the dispatch exits ---------- //
+  // Every embind object minted into Python visibility is COUNTED (note) and
+  // RETAINED (_csPy — the Python proxy's __del__ balances it via _csOcpFree).
+  // Internal temporaries created during the dispatch (progress pads, default
+  // fills, handle conversions — tracked via scratchNote) are deleted as soon
+  // as the dispatch returns. The variadic fast-path entries call through
+  // these, so they are covered too.
+  const scoped = (fn) => function (...a) {
+    const prev = scratch;
+    scratch = [];
+    const mine = scratch;
+    let r;
+    try {
+      r = fn.apply(null, a);
+    } finally {
+      scratch = prev;
+      scratchSweep(mine, r);
+    }
+    return retain(note(r));
+  };
+  const _newInner = self._csOcpNew;
+  self._csOcpNew = scoped((cls, args, kwargs) => _newInner(cls, args, kwargs));
+  const _callInner = self._csOcpCall;
+  self._csOcpCall = scoped((ref, name, args, kwargs) => _callInner(ref, name, args, kwargs));
+  const _staticInner = self._csOcpStatic;
+  self._csOcpStatic = scoped((cls, name, args, kwargs) => _staticInner(cls, name, args, kwargs));
+  const _itemInner = self._csOcpItem;
+  self._csOcpItem = function (v, i) {
+    return retain(note(_itemInner(v, i)));
   };
 }

@@ -33,7 +33,17 @@ class CascadeStudioMesher {
       }
       point2.copy(point1);
     }
+    CascadeStudioMesher._del(gpPnt);
     return arcLength;
+  }
+
+  /** Best-effort embind delete (meshing creates hundreds of thousands of
+   *  owned per-node wrapper copies per run; leaking them was a measured
+   *  30-90 MB of the heavy-model mesh-phase high-water). */
+  static _del(...objs) {
+    for (const o of objs) {
+      try { if (o && o.$$ && o.$$.ptr) { o.delete(); } } catch (e) { /* skip */ }
+    }
   }
 
   /** Iterate over all the faces in this shape, calling `callback` on each one. */
@@ -43,8 +53,12 @@ class CascadeStudioMesher {
       self.oc.TopAbs_ShapeEnum.TopAbs_FACE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
     for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_FACE,
       self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-      callback(face_index++, self.oc.TopoDS_Cast.Face_1(anExplorer.Current()));
+      const cur = anExplorer.Current();
+      const face = self.oc.TopoDS_Cast.Face_1(cur);
+      callback(face_index++, face);
+      CascadeStudioMesher._del(face, cur);
     }
+    CascadeStudioMesher._del(anExplorer);
   }
 
   /** Iterate over all the UNIQUE indices and edges in this shape, calling `callback` on each one. */
@@ -55,13 +69,16 @@ class CascadeStudioMesher {
       self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
     for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE,
       self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-      let edge = self.oc.TopoDS_Cast.Edge_1(anExplorer.Current());
+      const cur = anExplorer.Current();
+      let edge = self.oc.TopoDS_Cast.Edge_1(cur);
       let edgeHash = self.oc.OCJS.HashCode(edge, 100000000);
       if (!edgeHashes.hasOwnProperty(edgeHash)) {
         edgeHashes[edgeHash] = edgeIndex;
         callback(edgeIndex++, edge);
       }
+      CascadeStudioMesher._del(edge, cur);
     }
+    CascadeStudioMesher._del(anExplorer);
     return edgeHashes;
   }
 
@@ -77,7 +94,15 @@ class CascadeStudioMesher {
     try {
       let oc = self.oc;
       // Set up the Incremental Mesh builder, with a precision
+      const _mark = (l) => {
+        try {
+          if (!self._csMemSamples) { self._csMemSamples = []; }
+          self._csMemSamples.push([l, self.ocMemory ? self.ocMemory.buffer.byteLength : 0]);
+        } catch (e) { /* diagnostics */ }
+      };
       let mesher = new oc.BRepMesh_IncrementalMesh_2(shape, maxDeviation, false, maxDeviation * 5, false);
+      _mark('mesh-tri-done');
+      const _del = CascadeStudioMesher._del;
 
       // Construct the edge hashes to assign proper indices to the edges
       let fullShapeEdgeHashes2 = {};
@@ -87,7 +112,9 @@ class CascadeStudioMesher {
       CascadeStudioMesher.forEachFace(shape, (faceIndex, myFace) => {
         let aLocation = new oc.TopLoc_Location_1();
         let myT = oc.BRep_Tool.Triangulation(myFace, aLocation, 0 /* Poly_MeshPurpose_NONE */);
-        if (myT.IsNull()) { console.error("Encountered Null Face!"); for (let k in self.argCache) delete self.argCache[k]; return; }
+        if (myT.IsNull()) { console.error("Encountered Null Face!"); for (let k in self.argCache) delete self.argCache[k]; _del(myT, aLocation); return; }
+        const T = myT.get();           // non-owning alias; freed via myT
+        const faceTrsf = aLocation.Transformation();
 
         let faceHash = self.oc.OCJS.HashCode(myFace, 100000000);
         let this_face = {
@@ -100,27 +127,30 @@ class CascadeStudioMesher {
           shape_index: shapeIndexOfFace(faceHash)
         };
 
-        let nbNodes = myT.get().NbNodes();
+        let nbNodes = T.NbNodes();
 
-        // Write vertex buffer
+        // Write vertex buffer (delete the two owned gp_Pnt copies per node)
         this_face.vertex_coord = new Array(nbNodes * 3);
         for (let i = 1; i <= nbNodes; i++) {
-          let p = myT.get().Node(i).Transformed(aLocation.Transformation());
+          let p0 = T.Node(i);
+          let p = p0.Transformed(faceTrsf);
           this_face.vertex_coord[((i - 1) * 3) + 0] = p.X();
           this_face.vertex_coord[((i - 1) * 3) + 1] = p.Y();
           this_face.vertex_coord[((i - 1) * 3) + 2] = p.Z();
+          _del(p0, p);
         }
 
         // Write UV buffer
         let orient = myFace.Orientation_1();
-        if (myT.get().HasUVNodes()) {
+        if (T.HasUVNodes()) {
           let UMin = 0, UMax = 0, VMin = 0, VMax = 0;
 
           let UVNodesLength = nbNodes;
           this_face.uv_coord = new Array(UVNodesLength * 2);
           for (let i = 0; i < UVNodesLength; i++) {
-            let p = myT.get().UVNode(i + 1);
+            let p = T.UVNode(i + 1);
             let x = p.X(), y = p.Y();
+            _del(p);
             this_face.uv_coord[(i * 2) + 0] = x;
             this_face.uv_coord[(i * 2) + 1] = y;
 
@@ -130,7 +160,8 @@ class CascadeStudioMesher {
           }
 
           // Compute the Arclengths of the Isoparametric Curves of the face
-          let surface = oc.BRep_Tool.Surface_2(myFace).get();
+          let surfHandle = oc.BRep_Tool.Surface_2(myFace);
+          let surface = surfHandle.get();
           let UIso_Handle = surface.UIso(UMin + ((UMax - UMin) * 0.5));
           let VIso_Handle = surface.VIso(VMin + ((VMax - VMin) * 0.5));
           let UAdaptor = new oc.GeomAdaptor_Curve_2(VIso_Handle);
@@ -140,6 +171,8 @@ class CascadeStudioMesher {
             h: CascadeStudioMesher.lengthOfCurve(VAdaptor, VMin, VMax),
             index: curFace
           });
+          // the iso curves are freshly built Geom_Curves: release them
+          _del(UAdaptor, VAdaptor, UIso_Handle, VIso_Handle, surfHandle);
 
           // Normalize each face's UVs to 0-1
           for (let i = 0; i < UVNodesLength; i++) {
@@ -156,22 +189,24 @@ class CascadeStudioMesher {
         }
 
         // Write normal buffer (OCCT 8.0: StdPrs_ToolTriangulatedShape.Normal was removed)
-        if (!myT.get().HasNormals()) { myT.get().ComputeNormals(); }
+        if (!T.HasNormals()) { T.ComputeNormals(); }
         let IsReversed = (orient !== oc.TopAbs_Orientation.TopAbs_FORWARD);
         let IsReversedFactor = IsReversed ? -1 : 1;
         this_face.normal_coord = new Array(nbNodes * 3);
         for (let i = 0; i < nbNodes; i++) {
-          let d = myT.get().Normal_1(i + 1).Transformed(aLocation.Transformation());
+          let d0 = T.Normal_1(i + 1);
+          let d = d0.Transformed(faceTrsf);
           this_face.normal_coord[(i * 3) + 0] = IsReversedFactor * d.X();
           this_face.normal_coord[(i * 3) + 1] = IsReversedFactor * d.Y();
           this_face.normal_coord[(i * 3) + 2] = IsReversedFactor * d.Z();
+          _del(d0, d);
         }
 
         // Write triangle buffer
-        let nbTriangles = myT.get().NbTriangles();
+        let nbTriangles = T.NbTriangles();
         this_face.tri_indexes = new Array(nbTriangles * 3);
         for (let nt = 1; nt <= nbTriangles; nt++) {
-          let t = myT.get().Triangle(nt);
+          let t = T.Triangle(nt);
           let n1 = t.Value(1);
           let n2 = t.Value(2);
           let n3 = t.Value(3);
@@ -183,6 +218,7 @@ class CascadeStudioMesher {
           this_face.tri_indexes[((nt - 1) * 3) + 0] = n1 - 1;
           this_face.tri_indexes[((nt - 1) * 3) + 1] = n2 - 1;
           this_face.tri_indexes[((nt - 1) * 3) + 2] = n3 - 1;
+          _del(t);
         }
         this_face.number_of_triangles = nbTriangles;
         facelist.push(this_face);
@@ -197,8 +233,9 @@ class CascadeStudioMesher {
               shape_index: shapeIndexOfEdge(edgeHash)
             };
 
+            let myP = null;
             try {
-              let myP = oc.BRep_Tool.PolygonOnTriangulation_1(myEdge, myT, aLocation);
+              myP = oc.BRep_Tool.PolygonOnTriangulation_1(myEdge, myT, aLocation);
               if (!myP.IsNull()) {
                 let edgeNodes = myP.get().Nodes();
 
@@ -209,6 +246,7 @@ class CascadeStudioMesher {
                   this_edge.vertex_coord[(j * 3) + 1] = this_face.vertex_coord[((vertexIndex - 1) * 3) + 1];
                   this_edge.vertex_coord[(j * 3) + 2] = this_face.vertex_coord[((vertexIndex - 1) * 3) + 2];
                 }
+                _del(edgeNodes);
               } else {
                 throw new Error("Null polygon on triangulation");
               }
@@ -224,8 +262,11 @@ class CascadeStudioMesher {
                 this_edge.vertex_coord[(j * 3) + 0] = vertex.X();
                 this_edge.vertex_coord[(j * 3) + 1] = vertex.Y();
                 this_edge.vertex_coord[(j * 3) + 2] = vertex.Z();
+                _del(vertex);
               }
+              _del(tangDef, adaptorCurve);
             }
+            _del(myP);
 
             this_edge.edge_index = fullShapeEdgeHashes[edgeHash];
             edgeList.push(this_edge);
@@ -234,6 +275,7 @@ class CascadeStudioMesher {
           }
         });
         triangulations.push(myT);
+        _del(faceTrsf, aLocation);
       });
 
       // Scale each face's UVs to Worldspace and pack them into a 0-1 Atlas with potpack
@@ -255,8 +297,26 @@ class CascadeStudioMesher {
         }
       }
 
-      // Nullify Triangulations between runs so they're not stored in the cache
-      for (let i = 0; i < triangulations.length; i++) { triangulations[i].Nullify(); }
+      _mark('mesh-faces-done');
+      // Release the triangulations now that the buffers are extracted.
+      // Nullify() only clears OUR handle copies — the TShapes keep theirs, so
+      // shapes retained across runs (argCache, user refs, the scene compound)
+      // used to pin ~100 MB of mesh data per heavy run, and REMESHING a
+      // still-triangulated shape leaks its old mesh (measured: six remeshes
+      // of one sphere ratcheted 286->697 MB without Clean, dead flat with
+      // it). BRepTools.Clean detaches the triangulation from the shape
+      // itself; the next evaluation or history scrub simply remeshes.
+      for (let i = 0; i < triangulations.length; i++) {
+        triangulations[i].Nullify();
+        _del(triangulations[i]);
+      }
+      triangulations.length = 0;
+      try {
+        (oc.BRepTools.Clean_1 || oc.BRepTools.Clean).call(oc.BRepTools, shape, false);
+      } catch (e) {
+        try { (oc.BRepTools.Clean_1 || oc.BRepTools.Clean).call(oc.BRepTools, shape); }
+        catch (e2) { /* keep going: Clean is an optimization */ }
+      }
 
       // Get the free edges that aren't on any triangulated face/surface
       CascadeStudioMesher.forEachEdge(shape, (index, myEdge) => {
@@ -279,13 +339,16 @@ class CascadeStudioMesher {
             this_edge.vertex_coord[(j * 3) + 0] = vertex.X();
             this_edge.vertex_coord[(j * 3) + 1] = vertex.Y();
             this_edge.vertex_coord[(j * 3) + 2] = vertex.Z();
+            _del(vertex);
           }
+          _del(tangDef, adaptorCurve);
 
           this_edge.edge_index = fullShapeEdgeHashes[edgeHash];
           fullShapeEdgeHashes2[edgeHash] = edgeHash;
           edgeList.push(this_edge);
         }
       });
+      _del(mesher);
 
     } catch (err) {
       setTimeout(() => {

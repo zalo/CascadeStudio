@@ -63,13 +63,65 @@ class CascadeStudioWorker {
       const mp = self._csMpInterpreter;
       if (mp && mp._module && mp._module.HEAPU8) { pythonWasm = mp._module.HEAPU8.length; }
     } catch (e) { /* no MicroPython in this session */ }
+    // Retention attribution (heavy-model memory work): what the worker's own
+    // bookkeeping currently pins, plus the OCP shim's embind-object ledger.
+    const history = self.modelHistory || [];
+    let historyShapePins = 0;
+    for (const step of history) {
+      historyShapePins += (step.shapes && step.shapes.length) || 0;
+    }
+    let ocpStats = null;
+    if (self._csOcpStats) {
+      const s = self._csOcpStats;
+      const top = Object.entries(s.byClass)
+        .sort((a, b) => b[1] - a[1]).slice(0, 25);
+      const aliveBy = {};
+      for (const k in s.byClass) {
+        const a = s.byClass[k] - (s.freedByClass ? (s.freedByClass[k] || 0) : 0);
+        if (a > 0) { aliveBy[k] = a; }
+      }
+      const topAlive = Object.entries(aliveBy)
+        .sort((a, b) => b[1] - a[1]).slice(0, 25);
+      const topErr = s.errBy ? Object.entries(s.errBy)
+        .sort((a, b) => b[1] - a[1]).slice(0, 12) : null;
+      ocpStats = { created: s.created, freed: s.freed,
+        alive: s.created - s.freed, errs: s.errs || 0, topErr,
+        topClasses: top, topAlive };
+    }
+    // Triangulation census of the retained compound (attribution: is mesh
+    // data still attached to live shapes?)
+    let meshRetention = null;
+    try {
+      if (self.currentShape && self.oc && self.currentShape.$$ && self.currentShape.$$.ptr) {
+        const oc = self.oc;
+        let faces = 0, withTri = 0, triNodes = 0;
+        const ex = new oc.TopExp_Explorer_2(self.currentShape,
+          oc.TopAbs_ShapeEnum.TopAbs_FACE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+        for (; ex.More(); ex.Next()) {
+          faces++;
+          const loc = new oc.TopLoc_Location_1();
+          const f = oc.TopoDS_Cast.Face_1(ex.Current());
+          const t = oc.BRep_Tool.Triangulation(f, loc, 0);
+          if (!t.IsNull()) { withTri++; triNodes += t.get().NbNodes(); }
+          try { t.delete(); f.delete(); loc.delete(); } catch (e) { /* skip */ }
+        }
+        ex.delete();
+        meshRetention = { faces, withTri, triNodes };
+      }
+    } catch (e) { /* attribution only */ }
     return {
+      meshRetention,
       pyRuntime: self._pythonRuntimeKind || null,
       jsHeapUsed: mem.usedJSHeapSize || 0,
       jsHeapTotal: mem.totalJSHeapSize || 0,
       occtWasm: self.ocMemory ? self.ocMemory.buffer.byteLength : 0,
       pythonWasm,
       bootTiming: self._pythonBootTiming || null,
+      argCacheCount: Object.keys(self.argCache || {}).length,
+      sceneShapesCount: (self.sceneShapes || []).length,
+      historySteps: history.length,
+      historyShapePins,
+      ocpStats,
     };
   }
 
@@ -316,6 +368,29 @@ class CascadeStudioWorker {
     self.opNumber = 0;
     self.GUIState = payload.GUIState;
     self.evalLanguage = payload.language || 'cascadestudio';
+    // Heavy-model memory flags (EditorManager resolves them from the URL /
+    // localStorage): lowMemory drops history shape refs + deletes pruned
+    // cache entries; ocpLifetime='leak' opts OUT of the deterministic
+    // embind frees (A/B measurement).
+    self._csLowMemory = !!payload.lowMemory;
+    if (payload.ocpLifetime) { self._csOcpLifetime = payload.ocpLifetime; }
+    // Reset the shim's free machinery for this evaluation: clears stale
+    // fuse-operand pins and reclaims everything the PREVIOUS run left
+    // freeable (its history was just replaced).
+    self.modelHistory = [];
+    // The previous run's meshed compound is dead weight now (a new one is
+    // built after this evaluation) — delete it so its BRep data can be
+    // reclaimed instead of stacking under this run's peak.
+    if (self.currentShape) {
+      try {
+        if (self.currentShape.$$ && self.currentShape.$$.ptr) {
+          self.currentShape.delete();
+          if (self._csOcpStats) { self._csOcpStats.freed++; }
+        }
+      } catch (e) { /* best effort */ }
+      self.currentShape = null;
+    }
+    if (self._csOcpEvalReset) { self._csOcpEvalReset(); }
 
     // Reset cache counters and modeling history for this evaluation
     this.standardLibrary.utils.cacheHits = 0;
@@ -381,12 +456,39 @@ class CascadeStudioWorker {
 
     postMessage({ type: "log", payload: "Cache: " + self.cacheHits + " hits, " + self.cacheMisses + " misses" });
     postMessage({ type: "resetWorking" });
-    // Clean cache; remove unused objects
+    // Clean cache; remove unused objects. In low-memory mode the pruned
+    // entries' kernel objects are DELETED (they are provably from previous
+    // evaluations: unused this run, and the previous run's scene/history are
+    // gone) — freed wasm is reused within the arena, so iterative editing
+    // stops ratcheting. Skipped for shim-retained objects (`_csPy` > 0:
+    // a live Python proxy still owns them; the __del__ path frees those).
     let usedHashes = this.standardLibrary.utils.usedHashes;
     for (let hash in self.argCache) {
-      if (!usedHashes.hasOwnProperty(hash)) { delete self.argCache[hash]; }
+      if (!usedHashes.hasOwnProperty(hash)) {
+        if (self._csLowMemory) {
+          CascadeStudioWorker._deleteEmbindTree(self.argCache[hash]);
+        }
+        delete self.argCache[hash];
+      }
     }
     for (let key in usedHashes) { delete usedHashes[key]; }
+    // End-of-evaluation safe point for the shim's queued frees.
+    if (self._csOcpFlushFrees) { self._csOcpFlushFrees(); }
+    CascadeStudioWorker._memMark('eval-end');
+  }
+
+  /** Best-effort .delete() of an embind object (or array of them) that the
+   *  worker provably no longer references. Objects still retained by a live
+   *  Python proxy (`_csPy` > 0) are left to the shim's __del__ path. */
+  static _deleteEmbindTree(v) {
+    try {
+      if (!v || typeof v !== 'object') { return; }
+      if (Array.isArray(v)) { for (const x of v) { CascadeStudioWorker._deleteEmbindTree(x); } return; }
+      if (v.$$ === undefined || !v.$$.ptr) { return; }
+      if (v._csPy > 0) { return; }
+      v.delete();
+      if (self._csOcpStats) { self._csOcpStats.freed++; }
+    } catch (e) { /* best effort */ }
   }
 
   /** Accumulate all shapes in `sceneShapes` into a compound, triangulate
@@ -403,8 +505,33 @@ class CascadeStudioWorker {
   }
 
   /** Synchronous meshing of the accumulated sceneShapes. */
+  /** Labeled wasm-heap sample into the attribution buffer (see OcpShim).
+   *  With self._csMemFreeProbe set, also counts FREE arena space by
+   *  allocating 1-MB blocks until the memory grows (diagnostic only). */
+  static _memMark(label) {
+    try {
+      if (!self._csMemSamples) { self._csMemSamples = []; }
+      let freeMB = -1;
+      if (self._csMemFreeProbe && self.oc && self.ocMemory) {
+        const oc = self.oc;
+        const base = self.ocMemory.buffer.byteLength;
+        const held = [];
+        freeMB = 0;
+        for (let i = 0; i < 4000; i++) {
+          const a = new oc.TColStd_Array1OfReal_2(1, 131072);
+          if (self.ocMemory.buffer.byteLength > base) { a.delete(); break; }
+          held.push(a); freeMB++;
+        }
+        for (const a of held) { try { a.delete(); } catch (e) { /* skip */ } }
+      }
+      self._csMemSamples.push([label,
+        self.ocMemory ? self.ocMemory.buffer.byteLength : 0, freeMB]);
+    } catch (e) { /* diagnostics only */ }
+  }
+
   _combineAndRenderShapes(payload) {
     let oc = self.oc;
+    CascadeStudioWorker._memMark('mesh-start');
     // Initialize currentShape as an empty Compound Solid
     self.currentShape = new oc.TopoDS_Compound();
     let sceneBuilder = new oc.BRep_Builder();
@@ -453,6 +580,8 @@ class CascadeStudioWorker {
       let facesAndEdges = self.ShapeToMesh(self.currentShape,
         payload.maxDeviation || 0.1, fullShapeEdgeHashes, fullShapeFaceHashes,
         faceHashToShapeIndex, edgeHashToShapeIndex);
+      CascadeStudioWorker._memMark('mesh-end');
+      try { sceneBuilder.delete(); } catch (e) { /* best effort */ }
       self.sceneShapes = [];
       postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
       return [facesAndEdges, payload.sceneOptions, shapeLines];
@@ -466,6 +595,12 @@ class CascadeStudioWorker {
    *  Called on-demand when the user scrubs the timeline. */
   meshHistoryStep(payload) {
     let step = self.modelHistory[payload.stepIndex];
+    if (step && step.shapeCount > 0 && step.shapes.length === 0) {
+      console.log("History step " + payload.stepIndex + " has no retained " +
+        "shapes: low-memory mode keeps step metadata only. Re-run without " +
+        "?lowmem=1 to scrub the timeline.");
+      return null;
+    }
     if (!step || step.shapes.length === 0) return null;
 
     let oc = self.oc;
@@ -486,6 +621,7 @@ class CascadeStudioWorker {
     }
 
     let facesAndEdges = self.ShapeToMesh(compound, payload.maxDeviation || 0.1, edgeHashes, faceHashes);
+    try { compound.delete(); builder.delete(); } catch (e) { /* best effort */ }
     return facesAndEdges;
   }
 }

@@ -254,6 +254,13 @@ _NEW_V = js._csOcpNewV
 _CALL_V = js._csOcpCallVar
 _STATIC_V = js._csOcpStaticV
 
+# Deterministic embind lifetime (heavy-model memory): every embind object the
+# shim returns is retained JS-side (`_csPy`); the proxy's __del__ balances it,
+# and OcpShim.js deletes unreachable objects at op boundaries. CPython
+# refcounting makes this prompt — intermediates free DURING the evaluation,
+# which is what lowers the OCCT wasm high-water mark.
+_FREE = getattr(js, '_csOcpFree', None)
+
 
 def _conv_fast(args):
     """Fast-path conversion: scalars/JsProxy/proxies individually; returns
@@ -310,6 +317,11 @@ class _BoundMethod:
             new_raw = js._csOcpItem(arr, k + 1)
             target = args[i]
             if isinstance(target, OcpProxy):
+                if _FREE is not None:
+                    try:
+                        _FREE(target._ref)  # rebind: balance the old ref
+                    except Exception:
+                        pass
                 target._ref = new_raw
         return wrap(js._csOcpItem(arr, 0))
 
@@ -334,6 +346,18 @@ class OcpProxy:
                                      _unwrap_kw(kwargs))
         except JsException as e:
             _fail(_errmsg(e), self._cs)
+
+    def __del__(self):
+        # Balance the shim's retain: when the LAST Python reference to this
+        # proxy dies, the underlying embind object becomes freeable (queued;
+        # OcpShim.js deletes it at the next op boundary unless the worker
+        # still reaches it through the scene/history/cache). Objects that
+        # never came through the shim (`_csPy` unset) are left alone.
+        if _FREE is not None:
+            try:
+                _FREE(self._ref)
+            except Exception:
+                pass
 
     def __getattr__(self, name):
         # OCCT methods never start with '_'; refusing them keeps _ref lookups

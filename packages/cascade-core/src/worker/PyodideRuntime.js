@@ -255,6 +255,13 @@ def run_user(source):
     # runtimes so the scripts take the same branch.
     module.__file__ = 'cascade-worker.js#main'
     sys.modules[_USER_MODULE] = module
+    # The PREVIOUS run's module just became unreachable — collect its cycles
+    # NOW (build123d builders are cyclic, so plain refcounting won't free
+    # them) so the OCP proxies' __del__ fires and the kernel objects are
+    # reclaimed BEFORE this run allocates on top of them. reset_state's
+    # collect is too early for this: the old module is still in sys.modules.
+    import gc
+    gc.collect()
     try:
         code = compile(source, '<main>', 'exec')
     except BaseException as exc:
@@ -282,6 +289,10 @@ def reset_state():
         build123d._reset_state()
     except Exception:
         pass
+    # Break reference cycles from the previous run so their OCP proxies'
+    # __del__ fires (the shim frees the kernel objects at op boundaries).
+    import gc
+    gc.collect()
 `;
 
 async function _bootstrap(srcKind) {

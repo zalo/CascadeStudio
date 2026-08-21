@@ -61,6 +61,33 @@ export function resolvePyTopo() {
   return 'upstream';
 }
 
+/** Low-memory evaluation mode: `?lowmem=1` (or localStorage
+ *  ['cascade-low-memory'] = '1'). The worker keeps modeling-history METADATA
+ *  but drops the per-step shape refs (timeline scrubbing degrades with a
+ *  console note) and deletes pruned argCache entries' kernel objects, so
+ *  heavy models and iterative editing stop ratcheting wasm memory. */
+export function resolveLowMemory() {
+  try {
+    const fromURL = new URLSearchParams(window.location.search).get('lowmem');
+    if (fromURL !== null) { return fromURL === '1' || fromURL === 'true'; }
+    return window.localStorage.getItem('cascade-low-memory') === '1';
+  } catch (e) { return false; }
+}
+
+/** OCP-shim embind lifetime: 'free' (default — deterministic .delete() of
+ *  kernel objects whose Python proxies died) or 'leak' (`?ocplt=leak`, the
+ *  pre-round behavior, kept for A/B measurement). */
+export function resolveOcpLifetime() {
+  const KNOWN = ['free', 'leak'];
+  try {
+    const fromURL = new URLSearchParams(window.location.search).get('ocplt');
+    if (fromURL && KNOWN.includes(fromURL)) { return fromURL; }
+    const stored = window.localStorage.getItem('cascade-ocp-lifetime');
+    if (KNOWN.includes(stored)) { return stored; }
+  } catch (e) { /* fall through */ }
+  return 'free';
+}
+
 /** Manages the Monaco code editor instance, mode switching, and code evaluation. */
 class EditorManager {
   constructor(app) {
@@ -259,6 +286,8 @@ class EditorManager {
       pyRuntime: this.mode === 'python' ? resolvePyRuntime() : undefined,
       pySrc: this.mode === 'python' ? resolvePySrc() : undefined,
       pyTopo: this.mode === 'python' ? resolvePyTopo() : undefined,
+      lowMemory: resolveLowMemory(),
+      ocpLifetime: this.mode === 'python' ? resolveOcpLifetime() : undefined,
     }).then((result) => {
       if (this._app.viewport && result.meshData) {
         this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);

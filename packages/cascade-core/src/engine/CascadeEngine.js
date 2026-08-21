@@ -63,7 +63,7 @@ class CascadeEngine {
    *  ('brython' default | 'pyodide') picks the Python interpreter for that
    *  path — see PyodideRuntime.js.
    *  Returns: { meshData: { faces, edges }, sceneOptions, logs, errors } */
-  async evaluate(code, { guiState = {}, maxDeviation, sceneOptions, language, pyRuntime, pySrc, pyTopo } = {}) {
+  async evaluate(code, { guiState = {}, maxDeviation, sceneOptions, language, pyRuntime, pySrc, pyTopo, lowMemory, ocpLifetime } = {}) {
     if (!this._ready) throw new Error('CascadeEngine not initialized. Call init() first.');
 
     this._working = true;
@@ -75,7 +75,9 @@ class CascadeEngine {
       language,
       pyRuntime,
       pySrc,
-      pyTopo
+      pyTopo,
+      lowMemory,
+      ocpLifetime
     });
 
     // Request meshing — this returns a Promise that resolves with [facesAndEdges, sceneOptions]

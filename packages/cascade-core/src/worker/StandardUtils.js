@@ -116,6 +116,9 @@ class CascadeStudioUtils {
    *  Python user line) without the cache. */
   recordExternalOp(fnName) {
     this.flushHistoryStep();
+    // Op boundary: safe point to delete embind objects whose Python proxies
+    // died (see OcpShim.js "deterministic embind lifetime").
+    if (self._csOcpFlushFrees) { self._csOcpFlushFrees(); }
     this.currentOp = fnName;
     self.currentOp = fnName;
     this.currentLineNumber =
@@ -135,10 +138,15 @@ class CascadeStudioUtils {
    *  Metadata (volume, surfaceArea) is deferred to avoid O(n²) cost during eval. */
   flushHistoryStep() {
     if (this._pendingHistoryOp) {
+      // Low-memory mode keeps the step METADATA but drops the shape refs:
+      // a heavy run's history otherwise pins O(steps x scene) shape wrappers
+      // (heat_exchanger: 1049 steps pinning 107k refs), which blocks the
+      // deterministic embind frees. screenshotHistoryStep degrades
+      // gracefully (meshHistoryStep returns null with a console note).
       this.modelHistory.push({
         fnName: this._pendingHistoryOp.fnName,
         lineNumber: this._pendingHistoryOp.lineNumber,
-        shapes: [...self.sceneShapes],
+        shapes: self._csLowMemory ? [] : [...self.sceneShapes],
         shapeCount: self.sceneShapes.length,
       });
       self.modelHistory = this.modelHistory;
