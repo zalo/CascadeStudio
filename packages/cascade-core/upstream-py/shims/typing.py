@@ -1,8 +1,17 @@
 # Functional `typing` shim for running UPSTREAM build123d source on
-# MicroPython (which has no typing module and no metaclasses).
-# Everything subscriptable returns itself; Generic[...] resolves to a plain
+# MicroPython (which has no typing module).
+# Everything subscriptable returns itself; Generic[...] resolves to a
 # subclassable base. Replaces lite's minimal typing shim in sys.modules
 # AFTER lite has imported (one shared module instance otherwise).
+#
+# When the interpreter supports custom metaclasses (the custom
+# micropython-cs build), Generic is a REAL class whose metaclass __getitem__
+# returns the class itself: `class Builder(ABC, Generic[T])` then works
+# unmodified, subclasses INHERIT the metaclass, and `class B(Builder[Part])`
+# is legal Python at runtime — which is what lets the upstream-b123d loader
+# retire its class-base-subscript transform. On the stock artifacts Generic
+# falls back to the old subscript-to-`object` stand-in (and the loader keeps
+# the transform).
 TYPE_CHECKING = False
 
 
@@ -29,7 +38,27 @@ class _SubBase:
         return object
 
 
-Generic = _SubBase('Generic')
+def _cs_probe_metaclasses():
+    class _M(type):
+        pass
+    try:
+        exec("class _C(metaclass=_M):\n    pass", {'_M': _M})
+        return True
+    except TypeError:
+        return False
+
+
+if _cs_probe_metaclasses():
+    class _GenericMeta(type):
+        # class subscription: Generic[T] (and Subclass[T]) -> the class
+        def __getitem__(cls, item):
+            return cls
+
+    class Generic(metaclass=_GenericMeta):
+        pass
+else:
+    Generic = _SubBase('Generic')
+
 Protocol = object
 
 

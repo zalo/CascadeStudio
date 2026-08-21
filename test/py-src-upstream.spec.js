@@ -66,6 +66,53 @@ test('pysrc=upstream runs upstream BuildLine/BuildPart over lite\'s seam', async
     .toBe('POC2 125.0 (-2.5, -2.5, -2.5) (2.5, 2.5, 2.5)');
 });
 
+test('custom artifacts run upstream source with NATIVE metaclasses (enum/Generic)', async ({ page }) => {
+  // The vendored micropython-cs interpreter supports custom metaclasses; the
+  // upstream loader must detect that and take the native path: a metaclass
+  // EnumMeta (class iteration / Cls[name] / Cls(value) / no _finalize_enums)
+  // and a Generic whose metaclass __getitem__ legalizes class-base
+  // subscription (`class BuildPart(Builder[Part])` runs untransformed).
+  // On the stock settrace artifacts everything falls back to the old
+  // transform + post-import-finalize paths (proven manually by hiding the
+  // custom pair; this spec covers the committed normal state).
+  const browserLogs = [];
+  page.on('console', (m) => browserLogs.push(m.text()));
+  await gotoAndReady(page, '?pyruntime=micropython&pysrc=upstream');
+  test.skip(!(await upstreamAvailable(page)),
+    'vendor/build123d-0.11.1 not fetched — pysrc=upstream disabled');
+  const bootLine = browserLogs
+    .find((l) => l.indexOf('[pyruntime] micropython boot') === 0) || '';
+  test.skip(bootLine.indexOf('"artifact":"custom"') === -1,
+    'stock settrace artifacts booted — no interpreter metaclasses to freeze');
+
+  const registeredLine = browserLogs
+    .find((l) => l.indexOf('[pysrc=upstream] upstream build123d Level-A registered') === 0) || '';
+  expect(registeredLine).toContain('metaclasses: native enum/Generic');
+
+  const r = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
+    'from build123d import *',
+    'import enum as _e',
+    'import build123d.build_common as _bc',
+    'from build123d.build_part import BuildPart as _BP',
+    'print("METACHECK",',
+    '      _e._HAS_METACLASSES,',                        // capability probe
+    '      isinstance(Align.MIN, Align),',               // members ARE instances
+    '      [m.name for m in Align],',                    // class iteration
+    '      Align["CENTER"] is Align.CENTER,',            // Cls[name]
+    '      Mode(Mode.SUBTRACT.value) is Mode.SUBTRACT,', // Cls(value)
+    '      type(_bc.Builder).__name__,',                 // Generic metaclass
+    '      _bc.Builder[int] is _bc.Builder,',            // class subscription
+    '      _BP.__bases__[0] is _bc.Builder)',            // Builder[Part] base
+  ].join('\n'));
+  expect(r.errors).toEqual([]);
+  await page.waitForFunction(
+    () => window.CascadeAPI.getConsoleLog().some((l) => l.startsWith('METACHECK')),
+    { timeout: 90000 });
+  const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
+  expect(logs.find((l) => l.startsWith('METACHECK'))).toBe(
+    "METACHECK True True ['CENTER', 'MAX', 'MIN'] True True _GenericMeta True True");
+});
+
 test('micropython defaults to upstream source; pysrc=lite opts back into lite', async ({ page }) => {
   // The no-flag MicroPython default is the UPSTREAM source layer (when the
   // vendored payload is available — it is committed, so this is the normal
