@@ -198,6 +198,18 @@ for (const cls of closure) {
 // --------------------------------------------------------------------- //
 // 4. Emit table.json (JS dispatcher data)                                //
 // --------------------------------------------------------------------- //
+// pybind param → table param. The dump now carries EXPLICIT default
+// encodings (default_lit / default_enum / default_ctor0 — see
+// dump_ocp_defaults.py); the raw repr string is not shipped.
+const mapPyParam = (p) => ({
+  name: p.name || null,
+  type: p.type || null,
+  dflt_lit: p.default_lit !== undefined ? p.default_lit : undefined,
+  dflt_enum: p.default_enum || undefined,
+  dflt_ctor0: p.default_ctor0 || undefined,
+  has_dflt: p.default !== undefined ? true : undefined,
+});
+
 const table = { classes: {}, enums: {}, handleClasses: [] };
 for (const cls of [...closure].sort()) {
   const d = dts[cls];
@@ -217,12 +229,7 @@ for (const cls of [...closure].sort()) {
       variants,
       static: variants.every((v) => v.static),
       pybind: pysig ? pysig.sigs.map((s) => ({
-        params: s.params.map((p) => ({
-          name: p.name || null,
-          type: p.type || null,
-          dflt: p.default !== undefined ? p.default : undefined,
-          dflt_enum: p.default_enum || undefined,
-        })),
+        params: s.params.map(mapPyParam),
       })) : null,
       tuple_ret: pysig ? pysig.tuple_ret : false,
     };
@@ -231,12 +238,7 @@ for (const cls of [...closure].sort()) {
     parent: d.parent || null,
     ctors: d.ctors,
     pyctor: pd.ctor ? pd.ctor.map((s) => ({
-      params: s.params.map((p) => ({
-        name: p.name || null,
-        type: p.type || null,
-        dflt: p.default !== undefined ? p.default : undefined,
-        dflt_enum: p.default_enum || undefined,
-      })),
+      params: s.params.map(mapPyParam),
     })) : null,
     methods,
   };

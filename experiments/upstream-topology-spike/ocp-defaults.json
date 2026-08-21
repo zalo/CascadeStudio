@@ -2059,7 +2059,26 @@
 }
 },
 "BOPAlgo_Algo": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "AddError": {
 "static": false,
@@ -2253,7 +2272,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df060f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d2c870>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -2841,7 +2861,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dd6e570>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c13cf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -2862,7 +2883,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dfa6870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5374a70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -3062,7 +3084,26 @@
 }
 },
 "BOPAlgo_BuilderShape": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "AddError": {
 "static": false,
@@ -3359,7 +3400,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df060f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d2c870>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -4296,7 +4338,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48de3dbb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f611f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -4317,7 +4360,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dfa6870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5374a70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -5050,7 +5094,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dd6e570>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c13cf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -5071,7 +5116,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dfa6870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5374a70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -5313,7 +5359,8 @@
 {
 "name": "KnotByCurvilinearAbcissa",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -6747,7 +6794,8 @@
 {
 "name": "R",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -7153,7 +7201,8 @@
 {
 "name": "Restriction",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -7748,7 +7797,8 @@
 {
 "name": "AngularTolerance",
 "type": "float",
-"default": "0.0001"
+"default": "0.0001",
+"default_lit": 0.0001
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Wire",
@@ -7843,12 +7893,14 @@
 {
 "name": "closedSolid",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "GeomCtrl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -7860,7 +7912,26 @@
 }
 },
 "BRepAlgoAPI_Algo": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Build": {
 "static": false,
@@ -7870,7 +7941,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -8070,7 +8142,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48db5fbb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a9fdf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -8493,17 +8566,20 @@
 {
 "name": "theUnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theUnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAngularTol",
 "type": "float",
-"default": "1e-12"
+"default": "1e-12",
+"default_lit": 1e-12
 }
 ],
 "ret": "None",
@@ -8563,7 +8639,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dbd4eb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ad58f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -8921,17 +8998,20 @@
 {
 "name": "theUnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theUnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAngularTol",
 "type": "float",
-"default": "1e-12"
+"default": "1e-12",
+"default_lit": 1e-12
 }
 ],
 "ret": "None",
@@ -8972,7 +9052,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48db89e30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e999b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -8995,7 +9076,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dc0ecf0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ca5bb0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -9022,7 +9104,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48db5fbb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a9fdf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -9445,17 +9528,20 @@
 {
 "name": "theUnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theUnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAngularTol",
 "type": "float",
-"default": "1e-12"
+"default": "1e-12",
+"default_lit": 1e-12
 }
 ],
 "ret": "None",
@@ -9507,7 +9593,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dc4a2b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4affcb0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -9530,12 +9617,14 @@
 {
 "name": "bFWD",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dbd48f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b48f6d70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -9562,7 +9651,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48db5fbb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a9fdf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -9985,17 +10075,20 @@
 {
 "name": "theUnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theUnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAngularTol",
 "type": "float",
-"default": "1e-12"
+"default": "1e-12",
+"default_lit": 1e-12
 }
 ],
 "ret": "None",
@@ -10047,7 +10140,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dd24ff0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d4d8b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -10070,7 +10164,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48da462b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ad5ab0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -10097,7 +10192,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48db5fbb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a9fdf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -10520,17 +10616,20 @@
 {
 "name": "theUnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theUnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAngularTol",
 "type": "float",
-"default": "1e-12"
+"default": "1e-12",
+"default_lit": 1e-12
 }
 ],
 "ret": "None",
@@ -10582,7 +10681,8 @@
 {
 "name": "PerformNow",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -10605,7 +10705,8 @@
 {
 "name": "PerformNow",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -10624,7 +10725,8 @@
 {
 "name": "PerformNow",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -10643,7 +10745,8 @@
 {
 "name": "PerformNow",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -10662,7 +10765,8 @@
 {
 "name": "PerformNow",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -10681,7 +10785,8 @@
 {
 "name": "PerformNow",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -10724,7 +10829,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dfa7330>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a287f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -11291,17 +11397,20 @@
 {
 "name": "theUnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theUnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAngularTol",
 "type": "float",
-"default": "1e-12"
+"default": "1e-12",
+"default_lit": 1e-12
 }
 ],
 "ret": "None",
@@ -11361,7 +11470,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48da995b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b50fc930>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -11735,17 +11845,20 @@
 {
 "name": "theUnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theUnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAngularTol",
 "type": "float",
-"default": "1e-12"
+"default": "1e-12",
+"default_lit": 1e-12
 }
 ],
 "ret": "None",
@@ -11812,17 +11925,20 @@
 {
 "name": "theIsTriangulationUsed",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theIsOptimal",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theIsShapeToleranceUsed",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -11847,12 +11963,14 @@
 {
 "name": "useTriangulation",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "useShapeTolerance",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -11877,7 +11995,8 @@
 {
 "name": "useTriangulation",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -11889,7 +12008,26 @@
 }
 },
 "BRepBuilderAPI_Command": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Check": {
 "static": false,
@@ -11931,12 +12069,14 @@
 {
 "name": "copyGeom",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "copyMesh",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -11952,7 +12092,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -12059,12 +12200,14 @@
 {
 "name": "copyGeom",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "copyMesh",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -12141,7 +12284,8 @@
 {
 "name": "Copy",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -12157,7 +12301,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -12264,7 +12409,8 @@
 {
 "name": "Copy",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -12907,7 +13053,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -13555,7 +13702,8 @@
 {
 "name": "OnlyPlane",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -13574,7 +13722,8 @@
 {
 "name": "Inside",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -13593,7 +13742,8 @@
 {
 "name": "Inside",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -13612,7 +13762,8 @@
 {
 "name": "Inside",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -13631,7 +13782,8 @@
 {
 "name": "Inside",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -13650,7 +13802,8 @@
 {
 "name": "Inside",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -13669,7 +13822,8 @@
 {
 "name": "Inside",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -13715,7 +13869,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -13931,7 +14086,8 @@
 {
 "name": "Close",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -13958,7 +14114,8 @@
 {
 "name": "Close",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -13995,7 +14152,8 @@
 {
 "name": "Close",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -14022,7 +14180,8 @@
 {
 "name": "Close",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -14075,7 +14234,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -14223,7 +14383,26 @@
 }
 },
 "BRepBuilderAPI_MakeShape": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Build": {
 "static": false,
@@ -14233,7 +14412,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -14434,7 +14614,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -14559,7 +14740,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -14803,7 +14985,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -14940,7 +15123,26 @@
 }
 },
 "BRepBuilderAPI_ModifyShape": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Build": {
 "static": false,
@@ -14950,7 +15152,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -15110,27 +15313,32 @@
 {
 "name": "tolerance",
 "type": "float",
-"default": "1e-06"
+"default": "1e-06",
+"default_lit": 1e-06
 },
 {
 "name": "option1",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "option2",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "option3",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "option4",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -15351,27 +15559,32 @@
 {
 "name": "tolerance",
 "type": "float",
-"default": "1e-06"
+"default": "1e-06",
+"default_lit": 1e-06
 },
 {
 "name": "option1",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "option2",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "option3",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "option4",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -15687,7 +15900,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e7718f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5506c70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -16002,7 +16216,8 @@
 {
 "name": "index",
 "type": "int",
-"default": "1"
+"default": "1",
+"default_lit": 1
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Face",
@@ -16060,12 +16275,14 @@
 {
 "name": "theCopyGeom",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theCopyMesh",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -16081,7 +16298,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -16188,12 +16406,14 @@
 {
 "name": "theCopyGeom",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theCopyMesh",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -16241,17 +16461,20 @@
 {
 "name": "GeomControls",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theIsParallel",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theIsExact",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -16271,7 +16494,8 @@
 {
 "name": "GeomControls",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -16676,7 +16900,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e3a00f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b57d2270>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -16719,7 +16944,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e7285f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b554e070>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -16891,7 +17117,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e4a9d30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b554e7f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "bool",
@@ -17089,7 +17316,26 @@
 "methods": {}
 },
 "BRepFeat_Form": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "BarycCurve": {
 "static": false,
@@ -17126,7 +17372,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -17495,7 +17742,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -18075,7 +18323,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df05bb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ad5f30>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -18376,7 +18625,26 @@
 }
 },
 "BRepFilletAPI_LocalOperation": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Abscissa": {
 "static": false,
@@ -18422,7 +18690,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -18894,7 +19163,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48ded1ff0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f12030>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -19586,7 +19856,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e354030>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5275af0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -20537,7 +20808,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df06d30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b55a1430>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -20975,12 +21247,14 @@
 {
 "name": "SkipShared",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "UseTriangulation",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -21005,12 +21279,14 @@
 {
 "name": "SkipShared",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "UseTriangulation",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -21033,7 +21309,8 @@
 {
 "name": "SkipShared",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "float",
@@ -21058,32 +21335,38 @@
 {
 "name": "Eps",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 },
 {
 "name": "OnlyClosed",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "IsUseSpan",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "CGFlag",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "IFlag",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SkipShared",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "float",
@@ -21106,32 +21389,38 @@
 {
 "name": "Eps",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 },
 {
 "name": "OnlyClosed",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "IsUseSpan",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "CGFlag",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "IFlag",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SkipShared",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "float",
@@ -21156,17 +21445,20 @@
 {
 "name": "OnlyClosed",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SkipShared",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "UseTriangulation",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -21189,12 +21481,14 @@
 {
 "name": "OnlyClosed",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SkipShared",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "float",
@@ -21212,7 +21506,8 @@
 {
 "name": "IsUseSpan",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -21227,7 +21522,8 @@
 {
 "name": "IsUseSpan",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -21945,7 +22241,8 @@
 {
 "name": "Tolerance",
 "type": "float",
-"default": "1e-05"
+"default": "1e-05",
+"default_lit": 1e-05
 },
 {
 "name": "Continuity",
@@ -21960,12 +22257,14 @@
 {
 "name": "MaxDegree",
 "type": "int",
-"default": "14"
+"default": "14",
+"default_lit": 14
 },
 {
 "name": "MaxSegment",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -22000,12 +22299,14 @@
 {
 "name": "MaxDegree",
 "type": "int",
-"default": "14"
+"default": "14",
+"default_lit": 14
 },
 {
 "name": "MaxSegment",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -22074,7 +22375,8 @@
 {
 "name": "Confusion",
 "type": "float",
-"default": "1e-12"
+"default": "1e-12",
+"default_lit": 1e-12
 }
 ],
 "ret": "bool",
@@ -22123,7 +22425,8 @@
 {
 "name": "TolAng",
 "type": "float",
-"default": "1e-10"
+"default": "1e-10",
+"default_lit": 1e-10
 }
 ],
 "ret": "None",
@@ -22142,7 +22445,8 @@
 {
 "name": "TolAng",
 "type": "float",
-"default": "1e-10"
+"default": "1e-10",
+"default_lit": 1e-10
 }
 ],
 "ret": "None",
@@ -22165,7 +22469,8 @@
 {
 "name": "TolAng",
 "type": "float",
-"default": "1e-10"
+"default": "1e-10",
+"default_lit": 1e-10
 }
 ],
 "ret": "None",
@@ -22186,12 +22491,14 @@
 {
 "name": "theAngTol",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 },
 {
 "name": "ForceComputeNormals",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -22400,7 +22707,8 @@
 {
 "name": "Tolerance",
 "type": "float",
-"default": "1e-05"
+"default": "1e-05",
+"default_lit": 1e-05
 }
 ],
 "ret": "None",
@@ -22437,12 +22745,14 @@
 {
 "name": "Tolerance",
 "type": "float",
-"default": "1e-05"
+"default": "1e-05",
+"default_lit": 1e-05
 },
 {
 "name": "forced",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -22461,12 +22771,14 @@
 {
 "name": "Tolerance",
 "type": "float",
-"default": "1e-05"
+"default": "1e-05",
+"default_lit": 1e-05
 },
 {
 "name": "forced",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -22487,7 +22799,8 @@
 {
 "name": "Tolerance",
 "type": "float",
-"default": "1e-05"
+"default": "1e-05",
+"default_lit": 1e-05
 }
 ],
 "ret": "None",
@@ -22608,7 +22921,8 @@
 {
 "name": "verifyFaceTolerance",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -22627,7 +22941,8 @@
 {
 "name": "verifyFaceTolerance",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -22654,17 +22969,20 @@
 {
 "name": "Tol",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 },
 {
 "name": "OnlyPlane",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "OnlyClosed",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -22706,17 +23024,20 @@
 {
 "name": "Tol",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 },
 {
 "name": "OnlyPlane",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "OnlyClosed",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -22772,7 +23093,26 @@
 }
 },
 "BRepMesh_DiscretRoot": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "DecrementRefCounter": {
 "static": false,
@@ -22900,7 +23240,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e09ed30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5391570>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -22991,17 +23332,20 @@
 {
 "name": "isRelative",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theAngDeflection",
 "type": "float",
-"default": "0.5"
+"default": "0.5",
+"default_lit": 0.5
 },
 {
 "name": "isInParallel",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -23020,7 +23364,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48de3ec30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c31470>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -23209,7 +23554,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dd270b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5772cb0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -23224,7 +23570,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dfa6a70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b557bcf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -23354,7 +23701,8 @@
 {
 "name": "Flag",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -23382,7 +23730,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dd03fb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8f970>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -23600,52 +23949,62 @@
 {
 "name": "Degree",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "NbPtsOnCur",
 "type": "int",
-"default": "15"
+"default": "15",
+"default_lit": 15
 },
 {
 "name": "NbIter",
 "type": "int",
-"default": "2"
+"default": "2",
+"default_lit": 2
 },
 {
 "name": "Anisotropie",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "Tol2d",
 "type": "float",
-"default": "1e-05"
+"default": "1e-05",
+"default_lit": 1e-05
 },
 {
 "name": "Tol3d",
 "type": "float",
-"default": "0.0001"
+"default": "0.0001",
+"default_lit": 0.0001
 },
 {
 "name": "TolAng",
 "type": "float",
-"default": "0.01"
+"default": "0.01",
+"default_lit": 0.01
 },
 {
 "name": "TolCurv",
 "type": "float",
-"default": "0.1"
+"default": "0.1",
+"default_lit": 0.1
 },
 {
 "name": "MaxDeg",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "MaxSegments",
 "type": "int",
-"default": "9"
+"default": "9",
+"default_lit": 9
 }
 ],
 "ret": "None",
@@ -23669,7 +24028,8 @@
 {
 "name": "IsBound",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "int",
@@ -23692,7 +24052,8 @@
 {
 "name": "IsBound",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "int",
@@ -23755,7 +24116,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df05330>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5377570>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -23921,12 +24283,14 @@
 {
 "name": "MaxDeg",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "MaxSegments",
 "type": "int",
-"default": "9"
+"default": "9",
+"default_lit": 9
 }
 ],
 "ret": "None",
@@ -23943,22 +24307,26 @@
 {
 "name": "Tol2d",
 "type": "float",
-"default": "1e-05"
+"default": "1e-05",
+"default_lit": 1e-05
 },
 {
 "name": "Tol3d",
 "type": "float",
-"default": "0.0001"
+"default": "0.0001",
+"default_lit": 0.0001
 },
 {
 "name": "TolAng",
 "type": "float",
-"default": "0.01"
+"default": "0.01",
+"default_lit": 0.01
 },
 {
 "name": "TolCurv",
 "type": "float",
-"default": "0.1"
+"default": "0.1",
+"default_lit": 0.1
 }
 ],
 "ret": "None",
@@ -23975,22 +24343,26 @@
 {
 "name": "Degree",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "NbPtsOnCur",
 "type": "int",
-"default": "15"
+"default": "15",
+"default_lit": 15
 },
 {
 "name": "NbIter",
 "type": "int",
-"default": "2"
+"default": "2",
+"default_lit": 2
 },
 {
 "name": "Anisotropie",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -24038,7 +24410,8 @@
 {
 "name": "IsOpenResult",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -24063,7 +24436,8 @@
 {
 "name": "IsOpenResult",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -24095,7 +24469,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e09ca70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5117430>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -24173,7 +24548,8 @@
 {
 "name": "IsOpenResult",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -24194,7 +24570,8 @@
 {
 "name": "IsOpenResult",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -24258,7 +24635,8 @@
 {
 "name": "Alt",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "None",
@@ -24313,7 +24691,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e7803f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d6ca30>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -24444,12 +24823,14 @@
 {
 "name": "Intersection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SelfInter",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "Join",
@@ -24464,12 +24845,14 @@
 {
 "name": "RemoveIntEdges",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df05a70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4daff70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -24544,7 +24927,8 @@
 {
 "name": "ForceApproxC1",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -24560,7 +24944,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dc0c9b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b54604b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -24736,12 +25121,14 @@
 {
 "name": "WithContact",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "WithCorrection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -24760,12 +25147,14 @@
 {
 "name": "WithContact",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "WithCorrection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -24782,7 +25171,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e6873f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d6eb30>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -25002,12 +25392,14 @@
 {
 "name": "WithContact",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "WithCorrection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -25030,12 +25422,14 @@
 {
 "name": "WithContact",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "WithCorrection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -25084,7 +25478,8 @@
 {
 "name": "IsFrenet",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -25155,17 +25550,20 @@
 {
 "name": "Tol3d",
 "type": "float",
-"default": "0.0001"
+"default": "0.0001",
+"default_lit": 0.0001
 },
 {
 "name": "BoundTol",
 "type": "float",
-"default": "0.0001"
+"default": "0.0001",
+"default_lit": 0.0001
 },
 {
 "name": "TolAngular",
 "type": "float",
-"default": "0.01"
+"default": "0.01",
+"default_lit": 0.01
 }
 ],
 "ret": "None",
@@ -25257,7 +25655,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48de741b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ca4d70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -25376,12 +25775,14 @@
 {
 "name": "Intersection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SelfInter",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "Join",
@@ -25396,12 +25797,14 @@
 {
 "name": "RemoveIntEdges",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dc0c3f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d2f0b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -25476,12 +25879,14 @@
 {
 "name": "Intersection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SelfInter",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "Join",
@@ -25496,12 +25901,14 @@
 {
 "name": "RemoveIntEdges",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df05a70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4daff70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -25550,17 +25957,20 @@
 {
 "name": "isSolid",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "ruled",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "pres3d",
 "type": "float",
-"default": "1e-06"
+"default": "1e-06",
+"default_lit": 1e-06
 }
 ],
 "ret": "None",
@@ -25608,7 +26018,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dfa4bf0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4df6a70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -25636,7 +26047,8 @@
 {
 "name": "check",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -25729,17 +26141,20 @@
 {
 "name": "isSolid",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "ruled",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "pres3d",
 "type": "float",
-"default": "1e-06"
+"default": "1e-06",
+"default_lit": 1e-06
 }
 ],
 "ret": "None",
@@ -26008,12 +26423,14 @@
 {
 "name": "Intersection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SelfInter",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "Join",
@@ -26028,17 +26445,20 @@
 {
 "name": "Thickening",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "RemoveIntEdges",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e6e6670>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e9bc70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -26206,12 +26626,14 @@
 {
 "name": "Intersection",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "SelfInter",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "Join",
@@ -26226,12 +26648,14 @@
 {
 "name": "Thickening",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "RemoveIntEdges",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -26275,7 +26699,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dc0cc30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ca4030>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -26292,7 +26717,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df2dd70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ca4130>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -26502,7 +26928,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e27a5b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5360470>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -26853,7 +27280,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e27af30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -27084,7 +27512,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e27af30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -27271,7 +27700,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -27375,7 +27805,26 @@
 }
 },
 "BRepPrimAPI_MakeOneAxis": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Build": {
 "static": false,
@@ -27385,7 +27834,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e27af30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -27536,12 +27986,14 @@
 {
 "name": "Copy",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "Canonize",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -27560,17 +28012,20 @@
 {
 "name": "Inf",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "Copy",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "Canonize",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -27586,7 +28041,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e0bbd30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b513a5b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -27750,7 +28206,8 @@
 {
 "name": "Copy",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -27769,7 +28226,8 @@
 {
 "name": "Copy",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -27785,7 +28243,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e0e8370>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f61df0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -28188,7 +28647,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e27af30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -28336,7 +28796,26 @@
 }
 },
 "BRepPrimAPI_MakeSweep": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Build": {
 "static": false,
@@ -28346,7 +28825,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e976870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5832830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -28648,7 +29128,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e27af30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b565d4f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -28927,7 +29408,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e09efb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b57d00b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -29215,7 +29697,8 @@
 {
 "name": "theToActivateStrictly",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -29328,7 +29811,8 @@
 {
 "name": "theForce",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -29475,7 +29959,8 @@
 {
 "name": "theFileSystem",
 "type": "OCP.OSD.OSD_FileSystem",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "bool",
@@ -29496,17 +29981,20 @@
 {
 "name": "theTriangulationIdx",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 },
 {
 "name": "theToSetAsActive",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theFileSystem",
 "type": "OCP.OSD.OSD_FileSystem",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "bool",
@@ -29591,7 +30079,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e304d30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f63e30>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -29614,7 +30103,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e51d230>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5117270>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "bool",
@@ -29635,7 +30125,8 @@
 {
 "name": "theForce",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -29676,7 +30167,8 @@
 {
 "name": "theToCheckFreeEdges",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -29757,7 +30249,8 @@
 {
 "name": "theTriangulationIdx",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "bool",
@@ -29894,7 +30387,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dedca30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b50fe0f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -29925,7 +30419,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e0e9730>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f3c730>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "None",
@@ -29944,7 +30439,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e231630>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b554c530>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "bool",
@@ -29975,7 +30471,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df06530>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b55787b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "bool",
@@ -30441,7 +30938,8 @@
 {
 "name": "theTol",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Vertex",
@@ -30670,7 +31168,8 @@
 {
 "name": "last",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "int",
@@ -31334,7 +31833,8 @@
 {
 "name": "theActiveTriangulation",
 "type": "OCP.Poly.Poly_Triangulation",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "None",
@@ -31533,7 +32033,8 @@
 {
 "name": "Only3d",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -32316,7 +32817,8 @@
 {
 "name": "theToReset",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -32668,7 +33170,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -33154,7 +33657,8 @@
 {
 "name": "theIsStored",
 "type": "bool",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "OCP.Geom2d.Geom2d_Curve",
@@ -33185,7 +33689,8 @@
 {
 "name": "theIsStored",
 "type": "bool",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "OCP.Geom2d.Geom2d_Curve",
@@ -34016,7 +34521,8 @@
 {
 "name": "theMeshPurpose",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "OCP.Poly.Poly_Triangulation",
@@ -34235,7 +34741,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -34902,7 +35409,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -35030,12 +35538,14 @@
 {
 "name": "theListOfTolerances",
 "type": "OCP.TColStd.TColStd_Array1OfReal",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theIsOptimal",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -35227,7 +35737,26 @@
 }
 },
 "CDF_Application": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "BeginOfUpdate": {
 "static": false,
@@ -35368,7 +35897,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -35645,12 +36175,14 @@
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e3077b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f12430>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "tuple[()]",
@@ -35702,17 +36234,20 @@
 {
 "name": "UseStorageConfiguration",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e600bf0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b52762b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.CDM.CDM_Document",
@@ -35735,17 +36270,20 @@
 {
 "name": "UseStorageConfiguration",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48ded2d30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f13270>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.CDM.CDM_Document",
@@ -35849,7 +36387,26 @@
 }
 },
 "CDM_Application": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "BeginOfUpdate": {
 "static": false,
@@ -35901,7 +36458,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -36126,7 +36684,26 @@
 }
 },
 "CDM_Document": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "AddComment": {
 "static": false,
@@ -36405,7 +36982,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -37393,7 +37971,8 @@
 {
 "name": "iSolution",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Edge",
@@ -37432,7 +38011,8 @@
 {
 "name": "TolF",
 "type": "float",
-"default": "1e-10"
+"default": "1e-10",
+"default_lit": 1e-10
 }
 ],
 "ret": "None",
@@ -37451,7 +38031,8 @@
 {
 "name": "TolF",
 "type": "float",
-"default": "1e-10"
+"default": "1e-10",
+"default_lit": 1e-10
 }
 ],
 "ret": "None",
@@ -37479,7 +38060,8 @@
 {
 "name": "TolF",
 "type": "float",
-"default": "1e-10"
+"default": "1e-10",
+"default_lit": 1e-10
 }
 ],
 "ret": "None",
@@ -37664,7 +38246,26 @@
 }
 },
 "Font_FontMgr": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "AddFontAlias": {
 "static": false,
@@ -37827,7 +38428,8 @@
 {
 "name": "theDoFailMsg",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.Font.Font_SystemFont",
@@ -38450,7 +39052,8 @@
 {
 "name": "theFaceId",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -39190,7 +39793,8 @@
 {
 "name": "theWithControl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -39209,7 +39813,8 @@
 {
 "name": "theWithControl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -39236,7 +39841,8 @@
 {
 "name": "theWithControl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -39263,7 +39869,8 @@
 {
 "name": "theWithControl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -39298,7 +39905,8 @@
 {
 "name": "theWithControl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -39317,7 +39925,8 @@
 {
 "name": "theWithControl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -39344,7 +39953,8 @@
 {
 "name": "theWithControl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -39371,7 +39981,8 @@
 {
 "name": "theWithControl",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -40292,7 +40903,8 @@
 {
 "name": "Density",
 "type": "float",
-"default": "1.0"
+"default": "1.0",
+"default_lit": 1.0
 }
 ],
 "ret": "None",
@@ -40578,7 +41190,8 @@
 {
 "name": "Tol",
 "type": "float",
-"default": "1e-06"
+"default": "1e-06",
+"default_lit": 1e-06
 }
 ],
 "ret": "None",
@@ -40593,7 +41206,8 @@
 {
 "name": "Tol",
 "type": "float",
-"default": "1e-06"
+"default": "1e-06",
+"default_lit": 1e-06
 }
 ],
 "ret": "None",
@@ -40617,7 +41231,8 @@
 {
 "name": "Tol",
 "type": "float",
-"default": "1e-06"
+"default": "1e-06",
+"default_lit": 1e-06
 }
 ],
 "ret": "None",
@@ -40632,7 +41247,8 @@
 {
 "name": "Tol",
 "type": "float",
-"default": "1e-06"
+"default": "1e-06",
+"default_lit": 1e-06
 }
 ],
 "ret": "None",
@@ -43162,7 +43778,26 @@
 }
 },
 "Geom2d_BoundedCurve": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Continuity": {
 "static": false,
@@ -43344,7 +43979,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -43980,7 +44616,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -44475,7 +45112,8 @@
 {
 "name": "Sense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -44688,7 +45326,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -45365,7 +46004,26 @@
 }
 },
 "Geom2d_Conic": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Continuity": {
 "static": false,
@@ -45547,7 +46205,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -46181,7 +46840,26 @@
 }
 },
 "Geom2d_Curve": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Continuity": {
 "static": false,
@@ -46363,7 +47041,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -46878,7 +47557,26 @@
 }
 },
 "Geom2d_Geometry": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Copy": {
 "static": false,
@@ -46925,7 +47623,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -47523,7 +48222,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -48135,7 +48835,26 @@
 }
 },
 "Geom2d_Point": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Coord": {
 "static": false,
@@ -48209,7 +48928,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -48630,12 +49350,14 @@
 {
 "name": "Sense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAdjustPeriodic",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -48834,7 +49556,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -49212,12 +49935,14 @@
 {
 "name": "Sense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAdjustPeriodic",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -50090,7 +50815,8 @@
 {
 "name": "Scale",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -50109,7 +50835,8 @@
 {
 "name": "Scale",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -50147,12 +50874,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50167,7 +50896,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50186,12 +50916,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50206,7 +50938,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50225,12 +50958,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50245,7 +50980,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50272,7 +51008,8 @@
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50287,7 +51024,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50318,12 +51056,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50338,7 +51078,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50357,12 +51098,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50377,7 +51120,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50396,12 +51140,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50416,7 +51162,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50443,7 +51190,8 @@
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50458,7 +51206,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50496,12 +51245,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50516,7 +51267,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50535,12 +51287,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50555,7 +51309,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50582,7 +51337,8 @@
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50597,7 +51353,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50628,12 +51385,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50648,7 +51407,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50668,12 +51428,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50688,7 +51450,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50719,12 +51482,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50739,7 +51504,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50758,12 +51524,14 @@
 {
 "name": "DegMin",
 "type": "int",
-"default": "3"
+"default": "3",
+"default_lit": 3
 },
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50778,12 +51546,14 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 },
 {
 "name": "thePeriodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -50810,7 +51580,8 @@
 {
 "name": "DegMax",
 "type": "int",
-"default": "8"
+"default": "8",
+"default_lit": 8
 },
 {
 "name": "Continuity",
@@ -50825,7 +51596,8 @@
 {
 "name": "Tol3D",
 "type": "float",
-"default": "0.001"
+"default": "0.001",
+"default_lit": 0.001
 }
 ],
 "ret": "None",
@@ -50846,7 +51618,8 @@
 {
 "name": "thePeriodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -50865,7 +51638,8 @@
 {
 "name": "thePeriodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -52575,12 +53349,14 @@
 {
 "name": "theTolU",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 },
 {
 "name": "theTolV",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "None",
@@ -53130,12 +53906,14 @@
 {
 "name": "theTolU",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 },
 {
 "name": "theTolV",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "None",
@@ -53583,17 +54361,20 @@
 {
 "name": "After",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "WithRatio",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "MinM",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -54503,7 +55284,26 @@
 }
 },
 "GeomFill_TrihedronLaw": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Copy": {
 "static": false,
@@ -54929,7 +55729,8 @@
 {
 "name": "Tol",
 "type": "float",
-"default": "1e-07"
+"default": "1e-07",
+"default_lit": 1e-07
 }
 ],
 "ret": "None",
@@ -55217,7 +56018,8 @@
 {
 "name": "Periodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -55248,12 +56050,14 @@
 {
 "name": "Periodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "CheckRational",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -55452,7 +56256,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -55617,17 +56422,20 @@
 {
 "name": "M",
 "type": "int",
-"default": "1"
+"default": "1",
+"default_lit": 1
 },
 {
 "name": "ParametricTolerance",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 },
 {
 "name": "Add",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -55652,12 +56460,14 @@
 {
 "name": "ParametricTolerance",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 },
 {
 "name": "Add",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -56106,7 +56916,8 @@
 {
 "name": "WithKnotRepetition",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "tuple[int, int]",
@@ -56570,7 +57381,8 @@
 {
 "name": "theTolerance",
 "type": "float",
-"default": "1e-09"
+"default": "1e-09",
+"default_lit": 1e-09
 }
 ],
 "ret": "None",
@@ -56989,12 +57801,14 @@
 {
 "name": "UPeriodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "VPeriodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -57037,12 +57851,14 @@
 {
 "name": "UPeriodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "VPeriodic",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -57085,12 +57901,14 @@
 {
 "name": "theUTolerance",
 "type": "float",
-"default": "1e-09"
+"default": "1e-09",
+"default_lit": 1e-09
 },
 {
 "name": "theVTolerance",
 "type": "float",
-"default": "1e-09"
+"default": "1e-09",
+"default_lit": 1e-09
 }
 ],
 "ret": "None",
@@ -57343,7 +58161,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -57582,7 +58401,8 @@
 {
 "name": "Add",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -57607,12 +58427,14 @@
 {
 "name": "ParametricTolerance",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 },
 {
 "name": "Add",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -57641,7 +58463,8 @@
 {
 "name": "Add",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -57666,12 +58489,14 @@
 {
 "name": "ParametricTolerance",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 },
 {
 "name": "Add",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -58172,7 +58997,8 @@
 {
 "name": "WithKnotRepetition",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "tuple[int, int]",
@@ -58197,7 +59023,8 @@
 {
 "name": "WithKnotRepetition",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "tuple[int, int]",
@@ -58609,12 +59436,14 @@
 {
 "name": "theUTolerance",
 "type": "float",
-"default": "1e-09"
+"default": "1e-09",
+"default_lit": 1e-09
 },
 {
 "name": "theVTolerance",
 "type": "float",
-"default": "1e-09"
+"default": "1e-09",
+"default_lit": 1e-09
 }
 ],
 "ret": "None",
@@ -59808,7 +60637,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -60956,7 +61786,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -62192,7 +63023,26 @@
 }
 },
 "Geom_BoundedCurve": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Continuity": {
 "static": false,
@@ -62374,7 +63224,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -62931,7 +63782,26 @@
 }
 },
 "Geom_BoundedSurface": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Bounds": {
 "static": false,
@@ -63188,7 +64058,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -64049,7 +64920,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -64730,7 +65602,26 @@
 }
 },
 "Geom_Conic": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Axis": {
 "static": false,
@@ -64923,7 +65814,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -65891,7 +66783,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -66663,7 +67556,26 @@
 }
 },
 "Geom_Curve": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Continuity": {
 "static": false,
@@ -66845,7 +67757,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -67695,7 +68608,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -68440,7 +69354,26 @@
 }
 },
 "Geom_ElementarySurface": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Axis": {
 "static": false,
@@ -68708,7 +69641,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -69410,7 +70344,26 @@
 }
 },
 "Geom_Geometry": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Copy": {
 "static": false,
@@ -69457,7 +70410,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -70048,7 +71002,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -70683,7 +71638,8 @@
 {
 "name": "isNotCheckC0",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -70957,7 +71913,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -71340,7 +72297,8 @@
 {
 "name": "isNotCheckC0",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -72062,7 +73020,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -72817,12 +73776,14 @@
 {
 "name": "USense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "VSense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -72849,7 +73810,8 @@
 {
 "name": "Sense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -73123,7 +74085,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -73485,12 +74448,14 @@
 {
 "name": "USense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "VSense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -73513,7 +74478,8 @@
 {
 "name": "Sense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -73816,7 +74782,26 @@
 }
 },
 "Geom_Surface": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Bounds": {
 "static": false,
@@ -74073,7 +75058,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -74723,12 +75709,14 @@
 {
 "name": "Sense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAdjustPeriodic",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -74927,7 +75915,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -75325,12 +76314,14 @@
 {
 "name": "Sense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theAdjustPeriodic",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -75865,7 +76856,8 @@
 {
 "name": "On",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -76012,7 +77004,8 @@
 {
 "name": "nbIso",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -76027,7 +77020,8 @@
 {
 "name": "nbIso",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -76274,7 +77268,8 @@
 {
 "name": "nbIso",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -76289,7 +77284,8 @@
 {
 "name": "nbIso",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -77270,7 +78266,8 @@
 {
 "name": "nbIso",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -77285,7 +78282,8 @@
 {
 "name": "nbIso",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -77541,7 +78539,8 @@
 {
 "name": "active",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "int",
@@ -77566,7 +78565,8 @@
 {
 "name": "active",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "int",
@@ -77670,7 +78670,8 @@
 {
 "name": "complete",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.Interface.Interface_CheckIterator",
@@ -77760,7 +78761,8 @@
 {
 "name": "atnum",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "int",
@@ -77797,7 +78799,8 @@
 {
 "name": "enforce",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -77818,7 +78821,8 @@
 {
 "name": "forced",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -77843,7 +78847,8 @@
 {
 "name": "clear",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -77860,7 +78865,8 @@
 {
 "name": "enforce",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -78094,7 +79100,8 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -78115,7 +79122,8 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -78329,7 +79337,8 @@
 {
 "name": "second",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.TColStd.TColStd_HSequenceOfTransient",
@@ -78740,7 +79749,8 @@
 {
 "name": "label",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -78801,7 +79811,8 @@
 {
 "name": "complete",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.Interface.Interface_CheckIterator",
@@ -78973,7 +79984,8 @@
 {
 "name": "name",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_IntParam",
@@ -78994,7 +80006,8 @@
 {
 "name": "name",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.Standard.Standard_Transient",
@@ -79031,7 +80044,8 @@
 {
 "name": "name",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.TCollection.TCollection_HAsciiString",
@@ -79052,7 +80066,8 @@
 {
 "name": "name",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_Transformer",
@@ -79077,7 +80092,8 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "int",
@@ -79098,7 +80114,8 @@
 {
 "name": "afternum",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "int",
@@ -79482,7 +80499,8 @@
 {
 "name": "computegraph",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -79507,7 +80525,8 @@
 {
 "name": "computegraph",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -79546,7 +80565,8 @@
 {
 "name": "count",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "OCP.Interface.Interface_EntityIterator",
@@ -79611,7 +80631,8 @@
 {
 "name": "formain",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -79824,7 +80845,8 @@
 {
 "name": "clearpointed",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -80115,7 +81137,8 @@
 {
 "name": "num",
 "type": "int",
-"default": "1"
+"default": "1",
+"default_lit": 1
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_Selection",
@@ -80279,7 +81302,8 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -80408,7 +81432,8 @@
 {
 "name": "modefnes",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -80470,7 +81495,8 @@
 {
 "name": "toApply",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -80636,7 +81662,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -80661,7 +81688,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -80682,7 +81710,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "str",
@@ -80699,7 +81728,8 @@
 {
 "name": "rsc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "str",
@@ -80742,7 +81772,8 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -80763,7 +81794,8 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -80836,7 +81868,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -80861,7 +81894,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -80921,12 +81955,14 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48d9d7d70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b48f5130>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -80955,12 +81991,14 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dcc2d70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4b78530>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -81537,7 +82575,8 @@
 {
 "name": "init",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -81693,7 +82732,8 @@
 {
 "name": "init",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "bool",
@@ -81716,7 +82756,8 @@
 {
 "name": "init",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "bool",
@@ -81753,7 +82794,8 @@
 {
 "name": "proper",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -81786,12 +82828,14 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "criter",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.TColStd.TColStd_HSequenceOfHAsciiString",
@@ -82072,7 +83116,8 @@
 {
 "name": "init",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -82339,7 +83384,8 @@
 {
 "name": "theLength",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -82354,7 +83400,8 @@
 {
 "name": "theLength",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -82369,7 +83416,8 @@
 {
 "name": "theLength",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -82384,7 +83432,8 @@
 {
 "name": "theLength",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -82431,7 +83480,8 @@
 {
 "name": "theLength",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -82775,7 +83825,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -83060,7 +84111,8 @@
 {
 "name": "theHasNormals",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -83254,7 +84306,8 @@
 {
 "name": "theFileSystem",
 "type": "OCP.OSD.OSD_FileSystem",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "OCP.Poly.Poly_Triangulation",
@@ -83275,7 +84328,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -83487,7 +84541,8 @@
 {
 "name": "theFileSystem",
 "type": "OCP.OSD.OSD_FileSystem",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "bool",
@@ -83567,7 +84622,8 @@
 {
 "name": "theIsAccurate",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -84432,7 +85488,8 @@
 {
 "name": "theToPrefixHash",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.TCollection.TCollection_AsciiString",
@@ -84733,7 +85790,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -85161,7 +86219,8 @@
 {
 "name": "theAlphaComponentIsOff",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -85202,7 +86261,8 @@
 {
 "name": "theToPrefixHash",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.TCollection.TCollection_AsciiString",
@@ -85255,7 +86315,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -85996,7 +87057,8 @@
 {
 "name": "toApply",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -86162,7 +87224,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -86187,7 +87250,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -86208,7 +87272,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "str",
@@ -86225,7 +87290,8 @@
 {
 "name": "rsc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "str",
@@ -86268,7 +87334,8 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -86289,7 +87356,8 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -86362,7 +87430,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -86387,7 +87456,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -86447,12 +87517,14 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e664bf0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c31ef0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -86481,12 +87553,14 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dcc2d70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4b78530>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -86593,7 +87667,8 @@
 {
 "name": "toApply",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -86759,7 +87834,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -86784,7 +87860,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -86805,7 +87882,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "str",
@@ -86822,7 +87900,8 @@
 {
 "name": "rsc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "str",
@@ -86865,7 +87944,8 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -86886,7 +87966,8 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -86959,7 +88040,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -86984,7 +88066,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -87044,12 +88127,14 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e664bf0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4c31ef0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -87078,12 +88163,14 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dcc2d70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4b78530>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -87234,7 +88321,8 @@
 {
 "name": "preci",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 }
 ],
 "ret": "bool",
@@ -87285,7 +88373,8 @@
 {
 "name": "preci",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "bool",
@@ -87304,7 +88393,8 @@
 {
 "name": "preci",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "bool",
@@ -87353,7 +88443,8 @@
 {
 "name": "AdjustToEnds",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "float",
@@ -87420,7 +88511,8 @@
 {
 "name": "AdjustToEnds",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "float",
@@ -87451,7 +88543,8 @@
 {
 "name": "AdjustToEnds",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "float",
@@ -87490,7 +88583,8 @@
 {
 "name": "AdjustToEnds",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "float",
@@ -87702,7 +88796,8 @@
 {
 "name": "theDomainDist",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "bool",
@@ -87751,7 +88846,8 @@
 {
 "name": "NbControl",
 "type": "int",
-"default": "23"
+"default": "23",
+"default_lit": 23
 }
 ],
 "ret": "bool",
@@ -87774,7 +88870,8 @@
 {
 "name": "theNbControl",
 "type": "int",
-"default": "23"
+"default": "23",
+"default_lit": 23
 }
 ],
 "ret": "bool",
@@ -87841,12 +88938,14 @@
 {
 "name": "preci",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 },
 {
 "name": "vtx",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -87871,12 +88970,14 @@
 {
 "name": "preci",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 },
 {
 "name": "vtx",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -87899,12 +89000,14 @@
 {
 "name": "preci",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 },
 {
 "name": "vtx",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -87937,7 +89040,8 @@
 {
 "name": "orient",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -87990,7 +89094,8 @@
 {
 "name": "dparam",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "bool",
@@ -88025,7 +89130,8 @@
 {
 "name": "dparam",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "bool",
@@ -88186,7 +89292,8 @@
 {
 "name": "orient",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -88221,7 +89328,8 @@
 {
 "name": "orient",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -88268,12 +89376,14 @@
 {
 "name": "splitclosed",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "splitopen",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -88288,17 +89398,20 @@
 {
 "name": "splitclosed",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "splitopen",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "checkinternaledges",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -88511,12 +89624,14 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48de3fab0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b56c7430>",
+"default_ctor0": "Message_ProgressRange"
 },
 {
 "name": "aReShape",
 "type": "OCP.ShapeBuild.ShapeBuild_ReShape",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -88601,7 +89716,8 @@
 {
 "name": "planeMode",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -89130,7 +90246,8 @@
 {
 "name": "fwd",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -89149,7 +90266,8 @@
 {
 "name": "fwd",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -90501,7 +91619,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e202630>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b54eeef0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "bool",
@@ -91107,7 +92226,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e5e0870>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5e37570>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "bool",
@@ -91627,7 +92747,8 @@
 {
 "name": "prec",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 }
 ],
 "ret": "bool",
@@ -91644,7 +92765,8 @@
 {
 "name": "prec",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 }
 ],
 "ret": "bool",
@@ -91727,7 +92849,8 @@
 {
 "name": "convert",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -91748,7 +92871,8 @@
 {
 "name": "convert",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -91787,7 +92911,8 @@
 {
 "name": "force",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -91802,7 +92927,8 @@
 {
 "name": "force",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -91830,7 +92956,8 @@
 {
 "name": "theModeBoth",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -91899,7 +93026,8 @@
 {
 "name": "precsmall",
 "type": "float",
-"default": "0.0"
+"default": "0.0",
+"default_lit": 0.0
 }
 ],
 "ret": "int",
@@ -93333,12 +94461,14 @@
 {
 "name": "theModeDrop",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 },
 {
 "name": "theLimitAngle",
 "type": "float",
-"default": "-1.0"
+"default": "-1.0",
+"default_lit": -1.0
 }
 ],
 "ret": "bool",
@@ -93808,17 +94938,20 @@
 {
 "name": "UnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "UnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "ConcatBSplines",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -93936,17 +95069,20 @@
 {
 "name": "UnifyEdges",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "UnifyFaces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "ConcatBSplines",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -94134,19 +95270,95 @@
 }
 },
 "Standard_ConstructionError": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {}
 },
 "Standard_DomainError": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {}
 },
 "Standard_Failure": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {}
 },
 "Standard_NoSuchObject": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {}
 },
 "Standard_Transient": {
@@ -94311,11 +95523,49 @@
 }
 },
 "Standard_TypeMismatch": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {}
 },
 "StdFail_NotDone": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {}
 },
 "StdPrs_BRepFont": {
@@ -94338,7 +95588,8 @@
 {
 "name": "theFaceId",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -94847,7 +96098,8 @@
 {
 "name": "thePenLoc",
 "type": "OCP.gp.gp_Ax3",
-"default": "<OCP.OCP.gp.gp_Ax3 object at 0x7ad48dca2e30>"
+"default": "<OCP.OCP.gp.gp_Ax3 object at 0x7d48b4b35ef0>",
+"default_ctor0": "gp_Ax3"
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -94866,7 +96118,8 @@
 {
 "name": "thePenLoc",
 "type": "OCP.gp.gp_Ax3",
-"default": "<OCP.OCP.gp.gp_Ax3 object at 0x7ad48de09b70>"
+"default": "<OCP.OCP.gp.gp_Ax3 object at 0x7d48b5734770>",
+"default_ctor0": "gp_Ax3"
 },
 {
 "name": "theHAlign",
@@ -98948,7 +100201,8 @@
 {
 "name": "CaseSensitive",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -99519,7 +100773,8 @@
 {
 "name": "ahowmany",
 "type": "int",
-"default": "1"
+"default": "1",
+"default_lit": 1
 }
 ],
 "ret": "None",
@@ -99776,12 +101031,14 @@
 {
 "name": "separators",
 "type": "str",
-"default": "' \\t'"
+"default": "' \\t'",
+"default_lit": " \\t"
 },
 {
 "name": "whichone",
 "type": "int",
-"default": "1"
+"default": "1",
+"default_lit": 1
 }
 ],
 "ret": "OCP.TCollection.TCollection_HAsciiString",
@@ -99869,7 +101126,26 @@
 }
 },
 "TDF_Attribute": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "AddAttribute": {
 "static": false,
@@ -99917,7 +101193,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -99938,7 +101215,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -100014,7 +101292,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -100143,7 +101422,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -100231,7 +101511,8 @@
 {
 "name": "clearChildren",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -100579,7 +101860,26 @@
 }
 },
 "TDataStd_GenericEmpty": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "AddAttribute": {
 "static": false,
@@ -100627,7 +101927,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -100648,7 +101949,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -100724,7 +102026,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -100853,7 +102156,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -100941,7 +102245,8 @@
 {
 "name": "clearChildren",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -101289,7 +102594,26 @@
 }
 },
 "TDataStd_GenericExtString": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "AddAttribute": {
 "static": false,
@@ -101337,7 +102661,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -101358,7 +102683,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -101434,7 +102760,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -101563,7 +102890,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -101651,7 +102979,8 @@
 {
 "name": "clearChildren",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -102075,7 +103404,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -102096,7 +103426,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -102172,7 +103503,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -102301,7 +103633,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -102389,7 +103722,8 @@
 {
 "name": "clearChildren",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -102992,7 +104326,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -103377,7 +104712,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dfa59f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e49db0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_ReaderStatus",
@@ -103396,7 +104732,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dbd58f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f62e70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_ReaderStatus",
@@ -103419,7 +104756,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dbd5830>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e4a0b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_ReaderStatus",
@@ -103438,7 +104776,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df2cfb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d6e7b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_ReaderStatus",
@@ -103463,12 +104802,14 @@
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e3077b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f12430>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "tuple[()]",
@@ -103547,17 +104888,20 @@
 {
 "name": "UseStorageConfiguration",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e600bf0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b52762b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.CDM.CDM_Document",
@@ -103580,17 +104924,20 @@
 {
 "name": "UseStorageConfiguration",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48ded2d30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f13270>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.CDM.CDM_Document",
@@ -103611,7 +104958,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e180a70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b513bc70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -103630,7 +104978,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dca3db0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e99ef0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -103655,7 +105004,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dc0da30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4be2470>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -103674,7 +105024,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dcd9ef0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8d970>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -103697,7 +105048,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48de3f970>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d1acf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -103720,7 +105072,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dca0d70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a2b330>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -104228,7 +105581,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -105252,7 +106606,8 @@
 {
 "name": "isAllowed",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -105690,7 +107045,8 @@
 {
 "name": "CumOri",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Vertex",
@@ -105711,7 +107067,8 @@
 {
 "name": "CumOri",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Vertex",
@@ -105772,7 +107129,8 @@
 {
 "name": "useOrientation",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -105815,12 +107173,14 @@
 {
 "name": "cumOri",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "cumLoc",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -105839,12 +107199,14 @@
 {
 "name": "cumOri",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "cumLoc",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -105873,7 +107235,8 @@
 {
 "name": "CumOri",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -106123,7 +107486,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -106488,7 +107852,8 @@
 {
 "name": "theAllocator",
 "type": "OCP.NCollection.NCollection_BaseAllocator",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "None",
@@ -106974,7 +108339,8 @@
 {
 "name": "theAllocator",
 "type": "OCP.NCollection.NCollection_BaseAllocator",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "None",
@@ -107095,7 +108461,8 @@
 {
 "name": "doReleaseMemory",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -107421,7 +108788,8 @@
 {
 "name": "theAllocator",
 "type": "OCP.NCollection.NCollection_BaseAllocator",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "None",
@@ -107490,7 +108858,8 @@
 {
 "name": "doReleaseMemory",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -107838,7 +109207,8 @@
 {
 "name": "theAllocator",
 "type": "OCP.NCollection.NCollection_BaseAllocator",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "None",
@@ -108174,7 +109544,8 @@
 {
 "name": "theAllocator",
 "type": "OCP.NCollection.NCollection_BaseAllocator",
-"default": "None"
+"default": "None",
+"default_lit": null
 }
 ],
 "ret": "None",
@@ -108504,7 +109875,26 @@
 "methods": {}
 },
 "TopoDS": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "CompSolid": {
 "static": false,
@@ -109243,7 +110633,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -109403,7 +110794,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -109424,7 +110816,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -109492,7 +110885,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -109513,7 +110907,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -109652,33 +111047,6 @@
 "params": [],
 "ret": "OCP.TopoDS.TopoDS_TShape",
 "static_form": false
-}
-],
-"tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
 }
 ],
 "tuple_ret": false
@@ -109823,7 +111191,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -109983,7 +111352,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -110004,7 +111374,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -110072,7 +111443,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -110093,7 +111465,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -110232,33 +111605,6 @@
 "params": [],
 "ret": "OCP.TopoDS.TopoDS_TShape",
 "static_form": false
-}
-],
-"tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
 }
 ],
 "tuple_ret": false
@@ -110403,7 +111749,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -110563,7 +111910,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -110584,7 +111932,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -110652,7 +112001,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -110673,7 +112023,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -110812,33 +112163,6 @@
 "params": [],
 "ret": "OCP.TopoDS.TopoDS_TShape",
 "static_form": false
-}
-],
-"tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
 }
 ],
 "tuple_ret": false
@@ -110983,7 +112307,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -111143,7 +112468,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -111164,7 +112490,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -111232,7 +112559,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -111253,7 +112581,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -111395,33 +112724,6 @@
 }
 ],
 "tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
-}
-],
-"tuple_ret": false
 }
 }
 },
@@ -111441,12 +112743,14 @@
 {
 "name": "cumOri",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "cumLoc",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -111466,12 +112770,14 @@
 {
 "name": "cumOri",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "cumLoc",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -111653,7 +112959,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -111813,7 +113120,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -111834,7 +113142,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -111902,7 +113211,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -111923,7 +113233,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -112062,33 +113373,6 @@
 "params": [],
 "ret": "OCP.TopoDS.TopoDS_TShape",
 "static_form": false
-}
-],
-"tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
 }
 ],
 "tuple_ret": false
@@ -112233,7 +113517,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -112393,7 +113678,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -112414,7 +113700,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -112482,7 +113769,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -112503,7 +113791,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -112642,33 +113931,6 @@
 "params": [],
 "ret": "OCP.TopoDS.TopoDS_TShape",
 "static_form": false
-}
-],
-"tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
 }
 ],
 "tuple_ret": false
@@ -112813,7 +114075,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -112973,7 +114236,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -112994,7 +114258,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -113062,7 +114327,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -113083,7 +114349,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -113225,38 +114492,30 @@
 }
 ],
 "tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
-}
-],
-"tuple_ret": false
 }
 }
 },
 "TopoDS_TEdge": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Checked": {
 "static": false,
@@ -113355,7 +114614,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -113623,7 +114883,26 @@
 }
 },
 "TopoDS_TShape": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "Checked": {
 "static": false,
@@ -113722,7 +115001,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -114127,7 +115407,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -114287,7 +115568,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -114308,7 +115590,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -114376,7 +115659,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -114397,7 +115681,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -114536,33 +115821,6 @@
 "params": [],
 "ret": "OCP.TopoDS.TopoDS_TShape",
 "static_form": false
-}
-],
-"tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
 }
 ],
 "tuple_ret": false
@@ -114707,7 +115965,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -114867,7 +116126,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -114888,7 +116148,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -114956,7 +116217,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -114977,7 +116239,8 @@
 {
 "name": "theRaiseExc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TopoDS.TopoDS_Shape",
@@ -115119,33 +116382,6 @@
 }
 ],
 "tuple_ret": false
-},
-"_address": {
-"static": false,
-"sigs": [
-{
-"params": [],
-"ret": "int",
-"static_form": false
-}
-],
-"tuple_ret": false
-},
-"_from_address": {
-"static": true,
-"sigs": [
-{
-"params": [
-{
-"name": "address",
-"type": "int"
-}
-],
-"ret": "OCP.TopoDS.TopoDS_Shape",
-"static_form": true
-}
-],
-"tuple_ret": false
 }
 }
 },
@@ -115156,7 +116392,8 @@
 {
 "name": "nb",
 "type": "int",
-"default": "10000"
+"default": "10000",
+"default_lit": 10000
 }
 ],
 "ret": "None",
@@ -115171,7 +116408,8 @@
 {
 "name": "nb",
 "type": "int",
-"default": "10000"
+"default": "10000",
+"default_lit": 10000
 }
 ],
 "ret": "None",
@@ -115217,7 +116455,8 @@
 {
 "name": "orig",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -115242,7 +116481,8 @@
 {
 "name": "orig",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -115301,7 +116541,8 @@
 {
 "name": "orig",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -115482,7 +116723,8 @@
 {
 "name": "withstart",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.Transfer.Transfer_IteratorOfProcessForTransient",
@@ -115837,7 +117079,8 @@
 {
 "name": "pref",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -115962,7 +117205,8 @@
 {
 "name": "compute",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -116014,7 +117258,8 @@
 {
 "name": "withstart",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.Transfer.Transfer_IteratorOfProcessForTransient",
@@ -116079,7 +117324,8 @@
 {
 "name": "withstart",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.Transfer.Transfer_IteratorOfProcessForTransient",
@@ -116306,7 +117552,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dcdbe70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d19330>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "bool",
@@ -116327,7 +117574,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df2e470>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8da70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.Transfer.Transfer_Binder",
@@ -116383,7 +117631,8 @@
 {
 "name": "nb",
 "type": "int",
-"default": "10000"
+"default": "10000",
+"default_lit": 10000
 }
 ],
 "ret": "None",
@@ -116429,7 +117678,8 @@
 {
 "name": "orig",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -116454,7 +117704,8 @@
 {
 "name": "orig",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -116513,7 +117764,8 @@
 {
 "name": "orig",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -116694,7 +117946,8 @@
 {
 "name": "withstart",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.Transfer.Transfer_IteratorOfProcessForTransient",
@@ -117149,7 +118402,8 @@
 {
 "name": "pref",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -117305,7 +118559,8 @@
 {
 "name": "compute",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -117357,7 +118612,8 @@
 {
 "name": "withstart",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.Transfer.Transfer_IteratorOfProcessForTransient",
@@ -117422,7 +118678,8 @@
 {
 "name": "withstart",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.Transfer.Transfer_IteratorOfProcessForTransient",
@@ -117712,7 +118969,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dcdbe70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d19330>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "bool",
@@ -117733,7 +118991,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df2e470>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8da70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.Transfer.Transfer_Binder",
@@ -117803,7 +119062,26 @@
 }
 },
 "XCAFApp_Application": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "BeginOfUpdate": {
 "static": false,
@@ -117976,7 +119254,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -118372,7 +119651,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dfa59f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e49db0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_ReaderStatus",
@@ -118391,7 +119671,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dbd58f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f62e70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_ReaderStatus",
@@ -118414,7 +119695,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dbd5830>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e4a0b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_ReaderStatus",
@@ -118433,7 +119715,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df2cfb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d6e7b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_ReaderStatus",
@@ -118458,12 +119741,14 @@
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e3077b0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f12430>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "tuple[()]",
@@ -118542,17 +119827,20 @@
 {
 "name": "UseStorageConfiguration",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e600bf0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b52762b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.CDM.CDM_Document",
@@ -118575,17 +119863,20 @@
 {
 "name": "UseStorageConfiguration",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theFilter",
 "type": "OCP.PCDM.PCDM_ReaderFilter",
-"default": "None"
+"default": "None",
+"default_lit": null
 },
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48ded2d30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f13270>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.CDM.CDM_Document",
@@ -118606,7 +119897,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e180a70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b513bc70>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -118625,7 +119917,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dca3db0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4e99ef0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -118650,7 +119943,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dc0da30>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4be2470>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -118669,7 +119963,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dcd9ef0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4f8d970>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -118692,7 +119987,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48de3f970>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d1acf0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -118715,7 +120011,8 @@
 {
 "name": "theRange",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dca0d70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4a2b330>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.PCDM.PCDM_StoreStatus",
@@ -118915,7 +120212,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -118936,7 +120234,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -119034,7 +120333,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -119163,7 +120463,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -119305,7 +120606,8 @@
 {
 "name": "clearChildren",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -120053,7 +121355,8 @@
 {
 "name": "isColorByLayer",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -120103,7 +121406,8 @@
 {
 "name": "isCreateSHUO",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -120126,7 +121430,8 @@
 {
 "name": "isCreateSHUO",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -120147,7 +121452,8 @@
 {
 "name": "isvisible",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -120334,7 +121640,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -120355,7 +121662,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -120431,7 +121739,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -120816,7 +122125,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -120904,7 +122214,8 @@
 {
 "name": "clearChildren",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -121411,7 +122722,8 @@
 {
 "name": "IsAcces",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.XCAFDoc.XCAFDoc_DocumentTool",
@@ -121637,7 +122949,8 @@
 {
 "name": "expand",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TDF.TDF_Label",
@@ -121658,12 +122971,14 @@
 {
 "name": "makeAssembly",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "makePrepare",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.TDF.TDF_Label",
@@ -121740,7 +123055,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -121761,7 +123077,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -121859,7 +123176,8 @@
 {
 "name": "forceIt",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -122029,7 +123347,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -122054,12 +123373,14 @@
 {
 "name": "level",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "deep",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -122227,7 +123548,8 @@
 {
 "name": "findInstance",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -122242,7 +123564,8 @@
 {
 "name": "findInstance",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TDF.TDF_Label",
@@ -122299,7 +123622,8 @@
 {
 "name": "clearChildren",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -122380,7 +123704,8 @@
 {
 "name": "getsubchilds",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -122464,7 +123789,8 @@
 {
 "name": "theToCreate",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TDataStd.TDataStd_NamedData",
@@ -122479,7 +123805,8 @@
 {
 "name": "theToCreate",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.TDataStd.TDataStd_NamedData",
@@ -122704,7 +124031,8 @@
 {
 "name": "getsubchilds",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "int",
@@ -123081,7 +124409,8 @@
 {
 "name": "getsubchilds",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "int",
@@ -123192,7 +124521,8 @@
 {
 "name": "removeCompletely",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -123233,17 +124563,20 @@
 {
 "name": "findInstance",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "findComponent",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "findSubshape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -123517,7 +124850,26 @@
 }
 },
 "XSControl_Controller": {
-"ctor": [],
+"ctor": [
+{
+"params": [
+{
+"raw": "$self"
+},
+{
+"raw": "/"
+},
+{
+"name": "*args"
+},
+{
+"raw": "**kwargs"
+}
+],
+"ret": "?",
+"static_form": true
+}
+],
 "methods": {
 "ActorRead": {
 "static": false,
@@ -123573,7 +124925,8 @@
 {
 "name": "toApply",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "None",
@@ -123728,7 +125081,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -123753,7 +125107,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -123774,7 +125129,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "str",
@@ -123791,7 +125147,8 @@
 {
 "name": "rsc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "str",
@@ -123834,7 +125191,8 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -123855,7 +125213,8 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "bool",
@@ -123928,7 +125287,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -123953,7 +125313,8 @@
 {
 "name": "shape",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -124013,12 +125374,14 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48e3a10f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4d198f0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -124047,12 +125410,14 @@
 {
 "name": "modetrans",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48dcc2d70>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4b78530>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -124117,7 +125482,8 @@
 {
 "name": "active",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "int",
@@ -124142,7 +125508,8 @@
 {
 "name": "active",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "int",
@@ -124246,7 +125613,8 @@
 {
 "name": "complete",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.Interface.Interface_CheckIterator",
@@ -124347,7 +125715,8 @@
 {
 "name": "atnum",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "int",
@@ -124384,7 +125753,8 @@
 {
 "name": "enforce",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -124405,7 +125775,8 @@
 {
 "name": "forced",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -124430,7 +125801,8 @@
 {
 "name": "clear",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -124447,7 +125819,8 @@
 {
 "name": "enforce",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "bool",
@@ -124692,7 +126065,8 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -124713,7 +126087,8 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -124927,7 +126302,8 @@
 {
 "name": "second",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.TColStd.TColStd_HSequenceOfTransient",
@@ -125354,7 +126730,8 @@
 {
 "name": "label",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "None",
@@ -125426,7 +126803,8 @@
 {
 "name": "complete",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "OCP.Interface.Interface_CheckIterator",
@@ -125598,7 +126976,8 @@
 {
 "name": "name",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_IntParam",
@@ -125630,7 +127009,8 @@
 {
 "name": "name",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.Standard.Standard_Transient",
@@ -125667,7 +127047,8 @@
 {
 "name": "name",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.TCollection.TCollection_HAsciiString",
@@ -125688,7 +127069,8 @@
 {
 "name": "name",
 "type": "str",
-"default": "''"
+"default": "''",
+"default_lit": ""
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_Transformer",
@@ -125713,7 +127095,8 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "int",
@@ -125745,7 +127128,8 @@
 {
 "name": "afternum",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "int",
@@ -126133,7 +127517,8 @@
 {
 "name": "theRsc",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "str",
@@ -126206,7 +127591,8 @@
 {
 "name": "computegraph",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -126231,7 +127617,8 @@
 {
 "name": "computegraph",
 "type": "bool",
-"default": "False"
+"default": "False",
+"default_lit": false
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -126270,7 +127657,8 @@
 {
 "name": "count",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "OCP.Interface.Interface_EntityIterator",
@@ -126351,7 +127739,8 @@
 {
 "name": "formain",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "bool",
@@ -126612,7 +128001,8 @@
 {
 "name": "clearpointed",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -126935,7 +128325,8 @@
 {
 "name": "num",
 "type": "int",
-"default": "1"
+"default": "1",
+"default_lit": 1
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_Selection",
@@ -127099,7 +128490,8 @@
 {
 "name": "mode",
 "type": "int",
-"default": "0"
+"default": "0",
+"default_lit": 0
 }
 ],
 "ret": "None",
@@ -127120,7 +128512,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48d9d53f0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4aff0b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "int",
@@ -127137,7 +128530,8 @@
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48da5efb0>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b4ab47b0>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "int",
@@ -127180,12 +128574,14 @@
 {
 "name": "theCompGraph",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 },
 {
 "name": "theProgress",
 "type": "OCP.Message.Message_ProgressRange",
-"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7ad48df05230>"
+"default": "<OCP.OCP.Message.Message_ProgressRange object at 0x7d48b5116830>",
+"default_ctor0": "Message_ProgressRange"
 }
 ],
 "ret": "OCP.IFSelect.IFSelect_ReturnStatus",
@@ -127546,7 +128942,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -128061,7 +129458,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -128609,7 +130007,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -129121,7 +130520,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -130201,7 +131601,8 @@
 {
 "name": "theIsSense",
 "type": "bool",
-"default": "True"
+"default": "True",
+"default_lit": true
 }
 ],
 "ret": "None",
@@ -131063,7 +132464,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -131696,7 +133098,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -132820,7 +134223,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -135171,7 +136575,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -136398,7 +137803,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -136939,7 +138345,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -137562,7 +138969,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -138727,7 +140135,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -139717,7 +141126,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -140796,7 +142206,8 @@
 {
 "name": "theDepth",
 "type": "int",
-"default": "-1"
+"default": "-1",
+"default_lit": -1
 }
 ],
 "ret": "None",
@@ -141311,5 +142722,21 @@
 "tuple_ret": false
 }
 }
+},
+"__meta__": {
+"defaults": 937,
+"classes_requested": 311,
+"classes_not_importable": [
+"GeomAdaptor_TransformedCurve",
+"GeomAdaptor_TransformedSurface",
+"MoniTool_TypedValue"
+],
+"methods": 7291,
+"methods_without_sigs": 13,
+"sigs": 8859,
+"text_signature_fallbacks": 42,
+"default_ctor0": 128,
+"default_lit": 728,
+"default_enum": 81
 }
 }

@@ -50,33 +50,35 @@ export function installOcpShim(self, table) {
     return v;
   };
 
+  // Fresh default-construct a class instance (the Message_ProgressRange
+  // pattern all over OCCT 7.5+; pybind object-valued defaults).
+  const ctor0 = (cn) => {
+    const t = table.classes[cn];
+    if (t) {
+      const zero = t.ctors.find((c) => c.params && c.params.length === 0);
+      if (zero && oc[zero.js]) { return { v: new oc[zero.js]() }; }
+    }
+    for (const js of [cn + '_1', cn]) {
+      if (oc[js]) {
+        try { return { v: new oc[js]() }; } catch (e) { /* fall */ }
+      }
+    }
+    return { miss: true };
+  };
+
+  // The defaults dump carries EXPLICIT encodings (dump_ocp_defaults.py):
+  // dflt_lit (JSON literal), dflt_enum ([Enum, Member, int]),
+  // dflt_ctor0 (class to fresh-construct). No repr-string guessing here.
   const resolveDefault = (p) => {
     if (p.dflt_enum) {
       const [en, mem] = p.dflt_enum;
       const e = oc[en] && oc[en][mem];
       return e === undefined ? { miss: true } : { v: e };
     }
-    if (p.dflt !== undefined) {
-      const d = p.dflt;
-      if (d === 'True') { return { v: true }; }
-      if (d === 'False') { return { v: false }; }
-      if (d === 'None') { return { v: null }; }
-      if (!isNaN(parseFloat(d))) { return { v: parseFloat(d) }; }
-      // object-valued defaults (pybind renders them opaquely): construct a
-      // fresh default instance when the param type has a 0-arg ctor bound
-      // (the Message_ProgressRange pattern all over OCCT 7.5+)
-      if (p.type) {
-        const cn = p.type.split('.').pop();
-        const t = table.classes[cn];
-        if (t) {
-          const zero = t.ctors.find((c) => c.params && c.params.length === 0);
-          if (zero && oc[zero.js]) { return { v: new oc[zero.js]() }; }
-        }
-        if (oc[cn + '_1']) {
-          try { return { v: new oc[cn + '_1']() }; } catch (e) { /* fall */ }
-        }
-      }
+    if (Object.prototype.hasOwnProperty.call(p, 'dflt_lit')) {
+      return { v: p.dflt_lit };
     }
+    if (p.dflt_ctor0) { return ctor0(p.dflt_ctor0); }
     return { miss: true };
   };
 
