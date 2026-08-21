@@ -25,6 +25,11 @@ const FILES = [
   // upstream TOPOLOGY layer (the ?pytopo=upstream spike — see
   // experiments/upstream-topology-spike/)
   'topology/utils.py', 'topology/zero_d.py', 'topology/shape_core.py',
+  // Stage 3 (full upstream topology): geometry.py + the whole topology
+  // package run VERBATIM under pytopo=upstream
+  'geometry.py', 'topology/__init__.py', 'topology/one_d.py',
+  'topology/two_d.py', 'topology/three_d.py', 'topology/composite.py',
+  'topology/constrained_lines.py',
 ];
 
 const CANDIDATES = [

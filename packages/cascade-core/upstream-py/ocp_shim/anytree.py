@@ -59,6 +59,14 @@ class NodeMixin:
         return tuple(out)
 
 
+def PreOrderIter(node):
+    """Pre-order traversal INCLUDING the start node (anytree semantics;
+    upstream composite's Compound iteration/children walks ride on it)."""
+    yield node
+    for c in getattr(node, '_NodeMixin__children', ()):
+        yield from PreOrderIter(c)
+
+
 class RenderTree:
     """Minimal pre-order iterator yielding (prefix, fill, node)."""
 

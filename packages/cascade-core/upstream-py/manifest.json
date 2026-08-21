@@ -11,6 +11,10 @@
     { "name": "dataclasses", "file": "shims/dataclasses.py" },
     { "name": "enum", "file": "shims/enum.py" },
     { "name": "trianglesolver", "file": "shims/trianglesolver.py" },
+    { "name": "bisect", "file": "shims/bisect.py" },
+    { "name": "colorsys", "file": "shims/colorsys.py" },
+    { "name": "webcolors", "file": "shims/webcolors.py" },
+    { "name": "ocp_gordon", "file": "shims/ocp_gordon.py" },
     { "name": "numpy", "file": "shims/numpy.py" },
     { "name": "sympy", "file": "shims/sympy.py" }
   ]

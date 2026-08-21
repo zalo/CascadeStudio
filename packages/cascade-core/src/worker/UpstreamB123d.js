@@ -83,14 +83,29 @@ export function stripRuntimeGenerics(src, extraNames) {
 export function stripTypeAliases(src) {
   // MicroPython evaluates module-level TypeAlias assignments eagerly and has
   // no PEP 604 `|` on classes / builtin generics: neutralize the RHS
-  // (annotation-only use). All Level-A TypeAlias RHSs are single-line
-  // (multi-line ones exist only in geometry.py, which is replaced by the
-  // seam adapter); refuse loudly rather than mis-translate.
-  if (/^\w+: TypeAlias = [([]\s*$/m.test(src)) {
-    throw new Error('multi-line TypeAlias RHS is not supported by the '
-      + 'upstream-source transform');
+  // (annotation-only use). Multi-line RHSs (geometry.py's VectorLike /
+  // ColorLike parenthesized unions) are blanked line-by-line so the module
+  // keeps its line count.
+  const lines = src.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(\w+): TypeAlias = (.*)$/);
+    if (!m) { continue; }
+    let depth = 0;
+    for (const ch of m[2]) {
+      if (ch === '(' || ch === '[') { depth++; }
+      else if (ch === ')' || ch === ']') { depth--; }
+    }
+    lines[i] = m[1] + ' = object';
+    for (let j = i + 1; depth > 0 && j < lines.length; j++) {
+      for (const ch of lines[j]) {
+        if (ch === '(' || ch === '[') { depth++; }
+        else if (ch === ')' || ch === ']') { depth--; }
+      }
+      lines[j] = '';
+      i = j;
+    }
   }
-  return src.replace(/^(\w+): TypeAlias = .*$/gm, '$1 = object');
+  return lines.join('\n');
 }
 
 export function cleanClassBases(src) {
@@ -124,12 +139,37 @@ export function rewriteMatchStatements(src, name) {
       if (line.trim() === '') { continue; }
       const lineIndent = line.match(/^\s*/)[0];
       if (lineIndent.length <= indent.length) { break; } // match block ended
-      const cm = line.match(/^(\s*)case (.+):\s*$/);
+      const cm = line.match(/^(\s*)case (.+?):\s*(#.*)?$/) ||
+        line.match(/^(\s*)case (.+)$/); // multi-line case head (guard spans lines)
       if (!cm) { continue; }
       if (cm[1].length !== indent.length + 4) { continue; } // nested content
       const pat = cm[2].trim();
+      const kw = first ? 'if' : 'elif';
       if (pat === '_') {
         lines[j] = cm[1] + 'else:';
+      } else if (/^\([A-Za-z_][A-Za-z0-9_]*(\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*\)( if .*)?$/.test(pat)) {
+        // flat tuple-of-names CAPTURE pattern, optional guard (the guard may
+        // continue on the following source lines — only this line is
+        // rewritten, so the translation must not add unbalanced brackets).
+        // (n1, n2) if G  ->  elif _cs_match_seq(_cs_match_, 2) and
+        //   ((n1 := _cs_match_[0]) or True) and ... and G
+        const gm = pat.match(/^\(([^)]*)\)(?: if (.*))?$/);
+        const names = gm[1].split(',').map((s) => s.trim());
+        const binds = names.map((n, k) =>
+          '((' + n + ' := _cs_match_[' + k + ']) or True)').join(' and ');
+        let out = cm[1] + kw + ' _cs_match_seq(_cs_match_, ' + names.length +
+          ') and ' + binds;
+        if (gm[2] !== undefined) {
+          out += ' and ' + gm[2] + (line.trimEnd().endsWith(':') ? ':' : '');
+        } else {
+          out += ':';
+        }
+        lines[j] = out;
+        first = false;
+      } else if (/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$/.test(pat)) {
+        // dotted VALUE pattern (enum member): equality compare
+        lines[j] = cm[1] + kw + ' _cs_match_ == ' + pat + ':';
+        first = false;
       } else {
         const classes = pat.split('|').map((p) => p.trim());
         const bad = classes.find((p) => !/^[A-Za-z_][A-Za-z0-9_.]*\(\)$/.test(p));
@@ -137,7 +177,7 @@ export function rewriteMatchStatements(src, name) {
           throw new Error('unsupported match pattern in ' + name + ': ' + pat);
         }
         const tup = classes.map((p) => p.slice(0, -2)).join(', ');
-        lines[j] = cm[1] + (first ? 'if' : 'elif') +
+        lines[j] = cm[1] + kw +
           ' isinstance(_cs_match_, (' + tup + ')):';
         first = false;
       }
@@ -147,8 +187,58 @@ export function rewriteMatchStatements(src, name) {
 }
 
 export function rewriteListSplats(src) {
-  // `[*name]` list displays (MicroPython has no PEP 448 in displays)
-  return src.replace(/\[\*([A-Za-z_][A-Za-z0-9_]*)\]/g, 'list($1)');
+  // PEP 448 splats in LIST displays (MicroPython has none): `[a, *b, c]`
+  // becomes `([a] + list(b) + [c])`. Bracket-balanced scan over the whole
+  // source; a display is rewritten only when it has at least one TOP-LEVEL
+  // element starting with `*` (subscripts and plain displays never do).
+  // Runs inside-out (recurses into elements) so nested displays work.
+  const splitTop = (inner) => {
+    const parts = [];
+    let depth = 0, start = 0;
+    for (let k = 0; k < inner.length; k++) {
+      const ch = inner[k];
+      if ('([{'.indexOf(ch) !== -1) { depth++; }
+      else if (')]}'.indexOf(ch) !== -1) { depth--; }
+      else if (ch === ',' && depth === 0) {
+        parts.push(inner.slice(start, k)); start = k + 1;
+      }
+    }
+    parts.push(inner.slice(start));
+    return parts;
+  };
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    if (src[i] !== '[') { out += src[i++]; continue; }
+    let d = 0, j = i;
+    for (; j < src.length; j++) {
+      if ('([{'.indexOf(src[j]) !== -1) { d++; }
+      else if (')]}'.indexOf(src[j]) !== -1) { d--; if (d === 0) { break; } }
+    }
+    if (j >= src.length) { out += src[i++]; continue; }
+    const inner = rewriteListSplats(src.slice(i + 1, j));
+    const exprs = splitTop(inner).map((p) => p.trim()).filter((e) => e !== '');
+    if (!exprs.some((e) => e.startsWith('*'))) {
+      out += '[' + inner + ']';
+      i = j + 1;
+      continue;
+    }
+    // group consecutive plain elements into list chunks, splats into list()
+    const chunks = [];
+    let plain = [];
+    for (const e of exprs) {
+      if (e.startsWith('*')) {
+        if (plain.length) { chunks.push('[' + plain.join(', ') + ']'); plain = []; }
+        chunks.push('list(' + e.slice(1).trim() + ')');
+      } else {
+        plain.push(e);
+      }
+    }
+    if (plain.length) { chunks.push('[' + plain.join(', ') + ']'); }
+    out += '(' + chunks.join(' + ') + ')';
+    i = j + 1;
+  }
+  return out;
 }
 
 /** Bare named-plane ALIASES become copies: upstream's Plane.XY (classproperty)
@@ -256,6 +346,10 @@ if _cs_os_shim is not None and not hasattr(_cs_os_shim, 'PathLike'):
     class _CsPathLike:
         pass
     _cs_os_shim.PathLike = _CsPathLike
+if _cs_os_shim is not None and not hasattr(_cs_os_shim, 'fspath'):
+    def _cs_fspath(p):
+        return p if isinstance(p, str) else str(p)
+    _cs_os_shim.fspath = _cs_fspath
 `;
 
 /** Bootstrap upstream build123d over an already-initialized MicroPython
@@ -306,7 +400,10 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
   //    sys.exc_info stand-in (see transformUpstreamSource)
   runPy(LOGGING_PATCH_PY);
   runPy('import builtins as _cs_bi\n'
-    + '_cs_bi._cs_exc_info = lambda: (None, None, None)');
+    + '_cs_bi._cs_exc_info = lambda: (None, None, None)\n'
+    // the match-statement rewrite's sequence-pattern helper (tuple-of-names
+    // capture patterns in geometry.py's Color)
+    + '_cs_bi._cs_match_seq = lambda v, n: isinstance(v, (tuple, list)) and len(v) == n');
   // Stock MicroPython's sort is UNSTABLE; upstream sources rely on CPython's
   // stable sorted() (pack.py's tie ordering decides the whole layout).
   // Decorate with the input index so ties keep their original order —
