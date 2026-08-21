@@ -309,7 +309,33 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   (class-DAG) is CLOSED by the unification and the 2026-08-20 grind round
   closed the seam-method and semantics gaps. Compare against lite with
   `experiments/upstream-on-micropython/compare-examples.mjs`.
-- **Lite's topology class DAG IS upstream's** (class-DAG unification,
+- **`?pytopo=upstream` (Stage 3, DEFAULT OFF — `PYTOPO_DEFAULT='lite'` in
+  UpstreamB123d.js; localStorage `cascade-py-topo`; `CS_PY_TOPO=upstream`
+  for run-lite.mjs)**: upstream 0.11.1's **geometry.py + the WHOLE
+  topology package run VERBATIM** over the hardened OCP-over-embind shim
+  (`upstream-py/ocp_shim/`, OcpShim.js) — the seam adapter modules load
+  only under pytopo=lite, and lite reduces to the JS op layer + the worker
+  glue `ocp_shim/topo_glue.py` (show()/sceneShapes raw-TopoDS unwrap,
+  implicit post-run scene, `_measure_globals_json`, export/import, text ->
+  lite opentype (COMPROMISE(text)), gordon -> GordonSurface.js). History
+  rides the SHIM (recordExternalOp at BRepPrimAPI/BRepAlgoAPI/...-family
+  granularity + TopoDS `producingLine` tagging, so pick->line resolves);
+  the kernel-guard fuse-drop recovery is ported to the shim's
+  SetArguments/SetTools/Build/Shape path. Harness (2026-08-21, r8/r9):
+  **210 PASS / 3 MISMATCH / 3 ERROR / 6 TIMEOUT** — BEYOND the
+  205/10/5/2 baseline band on fidelity: upstream topology additionally
+  PASSES lite's residual COMPROMISE(edge-orientation)/(traversal-order)
+  set (joints x2, projection x2, sort_axis, filter_all_edges_circle,
+  sm_hanger, toy_truck, ttt-ppp0110) and every remaining ERROR/MISMATCH is
+  baseline-family; the honest shortfall is PERF (4 extra TIMEOUTs:
+  bicycle_tire/clock/algebra_performance b01+all — upstream's own
+  quadratic re-fuse and Python-heavy hot loops x the FFI envelope), which
+  is why the default stays OFF. State/next-actions:
+  `experiments/upstream-topology-spike/STAGE3-STATE.md`; fork asks:
+  FORK-ASKS.md Stage-3 addendum. NOTE the PROVENANCE **patch 9** found via
+  this stage: the vendored micropython.mjs jsffi converted integral JS
+  doubles >= 2^31 to WRAPPED int32 (1e100 arrived as 0) — patched JS-side,
+  carry forward on interpreter rebuilds.
   2026-08-19): `Wire` is a real class (distinct from `Edge` and `Curve`;
   all three subclass `Mixin1D`, lite's "any 1-D shape" isinstance target,
   which carries the shared behaviors + `_specs` bookkeeping);
