@@ -353,6 +353,13 @@ export function transformUpstreamSource(name, src, opts) {
   // ... and the BARE bound-method form (sorted(key=sort_by.__get__))
   out = out.replace(/(\w+)\.__get__(?!\()/g,
     '(lambda _cs_o, _cs_p=$1: _cs_prop_get(_cs_p, _cs_o))');
+  // MicroPython dicts are UNORDERED (CPython's are insertion-ordered, and
+  // upstream RELIES on it): _topods_entities dedups explorer results through
+  // a dict — a plain dict SCRAMBLES every faces()/edges()/vertices() list —
+  // and objects_curve dedups point sequences with dict.fromkeys
+  out = out.replace(/\bout = \{\}  # using dict to prevent duplicates/,
+    'out = _cs_odict()  # ordered dedup (MicroPython dicts are unordered)');
+  out = out.replace(/\bdict\.fromkeys\(/g, '_cs_ordered_fromkeys(');
   // MicroPython sys has no float_info and sys is read-only (two_d uses .max)
   out = out.replace(/\bsys\.float_info\.max\b/g, '1.7976931348623157e+308');
   out = out.replace(/\bsys\.float_info\.epsilon\b/g, '2.220446049250313e-16');
@@ -638,6 +645,16 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       '    format',
       'except NameError:',
       '    _cs_bi2.format = _cs_format',
+      // insertion-ordered dict helpers (MicroPython dicts are unordered;
+      // see the _topods_entities / dict.fromkeys transforms)
+      'from collections import OrderedDict as _CsOD',
+      '_cs_bi2._cs_odict = _CsOD',
+      'def _cs_ordered_fromkeys(seq, value=None):',
+      '    d = _CsOD()',
+      '    for k in seq:',
+      '        d[k] = value',
+      '    return d',
+      '_cs_bi2._cs_ordered_fromkeys = _cs_ordered_fromkeys',
     ].join('\n'));
 
     const topoTransform = (name, raw) => {

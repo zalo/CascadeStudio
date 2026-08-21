@@ -344,6 +344,40 @@ class Mesher:
 # (Font_FontMgr/StdPrs_BRepTextBuilder) is unbindable; route to lite's
 # validated opentype.js path and adopt the faces as an upstream Compound.
 
+# Enum bridging for glue-routed LITE calls: upstream members translate to
+# lite's plain-class values by CLASS+NAME (and the enum shim's __eq__ bridge
+# is armed so lite's own == comparisons see them too — under pytopo=lite the
+# seam topology module installs this; here the glue does).
+import enum as _enum_shim
+
+
+def _cs_lite_enum_lookup(cls_name, member_name):
+    lite_cls = getattr(_lt, cls_name, None)
+    if lite_cls is None:
+        return None
+    return getattr(lite_cls, member_name, None)
+
+
+_enum_shim._cs_set_lite_lookup(_cs_lite_enum_lookup)
+
+
+def _lite_enum(v):
+    nm = getattr(v, 'name', None)
+    if not isinstance(nm, str):
+        return v
+    cls_nm = getattr(v, '_cls_name_', None) or type(v).__name__
+    lite_cls = getattr(_lt, cls_nm, None)
+    if lite_cls is None:
+        return v
+    return getattr(lite_cls, nm, v)
+
+
+def _lite_enum_tuple(v):
+    if isinstance(v, (tuple, list)):
+        return tuple(_lite_enum(a) for a in v)
+    return _lite_enum(v)
+
+
 _upstream_make_text = Compound.make_text
 
 
@@ -361,7 +395,7 @@ def _cs_make_text(cls, txt, font_size, font='Arial', font_path=None,
         lite_kwargs['text_align'] = text_align
     lite = _lt.Compound.make_text(
         txt, font_size, font=font, font_path=font_path,
-        font_style=font_style, align=align,
+        font_style=font_style, align=_lite_enum_tuple(align),
         position_on_path=position_on_path, text_path=lite_path,
         single_line_width=single_line_width, **lite_kwargs)
     return cls(_c.wrap(_lt._topo(lite)))
