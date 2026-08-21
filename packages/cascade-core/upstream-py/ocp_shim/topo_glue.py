@@ -412,6 +412,27 @@ def _cs_make_text(cls, txt, font_size, font='Arial', font_path=None,
 Compound.make_text = classmethod(_cs_make_text)
 
 
+# Joint reparenting: upstream's `Compound(obj=part.wrapped, joints=
+# part.joints)` (BasePartObject / the tutorial's Hinge pattern) relies on
+# pybind's downcast() returning THE SAME C++ TopoDS object, so
+# Joint.connect_to's in-place `parent.locate()` moves the new wrapper too.
+# embind casts return VALUE COPIES, so the joints' parents must REBIND to
+# the newly-constructed shape (the same semantics lite documents for
+# Compound(joints=)).
+_upstream_compound_init = Compound.__init__
+
+
+def _cs_compound_init(self, *args, **kwargs):
+    _upstream_compound_init(self, *args, **kwargs)
+    joints = getattr(self, 'joints', None)
+    if joints:
+        for j in joints.values():
+            j.parent = self
+
+
+Compound.__init__ = _cs_compound_init
+
+
 # COMPROMISE(gordon-*): upstream delegates to the external ocp_gordon
 # package; here the JS port (GordonSurface.js, w.GordonSurfaceFace) builds
 # the face directly.
