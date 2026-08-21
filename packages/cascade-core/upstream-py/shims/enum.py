@@ -103,7 +103,13 @@ def _finalize_enum_class(cls):
             v._cls_name_ = cls.__name__
             members[k] = v
             order.append(k)
-        elif isinstance(v, (int, float, str, tuple)) and k.upper() == k:
+        elif (isinstance(v, (int, float, str, tuple))
+              or type(v).__name__ == 'JsProxy') and k.upper() == k:
+            # JsProxy: pytopo=upstream serves OCP enum members as embind
+            # proxies (e.g. build_enums Tangency.X = GccEnt_*); they must
+            # become _Members so .name exists (the lite seam translates by
+            # name) and .value is the MEMBER (pybind semantics) — a bare
+            # proxy's .value would read embind's int instead
             inst = _Member()
             inst._name_ = k
             inst._cls_name_ = cls.__name__

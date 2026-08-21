@@ -267,7 +267,13 @@ const coarseOf = (t) => {
   if (/^(string|Standard_CString|Standard_Character|NCollection_String|XCAFDoc_PartId)$/.test(ts)) { return 's'; }
   if (dtsEnums[ts]) { return 'e:' + ts; }
   if (dts[ts] && !/_\d+$/.test(ts)) { return 'c:' + ts; }
-  return '?'; // unregistered token (enum the wasm never bound, etc.)
+  if (ts === 'ptr') { return '?'; } // hand Handle_X_2 from-pointer ctors
+  // a PLAIN class identifier the d.ts never declared: embind throws
+  // "Cannot construct/call ... due to unbound types" on ANY call — the
+  // variant is dead and buildDispatch drops it (gp_Circ2d_3's gp_Ax22d
+  // param shadowed the real _2 overload before this)
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(ts)) { return 'u:' + ts; }
+  return '?'; // template/exotic token: unknown, weak-matches anything
 };
 const isAncestor = (anc, cls) => {
   let c = cls;
@@ -303,6 +309,10 @@ const buildDispatch = (variants) => {
   let unknown = 0;
   for (const v of variants) {
     if (!v.params) { unknown++; continue; }
+    if (v.csig.some((k) => k.lastIndexOf('u:', 0) === 0)) {
+      report.deadUnbound++;  // references a type embind never registered
+      continue;
+    }
     const ar = v.params.length;
     (byArity[ar] = byArity[ar] || []).push(v);
   }
@@ -355,7 +365,7 @@ const buildDispatch = (variants) => {
   return { dispatch, kinds, unknown };
 };
 const report = { direct: 0, typed: 0, ambiguous: 0, unknownOnly: 0,
-  pinnedPrimKeys: 0, runtimeDispatched: [], ambiguousKeys: [] };
+  pinnedPrimKeys: 0, deadUnbound: 0, runtimeDispatched: [], ambiguousKeys: [] };
 
 for (const cls of [...closure].sort()) {
   const d = dts[cls];
@@ -591,6 +601,7 @@ fs.writeFileSync(join(HERE, 'dispatch-report.json'), JSON.stringify({
     typedKeys: report.typed,
     ambiguousKeys: report.ambiguous,
     unknownSigOnlyMethods: report.unknownOnly,
+    deadUnboundVariants: report.deadUnbound,
     pinnedPrimTypeKeys: report.pinnedPrimKeys,
     billedAmbiguousKeys: billedAmb.length,
   },
@@ -601,7 +612,8 @@ fs.writeFileSync(join(HERE, 'dispatch-report.json'), JSON.stringify({
 console.log('dispatch: direct', report.direct, '| typed', report.typed,
   '| ambiguous', report.ambiguous, '(billed:', billedAmb.length + ')',
   '| prim-key pins', report.pinnedPrimKeys,
-  '| unknown-sig-only methods', report.unknownOnly);
+  '| unknown-sig-only methods', report.unknownOnly,
+  '| dead unbound variants', report.deadUnbound);
 if (billedAmb.length) {
   console.log('BILLED ambiguous keys (runtime will refuse on tie):');
   for (const r of billedAmb) {

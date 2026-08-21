@@ -260,6 +260,50 @@ except (NotImplementedError, AttributeError):
     pass
 print('T6 OK numpy micro-shim: lstsq intersection, linspace, out-of-bill raises')
 `,
+  't7-constrained-verbatim': `
+# pytopo=upstream runs upstream topology/constrained_lines.py VERBATIM
+# (Geom2dGcc over the shim) behind lite Edge.make_constrained_arcs/lines;
+# every solver family must agree with the harness-validated lite kernel
+# path on identical inputs (count + sorted lengths).
+import sys
+from build123d import *
+import build123d_lite as _lt
+_topo = sys.modules['build123d.topology']
+
+c1 = CenterArc((4, 0), 2, 0, 360)
+c2 = CenterArc((0, 2), 1.5, 0, 360)
+e1, e2 = c1.edge(), c2.edge()
+
+def compare(tag, up, lt, expect_nonzero=True):
+    assert (len(up) > 0) or not expect_nonzero, tag + ': no upstream solutions'
+    assert len(up) == len(lt), tag + ': count %d vs lite %d' % (len(up), len(lt))
+    ul = sorted(e.length for e in up)
+    ll = sorted(e.length for e in lt)
+    for a, b in zip(ul, ll):
+        assert abs(a - b) < 1e-6, tag + ': length %r vs %r' % (ul, ll)
+
+compare('2tan+rad',
+        Edge.make_constrained_arcs(e1, e2, radius=6),
+        _topo._edge_make_constrained_arcs(_lt.Edge, e1, e2, radius=6))
+compare('qualified 2tan+rad',
+        Edge.make_constrained_arcs((e1, Tangency.OUTSIDE), (e2, Tangency.OUTSIDE), radius=6),
+        _topo._edge_make_constrained_arcs(_lt.Edge, (e1, Tangency.OUTSIDE), (e2, Tangency.OUTSIDE), radius=6))
+c3 = CenterArc((2, -4), 1.0, 0, 360)
+e3 = c3.edge()
+compare('3tan',
+        Edge.make_constrained_arcs(e1, e2, e3),
+        _topo._edge_make_constrained_arcs(_lt.Edge, e1, e2, e3))
+compare('tan+center',
+        Edge.make_constrained_arcs(e1, center=(0, -4)),
+        _topo._edge_make_constrained_arcs(_lt.Edge, e1, center=(0, -4)))
+compare('2tan lines',
+        Edge.make_constrained_lines(e1, e2),
+        _topo._edge_make_constrained_lines(_lt.Edge, e1, e2))
+compare('oriented lines',
+        Edge.make_constrained_lines(e1, Axis.X, angle=30),
+        _topo._edge_make_constrained_lines(_lt.Edge, e1, Axis.X, angle=30))
+print('T7 OK verbatim constrained_lines agrees with the lite kernel path (6 families)')
+`,
   't4-shape-core-import': `
 import b123d_shape_core_u as sc
 from build123d import *

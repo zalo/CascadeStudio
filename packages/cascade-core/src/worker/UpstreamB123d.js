@@ -411,6 +411,19 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     };
     await regUpstreamTopo('utils', 'build123d.topology.utils');
     await regUpstreamTopo('zero_d', 'build123d.topology.zero_d');
+    // the whole Geom2dGcc constrained-solver layer runs VERBATIM over the
+    // shim (BILL: zero blocked call sites); constrained_bridge.py ports
+    // one_d's thin overload dispatchers onto lite Edge.make_constrained_*
+    try {
+      await regUpstreamTopo('constrained_lines',
+        'build123d.topology.constrained_lines');
+      registerAlias('constrained_bridge',
+        await fetchText('ocp_shim/constrained_bridge.py'));
+      console.log('[pytopo=upstream] upstream constrained_lines registered (verbatim)');
+    } catch (e) {
+      console.log('[pytopo=upstream] upstream constrained_lines not loaded: '
+        + String((e && e.message) || e).split('\n').slice(-3).join(' | ').slice(0, 300));
+    }
     try {
       await regUpstreamTopo('shape_core', 'b123d_shape_core_u');
       console.log('[pytopo=upstream] upstream shape_core registered (alias b123d_shape_core_u)');

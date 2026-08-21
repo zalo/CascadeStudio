@@ -131,23 +131,45 @@ export function installOcpShim(self, table) {
   };
 
   // pybind implicitly wraps a raw Standard_Transient into the handle<T> a
-  // parameter expects; embind does not. When a candidate fails with
-  // "Expected ... Handle_X", retry with each object arg wrapped in that
-  // handle class (ocjs convention: Handle_X_2 is the from-pointer ctor).
-  const retryWithHandle = (fn, thisArg, args, handleName) => {
+  // parameter expects; embind does not. ITERATIVELY wrap whichever arg
+  // matches the Handle_X each conversion error names — multi-handle calls
+  // (BRepBuilderAPI_MakeEdge(curve2d, surface)) need several rounds. The
+  // target arg is picked by class-chain match on the handle's inner type,
+  // falling back to the first wrappable raw transient.
+  const mkHandle = (handleName, a) => {
     for (const suffix of ['_2', '_3']) {
       const H = oc[handleName + suffix];
       if (!H) { continue; }
-      for (let i = 0; i < args.length; i++) {
-        const a = args[i];
-        if (!isEmbind(a) || String(a.constructor.name).startsWith('Handle_')) { continue; }
-        let h;
-        try { h = new H(a); } catch (e) { continue; }
-        const swapped = args.slice();
-        swapped[i] = h;
-        try {
-          return { done: true, value: fn.apply(thisArg, swapped) };
-        } catch (e) { /* keep looking */ }
+      try { return new H(a); } catch (e) { /* next */ }
+    }
+    return null;
+  };
+  const retryWithHandle = (fn, thisArg, args, firstHandle) => {
+    const cur = args.slice();
+    let handleName = firstHandle;
+    for (let round = 0; round <= args.length; round++) {
+      const inner = handleName.slice(7);
+      let idx = -1, blind = -1;
+      for (let i = 0; i < cur.length; i++) {
+        const a = cur[i];
+        if (!isEmbind(a)) { continue; }
+        const cn = String(a.constructor.name);
+        if (cn.lastIndexOf('Handle_', 0) === 0) { continue; }
+        if (chainHas(normCls(cn), inner)) { idx = i; break; }
+        if (blind === -1) { blind = i; }
+      }
+      if (idx === -1) { idx = blind; }
+      if (idx === -1) { return null; }
+      const h = mkHandle(handleName, cur[idx]);
+      if (!h) { return null; }
+      cur[idx] = h;
+      try {
+        return { done: true, value: fn.apply(thisArg, cur) };
+      } catch (e) {
+        const msg = (e && e.message) ? String(e.message) : String(e);
+        const hm = /Expected null or instance of (Handle_\w+)/.exec(msg);
+        if (!hm) { return null; }
+        handleName = hm[1];
       }
     }
     return null;
@@ -253,7 +275,7 @@ export function installOcpShim(self, table) {
     return best ? { cand: best } : null;
   };
 
-  const CONV_ERR = /Cannot pass|Expected null or instance|argument count|BindingError|reading '\$\$'|function \w+ called with/i;
+  const CONV_ERR = /Cannot pass|Expected null or instance|argument count|BindingError|reading '\$\$'|function \w+ called with|unbound types/i;
 
   // invoke a pinned/matched variant: pre-wrap raw transients into the
   // Handle_X the sig declares, surface OCCT raises, and report embind
@@ -548,7 +570,8 @@ export function installOcpShim(self, table) {
     }
     if (tieInfo) { refuseTie(cls + '.__init__', tieInfo); }
     throw lastErr || new Error('ocp_shim: no matching constructor ' + cls +
-      '/' + args.length);
+      '/' + args.length + ' (arg kinds: [' + args.map(argKind).join(', ')
+      + '])');
   };
   const ocCtor = (jsName) => {
     const C = oc[jsName];
