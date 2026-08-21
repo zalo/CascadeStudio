@@ -156,3 +156,29 @@ release-by-release without the big swap. Recommended default: hold at stage
 1+2 value (bindings + hardened shim + function-level adoption), take stage
 3 only when a build123d release makes topology-layer drift the dominant
 maintenance cost.
+
+## Harness-neutrality gate (pytopo DEFAULT OFF, run after landing)
+
+Full 232-script harness, `CS_PY_RUNTIME=micropython` (pysrc=upstream
+default), machine under load-average ~10 (shared box):
+
+- Raw: 202 PASS / 9 MISMATCH / 7 ERROR / 4 TIMEOUT — normalizes to the
+  committed **205 / 10 / 5 / 2 per-script EXACTLY**:
+  - `filter_inner_wire_count` + `tutorial_joints` "ERRORs" were the
+    DOCUMENTED harness-config pitfall (import_step assets need
+    `B123D_SRC=~/Desktop/build123d`); rerun with the env: PASS and
+    MISMATCH (= baseline).
+  - `bracelet`, `clock` TIMEOUTs were 4-page contention flaps; solo: PASS.
+  - `heat_exchanger` is the documented budget-edge flap (upstream-source
+    config only; times out under load even solo, while pysrc=lite passes
+    the same script in 55 s — exactly the CLAUDE.md note).
+- Browser checks under `?pytopo=upstream`: the full PYTHON_STARTER_CODE
+  (flanged bearing mount) evaluates with zero errors over the active
+  bridge, and the zero_d mixed-mode smoke prints exact geometry.
+- Full harness, `CS_PY_RUNTIME=micropython CS_PY_SRC=lite` (the lite
+  baseline): **206 PASS / 10 MISMATCH / 5 ERROR / 1 TIMEOUT — per-script
+  IDENTICAL to the committed report.md set** (joints x2, projection x2,
+  sort_axis, filter_all_edges_circle, tips/b04, objects_1d, tutorial_joints,
+  sm_hanger; toy_truck, dual_color_3mf, ttt-ppp0110, objects_2d,
+  curved_support; spitfire).
+- Full playwright suite: **95 passed / 1 skipped** (exit 0).
