@@ -134,7 +134,7 @@ if _HAS_METACLASSES:
                 v = ns[k]
                 if isinstance(v, _Member):
                     value = v._value_          # auto() sentinel: keep its value
-                elif (isinstance(v, (int, float, str, tuple))
+                elif (v is None or isinstance(v, (int, float, str, tuple))
                       or type(v).__name__ == 'JsProxy') and k.upper() == k:
                     # JsProxy: pytopo=upstream serves OCP enum members as
                     # embind proxies (build_enums Tangency.X = GccEnt_*);
@@ -218,7 +218,7 @@ else:
                 v._cls_name_ = cls.__name__
                 members[k] = v
                 order.append(k)
-            elif (isinstance(v, (int, float, str, tuple))
+            elif (v is None or isinstance(v, (int, float, str, tuple))
                   or type(v).__name__ == 'JsProxy') and k.upper() == k:
                 # JsProxy: see the metaclass path's note (pytopo=upstream
                 # OCP enum members as embind proxies)
