@@ -221,6 +221,14 @@ def _cs_run_user(src):
             g[_n] = OSError
     try:
         exec(compile(src, 'main', 'exec'), g)
+        # pytopo=upstream: populate the implicit scene from module globals
+        # when the script never called show() (lite's JS ops maintain
+        # sceneShapes call-by-call; upstream topology builds through the OCP
+        # shim, so the glue assembles the scene after the run). A no-op hook
+        # everywhere else.
+        _hook = getattr(sys.modules.get('build123d'), '_cs_after_run', None)
+        if _hook is not None:
+            _hook(g)
         return None
     except Exception as e:
         buf = io.StringIO()

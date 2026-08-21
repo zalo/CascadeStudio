@@ -477,6 +477,34 @@ export function installOcpShim(self, table) {
     // embind Parameter_1 IS that overload (the tuple form is Parameter_2)
     'Geom2dAPI_ProjectPointOnCurve.Parameter': (args, ref) =>
       ref.Parameter_1(args[0]),
+    // The BRepAlgoAPI base-chain hand binding exposes SetArguments/SetTools/
+    // Build/Shape but not the BOPAlgo_Options setters:
+    //  * SetRunParallel — EXACT no-op (this wasm build is single-threaded)
+    //  * SetFuzzyValue / SetNonDestructive — COMPROMISE(fuzzy-value): the
+    //    setters are unbound, so booleans run at OCCT's default fuzzy
+    //    (Precision::Confusion) where upstream requests one (Compound.__add__
+    //    passes TOLERANCE=1e-6; Shape.fuse(tol=...)). Candidate fork ask.
+    'BRepAlgoAPI_Algo.SetRunParallel': () => undefined,
+    'BRepAlgoAPI_Algo.SetFuzzyValue': () => undefined,
+    'BRepAlgoAPI_BuilderAlgo.SetNonDestructive': () => undefined,
+    // pybind GetEulerAngles(seq) -> (alpha, beta, gamma); the embind variant
+    // value-passes the three Standard_Real& outs. Extracted from the bound
+    // rotation matrix instead. build123d calls ONLY gp_Intrinsic_XYZ
+    // (Location.orientation / Location.to_tuple): R = Rx(a)·Ry(b)·Rz(g),
+    // validated against SetEulerAngles round-trips in topo-poc.
+    'gp_Quaternion.GetEulerAngles': (args, ref) => {
+      if (args[0] !== oc.gp_EulerSequence.gp_Intrinsic_XYZ) {
+        throw new Error('ocp_shim: GetEulerAngles glue supports '
+          + 'gp_Intrinsic_XYZ only (build123d uses no other sequence)');
+      }
+      const m = ref.GetMatrix();
+      const r11 = m.Value(1, 1), r12 = m.Value(1, 2), r13 = m.Value(1, 3);
+      const r23 = m.Value(2, 3), r33 = m.Value(3, 3);
+      const beta = Math.atan2(r13, Math.sqrt(r11 * r11 + r12 * r12));
+      const alpha = Math.atan2(-r23, r33);
+      const gamma = Math.atan2(-r12, r11);
+      return [alpha, beta, gamma];
+    },
   };
   // The Geom2dGcc Tangency family: pybind Tangency{1,2,3}(Index, PntSol)
   // -> (ParSol, ParArg), MUTATING the caller's PntSol. The fork's OCJS_Out
@@ -586,9 +614,22 @@ export function installOcpShim(self, table) {
       + '])');
   };
   const ocCtor = (jsName) => {
-    const C = oc[jsName];
+    let C = oc[jsName];
+    if (!C && /_\d+$/.test(jsName)) {
+      // hand-registered classes (TopTools_ListOfShape, OCJS helpers) bind
+      // under the PLAIN name; the generated table pins d.ts-style _N names
+      C = oc[jsName.replace(/_\d+$/, '')];
+    }
     if (!C) { return undefined; }
     return function (...a) { return new C(...a); };
+  };
+  // method resolution with the same plain-name fallback
+  const methodOn = (holder) => (js) => {
+    let f = holder[js];
+    if (typeof f !== 'function' && /_\d+$/.test(js)) {
+      f = holder[js.replace(/_\d+$/, '')];
+    }
+    return f;
   };
 
   self._csOcpStatic = function (cls, name, args, kwargs) {
@@ -609,7 +650,7 @@ export function installOcpShim(self, table) {
     const holder = oc[cls];
     if (!holder) { throw new Error('ocp_shim: class not bound: ' + cls); }
     // 1. pinned dispatch
-    let r = dispatchPhases(m && m.dispatch, (js) => holder[js], holder,
+    let r = dispatchPhases(m && m.dispatch, methodOn(holder), holder,
       args, kwargs, m && m.pybind, m && m.variants, cls + '.' + name);
     if (r.done) { return deref(r.value); }
     const sets = r.sets || [args];
@@ -671,7 +712,7 @@ export function installOcpShim(self, table) {
         (mcls || cn0) + '.' + name);
     }
     // 1. pinned dispatch
-    let r = dispatchPhases(m && m.dispatch, (js) => ref[js], ref, args,
+    let r = dispatchPhases(m && m.dispatch, methodOn(ref), ref, args,
       kwargs, m && m.pybind, m && m.variants, (mcls || cn0) + '.' + name);
     if (r.done) { return deref(r.value); }
     const sets = r.sets || [args];

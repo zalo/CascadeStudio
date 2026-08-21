@@ -107,6 +107,7 @@ def get_origin(tp):
 
 
 Any = _Sub('Any')
+SupportsIndex = _Sub('SupportsIndex')
 Union = _Sub('Union')
 Optional = _Sub('Optional')
 Callable = _Sub('Callable')

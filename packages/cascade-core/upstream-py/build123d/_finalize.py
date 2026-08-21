@@ -21,6 +21,11 @@ _OPTIONAL = ('objects_part', 'objects_curve', 'objects_sketch', 'joints',
              'pack', 'operations_sketch', 'operations_generic',
              'operations_part')
 
+# Which topology layer is beneath us: 'lite' (the seam re-exports) or
+# 'upstream' (Stage 3: upstream geometry+topology verbatim over the OCP
+# shim, with ocp_shim/topo_glue.py as the worker glue).
+_PYTOPO = getattr(_pkg, '_cs_pytopo', 'lite')
+
 
 def _public_names(mod):
     all_names = getattr(mod, '__all__', None)
@@ -64,18 +69,29 @@ for _name in dir(_lt):
     if isinstance(_val, type):
         setattr(_pkg, _name, _val)
 
-# lite's viewer + measurement + export hooks (worker/harness contract), plus
-# the handful of lite-only user-facing FUNCTIONS with no upstream Level-A
-# counterpart and no builder-context dependence that could silently misfire
-# (ArrowHead is sketch-context-aware in lite, but under an upstream builder
-# its result is still returned and add()-able; the harness measures it).
-for _name in ('show', 'show_object', 'show_all', 'volume',
-              '_measure_globals_json', 'export_stl', 'export_step',
-              'export_gltf', 'export_brep', 'import_brep', 'import_step',
-              'Mesher', 'ExportSVG', 'ArrowHead', 'polar', 'delta',
-              'topo_distance_to', 'edges_to_wires'):
-    if hasattr(_lt, _name):
-        setattr(_pkg, _name, getattr(_lt, _name))
+# viewer + measurement + export hooks (worker/harness contract).
+# pytopo=lite: lite's own hooks work on lite shapes. pytopo=upstream: the
+# worker glue (topo_glue) serves the same contract over UPSTREAM shapes
+# (raw-TopoDS unwrapping); lite-only helper FUNCTIONS with no upstream
+# counterpart still come from lite where they remain shape-compatible.
+if _PYTOPO == 'upstream':
+    import topo_glue as _glue
+    for _name in ('show', 'show_object', 'show_all', 'volume',
+                  '_measure_globals_json', 'export_stl', 'export_step',
+                  'export_gltf', 'export_brep', 'import_brep', 'import_step',
+                  'Mesher', '_cs_after_run'):
+        setattr(_pkg, _name, getattr(_glue, _name))
+    for _name in ('ExportSVG', 'polar', 'delta'):
+        if not hasattr(_pkg, _name) and hasattr(_lt, _name):
+            setattr(_pkg, _name, getattr(_lt, _name))
+else:
+    for _name in ('show', 'show_object', 'show_all', 'volume',
+                  '_measure_globals_json', 'export_stl', 'export_step',
+                  'export_gltf', 'export_brep', 'import_brep', 'import_step',
+                  'Mesher', 'ExportSVG', 'ArrowHead', 'polar', 'delta',
+                  'topo_distance_to', 'edges_to_wires'):
+        if hasattr(_lt, _name):
+            setattr(_pkg, _name, getattr(_lt, _name))
 
 
 # lite operations with NO upstream Level-A counterpart that must also reach
@@ -93,7 +109,12 @@ def _cs_builder_op(fn, mode):
     return wrapped
 
 
-_pkg.draft = _cs_builder_op(_lt.draft, _enums.Mode.REPLACE)
+if _PYTOPO != 'upstream':
+    # upstream 0.11.1 HAS operations_part.draft, but over the LITE seam its
+    # OCP calls cannot run; route to lite's validated draft op. Under
+    # pytopo=upstream the verbatim operations_part.draft is already in _pkg.
+    _pkg.draft = _cs_builder_op(_lt.draft, _enums.Mode.REPLACE)
+
 
 # upstream's Airfoil needs real numpy (an honest raise on this runtime);
 # lite's Airfoil is the VALIDATED numpy-free port. Its builder bookkeeping
@@ -103,8 +124,12 @@ def _cs_airfoil(airfoil_code, n_points=50, finite_te=False,
                 mode=_enums.Mode.ADD):
     res = _lt.Airfoil(airfoil_code, n_points=n_points, finite_te=finite_te,
                       mode=_lt.Mode.PRIVATE)
+    if _PYTOPO == 'upstream':
+        # adopt the lite-built edges as UPSTREAM shapes
+        import topo_glue as _g
+        res = _g._from_raw(_lt._topo(res), _topology.Curve)
     ctx = _common.Builder._current.get(None)
-    if ctx is not None and getattr(res, 'topo', None) is not None:
+    if ctx is not None and res is not None:
         ctx._add_to_context(*res.edges(), mode=mode)
     return res
 
@@ -119,6 +144,8 @@ _pkg.Airfoil = _cs_airfoil
 # active upstream BuildLine, exactly like lite does in its own builders
 # (COMPROMISE(double-tangent-arc)).
 def _cs_double_tangent_arc(pnt, tangent, other, keep=None, mode=None):
+    # pytopo=lite only (under upstream topology the verbatim objects_curve
+    # DoubleTangentArc runs over the shim's scipy Nelder-Mead shim)
     lk = getattr(_lt.Keep, getattr(keep, 'name', 'TOP'), _lt.Keep.TOP)
     arc = _lt.DoubleTangentArc(pnt, tangent, other, keep=lk,
                                mode=_lt.Mode.PRIVATE)
@@ -149,7 +176,8 @@ def _cs_double_tangent_arc(pnt, tangent, other, keep=None, mode=None):
     return arc
 
 
-_pkg.DoubleTangentArc = _cs_double_tangent_arc
+if _PYTOPO != 'upstream':
+    _pkg.DoubleTangentArc = _cs_double_tangent_arc
 
 
 

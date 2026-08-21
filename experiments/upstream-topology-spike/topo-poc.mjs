@@ -261,21 +261,27 @@ except (NotImplementedError, AttributeError):
 print('T6 OK numpy micro-shim: lstsq intersection, linspace, out-of-bill raises')
 `,
   't7-constrained-verbatim': `
-# pytopo=upstream runs upstream topology/constrained_lines.py VERBATIM
-# (Geom2dGcc over the shim) behind lite Edge.make_constrained_arcs/lines;
-# every solver family must agree with the harness-validated lite kernel
-# path on identical inputs (count + sorted lengths).
-import sys
+# Upstream topology/constrained_lines.py + one_d's own overload dispatchers
+# run VERBATIM (Geom2dGcc over the shim); every solver family must agree
+# with the harness-validated LITE kernel path on identical inputs
+# (count + sorted lengths). The lite side is built from lite's own classes.
 from build123d import *
 import build123d_lite as _lt
-_topo = sys.modules['build123d.topology']
 
 c1 = CenterArc((4, 0), 2, 0, 360)
 c2 = CenterArc((0, 2), 1.5, 0, 360)
 e1, e2 = c1.edge(), c2.edge()
+le1 = _lt.CenterArc((4, 0), 2, 0, 360, mode=_lt.Mode.PRIVATE).edge()
+le2 = _lt.CenterArc((0, 2), 1.5, 0, 360, mode=_lt.Mode.PRIVATE).edge()
 
-def compare(tag, up, lt, expect_nonzero=True):
-    assert (len(up) > 0) or not expect_nonzero, tag + ': no upstream solutions'
+def lite_arcs(*args, **kw):
+    return [_lt.Edge(t) for t in _lt._constrained_arc_topos(list(args), **kw)]
+
+def lite_lines(*args, **kw):
+    return [_lt.Edge(t) for t in _lt._constrained_line_topos(list(args), **kw)]
+
+def compare(tag, up, lt):
+    assert len(up) > 0, tag + ': no upstream solutions'
     assert len(up) == len(lt), tag + ': count %d vs lite %d' % (len(up), len(lt))
     ul = sorted(e.length for e in up)
     ll = sorted(e.length for e in lt)
@@ -284,24 +290,26 @@ def compare(tag, up, lt, expect_nonzero=True):
 
 compare('2tan+rad',
         Edge.make_constrained_arcs(e1, e2, radius=6),
-        _topo._edge_make_constrained_arcs(_lt.Edge, e1, e2, radius=6))
+        lite_arcs(le1, le2, radius=6, sagitta=_lt.Sagitta.SHORT))
 compare('qualified 2tan+rad',
         Edge.make_constrained_arcs((e1, Tangency.OUTSIDE), (e2, Tangency.OUTSIDE), radius=6),
-        _topo._edge_make_constrained_arcs(_lt.Edge, (e1, Tangency.OUTSIDE), (e2, Tangency.OUTSIDE), radius=6))
+        lite_arcs((le1, _lt.Tangency.OUTSIDE), (le2, _lt.Tangency.OUTSIDE),
+                  radius=6, sagitta=_lt.Sagitta.SHORT))
 c3 = CenterArc((2, -4), 1.0, 0, 360)
 e3 = c3.edge()
+le3 = _lt.CenterArc((2, -4), 1.0, 0, 360, mode=_lt.Mode.PRIVATE).edge()
 compare('3tan',
         Edge.make_constrained_arcs(e1, e2, e3),
-        _topo._edge_make_constrained_arcs(_lt.Edge, e1, e2, e3))
+        lite_arcs(le1, le2, le3, sagitta=_lt.Sagitta.SHORT))
 compare('tan+center',
         Edge.make_constrained_arcs(e1, center=(0, -4)),
-        _topo._edge_make_constrained_arcs(_lt.Edge, e1, center=(0, -4)))
+        lite_arcs(le1, center=(0, -4)))
 compare('2tan lines',
         Edge.make_constrained_lines(e1, e2),
-        _topo._edge_make_constrained_lines(_lt.Edge, e1, e2))
+        lite_lines(le1, le2))
 compare('oriented lines',
         Edge.make_constrained_lines(e1, Axis.X, angle=30),
-        _topo._edge_make_constrained_lines(_lt.Edge, e1, Axis.X, angle=30))
+        lite_lines(le1, _lt.Axis.X, angle=30))
 print('T7 OK verbatim constrained_lines agrees with the lite kernel path (6 families)')
 `,
   't8-fork-05d088d-bindings': `
@@ -460,11 +468,13 @@ print('T8 OK fork 05d088d: Range/UVBounds/CurveOnSurface/StaticMoments/'
       'PrincipalProps/gp_Mat/CompSolid/ExtPC/MakeOffset/ParOnEdgeS2/'
       'ECC.Parameters/HSequence+ConnectEdges/HArray2/Seq+IndexedMap')
 `,
-  't4-shape-core-import': `
-import b123d_shape_core_u as sc
+  't4-shape-core-selectors': `
+# build123d.topology.shape_core IS upstream's module now: selectors over
+# upstream-built shapes (the OCCT-heavy filter_by(Plane) predicate included)
+import sys
+sc = sys.modules['build123d.topology.shape_core']
 from build123d import *
 b = Box(2, 3, 4)
-# upstream ShapeList over LITE shapes (duck-typed members)
 sl = sc.ShapeList(b.faces())
 assert len(sl) == 6
 top = sl.sort_by(Axis.Z)[-1]
@@ -473,7 +483,87 @@ groups = sl.group_by(Axis.Z)
 assert len(groups[-1]) == 1
 filtered = sl.filter_by(Plane.XY)
 assert len(filtered) == 2, 'filter_by Plane.XY: ' + str(len(filtered))
-print('T4 OK upstream ShapeList selectors over lite faces')
+print('T4 OK upstream shape_core selectors over upstream faces')
+`,
+  't9-geometry-verbatim': `
+# PHASE 1 gate: upstream geometry.py VERBATIM — Vector/Axis/Plane/Location/
+# Matrix/BoundBox constructed and operated, Axis intersection via the numpy
+# micro-shim, Plane/Location round-trips, Rotation Euler round-trip.
+import math
+from build123d import *
+from build123d.geometry import Matrix, BoundBox
+
+v = Vector(1, 2, 3)
+assert abs((v + (1, 1, 1)).length - math.sqrt(4 + 9 + 16)) < 1e-12
+assert tuple(v.cross(Vector(0, 0, 1))) == (2.0, -1.0, 0.0)
+
+# Axis.intersect(Axis) is the np.linalg.lstsq path
+a1 = Axis((0, 0, 0), (1, 0, 0))
+a2 = Axis((5, -5, 0), (0, 1, 0))
+p = a1.intersect(a2)
+assert p is not None and (p - Vector(5, 0, 0)).length < 1e-9, 'axis intersect ' + str(p)
+
+# Plane round-trips: offset, rotated, Plane(Location(plane)) identity
+pl = Plane.XY.offset(5)
+assert abs(pl.origin.Z - 5.0) < 1e-12
+pl2 = Plane(pl.location)
+assert (pl2.origin - pl.origin).length < 1e-12
+assert (pl2.z_dir - pl.z_dir).length < 1e-12
+plr = Plane.XY.rotated((45, 0, 0))
+assert abs(plr.z_dir.dot(Plane.XY.z_dir) - math.cos(math.radians(45))) < 1e-9
+
+# Location: position/orientation round-trip (GetEulerAngles glue)
+loc = Location((1, 2, 3), (10, 20, 30))
+t, r = tuple(loc)
+assert (t - Vector(1, 2, 3)).length < 1e-9
+assert all(abs(a - b) < 1e-9 for a, b in zip(tuple(r), (10.0, 20.0, 30.0))), \\
+    'orientation ' + str(tuple(r))
+li = loc * loc.inverse()
+assert (li.position - Vector(0, 0, 0)).length < 1e-9
+
+# Rotation algebra
+rot = Rotation(0, 0, 90)
+pv = (rot * Location((1, 0, 0))).position
+assert (pv - Vector(0, 1, 0)).length < 1e-9, 'rotated pos ' + str(pv)
+
+# Matrix (rotate takes DEGREES upstream)
+m = Matrix()
+m.rotate(Axis.Z, 90)
+mv = m.multiply(Vector(1, 0, 0))
+assert (mv - Vector(0, 1, 0)).length < 1e-9, 'matrix rotate ' + str(mv)
+
+# BoundBox over an upstream shape (exact Bnd_Box)
+bb = Box(2, 4, 6).bounding_box()
+assert all(abs(a - b) < 1e-6 for a, b in zip(tuple(bb.size), (2.0, 4.0, 6.0)))
+print('T9 OK upstream geometry verbatim (Vector/Axis/Plane/Location/Rotation/Matrix/BoundBox)')
+`,
+  't10-buildpart-glue': `
+# PHASE 2 gate: a real builder flow end-to-end over the full upstream stack
+# + the worker glue (show -> sceneShapes raw TopoDS, measurement hook).
+import math
+from browser import self as w
+import build123d as b123d
+from build123d import *
+
+with BuildPart() as bp:
+    Box(10, 10, 5)
+    Cylinder(3, 5, mode=Mode.SUBTRACT)
+    fillet(bp.edges().filter_by(Axis.Z), 1)
+
+expected = 500.0 - math.pi * 9 * 5 - (1.0 - math.pi / 4.0) * 5.0 * 4.0
+assert abs(bp.part.volume - expected) < 1e-6, 'volume %r vs %r' % (bp.part.volume, expected)
+
+show(bp)
+n = int(w.sceneShapes.length)
+assert n == 1, 'sceneShapes after show: ' + str(n)
+raw = w.sceneShapes[0]
+assert hasattr(raw, 'ShapeType') or str(type(raw).__name__) == 'JsProxy', 'raw scene member'
+
+meas = b123d._measure_globals_json({'bp': bp, 'x': 5})
+assert '"bp"' in meas and '"volume"' in meas, meas
+import json as _json  # noqa: F401 (string check only; shim json is fine)
+assert str(round(expected, 3))[:6] in meas, 'measured volume in ' + meas
+print('T10 OK BuildPart flow + show/sceneShapes + measurement over the full upstream stack')
 `,
 };
 

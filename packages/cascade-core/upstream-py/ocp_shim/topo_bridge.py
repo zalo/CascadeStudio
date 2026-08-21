@@ -189,7 +189,14 @@ class TrimmingTool:
     """TypeAlias placeholder (annotation-only in upstream)."""
 
 
-_sc.shapetype = shapetype
-_sc.downcast = downcast
-_sc._make_topods_compound_from_shapes = _make_topods_compound_from_shapes
-_sc.TrimmingTool = TrimmingTool
+# Under the FULL upstream topology (Stage 3) build123d.topology.shape_core
+# IS upstream's module and already has all four names; only the seam
+# re-export module (pre-Stage-3 layout) needs them filled.
+if not hasattr(_sc, 'shapetype'):
+    _sc.shapetype = shapetype
+if not hasattr(_sc, 'downcast'):
+    _sc.downcast = downcast
+if not hasattr(_sc, '_make_topods_compound_from_shapes'):
+    _sc._make_topods_compound_from_shapes = _make_topods_compound_from_shapes
+if not hasattr(_sc, 'TrimmingTool'):
+    _sc.TrimmingTool = TrimmingTool

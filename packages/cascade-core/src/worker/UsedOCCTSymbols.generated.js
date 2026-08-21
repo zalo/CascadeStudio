@@ -174,6 +174,7 @@ export const USED_OCCT_SYMBOLS = [
   "gp_Dir_3",
   "gp_Dir_5",
   "gp_Elips_2",
+  "gp_EulerSequence",
   "gp_GTrsf_1",
   "gp_Hypr_2",
   "gp_Lin2d_3",

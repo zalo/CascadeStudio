@@ -159,6 +159,23 @@ class OcpProxy:
             raise AttributeError(name)
         return _BoundMethod(self, name)
 
+    # pybind maps C++ operators onto Python dunders (TopLoc_Location * ,
+    # gp_Trsf *, gp_Vec + - ...); embind binds them as named methods.
+    def __mul__(self, other):
+        return _BoundMethod(self, 'Multiplied')(other)
+
+    def __add__(self, other):
+        return _BoundMethod(self, 'Added')(other)
+
+    def __sub__(self, other):
+        return _BoundMethod(self, 'Subtracted')(other)
+
+    def __truediv__(self, other):
+        return _BoundMethod(self, 'Divided')(other)
+
+    def __neg__(self):
+        return _BoundMethod(self, 'Reversed')()
+
     def __repr__(self):
         return '<ocp_shim ' + str(self._cs) + '>'
 

@@ -7,11 +7,12 @@
 # breaks there; the custom micropython-cs interpreter build fixes nested
 # tuples natively (CPython semantics).
 _gen = type((_x for _x in ()))
-Iterable = (list, tuple, set, frozenset, dict, range, str, bytes, _gen)
+_lazy = (map, zip, filter, enumerate, reversed)  # lazy-iterator builtins
+Iterable = (list, tuple, set, frozenset, dict, range, str, bytes, _gen) + _lazy
 Sequence = (list, tuple, range, str, bytes)
 Mapping = (dict,)
 Callable = type(lambda: 0)
-Iterator = (_gen,)
+Iterator = (_gen,) + _lazy
 Hashable = object
 Sized = (list, tuple, set, dict, str, bytes)
 Collection = (list, tuple, set, frozenset, dict, range, str, bytes)

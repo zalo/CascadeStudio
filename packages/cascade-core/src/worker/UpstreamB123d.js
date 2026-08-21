@@ -292,7 +292,13 @@ export function rewriteDataclassFields(src) {
 export function transformUpstreamSource(name, src, opts) {
   let out = src;
   out = stripTypeAliases(out);
-  out = copyNamedPlaneAliases(out);
+  if (!(opts && opts.upstreamGeometry)) {
+    // lite's named planes are shared singletons that a mutation would
+    // corrupt; UPSTREAM geometry's Plane.XY classproperty returns a fresh
+    // plane per access (and upstream Plane has no .copy()), so the rewrite
+    // is only needed (and only valid) over the lite seam.
+    out = copyNamedPlaneAliases(out);
+  }
   out = stripRuntimeGenerics(out);
   if (!(opts && opts.metaclasses)) {
     // without interpreter metaclasses, class-base subscripts and Generic[...]
@@ -383,7 +389,8 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     hasMetaclasses = false;
   }
   self._csMpHasMetaclasses = hasMetaclasses;
-  const transformOpts = { metaclasses: hasMetaclasses };
+  const transformOpts = { metaclasses: hasMetaclasses,
+    upstreamGeometry: pytopo === 'upstream' };
 
   const registerAlias = (name, src) => {
     mp.globals.set('_CS_N', name);
@@ -503,70 +510,106 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     ].join('\n'));
   }
 
-  // 6. seam adapters
-  br._cs_register_module('build123d.geometry', await fetchText('build123d/geometry.py'), false);
-  br._cs_register_module('build123d.topology', await fetchText('build123d/topology/__init__.py'), true);
-  const seamSubs = ['shape_core', 'composite', 'three_d', 'two_d', 'one_d'];
-  if (pytopo !== 'upstream') { seamSubs.push('zero_d'); }
-  for (const sub of seamSubs) {
-    br._cs_register_module('build123d.topology.' + sub,
-      await fetchText('build123d/topology/' + sub + '.py'), false);
-  }
-
-  // 6b. pytopo=upstream: UPSTREAM topology modules run VERBATIM over the
-  //     shim (utils + zero_d replace the seam re-exports; shape_core is
-  //     registered best-effort under an alias for interop measurement)
-  if (pytopo === 'upstream') {
+  // 6. the geometry/topology bottom layer.
+  //    pytopo=lite (the default): the SEAM adapter modules re-export lite's
+  //    classes. pytopo=upstream (Stage 3): upstream geometry.py + the WHOLE
+  //    topology package run VERBATIM over the OCP shim, and lite reduces to
+  //    the JS op layer + the worker glue (ocp_shim/topo_glue.py).
+  if (pytopo !== 'upstream') {
+    br._cs_register_module('build123d.geometry', await fetchText('build123d/geometry.py'), false);
+    br._cs_register_module('build123d.topology', await fetchText('build123d/topology/__init__.py'), true);
+    const seamSubs = ['shape_core', 'composite', 'three_d', 'two_d', 'one_d', 'zero_d'];
+    for (const sub of seamSubs) {
+      br._cs_register_module('build123d.topology.' + sub,
+        await fetchText('build123d/topology/' + sub + '.py'), false);
+    }
+  } else {
     registerAlias('anytree', await fetchText('ocp_shim/anytree.py'));
     br._cs_register_module('IPython', 'pass\n', true);
     br._cs_register_module('IPython.lib', 'pass\n', true);
     br._cs_register_module('IPython.lib.pretty', await fetchText('ocp_shim/ipython_pretty.py'), false);
-    registerAlias('topo_bridge', await fetchText('ocp_shim/topo_bridge.py'));
     // the numpy MICRO-shim (array/cross/linspace/3x3 lstsq — exactly the
     // billed surface of upstream geometry.py + one_d.py) replaces the
     // honest raising stub ONLY here; everywhere else `import numpy` still
     // raises on use. Registered AFTER the manifest shims, so this wins.
     registerAlias('numpy', await fetchText('ocp_shim/numpy_micro.py'));
-    const regUpstreamTopo = async (name, asName) => {
-      const raw = await fetchText('upstream/topology/' + name + '.py');
-      // NOTE: no transformOpts — while the topology seam is still lite's
-      // shape_core, upstream topo modules subscript SEAM classes
-      // (class Vertex(Shape[TopoDS_Vertex])) that carry no Generic
-      // metaclass, so cleanClassBases must stay applied here even on the
-      // metaclass-capable interpreter. Revisit when upstream shape_core
-      // becomes build123d.topology.shape_core (Stage 3 Phase 2).
-      let src = transformUpstreamSource(name, raw);
+
+    // MicroPython's round() does not dispatch to __round__; upstream
+    // geometry rounds Vectors (`round(Vector(x_dir), 14)` in Plane(face)).
+    // Install a protocol-aware round in builtins (pytopo=upstream boots
+    // only).
+    runPy([
+      'import builtins as _cs_bi2',
+      '_cs_orig_round = _cs_bi2.round',
+      'def _cs_round(x, n=None):',
+      "    r = getattr(x, '__round__', None)",
+      '    if r is not None:',
+      '        return r(n) if n is not None else r()',
+      '    return _cs_orig_round(x) if n is None else _cs_orig_round(x, n)',
+      '_cs_bi2.round = _cs_round',
+    ].join('\n'));
+
+    const topoTransform = (name, raw) => {
+      let src = transformUpstreamSource(name, raw, transformOpts);
       // topology-only extra strips: module-level type-alias factories built
       // on the isinstance-tuple collections.abc shim (Callable[[...], X])
       src = stripRuntimeGenerics(src, ['Callable', 'Iterator']);
       // MicroPython exposes no bound dunders on builtin instances
       // (list(self).__getitem__(key) in ShapeList slicing)
       src = src.replace(/\.__getitem__\(([^()]+)\)/g, '[$1]');
-      br._cs_register_module(asName, src, false);
+      return src;
     };
-    await regUpstreamTopo('utils', 'build123d.topology.utils');
-    await regUpstreamTopo('zero_d', 'build123d.topology.zero_d');
-    // the whole Geom2dGcc constrained-solver layer runs VERBATIM over the
-    // shim (BILL: zero blocked call sites); constrained_bridge.py ports
-    // one_d's thin overload dispatchers onto lite Edge.make_constrained_*
-    try {
-      await regUpstreamTopo('constrained_lines',
-        'build123d.topology.constrained_lines');
-      registerAlias('constrained_bridge',
-        await fetchText('ocp_shim/constrained_bridge.py'));
-      console.log('[pytopo=upstream] upstream constrained_lines registered (verbatim)');
-    } catch (e) {
-      console.log('[pytopo=upstream] upstream constrained_lines not loaded: '
-        + String((e && e.message) || e).split('\n').slice(-3).join(' | ').slice(0, 300));
+
+    // 6-up.1: upstream geometry.py VERBATIM (numpy micro-shim serves its
+    // Axis._intersect_axis / color_wheel calls; AxisMeta runs natively on
+    // the metaclass interpreter)
+    br._cs_register_module('build123d.geometry',
+      topoTransform('geometry', await fetchText('upstream/geometry.py')), false);
+
+    // 6-up.1b: build123d.text is kernel-font machinery (fontTools +
+    // Font_FontMgr — COMPROMISE(text): no system fonts in wasm, kernel text
+    // permanently skipped). composite.py imports FONT_ASPECT/FontManager at
+    // module level; make_text itself is routed to lite's opentype.js path by
+    // topo_glue, so an import-satisfying stub suffices.
+    br._cs_register_module('build123d.text', [
+      'from build123d.build_enums import FontStyle',
+      'FONT_ASPECT = {FontStyle.REGULAR: 0, FontStyle.BOLD: 1,',
+      '               FontStyle.ITALIC: 2, FontStyle.BOLDITALIC: 3}',
+      'class FontManager:',
+      '    def __getattr__(self, name):',
+      "        raise NotImplementedError('kernel fonts are not available in '",
+      "                                  'this wasm build (COMPROMISE(text))')",
+      '',
+    ].join('\n'), false);
+
+    // 6-up.2: the topology package. Submodules are registered bottom-up
+    // under a PLACEHOLDER package __init__ (they only import downward), then
+    // the real upstream __init__.py replaces it and the package is reloaded
+    // (its relative imports resolve against the already-imported submodules).
+    br._cs_register_module('build123d.topology', 'pass\n', true);
+    const TOPO_ORDER = ['shape_core', 'utils', 'zero_d', 'constrained_lines',
+      'one_d', 'two_d', 'three_d', 'composite'];
+    for (const sub of TOPO_ORDER) {
+      br._cs_register_module('build123d.topology.' + sub,
+        topoTransform(sub, await fetchText('upstream/topology/' + sub + '.py')), false);
     }
-    try {
-      await regUpstreamTopo('shape_core', 'b123d_shape_core_u');
-      console.log('[pytopo=upstream] upstream shape_core registered (alias b123d_shape_core_u)');
-    } catch (e) {
-      console.log('[pytopo=upstream] upstream shape_core not loaded: '
-        + String((e && e.message) || e).split('\n').slice(-3).join(' | ').slice(0, 300));
-    }
-    console.log('[pytopo=upstream] upstream topology utils + zero_d registered');
+    mp.globals.set('_CS_TOPO_INIT',
+      topoTransform('topology_init', await fetchText('upstream/topology/__init__.py')));
+    runPy([
+      'import sys as _cs_sys',
+      "with open('/lib/build123d/topology/__init__.py', 'w') as _f:",
+      '    _f.write(_CS_TOPO_INIT)',
+      "del _cs_sys.modules['build123d.topology']",
+      'import build123d.topology as _cs_topo_mod',
+      "setattr(_cs_sys.modules['build123d'], 'topology', _cs_topo_mod)",
+    ].join('\n'));
+
+    // 6-up.3: lite interop (Shape.wrapped proxies, _Fn unwrap) + the worker
+    // glue (show/sceneShapes, measurement, text/gordon routing — everything
+    // lite's bottom layer provided to CascadeStudio)
+    registerAlias('topo_bridge', await fetchText('ocp_shim/topo_bridge.py'));
+    registerAlias('topo_glue', await fetchText('ocp_shim/topo_glue.py'));
+    console.log('[pytopo=upstream] upstream geometry + FULL topology registered verbatim');
   }
 
   // 7. the upstream Level-A modules
@@ -585,7 +628,10 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     }
   }
 
-  // 8. populate the package namespace + reset hook
+  // 8. populate the package namespace + reset hook (_finalize branches on
+  //    the topology layer via build123d._cs_pytopo)
+  mp.globals.set('_CS_PYTOPO', pytopo);
+  runPy("import sys as _cs_sys\nsetattr(_cs_sys.modules['build123d'], '_cs_pytopo', _CS_PYTOPO)");
   br._cs_register_module('build123d._finalize', await fetchText('build123d/_finalize.py'), false);
 
   console.log('[pysrc=upstream] upstream build123d Level-A registered'
