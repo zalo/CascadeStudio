@@ -153,47 +153,216 @@ export function installOcpShim(self, table) {
     return null;
   };
 
-  // d.ts-type-aware argument matching: embind coerces (an object passed to
-  // a bool param is silently truthy), so same-arity overloads MUST be
-  // ordered by type fit before calling (BRepGProp_Face_1(bool) vs
-  // _2(face, bool) was the motivating crash).
-  const typeFit = (arg, t) => {
-    if (t === null || t === undefined || t === 'any' || t === '') { return 0; }
-    const ts = String(t);
-    if (/Standard_Boolean|^bool/.test(ts)) {
-      return typeof arg === 'boolean' ? 1 : -1;
+  // ------------------------------------------------------------------ //
+  // Pinned dispatch (see gen-ocp-shim.mjs). Build-time classification    //
+  // per (class, method, arity): {d} direct-pinned js name, or {c:[...]}  //
+  // candidates carrying coarse-type sigs matched DECISIVELY at runtime.  //
+  // A tie REFUSES with the candidate list — the dispatcher never guesses //
+  // (the BRepGProp_Face_1 bool-coercion incident is the reason).         //
+  // ------------------------------------------------------------------ //
+
+  // enum member object -> enum type name (embind members are identity-
+  // stable singletons, so a Map keyed on them is exact)
+  const enumMap = new Map();
+  for (const [en, members] of Object.entries(table.enums || {})) {
+    const e = oc[en];
+    if (!e) { continue; }
+    for (const m of members) {
+      if (e[m] !== undefined) { enumMap.set(e[m], en); }
     }
-    if (/Standard_(Real|Integer|ShortReal|Size)|^(int|double|float)/.test(ts)) {
-      return typeof arg === 'number' ? 1 : -1;
+  }
+
+  // runtime coarse kind of an argument (tags shared with the generator)
+  const argKind = (a) => {
+    if (a === null || a === undefined) { return '0'; }
+    const t = typeof a;
+    if (t === 'boolean') { return 'b'; }
+    if (t === 'number') { return 'n'; }
+    if (t === 'string') { return 's'; }
+    if (Array.isArray(a)) { return 'a'; }
+    if (t === 'object') {
+      const en = enumMap.get(a);
+      if (en) { return 'e:' + en; }
+      if (a.$$ !== undefined && a.constructor) {
+        return 'c:' + normCls(a.constructor.name);
+      }
     }
-    if (/Standard_C(haracter|String)|^string|XCAFDoc_PartId|TCollection_/.test(ts)) {
-      return typeof arg === 'string' ? 1 : (typeof arg === 'object' ? 0 : -1);
-    }
-    // class-typed param
-    if (arg === null || arg === undefined) { return 0; }
-    return (typeof arg === 'object') ? 1 : -1;
-  };
-  const candScore = (cand, args) => {
-    if (!cand.params || cand.params.length !== args.length) { return 0; }
-    let score = 0;
-    for (let i = 0; i < args.length; i++) {
-      const f = typeFit(args[i], cand.params[i]);
-      if (f < 0) { return -1; }
-      score += f;
-    }
-    return score + 1;
+    return 'o';
   };
 
+  const chainCache = new Map();
+  const chainHas = (cls, target) => {
+    if (cls === target) { return true; }
+    let chain = chainCache.get(cls);
+    if (!chain) {
+      chain = [];
+      let c = cls;
+      const seen = new Set();
+      while (c && !seen.has(c)) {
+        chain.push(c);
+        seen.add(c);
+        const t = table.classes[c];
+        c = t ? t.parent : null;
+      }
+      chainCache.set(cls, chain);
+    }
+    return chain.indexOf(target) !== -1;
+  };
+
+  // score of one arg against one coarse param tag; 0 = incompatible
+  const posScore = (kind, want) => {
+    if (want === '?') { return 1; }
+    const w0 = want.charCodeAt(0);
+    if (w0 === 98 /* b */) { return kind === 'b' ? 3 : 0; }
+    if (w0 === 110 /* n */) { return kind === 'n' ? 3 : (kind === 'b' ? 1 : 0); }
+    if (w0 === 115 /* s */) { return kind === 's' ? 3 : 0; }
+    if (w0 === 101 /* e */) { return kind === want ? 3 : 0; }
+    // 'c:X' class param
+    if (kind === '0' || kind === 'o') { return 1; }
+    if (kind.charCodeAt(0) !== 99 /* c */) { return 0; }
+    const target = want.slice(2), have = kind.slice(2);
+    if (have === target) { return 4; }
+    if (chainHas(have, target)) { return 3; }
+    // raw transient where a handle is expected: pybind wraps implicitly
+    if (target.lastIndexOf('Handle_', 0) === 0 && chainHas(have, target.slice(7))) {
+      return 2;
+    }
+    return 0;
+  };
+
+  // pick ONE candidate or refuse. Returns {cand} | {tie:[js...]} | null.
+  const matchCands = (cands, args, kinds) => {
+    let best = null, bestScore = -1, tie = false;
+    for (const c of cands) {
+      const sig = c.s;
+      if (!sig || sig.length !== args.length) { continue; }
+      let sc = 0, ok = true;
+      for (let i = 0; i < args.length; i++) {
+        const p = posScore(kinds[i], sig[i]);
+        if (!p) { ok = false; break; }
+        sc += p;
+      }
+      if (!ok) { continue; }
+      if (sc > bestScore) { best = c; bestScore = sc; tie = false; }
+      else if (sc === bestScore) { tie = true; }
+    }
+    if (tie) {
+      return { tie: cands.filter((c) => c.s && c.s.length === args.length)
+        .map((c) => c.js + '(' + c.s.join(',') + ')') };
+    }
+    return best ? { cand: best } : null;
+  };
+
+  const CONV_ERR = /Cannot pass|Expected null or instance|argument count|BindingError|reading '\$\$'|function \w+ called with/i;
+
+  // invoke a pinned/matched variant: pre-wrap raw transients into the
+  // Handle_X the sig declares, surface OCCT raises, and report embind
+  // conversion errors as CONTINUE (the next argSet may fill defaults)
+  const invoke = (fn, thisArg, args, sig) => {
+    let callArgs = args;
+    if (sig) {
+      for (let i = 0; i < args.length; i++) {
+        const want = sig[i];
+        if (!want || want.charCodeAt(0) !== 99) { continue; }
+        const target = want.slice(2);
+        if (target.lastIndexOf('Handle_', 0) !== 0) { continue; }
+        const a = args[i];
+        if (!isEmbind(a) || a.constructor.name.lastIndexOf('Handle_', 0) === 0) { continue; }
+        const H = oc[target + '_2'] || oc[target + '_3'];
+        if (!H) { continue; }
+        try {
+          if (callArgs === args) { callArgs = args.slice(); }
+          callArgs[i] = new H(a);
+        } catch (e) { /* leave raw; embind will report */ }
+      }
+    }
+    try {
+      return { done: true, value: fn.apply(thisArg, callArgs) };
+    } catch (e) {
+      const msg = (e && e.message) ? String(e.message) : String(e);
+      const hm = /Expected null or instance of (Handle_\w+)/.exec(msg);
+      if (hm) {
+        const r = retryWithHandle(fn, thisArg, callArgs, hm[1]);
+        if (r) { return r; }
+      }
+      if (typeof e !== 'number' && CONV_ERR.test(msg)) {
+        return { done: false, err: e };
+      }
+      throw e;
+    }
+  };
+
+  // table-driven dispatch over completed argument sets.
+  //   getFn(js) resolves a variant name to a callable (ctor/static/method).
+  const runDispatch = (dispatch, getFn, thisArg, argSets, label) => {
+    if (!dispatch) { return { done: false }; }
+    let lastErr = null, tieInfo = null;
+    for (const args of argSets) {
+      if (args === null) { continue; }
+      const e = dispatch[args.length];
+      if (!e) { continue; }
+      if (e.d) {
+        // even a single-variant pin must TYPE-CHECK before calling: embind
+        // COERCES (a face passed to a bool param is silently truthy and
+        // crashes inside wasm) and pybind may serve this arity through a
+        // different overload's defaults — the next argSet is the fill
+        if (e.s) {
+          let ok = true;
+          for (let i = 0; i < args.length; i++) {
+            if (!posScore(argKind(args[i]), e.s[i])) { ok = false; break; }
+          }
+          if (!ok) { continue; }
+        }
+        const fn = getFn(e.d);
+        if (typeof fn !== 'function') { continue; }
+        const r = invoke(fn, thisArg, args, e.s);
+        if (r.done) { return r; }
+        lastErr = r.err;
+        continue;
+      }
+      const kinds = args.map(argKind);
+      if (e.k) {
+        const hit = e.k[kinds.join(',')];
+        if (hit) {
+          const fn = getFn(hit);
+          if (typeof fn === 'function') {
+            const r = invoke(fn, thisArg, args, null);
+            if (r.done) { return r; }
+            lastErr = r.err;
+            continue;
+          }
+        }
+      }
+      const m = matchCands(e.c, args, kinds);
+      if (m && m.tie) {
+        tieInfo = { arity: args.length, kinds, cands: m.tie };
+        continue;
+      }
+      if (m && m.cand) {
+        const fn = getFn(m.cand.js);
+        if (typeof fn !== 'function') { continue; }
+        const r = invoke(fn, thisArg, args, m.cand.s);
+        if (r.done) { return r; }
+        lastErr = r.err;
+      }
+    }
+    if (tieInfo) {
+      throw new Error('ocp_shim: ambiguous overload ' + label + '/'
+        + tieInfo.arity + ' — runtime arg types [' + tieInfo.kinds.join(', ')
+        + '] do not decide between [' + tieInfo.cands.join(' | ')
+        + ']; refusing to guess');
+    }
+    return { done: false, err: lastErr };
+  };
+
+  // legacy try-in-order path — ONLY for candidates the table has no coarse
+  // sigs for (hand-registered surface: TopoDS_Cast, OCJS_Out, arrays,
+  // handles) and for classes outside the generated closure entirely.
   const tryCall = (fns, thisArg, argSets) => {
     let lastErr = null;
     for (const args of argSets) {
       if (args === null) { continue; }
-      const ordered = fns
-        .map((fn) => ({ fn, score: candScore(fn, args) }))
-        .filter((c) => c.score >= 0)
-        .sort((a, b) => b.score - a.score)
-        .map((c) => c.fn);
-      for (const fn of ordered) {
+      for (const fn of fns) {
         if (typeof fn.fn !== 'function') { continue; }
         if (fn.arity !== undefined && fn.arity !== null &&
             fn.arity !== args.length) { continue; }
@@ -208,7 +377,7 @@ export function installOcpShim(self, table) {
             const r = retryWithHandle(fn.fn, thisArg, args, hm[1]);
             if (r) { return r; }
           }
-          if (typeof e !== 'number' && /Cannot pass|Expected null or instance|argument count|BindingError|reading '\$\$'|function \w+ called with/i.test(msg)) {
+          if (typeof e !== 'number' && CONV_ERR.test(msg)) {
             lastErr = e;
             continue;
           }
@@ -221,11 +390,14 @@ export function installOcpShim(self, table) {
 
   const tableClass = (name) => (table.classes[name] || null);
   // embind instances built via ctor-overload subclasses report
-  // constructor.name 'Cls_N'; normalize to the registered base class
+  // constructor.name 'Cls_N'; normalize to the base class. The suffix is
+  // stripped even when the base is outside the table (no real OCCT class
+  // name ends in _<digits>) so posScore can exact-match param classes the
+  // closure never listed.
   const normCls = (name) => {
     if (!name || table.classes[name]) { return name; }
     const m = /^(.*)_\d+$/.exec(name);
-    return (m && table.classes[m[1]]) ? m[1] : name;
+    return m ? m[1] : name;
   };
 
   // ---- glue: out-param methods pybind serves as tuple returns ---------- //
@@ -258,30 +430,34 @@ export function installOcpShim(self, table) {
   self._csOcpNew = function (cls, args, kwargs) {
     kwargs = normKw(kwargs);
     const t = tableClass(cls);
+    const fills = fillDefaults(args, kwargs, t && t.pyctor);
+    const sets = [(kwargs && Object.keys(kwargs).length) ? null : args, ...fills];
+    sets.push(padProgress(args, t && t.ctors));
+    for (const f of fills) { sets.push(padProgress(f, t && t.ctors)); }
+    // 1. pinned dispatch (build-time resolved; refuses on ambiguity)
+    let r = runDispatch(t && t.cdispatch, ocCtor, null, sets, cls + '.__init__');
+    if (r.done) { return r.value; }
+    let lastErr = r.err;
+    // 2. legacy try-in-order — ONLY unknown-sig variants / unlisted classes
     const cands = [];
     if (t) {
       for (const c of t.ctors) {
-        cands.push({ fn: ocCtor(c.js), arity: c.params ? c.params.length : null,
-          params: c.params });
+        if (c.params) { continue; } // typed: dispatch already decided
+        cands.push({ fn: ocCtor(c.js), arity: null, params: null });
       }
-    }
-    // fallback probing: Cls / Cls_1..Cls_9
-    if (!cands.length) {
+    } else {
       if (oc[cls]) { cands.push({ fn: ocCtor(cls), arity: null }); }
       for (let i = 1; i <= 9; i++) {
         if (oc[cls + '_' + i]) { cands.push({ fn: ocCtor(cls + '_' + i), arity: null }); }
       }
     }
-    const fills = fillDefaults(args, kwargs, t && t.pyctor);
-    const sets = [(kwargs && Object.keys(kwargs).length) ? null : args, ...fills];
-    sets.push(padProgress(args, t && t.ctors));
-    for (const f of fills) { sets.push(padProgress(f, t && t.ctors)); }
-    const r = tryCall(cands, null, sets);
-    if (!r.done) {
-      throw r.err || new Error('ocp_shim: no matching constructor ' + cls +
-        '/' + args.length);
+    if (cands.length) {
+      r = tryCall(cands, null, sets);
+      if (r.done) { return r.value; }
+      lastErr = r.err || lastErr;
     }
-    return r.value;
+    throw lastErr || new Error('ocp_shim: no matching constructor ' + cls +
+      '/' + args.length);
   };
   const ocCtor = (jsName) => {
     const C = oc[jsName];
@@ -306,15 +482,23 @@ export function installOcpShim(self, table) {
     }
     const holder = oc[cls];
     if (!holder) { throw new Error('ocp_shim: class not bound: ' + cls); }
+    const sFills = fillDefaults(args, kwargs, m && m.pybind);
+    const sets = [(kwargs && Object.keys(kwargs).length) ? null : args, ...sFills];
+    sets.push(padProgress(args, m && m.variants));
+    for (const f of sFills) { sets.push(padProgress(f, m && m.variants)); }
+    // 1. pinned dispatch
+    let r = runDispatch(m && m.dispatch, (js) => holder[js], holder, sets,
+      cls + '.' + name);
+    if (r.done) { return deref(r.value); }
+    let lastErr = r.err;
+    // 2. legacy try-in-order for unknown-sig variants / unlisted methods
     const cands = [];
     if (m) {
       for (const v of m.variants) {
-        if (!v.static) { continue; }
-        cands.push({ fn: holder[v.js], arity: v.params ? v.params.length : null,
-          params: v.params });
+        if (!v.static || v.params) { continue; }
+        cands.push({ fn: holder[v.js], arity: null, params: null });
       }
-    }
-    if (!cands.length) {
+    } else {
       if (typeof holder[name] === 'function') { cands.push({ fn: holder[name], arity: null }); }
       for (let i = 1; i <= 9; i++) {
         if (typeof holder[name + '_' + i] === 'function') {
@@ -322,16 +506,13 @@ export function installOcpShim(self, table) {
         }
       }
     }
-    const sFills = fillDefaults(args, kwargs, m && m.pybind);
-    const sets = [(kwargs && Object.keys(kwargs).length) ? null : args, ...sFills];
-    sets.push(padProgress(args, m && m.variants));
-    for (const f of sFills) { sets.push(padProgress(f, m && m.variants)); }
-    const r = tryCall(cands, holder, sets);
-    if (!r.done) {
-      throw r.err || new Error('ocp_shim: no matching static ' + cls + '.' +
-        name + '/' + args.length);
+    if (cands.length) {
+      r = tryCall(cands, holder, sets);
+      if (r.done) { return deref(r.value); }
+      lastErr = r.err || lastErr;
     }
-    return deref(r.value);
+    throw lastErr || new Error('ocp_shim: no matching static ' + cls + '.' +
+      name + '/' + args.length);
   };
 
   self._csOcpCall = function (ref, name, args, kwargs) {
@@ -355,40 +536,45 @@ export function installOcpShim(self, table) {
       throw new Error('ocp_shim: out-param method needs glue: ' +
         (mcls || ref.constructor.name) + '.' + name);
     }
-    const vparams = {};
-    if (m) { for (const v of m.variants) { vparams[v.js] = v.params; } }
-    const cands = [];
-    if (typeof ref[name] === 'function') {
-      cands.push({ fn: ref[name], arity: null, params: vparams[name] || null });
-    }
-    for (let i = 1; i <= 9; i++) {
-      if (typeof ref[name + '_' + i] === 'function') {
-        cands.push({ fn: ref[name + '_' + i], arity: null,
-          params: vparams[name + '_' + i] || null });
-      }
-    }
-    if (!cands.length) {
-      throw new Error('ocp_shim: no method ' + name + ' on ' +
-        (ref.constructor ? ref.constructor.name : typeof ref));
-    }
-    // arity hints from the table improve candidate ordering
-    if (m) {
-      const order = {};
-      m.variants.forEach((v, i) => { order[v.js] = i; });
-      cands.sort((a, b) => (order[a.fn.name] || 0) - (order[b.fn.name] || 0));
-    }
     const cFills = fillDefaults(args, kwargs, m && m.pybind);
     const sets = [(kwargs && Object.keys(kwargs).length) ? null : args, ...cFills];
     sets.push(padProgress(args, m && m.variants));
     for (const f of cFills) { sets.push(padProgress(f, m && m.variants)); }
-    const r = tryCall(cands, ref, sets);
-    if (!r.done) {
-      const base = 'ocp_shim: no matching overload ' + name + '/' + args.length
-        + ' on ' + (ref.constructor && ref.constructor.name)
-        + ' (candidates: ' + cands.length + ', pybind: ' + (m ? 'yes' : 'no') + ')';
-      throw new Error(r.err ? base + ' — last: ' + (r.err.message || r.err) : base);
+    // 1. pinned dispatch
+    let r = runDispatch(m && m.dispatch, (js) => ref[js], ref, sets,
+      (mcls || (ref.constructor && ref.constructor.name)) + '.' + name);
+    if (r.done) { return deref(r.value); }
+    let lastErr = r.err;
+    // 2. legacy try-in-order for unknown-sig variants / unlisted methods
+    const knownJs = new Set();
+    if (m) {
+      for (const v of m.variants) { if (v.params) { knownJs.add(v.js); } }
     }
-    return deref(r.value);
+    const cands = [];
+    if (typeof ref[name] === 'function' && !knownJs.has(name)) {
+      cands.push({ fn: ref[name], arity: null, params: null });
+    }
+    for (let i = 1; i <= 9; i++) {
+      const js = name + '_' + i;
+      if (typeof ref[js] === 'function' && !knownJs.has(js)) {
+        cands.push({ fn: ref[js], arity: null, params: null });
+      }
+    }
+    if (!cands.length && !m) {
+      throw new Error('ocp_shim: no method ' + name + ' on ' +
+        (ref.constructor ? ref.constructor.name : typeof ref));
+    }
+    if (cands.length) {
+      r = tryCall(cands, ref, sets);
+      if (r.done) { return deref(r.value); }
+      lastErr = r.err || lastErr;
+    }
+    const base = 'ocp_shim: no matching overload ' + name + '/' + args.length
+      + ' on ' + (ref.constructor && ref.constructor.name)
+      + ' (pinned dispatch: ' + (m && m.dispatch ? 'yes' : 'no')
+      + ', pybind: ' + (m ? 'yes' : 'no') + ')';
+    throw new Error(lastErr ? base + ' — last: ' + (lastErr.message || lastErr)
+      : base);
   };
 
   self._csOcpEnum = function (en, member) {

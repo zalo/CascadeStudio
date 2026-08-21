@@ -1,0 +1,3387 @@
+{
+ "note": "gen-ocp-shim.mjs self-check: per-(class,method,arity) dispatch. direct = build-time pinned; typed = runtime coarse-type match, statically guaranteed decisive; ambiguous = statically inseparable pair exists (or an unknown-sig hand-registered variant shadows) — the runtime REFUSES with the candidate list on a tie.",
+ "totals": {
+  "directKeys": 5310,
+  "typedKeys": 184,
+  "ambiguousKeys": 73,
+  "unknownSigOnlyMethods": 79,
+  "pinnedPrimTypeKeys": 2,
+  "billedAmbiguousKeys": 13
+ },
+ "billedAmbiguous": [
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_4(c:gp_Lin)",
+    "BRepBuilderAPI_MakeEdge_8(c:gp_Circ)",
+    "BRepBuilderAPI_MakeEdge_12(c:gp_Elips)",
+    "BRepBuilderAPI_MakeEdge_16(c:gp_Hypr)",
+    "BRepBuilderAPI_MakeEdge_20(c:gp_Parab)",
+    "BRepBuilderAPI_MakeEdge_24(?)"
+   ],
+   "billedSites": 20
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_2(c:TopoDS_Face)",
+    "BRepBuilderAPI_MakeFace_3(c:gp_Pln)",
+    "BRepBuilderAPI_MakeFace_4(c:gp_Cylinder)",
+    "BRepBuilderAPI_MakeFace_5(?)",
+    "BRepBuilderAPI_MakeFace_6(c:gp_Sphere)",
+    "BRepBuilderAPI_MakeFace_7(c:gp_Torus)"
+   ],
+   "billedSites": 8
+  },
+  {
+   "key": "TopLoc_Location.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "TopLoc_Location_2(c:TopLoc_Location)",
+    "TopLoc_Location_4(c:gp_Trsf)",
+    "TopLoc_Location_5(?)"
+   ],
+   "billedSites": 6
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_2(c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_3(c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_30(?,?)"
+   ],
+   "billedSites": 5
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/5",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_9(c:gp_Pln,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_10(c:gp_Cylinder,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_11(?,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_12(c:gp_Sphere,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_13(c:gp_Torus,n,n,n,n)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepFilletAPI_MakeFillet.Add/2",
+   "kind": "ambiguous",
+   "cands": [
+    "Add_2(n,c:TopoDS_Edge)",
+    "Add_4(?,c:TopoDS_Edge)",
+    "Add_5(c:TColgp_Array1OfPnt2d,c:TopoDS_Edge)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepAlgoAPI_Section.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepAlgoAPI_Section_3(c:TopoDS_Shape,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_5(c:TopoDS_Shape,c:gp_Pln,b)",
+    "BRepAlgoAPI_Section_6(c:TopoDS_Shape,?,b)",
+    "BRepAlgoAPI_Section_7(?,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_8(?,?,b)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_5(c:gp_Lin,n,n)",
+    "BRepBuilderAPI_MakeEdge_6(c:gp_Lin,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_7(c:gp_Lin,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_9(c:gp_Circ,n,n)",
+    "BRepBuilderAPI_MakeEdge_10(c:gp_Circ,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_11(c:gp_Circ,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_13(c:gp_Elips,n,n)",
+    "BRepBuilderAPI_MakeEdge_14(c:gp_Elips,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_15(c:gp_Elips,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_17(c:gp_Hypr,n,n)",
+    "BRepBuilderAPI_MakeEdge_18(c:gp_Hypr,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_19(c:gp_Hypr,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_21(c:gp_Parab,n,n)",
+    "BRepBuilderAPI_MakeEdge_22(c:gp_Parab,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_23(c:gp_Parab,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_25(?,n,n)",
+    "BRepBuilderAPI_MakeEdge_26(?,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_27(?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Geom2dGcc_Circ2dTanOnRad.__init__/4",
+   "kind": "ambiguous",
+   "cands": [
+    "Geom2dGcc_Circ2dTanOnRad_1(c:Geom2dGcc_QualifiedCurve,c:Geom2dAdaptor_Curve,n,n)",
+    "Geom2dGcc_Circ2dTanOnRad_2(?,c:Geom2dAdaptor_Curve,n,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "IntAna2d_AnaIntersection.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "IntAna2d_AnaIntersection_2(c:gp_Lin2d,c:gp_Lin2d)",
+    "IntAna2d_AnaIntersection_3(c:gp_Circ2d,c:gp_Circ2d)",
+    "IntAna2d_AnaIntersection_4(c:gp_Lin2d,c:gp_Circ2d)",
+    "IntAna2d_AnaIntersection_5(c:gp_Lin2d,?)",
+    "IntAna2d_AnaIntersection_6(c:gp_Circ2d,?)",
+    "IntAna2d_AnaIntersection_7(?,?)",
+    "IntAna2d_AnaIntersection_8(?,?)",
+    "IntAna2d_AnaIntersection_9(?,?)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Quantity_Color.ColorFromName/2",
+   "kind": "ambiguous",
+   "cands": [
+    "ColorFromName_1(s,?)",
+    "ColorFromName_2(s,c:Quantity_Color)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "ShapeAnalysis_Curve.IsPlanar/3",
+   "kind": "ambiguous",
+   "cands": [
+    "IsPlanar_1(c:TColgp_Array1OfPnt,c:gp_XYZ,n)",
+    "IsPlanar_2(?,c:gp_XYZ,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "ShapeFix_Wire.Load/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Load_1(c:TopoDS_Wire)",
+    "Load_2(?)"
+   ],
+   "billedSites": 1
+  }
+ ],
+ "ambiguous": [
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_4(c:gp_Lin)",
+    "BRepBuilderAPI_MakeEdge_8(c:gp_Circ)",
+    "BRepBuilderAPI_MakeEdge_12(c:gp_Elips)",
+    "BRepBuilderAPI_MakeEdge_16(c:gp_Hypr)",
+    "BRepBuilderAPI_MakeEdge_20(c:gp_Parab)",
+    "BRepBuilderAPI_MakeEdge_24(?)"
+   ],
+   "billedSites": 20
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_2(c:TopoDS_Face)",
+    "BRepBuilderAPI_MakeFace_3(c:gp_Pln)",
+    "BRepBuilderAPI_MakeFace_4(c:gp_Cylinder)",
+    "BRepBuilderAPI_MakeFace_5(?)",
+    "BRepBuilderAPI_MakeFace_6(c:gp_Sphere)",
+    "BRepBuilderAPI_MakeFace_7(c:gp_Torus)"
+   ],
+   "billedSites": 8
+  },
+  {
+   "key": "TopLoc_Location.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "TopLoc_Location_2(c:TopLoc_Location)",
+    "TopLoc_Location_4(c:gp_Trsf)",
+    "TopLoc_Location_5(?)"
+   ],
+   "billedSites": 6
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_2(c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_3(c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_30(?,?)"
+   ],
+   "billedSites": 5
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/5",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_9(c:gp_Pln,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_10(c:gp_Cylinder,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_11(?,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_12(c:gp_Sphere,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_13(c:gp_Torus,n,n,n,n)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepFilletAPI_MakeFillet.Add/2",
+   "kind": "ambiguous",
+   "cands": [
+    "Add_2(n,c:TopoDS_Edge)",
+    "Add_4(?,c:TopoDS_Edge)",
+    "Add_5(c:TColgp_Array1OfPnt2d,c:TopoDS_Edge)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepAlgoAPI_Section.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepAlgoAPI_Section_3(c:TopoDS_Shape,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_5(c:TopoDS_Shape,c:gp_Pln,b)",
+    "BRepAlgoAPI_Section_6(c:TopoDS_Shape,?,b)",
+    "BRepAlgoAPI_Section_7(?,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_8(?,?,b)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_5(c:gp_Lin,n,n)",
+    "BRepBuilderAPI_MakeEdge_6(c:gp_Lin,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_7(c:gp_Lin,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_9(c:gp_Circ,n,n)",
+    "BRepBuilderAPI_MakeEdge_10(c:gp_Circ,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_11(c:gp_Circ,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_13(c:gp_Elips,n,n)",
+    "BRepBuilderAPI_MakeEdge_14(c:gp_Elips,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_15(c:gp_Elips,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_17(c:gp_Hypr,n,n)",
+    "BRepBuilderAPI_MakeEdge_18(c:gp_Hypr,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_19(c:gp_Hypr,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_21(c:gp_Parab,n,n)",
+    "BRepBuilderAPI_MakeEdge_22(c:gp_Parab,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_23(c:gp_Parab,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_25(?,n,n)",
+    "BRepBuilderAPI_MakeEdge_26(?,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_27(?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Geom2dGcc_Circ2dTanOnRad.__init__/4",
+   "kind": "ambiguous",
+   "cands": [
+    "Geom2dGcc_Circ2dTanOnRad_1(c:Geom2dGcc_QualifiedCurve,c:Geom2dAdaptor_Curve,n,n)",
+    "Geom2dGcc_Circ2dTanOnRad_2(?,c:Geom2dAdaptor_Curve,n,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "IntAna2d_AnaIntersection.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "IntAna2d_AnaIntersection_2(c:gp_Lin2d,c:gp_Lin2d)",
+    "IntAna2d_AnaIntersection_3(c:gp_Circ2d,c:gp_Circ2d)",
+    "IntAna2d_AnaIntersection_4(c:gp_Lin2d,c:gp_Circ2d)",
+    "IntAna2d_AnaIntersection_5(c:gp_Lin2d,?)",
+    "IntAna2d_AnaIntersection_6(c:gp_Circ2d,?)",
+    "IntAna2d_AnaIntersection_7(?,?)",
+    "IntAna2d_AnaIntersection_8(?,?)",
+    "IntAna2d_AnaIntersection_9(?,?)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Quantity_Color.ColorFromName/2",
+   "kind": "ambiguous",
+   "cands": [
+    "ColorFromName_1(s,?)",
+    "ColorFromName_2(s,c:Quantity_Color)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "ShapeAnalysis_Curve.IsPlanar/3",
+   "kind": "ambiguous",
+   "cands": [
+    "IsPlanar_1(c:TColgp_Array1OfPnt,c:gp_XYZ,n)",
+    "IsPlanar_2(?,c:gp_XYZ,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "ShapeFix_Wire.Load/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Load_1(c:TopoDS_Wire)",
+    "Load_2(?)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepAlgoAPI_Section.Init1/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Init1_1(c:TopoDS_Shape)",
+    "Init1_2(c:gp_Pln)",
+    "Init1_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepAlgoAPI_Section.Init2/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Init2_1(c:TopoDS_Shape)",
+    "Init2_2(c:gp_Pln)",
+    "Init2_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_16(c:gp_Pln,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_17(c:gp_Cylinder,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_18(?,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_19(c:gp_Sphere,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_20(c:gp_Torus,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_21(?,c:TopoDS_Wire,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepFilletAPI_MakeFillet.SetRadius/3",
+   "kind": "ambiguous",
+   "cands": [
+    "SetRadius_1(n,n,n)",
+    "SetRadius_3(?,n,n)",
+    "SetRadius_4(c:TColgp_Array1OfPnt2d,n,n)",
+    "SetRadius_5(n,n,c:TopoDS_Edge)",
+    "SetRadius_6(n,n,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.MakeEdge/3",
+   "kind": "ambiguous",
+   "cands": [
+    "MakeEdge_2(c:TopoDS_Edge,?,n)",
+    "MakeEdge_5(c:TopoDS_Edge,?,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.MakeFace/3",
+   "kind": "ambiguous",
+   "cands": [
+    "MakeFace_2(c:TopoDS_Face,?,n)",
+    "MakeFace_5(c:TopoDS_Face,?,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateEdge/2",
+   "kind": "ambiguous",
+   "cands": [
+    "UpdateEdge_9(c:TopoDS_Edge,?)",
+    "UpdateEdge_19(c:TopoDS_Edge,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateEdge/3",
+   "kind": "ambiguous",
+   "cands": [
+    "UpdateEdge_1(c:TopoDS_Edge,?,n)",
+    "UpdateEdge_10(c:TopoDS_Edge,?,c:TopLoc_Location)",
+    "UpdateEdge_11(c:TopoDS_Edge,?,?)",
+    "UpdateEdge_15(c:TopoDS_Edge,?,c:TopoDS_Face)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateEdge/4",
+   "kind": "ambiguous",
+   "cands": [
+    "UpdateEdge_2(c:TopoDS_Edge,?,c:TopLoc_Location,n)",
+    "UpdateEdge_3(c:TopoDS_Edge,?,c:TopoDS_Face,n)",
+    "UpdateEdge_12(c:TopoDS_Edge,?,?,c:TopLoc_Location)",
+    "UpdateEdge_13(c:TopoDS_Edge,?,?,?)",
+    "UpdateEdge_16(c:TopoDS_Edge,?,?,c:TopLoc_Location)",
+    "UpdateEdge_17(c:TopoDS_Edge,?,?,c:TopoDS_Face)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateEdge/5",
+   "kind": "ambiguous",
+   "cands": [
+    "UpdateEdge_4(c:TopoDS_Edge,?,?,c:TopoDS_Face,n)",
+    "UpdateEdge_5(c:TopoDS_Edge,?,?,c:TopLoc_Location,n)",
+    "UpdateEdge_14(c:TopoDS_Edge,?,?,?,c:TopLoc_Location)",
+    "UpdateEdge_18(c:TopoDS_Edge,?,?,?,c:TopLoc_Location)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Tool.IsClosed/3",
+   "kind": "ambiguous",
+   "cands": [
+    "IsClosed_3(c:TopoDS_Edge,?,c:TopLoc_Location)",
+    "IsClosed_4(c:TopoDS_Edge,?,c:TopLoc_Location)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2dGcc_Circ2d2TanOn.Results/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Results_1(?)",
+    "Results_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2dGcc_Circ2d2TanRad.Results/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Results_1(?)",
+    "Results_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2dGcc_Circ2d2TanRad.__init__/4",
+   "kind": "ambiguous",
+   "cands": [
+    "Geom2dGcc_Circ2d2TanRad_1(c:Geom2dGcc_QualifiedCurve,c:Geom2dGcc_QualifiedCurve,n,n)",
+    "Geom2dGcc_Circ2d2TanRad_2(c:Geom2dGcc_QualifiedCurve,?,n,n)",
+    "Geom2dGcc_Circ2d2TanRad_3(?,?,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2dGcc_Circ2dTanOnRad.Results/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Results_1(?)",
+    "Results_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GeomAPI_PointsToBSpline.Init/6",
+   "kind": "ambiguous",
+   "cands": [
+    "Init_2(c:TColgp_Array1OfPnt,?,n,n,e:GeomAbs_Shape,n)",
+    "Init_3(c:TColgp_Array1OfPnt,c:TColStd_Array1OfReal,n,n,e:GeomAbs_Shape,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GeomAPI_PointsToBSpline.__init__/6",
+   "kind": "ambiguous",
+   "cands": [
+    "GeomAPI_PointsToBSpline_3(c:TColgp_Array1OfPnt,?,n,n,e:GeomAbs_Shape,n)",
+    "GeomAPI_PointsToBSpline_4(c:TColgp_Array1OfPnt,c:TColStd_Array1OfReal,n,n,e:GeomAbs_Shape,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GeomAPI_ProjectPointOnSurf.Init/7",
+   "kind": "ambiguous",
+   "cands": [
+    "Init_4(c:gp_Pnt,?,n,n,n,n,e:Extrema_ExtAlgo)",
+    "Init_5(?,n,n,n,n,n,e:Extrema_ExtAlgo)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "IFSelect_WorkSession.NamedItem/1",
+   "kind": "ambiguous",
+   "cands": [
+    "NamedItem_1(s)",
+    "NamedItem_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "IntAna2d_AnaIntersection.Perform/2",
+   "kind": "ambiguous",
+   "cands": [
+    "Perform_1(c:gp_Lin2d,c:gp_Lin2d)",
+    "Perform_2(c:gp_Circ2d,c:gp_Circ2d)",
+    "Perform_3(c:gp_Lin2d,c:gp_Circ2d)",
+    "Perform_4(c:gp_Lin2d,?)",
+    "Perform_5(c:gp_Circ2d,?)",
+    "Perform_6(?,?)",
+    "Perform_7(?,?)",
+    "Perform_8(?,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Interface_Static.Init/4",
+   "kind": "ambiguous",
+   "cands": [
+    "Init_1(s,s,?,s)",
+    "Init_2(s,s,s,s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Poly_Triangulation.SetNormal/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetNormal_1(n,?)",
+    "SetNormal_2(n,c:gp_Dir)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.Convert_LinearRGB_To_sRGB/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Convert_LinearRGB_To_sRGB_1(n)",
+    "Convert_LinearRGB_To_sRGB_2(n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.Convert_LinearRGB_To_sRGB_approx22/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Convert_LinearRGB_To_sRGB_approx22_1(n)",
+    "Convert_LinearRGB_To_sRGB_approx22_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.Convert_sRGB_To_LinearRGB/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Convert_sRGB_To_LinearRGB_1(n)",
+    "Convert_sRGB_To_LinearRGB_2(n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.Convert_sRGB_To_LinearRGB_approx22/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Convert_sRGB_To_LinearRGB_approx22_1(n)",
+    "Convert_sRGB_To_LinearRGB_approx22_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Quantity_Color_2(?)",
+    "Quantity_Color_4(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_ColorRGBA.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Quantity_ColorRGBA_2(c:Quantity_Color)",
+    "Quantity_ColorRGBA_4(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_Curve.GetSamplePoints/4",
+   "kind": "ambiguous",
+   "cands": [
+    "GetSamplePoints_1(?,n,n,?)",
+    "GetSamplePoints_2(?,n,n,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_Curve.IsPeriodic/1",
+   "kind": "ambiguous",
+   "cands": [
+    "IsPeriodic_1(?)",
+    "IsPeriodic_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_Curve.Project/6",
+   "kind": "ambiguous",
+   "cands": [
+    "Project_1(?,c:gp_Pnt,n,c:gp_Pnt,n,b)",
+    "Project_2(c:Adaptor3d_Curve,c:gp_Pnt,n,c:gp_Pnt,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_FreeBounds.ConnectWiresToWires/4",
+   "kind": "ambiguous",
+   "cands": [
+    "ConnectWiresToWires_2(?,n,b,?)",
+    "ConnectWiresToWires_3(?,n,b,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeFix_Face.Init/3",
+   "kind": "ambiguous",
+   "cands": [
+    "Init_2(?,n,b)",
+    "Init_3(?,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeFix_Wire.FixReorder/1",
+   "kind": "ambiguous",
+   "cands": [
+    "FixReorder_1(b)",
+    "FixReorder_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeFix_Wire.SetSurface/1",
+   "kind": "ambiguous",
+   "cands": [
+    "SetSurface_1(?)",
+    "SetSurface_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Standard_Transient.IsInstance/1",
+   "kind": "ambiguous",
+   "cands": [
+    "IsInstance_1(?)",
+    "IsInstance_2(s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Standard_Transient.IsKind/1",
+   "kind": "ambiguous",
+   "cands": [
+    "IsKind_1(?)",
+    "IsKind_2(s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.AssignCat/1",
+   "kind": "ambiguous",
+   "cands": [
+    "AssignCat_1(c:TCollection_ExtendedString)",
+    "AssignCat_2(n)",
+    "AssignCat_3(s)",
+    "AssignCat_4(n)",
+    "AssignCat_5(n)",
+    "AssignCat_9(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.Cat/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Cat_2(n)",
+    "Cat_3(n)",
+    "Cat_4(n)",
+    "Cat_5(s)",
+    "Cat_7(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "TCollection_ExtendedString_3(n)",
+    "TCollection_ExtendedString_4(?)",
+    "TCollection_ExtendedString_5(s)",
+    "TCollection_ExtendedString_8(n)",
+    "TCollection_ExtendedString_9(n)",
+    "TCollection_ExtendedString_10(c:TCollection_ExtendedString)",
+    "TCollection_ExtendedString_15(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "TCollection_ExtendedString_2(s,b)",
+    "TCollection_ExtendedString_7(n,n)",
+    "TCollection_ExtendedString_12(s,b)",
+    "TCollection_ExtendedString_13(n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.AssignCat/1",
+   "kind": "ambiguous",
+   "cands": [
+    "AssignCat_1(s)",
+    "AssignCat_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.Cat/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Cat_1(s)",
+    "Cat_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.Insert/2",
+   "kind": "ambiguous",
+   "cands": [
+    "Insert_1(n,s)",
+    "Insert_3(n,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.Search/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Search_1(s)",
+    "Search_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.SearchFromEnd/1",
+   "kind": "ambiguous",
+   "cands": [
+    "SearchFromEnd_1(s)",
+    "SearchFromEnd_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.SetValue/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetValue_1(n,s)",
+    "SetValue_3(n,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "TCollection_HAsciiString_2(s)",
+    "TCollection_HAsciiString_5(n)",
+    "TCollection_HAsciiString_6(n)",
+    "TCollection_HAsciiString_7(s)",
+    "TCollection_HAsciiString_9(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "TCollection_HAsciiString_4(n,s)",
+    "TCollection_HAsciiString_10(?,s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TDF_Attribute.DeltaOnModification/1",
+   "kind": "ambiguous",
+   "cands": [
+    "DeltaOnModification_1(?)",
+    "DeltaOnModification_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TDF_Label.ForgetAttribute/1",
+   "kind": "ambiguous",
+   "cands": [
+    "ForgetAttribute_1(?)",
+    "ForgetAttribute_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TDocStd_Application.NewDocument/2",
+   "kind": "ambiguous",
+   "cands": [
+    "NewDocument_1(c:TCollection_ExtendedString,?)",
+    "NewDocument_2(c:TCollection_ExtendedString,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TopExp.MapShapes/4",
+   "kind": "ambiguous",
+   "cands": [
+    "MapShapes_2(c:TopoDS_Shape,?,b,b)",
+    "MapShapes_3(c:TopoDS_Shape,?,b,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Dir2d.SetCoord/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetCoord_1(n,n)",
+    "SetCoord_2(n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Dir2d.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "gp_Dir2d_3(c:gp_Vec2d)",
+    "gp_Dir2d_4(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pnt2d.SetCoord/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetCoord_1(n,n)",
+    "SetCoord_2(n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec2d.SetCoord/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetCoord_1(n,n)",
+    "SetCoord_2(n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec2d.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "gp_Vec2d_2(c:gp_Dir2d)",
+    "gp_Vec2d_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_XYZ.Multiplied/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Multiplied_1(n)",
+    "Multiplied_2(c:gp_XYZ)",
+    "Multiplied_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_XYZ.Multiply/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Multiply_1(n)",
+    "Multiply_2(c:gp_XYZ)",
+    "Multiply_3(?)"
+   ],
+   "billedSites": 0
+  }
+ ],
+ "runtimeDispatched": [
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_4(c:gp_Lin)",
+    "BRepBuilderAPI_MakeEdge_8(c:gp_Circ)",
+    "BRepBuilderAPI_MakeEdge_12(c:gp_Elips)",
+    "BRepBuilderAPI_MakeEdge_16(c:gp_Hypr)",
+    "BRepBuilderAPI_MakeEdge_20(c:gp_Parab)",
+    "BRepBuilderAPI_MakeEdge_24(?)"
+   ],
+   "billedSites": 20
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_2(c:TopoDS_Face)",
+    "BRepBuilderAPI_MakeFace_3(c:gp_Pln)",
+    "BRepBuilderAPI_MakeFace_4(c:gp_Cylinder)",
+    "BRepBuilderAPI_MakeFace_5(?)",
+    "BRepBuilderAPI_MakeFace_6(c:gp_Sphere)",
+    "BRepBuilderAPI_MakeFace_7(c:gp_Torus)"
+   ],
+   "billedSites": 8
+  },
+  {
+   "key": "GCPnts_AbscissaPoint.Length/1",
+   "kind": "typed",
+   "cands": [
+    "Length_1(c:Adaptor3d_Curve)",
+    "Length_2(c:Adaptor2d_Curve2d)"
+   ],
+   "billedSites": 8
+  },
+  {
+   "key": "gp_Dir.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "gp_Dir_3(c:gp_Vec)",
+    "gp_Dir_4(c:gp_XYZ)",
+    "gp_Dir_6(c:gp_Dir)"
+   ],
+   "billedSites": 8
+  },
+  {
+   "key": "gp_Vec.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "gp_Vec_2(c:gp_Dir)",
+    "gp_Vec_3(c:gp_XYZ)"
+   ],
+   "billedSites": 8
+  },
+  {
+   "key": "TopLoc_Location.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "TopLoc_Location_2(c:TopLoc_Location)",
+    "TopLoc_Location_4(c:gp_Trsf)",
+    "TopLoc_Location_5(?)"
+   ],
+   "billedSites": 6
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_2(c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_3(c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_30(?,?)"
+   ],
+   "billedSites": 5
+  },
+  {
+   "key": "BRepBuilderAPI_MakeWire.Add/1",
+   "kind": "typed",
+   "cands": [
+    "Add_1(c:TopoDS_Edge)",
+    "Add_2(c:TopoDS_Wire)",
+    "Add_3(c:TopTools_ListOfShape)"
+   ],
+   "billedSites": 5
+  },
+  {
+   "key": "gp_Trsf.SetTransformation/2",
+   "kind": "typed",
+   "cands": [
+    "SetTransformation_1(c:gp_Ax3,c:gp_Ax3)",
+    "SetTransformation_3(c:gp_Quaternion,c:gp_Vec)"
+   ],
+   "billedSites": 5
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_8(?,n)",
+    "BRepBuilderAPI_MakeFace_15(c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_22(c:TopoDS_Face,c:TopoDS_Wire)"
+   ],
+   "billedSites": 4
+  },
+  {
+   "key": "Geom_Plane.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "Geom_Plane_1(c:gp_Ax3)",
+    "Geom_Plane_2(c:gp_Pln)"
+   ],
+   "billedSites": 4
+  },
+  {
+   "key": "BRepOffsetAPI_MakePipeShell.SetMode/1",
+   "kind": "typed",
+   "cands": [
+    "SetMode_1(b)",
+    "SetMode_2(c:gp_Ax2)",
+    "SetMode_3(c:gp_Dir)",
+    "SetMode_4(c:TopoDS_Shape)"
+   ],
+   "billedSites": 3
+  },
+  {
+   "key": "BRepProj_Projection.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "BRepProj_Projection_1(c:TopoDS_Shape,c:TopoDS_Shape,c:gp_Dir)",
+    "BRepProj_Projection_2(c:TopoDS_Shape,c:TopoDS_Shape,c:gp_Pnt)"
+   ],
+   "billedSites": 3
+  },
+  {
+   "key": "GCPnts_AbscissaPoint.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "GCPnts_AbscissaPoint_2(c:Adaptor3d_Curve,n,n)",
+    "GCPnts_AbscissaPoint_5(c:Adaptor2d_Curve2d,n,n)"
+   ],
+   "billedSites": 3
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/5",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_9(c:gp_Pln,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_10(c:gp_Cylinder,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_11(?,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_12(c:gp_Sphere,n,n,n,n)",
+    "BRepBuilderAPI_MakeFace_13(c:gp_Torus,n,n,n,n)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepBuilderAPI_MakeSolid.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeSolid_4(c:TopoDS_Shell,c:TopoDS_Shell)",
+    "BRepBuilderAPI_MakeSolid_7(c:TopoDS_Solid,c:TopoDS_Shell)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepFeat_MakeDPrism.Perform/1",
+   "kind": "typed",
+   "cands": [
+    "Perform_1(n)",
+    "Perform_2(c:TopoDS_Shape)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepFilletAPI_MakeFillet.Add/2",
+   "kind": "ambiguous",
+   "cands": [
+    "Add_2(n,c:TopoDS_Edge)",
+    "Add_4(?,c:TopoDS_Edge)",
+    "Add_5(c:TColgp_Array1OfPnt2d,c:TopoDS_Edge)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepFilletAPI_MakeFillet2d.AddChamfer/4",
+   "kind": "typed",
+   "cands": [
+    "AddChamfer_1(c:TopoDS_Edge,c:TopoDS_Edge,n,n)",
+    "AddChamfer_2(c:TopoDS_Edge,c:TopoDS_Vertex,n,n)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepIntCurveSurface_Inter.Init/3",
+   "kind": "typed",
+   "cands": [
+    "Init_1(c:TopoDS_Shape,c:GeomAdaptor_Curve,n)",
+    "Init_2(c:TopoDS_Shape,c:gp_Lin,n)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "Bnd_Box.Add/1",
+   "kind": "typed",
+   "cands": [
+    "Add_1(c:Bnd_Box)",
+    "Add_2(c:gp_Pnt)",
+    "Add_4(c:gp_Dir)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "GCPnts_AbscissaPoint.Length/3",
+   "kind": "typed",
+   "cands": [
+    "Length_5(c:Adaptor3d_Curve,n,n)",
+    "Length_6(c:Adaptor2d_Curve2d,n,n)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "GC_MakeArcOfCircle.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "GC_MakeArcOfCircle_4(c:gp_Pnt,c:gp_Pnt,c:gp_Pnt)",
+    "GC_MakeArcOfCircle_5(c:gp_Pnt,c:gp_Vec,c:gp_Pnt)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "Geom2dGcc_Lin2d2Tan.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "Geom2dGcc_Lin2d2Tan_1(c:Geom2dGcc_QualifiedCurve,c:Geom2dGcc_QualifiedCurve,n)",
+    "Geom2dGcc_Lin2d2Tan_2(c:Geom2dGcc_QualifiedCurve,c:gp_Pnt2d,n)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "GeomAPI_Interpolate.Load/3",
+   "kind": "typed",
+   "cands": [
+    "Load_1(c:gp_Vec,c:gp_Vec,b)",
+    "Load_2(c:TColgp_Array1OfVec,?,b)"
+   ],
+   "billedSites": 2
+  },
+  {
+   "key": "BRepAlgoAPI_Section.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepAlgoAPI_Section_3(c:TopoDS_Shape,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_5(c:TopoDS_Shape,c:gp_Pln,b)",
+    "BRepAlgoAPI_Section_6(c:TopoDS_Shape,?,b)",
+    "BRepAlgoAPI_Section_7(?,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_8(?,?,b)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_5(c:gp_Lin,n,n)",
+    "BRepBuilderAPI_MakeEdge_6(c:gp_Lin,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_7(c:gp_Lin,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_9(c:gp_Circ,n,n)",
+    "BRepBuilderAPI_MakeEdge_10(c:gp_Circ,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_11(c:gp_Circ,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_13(c:gp_Elips,n,n)",
+    "BRepBuilderAPI_MakeEdge_14(c:gp_Elips,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_15(c:gp_Elips,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_17(c:gp_Hypr,n,n)",
+    "BRepBuilderAPI_MakeEdge_18(c:gp_Hypr,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_19(c:gp_Hypr,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_21(c:gp_Parab,n,n)",
+    "BRepBuilderAPI_MakeEdge_22(c:gp_Parab,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_23(c:gp_Parab,c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "BRepBuilderAPI_MakeEdge_25(?,n,n)",
+    "BRepBuilderAPI_MakeEdge_26(?,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_27(?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_31(?,?,n,n)",
+    "BRepBuilderAPI_MakeEdge_32(?,?,c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakeEdge_33(?,?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepBuilderAPI_MakePolygon.Add/1",
+   "kind": "typed",
+   "cands": [
+    "Add_1(c:gp_Pnt)",
+    "Add_2(c:TopoDS_Vertex)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepPrimAPI_MakeBox.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeBox_3(c:gp_Pnt,n,n,n)",
+    "BRepPrimAPI_MakeBox_5(c:gp_Ax2,n,n,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepPrimAPI_MakeHalfSpace.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeHalfSpace_1(c:TopoDS_Face,c:gp_Pnt)",
+    "BRepPrimAPI_MakeHalfSpace_2(c:TopoDS_Shell,c:gp_Pnt)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepPrimAPI_MakeSphere.__init__/5",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeSphere_8(c:gp_Pnt,n,n,n,n)",
+    "BRepPrimAPI_MakeSphere_12(c:gp_Ax2,n,n,n,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Bnd_OBB.IsOut/1",
+   "kind": "typed",
+   "cands": [
+    "IsOut_1(c:Bnd_OBB)",
+    "IsOut_2(c:gp_Pnt)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "GCPnts_AbscissaPoint.Length/2",
+   "kind": "typed",
+   "cands": [
+    "Length_3(c:Adaptor3d_Curve,n)",
+    "Length_4(c:Adaptor2d_Curve2d,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "GC_MakeArcOfCircle.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "GC_MakeArcOfCircle_1(c:gp_Circ,n,n,b)",
+    "GC_MakeArcOfCircle_2(c:gp_Circ,c:gp_Pnt,n,b)",
+    "GC_MakeArcOfCircle_3(c:gp_Circ,c:gp_Pnt,c:gp_Pnt,b)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "GC_MakeArcOfEllipse.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "GC_MakeArcOfEllipse_1(c:gp_Elips,n,n,b)",
+    "GC_MakeArcOfEllipse_2(c:gp_Elips,c:gp_Pnt,n,b)",
+    "GC_MakeArcOfEllipse_3(c:gp_Elips,c:gp_Pnt,c:gp_Pnt,b)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "GC_MakeArcOfHyperbola.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "GC_MakeArcOfHyperbola_1(c:gp_Hypr,n,n,b)",
+    "GC_MakeArcOfHyperbola_2(c:gp_Hypr,c:gp_Pnt,n,b)",
+    "GC_MakeArcOfHyperbola_3(c:gp_Hypr,c:gp_Pnt,c:gp_Pnt,b)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "GC_MakeArcOfParabola.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "GC_MakeArcOfParabola_1(c:gp_Parab,n,n,b)",
+    "GC_MakeArcOfParabola_2(c:gp_Parab,c:gp_Pnt,n,b)",
+    "GC_MakeArcOfParabola_3(c:gp_Parab,c:gp_Pnt,c:gp_Pnt,b)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Geom2dGcc_Circ2dTanOnRad.__init__/4",
+   "kind": "ambiguous",
+   "cands": [
+    "Geom2dGcc_Circ2dTanOnRad_1(c:Geom2dGcc_QualifiedCurve,c:Geom2dAdaptor_Curve,n,n)",
+    "Geom2dGcc_Circ2dTanOnRad_2(?,c:Geom2dAdaptor_Curve,n,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Geom2d_Line.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "Geom2d_Line_1(c:gp_Ax2d)",
+    "Geom2d_Line_2(c:gp_Lin2d)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Geom_BezierCurve.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "Geom_BezierCurve_1(c:TColgp_Array1OfPnt)",
+    "Geom_BezierCurve_3(c:Geom_BezierCurve)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Geom_BezierSurface.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "Geom_BezierSurface_1(c:TColgp_Array2OfPnt)",
+    "Geom_BezierSurface_2(c:Geom_BezierSurface)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Geom_Line.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "Geom_Line_1(c:gp_Ax1)",
+    "Geom_Line_2(c:gp_Lin)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "IntAna2d_AnaIntersection.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "IntAna2d_AnaIntersection_2(c:gp_Lin2d,c:gp_Lin2d)",
+    "IntAna2d_AnaIntersection_3(c:gp_Circ2d,c:gp_Circ2d)",
+    "IntAna2d_AnaIntersection_4(c:gp_Lin2d,c:gp_Circ2d)",
+    "IntAna2d_AnaIntersection_5(c:gp_Lin2d,?)",
+    "IntAna2d_AnaIntersection_6(c:gp_Circ2d,?)",
+    "IntAna2d_AnaIntersection_7(?,?)",
+    "IntAna2d_AnaIntersection_8(?,?)",
+    "IntAna2d_AnaIntersection_9(?,?)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "Quantity_Color.ColorFromName/2",
+   "kind": "ambiguous",
+   "cands": [
+    "ColorFromName_1(s,?)",
+    "ColorFromName_2(s,c:Quantity_Color)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "ShapeAnalysis_Curve.IsPlanar/3",
+   "kind": "ambiguous",
+   "cands": [
+    "IsPlanar_1(c:TColgp_Array1OfPnt,c:gp_XYZ,n)",
+    "IsPlanar_2(?,c:gp_XYZ,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "ShapeFix_Wire.Load/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Load_1(c:TopoDS_Wire)",
+    "Load_2(?)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "gp_Parab.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "gp_Parab_2(c:gp_Ax2,n)",
+    "gp_Parab_3(c:gp_Ax1,c:gp_Pnt)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "gp_Pln.Distance/1",
+   "kind": "typed",
+   "cands": [
+    "Distance_1(c:gp_Pnt)",
+    "Distance_2(c:gp_Lin)",
+    "Distance_3(c:gp_Pln)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "gp_Trsf.SetMirror/1",
+   "kind": "typed",
+   "cands": [
+    "SetMirror_1(c:gp_Pnt)",
+    "SetMirror_2(c:gp_Ax1)",
+    "SetMirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepAlgoAPI_Section.Init1/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Init1_1(c:TopoDS_Shape)",
+    "Init1_2(c:gp_Pln)",
+    "Init1_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepAlgoAPI_Section.Init2/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Init2_1(c:TopoDS_Shape)",
+    "Init2_2(c:gp_Pln)",
+    "Init2_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.Init/3",
+   "kind": "typed",
+   "cands": [
+    "Init_2(?,n,n)",
+    "Init_3(?,c:gp_Pnt,c:gp_Pnt)",
+    "Init_4(?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.Init/4",
+   "kind": "typed",
+   "cands": [
+    "Init_8(?,?,n,n)",
+    "Init_9(?,?,c:gp_Pnt,c:gp_Pnt)",
+    "Init_10(?,?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.Init/5",
+   "kind": "typed",
+   "cands": [
+    "Init_5(?,c:gp_Pnt,c:gp_Pnt,n,n)",
+    "Init_6(?,c:TopoDS_Vertex,c:TopoDS_Vertex,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.Init/6",
+   "kind": "typed",
+   "cands": [
+    "Init_11(?,?,c:gp_Pnt,c:gp_Pnt,n,n)",
+    "Init_12(?,?,c:TopoDS_Vertex,c:TopoDS_Vertex,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/5",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_28(?,c:gp_Pnt,c:gp_Pnt,n,n)",
+    "BRepBuilderAPI_MakeEdge_29(?,c:TopoDS_Vertex,c:TopoDS_Vertex,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeEdge.__init__/6",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeEdge_34(?,?,c:gp_Pnt,c:gp_Pnt,n,n)",
+    "BRepBuilderAPI_MakeEdge_35(?,?,c:TopoDS_Vertex,c:TopoDS_Vertex,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_16(c:gp_Pln,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_17(c:gp_Cylinder,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_18(?,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_19(c:gp_Sphere,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_20(c:gp_Torus,c:TopoDS_Wire,b)",
+    "BRepBuilderAPI_MakeFace_21(?,c:TopoDS_Wire,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakePolygon.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakePolygon_2(c:gp_Pnt,c:gp_Pnt)",
+    "BRepBuilderAPI_MakePolygon_5(c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakePolygon.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakePolygon_3(c:gp_Pnt,c:gp_Pnt,c:gp_Pnt,b)",
+    "BRepBuilderAPI_MakePolygon_6(c:TopoDS_Vertex,c:TopoDS_Vertex,c:TopoDS_Vertex,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakePolygon.__init__/5",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakePolygon_4(c:gp_Pnt,c:gp_Pnt,c:gp_Pnt,c:gp_Pnt,b)",
+    "BRepBuilderAPI_MakePolygon_7(c:TopoDS_Vertex,c:TopoDS_Vertex,c:TopoDS_Vertex,c:TopoDS_Vertex,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeSolid.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeSolid_2(c:TopoDS_CompSolid)",
+    "BRepBuilderAPI_MakeSolid_3(c:TopoDS_Shell)",
+    "BRepBuilderAPI_MakeSolid_6(c:TopoDS_Solid)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeWire.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeWire_2(c:TopoDS_Edge)",
+    "BRepBuilderAPI_MakeWire_6(c:TopoDS_Wire)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepBuilderAPI_MakeWire.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeWire_3(c:TopoDS_Edge,c:TopoDS_Edge)",
+    "BRepBuilderAPI_MakeWire_7(c:TopoDS_Wire,c:TopoDS_Edge)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepFeat_SplitShape.Add/2",
+   "kind": "typed",
+   "cands": [
+    "Add_2(c:TopoDS_Wire,c:TopoDS_Face)",
+    "Add_3(c:TopoDS_Edge,c:TopoDS_Face)",
+    "Add_4(c:TopoDS_Compound,c:TopoDS_Face)",
+    "Add_5(c:TopoDS_Edge,c:TopoDS_Edge)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepFilletAPI_MakeFillet.SetRadius/3",
+   "kind": "ambiguous",
+   "cands": [
+    "SetRadius_1(n,n,n)",
+    "SetRadius_3(?,n,n)",
+    "SetRadius_4(c:TColgp_Array1OfPnt2d,n,n)",
+    "SetRadius_5(n,n,c:TopoDS_Edge)",
+    "SetRadius_6(n,n,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepGProp.SurfaceProperties/4",
+   "kind": "typed",
+   "cands": [
+    "SurfaceProperties_1(c:TopoDS_Shape,c:GProp_GProps,b,b)",
+    "SurfaceProperties_2(c:TopoDS_Shape,c:GProp_GProps,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepGProp.VolumeProperties/5",
+   "kind": "typed",
+   "cands": [
+    "VolumeProperties_1(c:TopoDS_Shape,c:GProp_GProps,b,b,b)",
+    "VolumeProperties_2(c:TopoDS_Shape,c:GProp_GProps,n,b,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepGProp_Face.Load/1",
+   "kind": "typed",
+   "cands": [
+    "Load_1(c:TopoDS_Face)",
+    "Load_2(c:TopoDS_Edge)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepLib.SameParameter/4",
+   "kind": "typed",
+   "cands": [
+    "SameParameter_2(c:TopoDS_Edge,n,n,b)",
+    "SameParameter_4(c:TopoDS_Shape,c:BRepTools_ReShape,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepOffsetAPI_MakeFilling.Add/4",
+   "kind": "typed",
+   "cands": [
+    "Add_2(c:TopoDS_Edge,c:TopoDS_Face,e:GeomAbs_Shape,b)",
+    "Add_5(n,n,c:TopoDS_Face,e:GeomAbs_Shape)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepOffsetAPI_MakeOffset.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "BRepOffsetAPI_MakeOffset_2(c:TopoDS_Face,e:GeomAbs_JoinType,b)",
+    "BRepOffsetAPI_MakeOffset_3(c:TopoDS_Wire,e:GeomAbs_JoinType,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeBox.Init/4",
+   "kind": "typed",
+   "cands": [
+    "Init_2(c:gp_Pnt,n,n,n)",
+    "Init_4(c:gp_Ax2,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeCone.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeCone_2(n,n,n,n)",
+    "BRepPrimAPI_MakeCone_3(c:gp_Ax2,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeCylinder.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeCylinder_2(n,n,n)",
+    "BRepPrimAPI_MakeCylinder_3(c:gp_Ax2,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeSphere.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeSphere_2(n,n)",
+    "BRepPrimAPI_MakeSphere_5(c:gp_Pnt,n)",
+    "BRepPrimAPI_MakeSphere_9(c:gp_Ax2,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeSphere.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeSphere_3(n,n,n)",
+    "BRepPrimAPI_MakeSphere_6(c:gp_Pnt,n,n)",
+    "BRepPrimAPI_MakeSphere_10(c:gp_Ax2,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeSphere.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeSphere_4(n,n,n,n)",
+    "BRepPrimAPI_MakeSphere_7(c:gp_Pnt,n,n,n)",
+    "BRepPrimAPI_MakeSphere_11(c:gp_Ax2,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeTorus.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeTorus_2(n,n,n)",
+    "BRepPrimAPI_MakeTorus_5(c:gp_Ax2,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeTorus.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeTorus_3(n,n,n,n)",
+    "BRepPrimAPI_MakeTorus_6(c:gp_Ax2,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepPrimAPI_MakeTorus.__init__/5",
+   "kind": "typed",
+   "cands": [
+    "BRepPrimAPI_MakeTorus_4(n,n,n,n,n)",
+    "BRepPrimAPI_MakeTorus_7(c:gp_Ax2,n,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepTools.AddUVBounds/3",
+   "kind": "typed",
+   "cands": [
+    "AddUVBounds_2(c:TopoDS_Face,c:TopoDS_Wire,?)",
+    "AddUVBounds_3(c:TopoDS_Face,c:TopoDS_Edge,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepTools.Compare/2",
+   "kind": "typed",
+   "cands": [
+    "Compare_1(c:TopoDS_Vertex,c:TopoDS_Vertex)",
+    "Compare_2(c:TopoDS_Edge,c:TopoDS_Edge)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepTools.UVBounds/6",
+   "kind": "typed",
+   "cands": [
+    "UVBounds_2(c:TopoDS_Face,c:TopoDS_Wire,n,n,n,n)",
+    "UVBounds_3(c:TopoDS_Face,c:TopoDS_Edge,n,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepTools.Update/1",
+   "kind": "typed",
+   "cands": [
+    "Update_1(c:TopoDS_Vertex)",
+    "Update_2(c:TopoDS_Edge)",
+    "Update_3(c:TopoDS_Wire)",
+    "Update_4(c:TopoDS_Face)",
+    "Update_5(c:TopoDS_Shell)",
+    "Update_6(c:TopoDS_Solid)",
+    "Update_7(c:TopoDS_CompSolid)",
+    "Update_8(c:TopoDS_Compound)",
+    "Update_9(c:TopoDS_Shape)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.MakeEdge/3",
+   "kind": "ambiguous",
+   "cands": [
+    "MakeEdge_2(c:TopoDS_Edge,?,n)",
+    "MakeEdge_5(c:TopoDS_Edge,?,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.MakeEdge/4",
+   "kind": "typed",
+   "cands": [
+    "MakeEdge_3(c:TopoDS_Edge,?,c:TopLoc_Location,n)",
+    "MakeEdge_6(c:TopoDS_Edge,?,?,c:TopLoc_Location)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.MakeFace/3",
+   "kind": "ambiguous",
+   "cands": [
+    "MakeFace_2(c:TopoDS_Face,?,n)",
+    "MakeFace_5(c:TopoDS_Face,?,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.Range/4",
+   "kind": "typed",
+   "cands": [
+    "Range_1(c:TopoDS_Edge,n,n,b)",
+    "Range_3(c:TopoDS_Edge,c:TopoDS_Face,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateEdge/2",
+   "kind": "ambiguous",
+   "cands": [
+    "UpdateEdge_9(c:TopoDS_Edge,?)",
+    "UpdateEdge_19(c:TopoDS_Edge,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateEdge/3",
+   "kind": "ambiguous",
+   "cands": [
+    "UpdateEdge_1(c:TopoDS_Edge,?,n)",
+    "UpdateEdge_10(c:TopoDS_Edge,?,c:TopLoc_Location)",
+    "UpdateEdge_11(c:TopoDS_Edge,?,?)",
+    "UpdateEdge_15(c:TopoDS_Edge,?,c:TopoDS_Face)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateEdge/4",
+   "kind": "ambiguous",
+   "cands": [
+    "UpdateEdge_2(c:TopoDS_Edge,?,c:TopLoc_Location,n)",
+    "UpdateEdge_3(c:TopoDS_Edge,?,c:TopoDS_Face,n)",
+    "UpdateEdge_12(c:TopoDS_Edge,?,?,c:TopLoc_Location)",
+    "UpdateEdge_13(c:TopoDS_Edge,?,?,?)",
+    "UpdateEdge_16(c:TopoDS_Edge,?,?,c:TopLoc_Location)",
+    "UpdateEdge_17(c:TopoDS_Edge,?,?,c:TopoDS_Face)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateEdge/5",
+   "kind": "ambiguous",
+   "cands": [
+    "UpdateEdge_4(c:TopoDS_Edge,?,?,c:TopoDS_Face,n)",
+    "UpdateEdge_5(c:TopoDS_Edge,?,?,c:TopLoc_Location,n)",
+    "UpdateEdge_14(c:TopoDS_Edge,?,?,?,c:TopLoc_Location)",
+    "UpdateEdge_18(c:TopoDS_Edge,?,?,?,c:TopLoc_Location)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Builder.UpdateVertex/5",
+   "kind": "typed",
+   "cands": [
+    "UpdateVertex_3(c:TopoDS_Vertex,n,c:TopoDS_Edge,c:TopoDS_Face,n)",
+    "UpdateVertex_5(c:TopoDS_Vertex,n,n,c:TopoDS_Face,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Tool.CurveOnSurface/6",
+   "kind": "typed",
+   "cands": [
+    "CurveOnSurface_2(c:TopoDS_Edge,?,c:TopLoc_Location,n,n,b)",
+    "CurveOnSurface_3(c:TopoDS_Edge,?,?,c:TopLoc_Location,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Tool.IsClosed/3",
+   "kind": "ambiguous",
+   "cands": [
+    "IsClosed_3(c:TopoDS_Edge,?,c:TopLoc_Location)",
+    "IsClosed_4(c:TopoDS_Edge,?,c:TopLoc_Location)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Tool.IsGeometric/1",
+   "kind": "typed",
+   "cands": [
+    "IsGeometric_1(c:TopoDS_Face)",
+    "IsGeometric_2(c:TopoDS_Edge)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Tool.Parameter/3",
+   "kind": "typed",
+   "cands": [
+    "Parameter_1(c:TopoDS_Vertex,c:TopoDS_Edge,n)",
+    "Parameter_3(c:TopoDS_Vertex,c:TopoDS_Edge,c:TopoDS_Face)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRep_Tool.Tolerance/1",
+   "kind": "typed",
+   "cands": [
+    "Tolerance_1(c:TopoDS_Face)",
+    "Tolerance_2(c:TopoDS_Edge)",
+    "Tolerance_3(c:TopoDS_Vertex)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Bnd_Box.IsOut/1",
+   "kind": "typed",
+   "cands": [
+    "IsOut_1(c:gp_Pnt)",
+    "IsOut_2(c:gp_Lin)",
+    "IsOut_3(c:gp_Pln)",
+    "IsOut_4(c:Bnd_Box)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Bnd_Box.IsOut/3",
+   "kind": "typed",
+   "cands": [
+    "IsOut_6(c:gp_Trsf,c:Bnd_Box,c:gp_Trsf)",
+    "IsOut_7(c:gp_Pnt,c:gp_Pnt,c:gp_Dir)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Bnd_OBB.Add/1",
+   "kind": "typed",
+   "cands": [
+    "Add_1(c:Bnd_OBB)",
+    "Add_2(c:gp_Pnt)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_AbscissaPoint.Length/4",
+   "kind": "typed",
+   "cands": [
+    "Length_7(c:Adaptor3d_Curve,n,n,n)",
+    "Length_8(c:Adaptor2d_Curve2d,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_AbscissaPoint.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "GCPnts_AbscissaPoint_3(n,c:Adaptor3d_Curve,n,n)",
+    "GCPnts_AbscissaPoint_4(n,c:Adaptor2d_Curve2d,n,n)",
+    "GCPnts_AbscissaPoint_6(c:Adaptor3d_Curve,n,n,n)",
+    "GCPnts_AbscissaPoint_7(c:Adaptor2d_Curve2d,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_AbscissaPoint.__init__/5",
+   "kind": "typed",
+   "cands": [
+    "GCPnts_AbscissaPoint_8(c:Adaptor3d_Curve,n,n,n,n)",
+    "GCPnts_AbscissaPoint_9(c:Adaptor2d_Curve2d,n,n,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_QuasiUniformDeflection.Initialize/3",
+   "kind": "typed",
+   "cands": [
+    "Initialize_1(c:Adaptor3d_Curve,n,e:GeomAbs_Shape)",
+    "Initialize_2(c:Adaptor2d_Curve2d,n,e:GeomAbs_Shape)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_QuasiUniformDeflection.Initialize/5",
+   "kind": "typed",
+   "cands": [
+    "Initialize_3(c:Adaptor3d_Curve,n,n,n,e:GeomAbs_Shape)",
+    "Initialize_4(c:Adaptor2d_Curve2d,n,n,n,e:GeomAbs_Shape)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_QuasiUniformDeflection.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "GCPnts_QuasiUniformDeflection_2(c:Adaptor3d_Curve,n,e:GeomAbs_Shape)",
+    "GCPnts_QuasiUniformDeflection_3(c:Adaptor2d_Curve2d,n,e:GeomAbs_Shape)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_QuasiUniformDeflection.__init__/5",
+   "kind": "typed",
+   "cands": [
+    "GCPnts_QuasiUniformDeflection_4(c:Adaptor3d_Curve,n,n,n,e:GeomAbs_Shape)",
+    "GCPnts_QuasiUniformDeflection_5(c:Adaptor2d_Curve2d,n,n,n,e:GeomAbs_Shape)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_UniformDeflection.Initialize/3",
+   "kind": "typed",
+   "cands": [
+    "Initialize_1(c:Adaptor3d_Curve,n,b)",
+    "Initialize_2(c:Adaptor2d_Curve2d,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_UniformDeflection.Initialize/5",
+   "kind": "typed",
+   "cands": [
+    "Initialize_3(c:Adaptor3d_Curve,n,n,n,b)",
+    "Initialize_4(c:Adaptor2d_Curve2d,n,n,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_UniformDeflection.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "GCPnts_UniformDeflection_2(c:Adaptor3d_Curve,n,b)",
+    "GCPnts_UniformDeflection_3(c:Adaptor2d_Curve2d,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GCPnts_UniformDeflection.__init__/5",
+   "kind": "typed",
+   "cands": [
+    "GCPnts_UniformDeflection_4(c:Adaptor3d_Curve,n,n,n,b)",
+    "GCPnts_UniformDeflection_5(c:Adaptor2d_Curve2d,n,n,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GC_MakeCircle.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "GC_MakeCircle_2(c:gp_Ax2,n)",
+    "GC_MakeCircle_3(c:gp_Circ,n)",
+    "GC_MakeCircle_4(c:gp_Circ,c:gp_Pnt)",
+    "GC_MakeCircle_8(c:gp_Ax1,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GC_MakeCircle.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "GC_MakeCircle_5(c:gp_Pnt,c:gp_Pnt,c:gp_Pnt)",
+    "GC_MakeCircle_6(c:gp_Pnt,c:gp_Dir,n)",
+    "GC_MakeCircle_7(c:gp_Pnt,c:gp_Pnt,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GC_MakeSegment.__init__/3",
+   "kind": "typed",
+   "cands": [
+    "GC_MakeSegment_2(c:gp_Lin,n,n)",
+    "GC_MakeSegment_3(c:gp_Lin,c:gp_Pnt,n)",
+    "GC_MakeSegment_4(c:gp_Lin,c:gp_Pnt,c:gp_Pnt)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2dGcc_Circ2d2TanOn.Results/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Results_1(?)",
+    "Results_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2dGcc_Circ2d2TanRad.Results/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Results_1(?)",
+    "Results_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2dGcc_Circ2d2TanRad.__init__/4",
+   "kind": "ambiguous",
+   "cands": [
+    "Geom2dGcc_Circ2d2TanRad_1(c:Geom2dGcc_QualifiedCurve,c:Geom2dGcc_QualifiedCurve,n,n)",
+    "Geom2dGcc_Circ2d2TanRad_2(c:Geom2dGcc_QualifiedCurve,?,n,n)",
+    "Geom2dGcc_Circ2d2TanRad_3(?,?,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2dGcc_Circ2dTanOnRad.Results/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Results_1(?)",
+    "Results_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2d_Geometry.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt2d)",
+    "Mirror_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom2d_Geometry.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt2d)",
+    "Mirrored_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GeomAPI_PointsToBSpline.Init/6",
+   "kind": "ambiguous",
+   "cands": [
+    "Init_2(c:TColgp_Array1OfPnt,?,n,n,e:GeomAbs_Shape,n)",
+    "Init_3(c:TColgp_Array1OfPnt,c:TColStd_Array1OfReal,n,n,e:GeomAbs_Shape,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GeomAPI_PointsToBSpline.__init__/6",
+   "kind": "ambiguous",
+   "cands": [
+    "GeomAPI_PointsToBSpline_3(c:TColgp_Array1OfPnt,?,n,n,e:GeomAbs_Shape,n)",
+    "GeomAPI_PointsToBSpline_4(c:TColgp_Array1OfPnt,c:TColStd_Array1OfReal,n,n,e:GeomAbs_Shape,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GeomAPI_PointsToBSplineSurface.Init/7",
+   "kind": "typed",
+   "cands": [
+    "Init_3(c:TColgp_Array2OfPnt,?,n,n,e:GeomAbs_Shape,n,b)",
+    "Init_4(c:TColgp_Array2OfPnt,n,n,n,n,e:GeomAbs_Shape,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "GeomAPI_ProjectPointOnSurf.Init/7",
+   "kind": "ambiguous",
+   "cands": [
+    "Init_4(c:gp_Pnt,?,n,n,n,n,e:Extrema_ExtAlgo)",
+    "Init_5(?,n,n,n,n,n,e:Extrema_ExtAlgo)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom_Geometry.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Geom_Geometry.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "HLRAlgo_Projector.Project/4",
+   "kind": "typed",
+   "cands": [
+    "Project_2(c:gp_Pnt,n,n,n)",
+    "Project_3(c:gp_Pnt,c:gp_Vec,c:gp_Pnt2d,c:gp_Vec2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "HLRAlgo_Projector.Transform/1",
+   "kind": "typed",
+   "cands": [
+    "Transform_1(c:gp_Vec)",
+    "Transform_2(c:gp_Pnt)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "IFSelect_WorkSession.NamedItem/1",
+   "kind": "ambiguous",
+   "cands": [
+    "NamedItem_1(s)",
+    "NamedItem_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "IntAna2d_AnaIntersection.Perform/2",
+   "kind": "ambiguous",
+   "cands": [
+    "Perform_1(c:gp_Lin2d,c:gp_Lin2d)",
+    "Perform_2(c:gp_Circ2d,c:gp_Circ2d)",
+    "Perform_3(c:gp_Lin2d,c:gp_Circ2d)",
+    "Perform_4(c:gp_Lin2d,?)",
+    "Perform_5(c:gp_Circ2d,?)",
+    "Perform_6(?,?)",
+    "Perform_7(?,?)",
+    "Perform_8(?,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Interface_Static.Init/4",
+   "kind": "ambiguous",
+   "cands": [
+    "Init_1(s,s,?,s)",
+    "Init_2(s,s,s,s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Poly_PolygonOnTriangulation.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "Poly_PolygonOnTriangulation_1(n,b)",
+    "Poly_PolygonOnTriangulation_3(c:TColStd_Array1OfInteger,c:TColStd_Array1OfReal)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Poly_Triangulation.SetNormal/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetNormal_1(n,?)",
+    "SetNormal_2(n,c:gp_Dir)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.Convert_LinearRGB_To_sRGB/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Convert_LinearRGB_To_sRGB_1(n)",
+    "Convert_LinearRGB_To_sRGB_2(n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.Convert_LinearRGB_To_sRGB_approx22/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Convert_LinearRGB_To_sRGB_approx22_1(n)",
+    "Convert_LinearRGB_To_sRGB_approx22_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.Convert_sRGB_To_LinearRGB/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Convert_sRGB_To_LinearRGB_1(n)",
+    "Convert_sRGB_To_LinearRGB_2(n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.Convert_sRGB_To_LinearRGB_approx22/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Convert_sRGB_To_LinearRGB_approx22_1(n)",
+    "Convert_sRGB_To_LinearRGB_approx22_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_Color.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Quantity_Color_2(?)",
+    "Quantity_Color_4(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Quantity_ColorRGBA.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Quantity_ColorRGBA_2(c:Quantity_Color)",
+    "Quantity_ColorRGBA_4(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_Curve.GetSamplePoints/4",
+   "kind": "ambiguous",
+   "cands": [
+    "GetSamplePoints_1(?,n,n,?)",
+    "GetSamplePoints_2(?,n,n,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_Curve.IsPeriodic/1",
+   "kind": "ambiguous",
+   "cands": [
+    "IsPeriodic_1(?)",
+    "IsPeriodic_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_Curve.Project/6",
+   "kind": "ambiguous",
+   "cands": [
+    "Project_1(?,c:gp_Pnt,n,c:gp_Pnt,n,b)",
+    "Project_2(c:Adaptor3d_Curve,c:gp_Pnt,n,c:gp_Pnt,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_FreeBounds.ConnectWiresToWires/4",
+   "kind": "ambiguous",
+   "cands": [
+    "ConnectWiresToWires_2(?,n,b,?)",
+    "ConnectWiresToWires_3(?,n,b,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeAnalysis_FreeBounds.__init__/4",
+   "kind": "typed",
+   "cands": [
+    "ShapeAnalysis_FreeBounds_2(c:TopoDS_Shape,n,b,b)",
+    "ShapeAnalysis_FreeBounds_3(c:TopoDS_Shape,b,b,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeFix_Face.Init/3",
+   "kind": "ambiguous",
+   "cands": [
+    "Init_2(?,n,b)",
+    "Init_3(?,n,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeFix_Wire.FixReorder/1",
+   "kind": "ambiguous",
+   "cands": [
+    "FixReorder_1(b)",
+    "FixReorder_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "ShapeFix_Wire.SetSurface/1",
+   "kind": "ambiguous",
+   "cands": [
+    "SetSurface_1(?)",
+    "SetSurface_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Standard_Failure.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "Standard_Failure_2(c:Standard_Failure)",
+    "Standard_Failure_3(s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Standard_Transient.IsInstance/1",
+   "kind": "ambiguous",
+   "cands": [
+    "IsInstance_1(?)",
+    "IsInstance_2(s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "Standard_Transient.IsKind/1",
+   "kind": "ambiguous",
+   "cands": [
+    "IsKind_1(?)",
+    "IsKind_2(s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "StdPrs_BRepFont.Init/3",
+   "kind": "typed",
+   "cands": [
+    "Init_1(s,n,n)",
+    "Init_2(s,e:Font_FontAspect,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.AssignCat/1",
+   "kind": "ambiguous",
+   "cands": [
+    "AssignCat_1(c:TCollection_ExtendedString)",
+    "AssignCat_2(n)",
+    "AssignCat_3(s)",
+    "AssignCat_4(n)",
+    "AssignCat_5(n)",
+    "AssignCat_9(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.Cat/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Cat_2(n)",
+    "Cat_3(n)",
+    "Cat_4(n)",
+    "Cat_5(s)",
+    "Cat_7(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.Copy/1",
+   "kind": "typed",
+   "cands": [
+    "Copy_2(n)",
+    "Copy_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.EndsWith/1",
+   "kind": "typed",
+   "cands": [
+    "EndsWith_2(n)",
+    "EndsWith_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.Insert/2",
+   "kind": "typed",
+   "cands": [
+    "Insert_1(n,n)",
+    "Insert_4(n,c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.IsDifferent/1",
+   "kind": "typed",
+   "cands": [
+    "IsDifferent_2(n)",
+    "IsDifferent_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.IsEqual/1",
+   "kind": "typed",
+   "cands": [
+    "IsEqual_2(n)",
+    "IsEqual_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.IsEqual/2",
+   "kind": "typed",
+   "cands": [
+    "IsEqual_1(n,n)",
+    "IsEqual_4(c:TCollection_ExtendedString,c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.IsGreater/1",
+   "kind": "typed",
+   "cands": [
+    "IsGreater_2(n)",
+    "IsGreater_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.IsLess/1",
+   "kind": "typed",
+   "cands": [
+    "IsLess_2(n)",
+    "IsLess_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.Prepend/1",
+   "kind": "typed",
+   "cands": [
+    "Prepend_2(n)",
+    "Prepend_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.Search/1",
+   "kind": "typed",
+   "cands": [
+    "Search_2(n)",
+    "Search_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.SearchFromEnd/1",
+   "kind": "typed",
+   "cands": [
+    "SearchFromEnd_2(n)",
+    "SearchFromEnd_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.SetValue/2",
+   "kind": "typed",
+   "cands": [
+    "SetValue_1(n,n)",
+    "SetValue_4(n,c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.StartsWith/1",
+   "kind": "typed",
+   "cands": [
+    "StartsWith_2(n)",
+    "StartsWith_3(c:TCollection_ExtendedString)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "TCollection_ExtendedString_3(n)",
+    "TCollection_ExtendedString_4(?)",
+    "TCollection_ExtendedString_5(s)",
+    "TCollection_ExtendedString_8(n)",
+    "TCollection_ExtendedString_9(n)",
+    "TCollection_ExtendedString_10(c:TCollection_ExtendedString)",
+    "TCollection_ExtendedString_15(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_ExtendedString.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "TCollection_ExtendedString_2(s,b)",
+    "TCollection_ExtendedString_7(n,n)",
+    "TCollection_ExtendedString_12(s,b)",
+    "TCollection_ExtendedString_13(n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.AssignCat/1",
+   "kind": "ambiguous",
+   "cands": [
+    "AssignCat_1(s)",
+    "AssignCat_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.Cat/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Cat_1(s)",
+    "Cat_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.Insert/2",
+   "kind": "ambiguous",
+   "cands": [
+    "Insert_1(n,s)",
+    "Insert_3(n,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.Search/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Search_1(s)",
+    "Search_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.SearchFromEnd/1",
+   "kind": "ambiguous",
+   "cands": [
+    "SearchFromEnd_1(s)",
+    "SearchFromEnd_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.SetValue/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetValue_1(n,s)",
+    "SetValue_3(n,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "TCollection_HAsciiString_2(s)",
+    "TCollection_HAsciiString_5(n)",
+    "TCollection_HAsciiString_6(n)",
+    "TCollection_HAsciiString_7(s)",
+    "TCollection_HAsciiString_9(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TCollection_HAsciiString.__init__/2",
+   "kind": "ambiguous",
+   "cands": [
+    "TCollection_HAsciiString_4(n,s)",
+    "TCollection_HAsciiString_10(?,s)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TDF_Attribute.DeltaOnModification/1",
+   "kind": "ambiguous",
+   "cands": [
+    "DeltaOnModification_1(?)",
+    "DeltaOnModification_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TDF_Label.ForgetAttribute/1",
+   "kind": "ambiguous",
+   "cands": [
+    "ForgetAttribute_1(?)",
+    "ForgetAttribute_2(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TDocStd_Application.NewDocument/2",
+   "kind": "ambiguous",
+   "cands": [
+    "NewDocument_1(c:TCollection_ExtendedString,?)",
+    "NewDocument_2(c:TCollection_ExtendedString,?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "TopExp.MapShapes/4",
+   "kind": "ambiguous",
+   "cands": [
+    "MapShapes_2(c:TopoDS_Shape,?,b,b)",
+    "MapShapes_3(c:TopoDS_Shape,?,b,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.AddColor/1",
+   "kind": "typed",
+   "cands": [
+    "AddColor_1(c:Quantity_Color)",
+    "AddColor_2(c:Quantity_ColorRGBA)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.FindColor/1",
+   "kind": "typed",
+   "cands": [
+    "FindColor_3(c:Quantity_Color)",
+    "FindColor_4(c:Quantity_ColorRGBA)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.FindColor/2",
+   "kind": "typed",
+   "cands": [
+    "FindColor_1(c:Quantity_Color,c:TDF_Label)",
+    "FindColor_2(c:Quantity_ColorRGBA,c:TDF_Label)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.GetColor/2",
+   "kind": "typed",
+   "cands": [
+    "GetColor_1(c:TDF_Label,c:Quantity_Color)",
+    "GetColor_2(c:TDF_Label,c:Quantity_ColorRGBA)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.GetColor/3",
+   "kind": "typed",
+   "cands": [
+    "GetColor_3(c:TDF_Label,e:XCAFDoc_ColorType,c:TDF_Label)",
+    "GetColor_4(c:TDF_Label,e:XCAFDoc_ColorType,c:Quantity_Color)",
+    "GetColor_5(c:TDF_Label,e:XCAFDoc_ColorType,c:Quantity_ColorRGBA)",
+    "GetColor_6(c:TopoDS_Shape,e:XCAFDoc_ColorType,c:TDF_Label)",
+    "GetColor_7(c:TopoDS_Shape,e:XCAFDoc_ColorType,c:Quantity_Color)",
+    "GetColor_8(c:TopoDS_Shape,e:XCAFDoc_ColorType,c:Quantity_ColorRGBA)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.GetInstanceColor/3",
+   "kind": "typed",
+   "cands": [
+    "GetInstanceColor_1(c:TopoDS_Shape,e:XCAFDoc_ColorType,c:Quantity_Color)",
+    "GetInstanceColor_2(c:TopoDS_Shape,e:XCAFDoc_ColorType,c:Quantity_ColorRGBA)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.IsSet/2",
+   "kind": "typed",
+   "cands": [
+    "IsSet_1(c:TDF_Label,e:XCAFDoc_ColorType)",
+    "IsSet_2(c:TopoDS_Shape,e:XCAFDoc_ColorType)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.SetColor/3",
+   "kind": "typed",
+   "cands": [
+    "SetColor_1(c:TDF_Label,c:TDF_Label,e:XCAFDoc_ColorType)",
+    "SetColor_2(c:TDF_Label,c:Quantity_Color,e:XCAFDoc_ColorType)",
+    "SetColor_3(c:TDF_Label,c:Quantity_ColorRGBA,e:XCAFDoc_ColorType)",
+    "SetColor_4(c:TopoDS_Shape,c:TDF_Label,e:XCAFDoc_ColorType)",
+    "SetColor_5(c:TopoDS_Shape,c:Quantity_Color,e:XCAFDoc_ColorType)",
+    "SetColor_6(c:TopoDS_Shape,c:Quantity_ColorRGBA,e:XCAFDoc_ColorType)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.SetInstanceColor/4",
+   "kind": "typed",
+   "cands": [
+    "SetInstanceColor_1(c:TopoDS_Shape,e:XCAFDoc_ColorType,c:Quantity_Color,b)",
+    "SetInstanceColor_2(c:TopoDS_Shape,e:XCAFDoc_ColorType,c:Quantity_ColorRGBA,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ColorTool.UnSetColor/2",
+   "kind": "typed",
+   "cands": [
+    "UnSetColor_1(c:TDF_Label,e:XCAFDoc_ColorType)",
+    "UnSetColor_2(c:TopoDS_Shape,e:XCAFDoc_ColorType)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ShapeTool.AddComponent/3",
+   "kind": "typed",
+   "cands": [
+    "AddComponent_1(c:TDF_Label,c:TDF_Label,c:TopLoc_Location)",
+    "AddComponent_2(c:TDF_Label,c:TopoDS_Shape,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "XCAFDoc_ShapeTool.GetNamedProperties/2",
+   "kind": "typed",
+   "cands": [
+    "GetNamedProperties_1(c:TDF_Label,b)",
+    "GetNamedProperties_2(c:TopoDS_Shape,b)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gce_MakeLin.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "gce_MakeLin_2(c:gp_Pnt,c:gp_Dir)",
+    "gce_MakeLin_3(c:gp_Lin,c:gp_Pnt)",
+    "gce_MakeLin_4(c:gp_Pnt,c:gp_Pnt)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax1.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax1.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax2.IsCoplanar/3",
+   "kind": "typed",
+   "cands": [
+    "IsCoplanar_1(c:gp_Ax2,n,n)",
+    "IsCoplanar_2(c:gp_Ax1,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax2.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax2.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax2d.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt2d)",
+    "Mirror_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax2d.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt2d)",
+    "Mirrored_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax3.IsCoplanar/3",
+   "kind": "typed",
+   "cands": [
+    "IsCoplanar_1(c:gp_Ax3,n,n)",
+    "IsCoplanar_2(c:gp_Ax1,n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax3.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Ax3.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Circ.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Circ.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Circ2d.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt2d)",
+    "Mirror_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Circ2d.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt2d)",
+    "Mirrored_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Cylinder.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Cylinder.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Dir.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Dir)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Dir.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Dir)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Dir2d.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Dir2d)",
+    "Mirror_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Dir2d.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Dir2d)",
+    "Mirrored_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Dir2d.SetCoord/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetCoord_1(n,n)",
+    "SetCoord_2(n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Dir2d.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "gp_Dir2d_3(c:gp_Vec2d)",
+    "gp_Dir2d_4(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Elips.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Elips.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_GTrsf.SetAffinity/2",
+   "kind": "typed",
+   "cands": [
+    "SetAffinity_1(c:gp_Ax1,n)",
+    "SetAffinity_2(c:gp_Ax2,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Hypr.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Hypr.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Lin.Distance/1",
+   "kind": "typed",
+   "cands": [
+    "Distance_1(c:gp_Pnt)",
+    "Distance_2(c:gp_Lin)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Lin.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Lin.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Lin.SquareDistance/1",
+   "kind": "typed",
+   "cands": [
+    "SquareDistance_1(c:gp_Pnt)",
+    "SquareDistance_2(c:gp_Lin)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Lin2d.Distance/1",
+   "kind": "typed",
+   "cands": [
+    "Distance_1(c:gp_Pnt2d)",
+    "Distance_2(c:gp_Lin2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Lin2d.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt2d)",
+    "Mirror_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Lin2d.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt2d)",
+    "Mirrored_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Lin2d.SquareDistance/1",
+   "kind": "typed",
+   "cands": [
+    "SquareDistance_1(c:gp_Pnt2d)",
+    "SquareDistance_2(c:gp_Lin2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Parab.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Parab.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pln.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pln.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pln.SignedDistance/1",
+   "kind": "typed",
+   "cands": [
+    "SignedDistance_1(c:gp_Pnt)",
+    "SignedDistance_2(c:gp_Lin)",
+    "SignedDistance_3(c:gp_Pln)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pln.SquareDistance/1",
+   "kind": "typed",
+   "cands": [
+    "SquareDistance_1(c:gp_Pnt)",
+    "SquareDistance_2(c:gp_Lin)",
+    "SquareDistance_3(c:gp_Pln)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pnt.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pnt.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pnt2d.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt2d)",
+    "Mirror_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pnt2d.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt2d)",
+    "Mirrored_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Pnt2d.SetCoord/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetCoord_1(n,n)",
+    "SetCoord_2(n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Quaternion.Multiply/1",
+   "kind": "typed",
+   "cands": [
+    "Multiply_1(c:gp_Quaternion)",
+    "Multiply_2(c:gp_Vec)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Quaternion.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "gp_Quaternion_3(c:gp_Vec,c:gp_Vec)",
+    "gp_Quaternion_5(c:gp_Vec,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Sphere.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Sphere.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Torus.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Pnt)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Torus.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Pnt)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Vec)",
+    "Mirror_2(c:gp_Ax1)",
+    "Mirror_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Vec)",
+    "Mirrored_2(c:gp_Ax1)",
+    "Mirrored_3(c:gp_Ax2)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec2d.Mirror/1",
+   "kind": "typed",
+   "cands": [
+    "Mirror_1(c:gp_Vec2d)",
+    "Mirror_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec2d.Mirrored/1",
+   "kind": "typed",
+   "cands": [
+    "Mirrored_1(c:gp_Vec2d)",
+    "Mirrored_2(c:gp_Ax2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec2d.SetCoord/2",
+   "kind": "ambiguous",
+   "cands": [
+    "SetCoord_1(n,n)",
+    "SetCoord_2(n,n)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec2d.__init__/1",
+   "kind": "ambiguous",
+   "cands": [
+    "gp_Vec2d_2(c:gp_Dir2d)",
+    "gp_Vec2d_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_Vec2d.__init__/2",
+   "kind": "typed",
+   "cands": [
+    "gp_Vec2d_4(n,n)",
+    "gp_Vec2d_5(c:gp_Pnt2d,c:gp_Pnt2d)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_XYZ.Multiplied/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Multiplied_1(n)",
+    "Multiplied_2(c:gp_XYZ)",
+    "Multiplied_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "gp_XYZ.Multiply/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Multiply_1(n)",
+    "Multiply_2(c:gp_XYZ)",
+    "Multiply_3(?)"
+   ],
+   "billedSites": 0
+  }
+ ]
+}

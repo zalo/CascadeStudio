@@ -351,8 +351,12 @@ class Interface_Static(Interface_TypedValue):
     _cs = 'Interface_Static'
 class LocOpe_DPrism(_c.OcpProxy):
     _cs = 'LocOpe_DPrism'
+class Message_ProgressRange(_c.OcpProxy):
+    _cs = 'Message_ProgressRange'
 class Poly_PolygonOnTriangulation(Standard_Transient):
     _cs = 'Poly_PolygonOnTriangulation'
+class Poly_Triangle(_c.OcpProxy):
+    _cs = 'Poly_Triangle'
 class Poly_Triangulation(Standard_Transient):
     _cs = 'Poly_Triangulation'
 class Precision(_c.OcpProxy):
@@ -415,14 +419,22 @@ class TColStd_HArray1OfBoolean(_c.OcpProxy):
     _cs = 'TColStd_HArray1OfBoolean'
 class TColgp_Array1OfPnt(_c.OcpProxy):
     _cs = 'TColgp_Array1OfPnt'
+class TColgp_Array1OfPnt2d(_c.OcpProxy):
+    _cs = 'TColgp_Array1OfPnt2d'
 class TColgp_Array1OfVec(_c.OcpProxy):
     _cs = 'TColgp_Array1OfVec'
+class TColgp_Array2OfPnt(_c.OcpProxy):
+    _cs = 'TColgp_Array2OfPnt'
 class TColgp_HArray1OfPnt(_c.OcpProxy):
     _cs = 'TColgp_HArray1OfPnt'
+class TCollection_ExtendedString(_c.OcpProxy):
+    _cs = 'TCollection_ExtendedString'
 class TCollection_HAsciiString(Standard_Transient):
     _cs = 'TCollection_HAsciiString'
 class TDF_Attribute(Standard_Transient):
     _cs = 'TDF_Attribute'
+class TDF_Label(_c.OcpProxy):
+    _cs = 'TDF_Label'
 class TDataStd_GenericEmpty(TDF_Attribute):
     _cs = 'TDataStd_GenericEmpty'
 class TDataStd_GenericExtString(TDF_Attribute):
@@ -495,6 +507,8 @@ class gp_Circ(_c.OcpProxy):
     _cs = 'gp_Circ'
 class gp_Circ2d(_c.OcpProxy):
     _cs = 'gp_Circ2d'
+class gp_Cylinder(_c.OcpProxy):
+    _cs = 'gp_Cylinder'
 class gp_Dir(_c.OcpProxy):
     _cs = 'gp_Dir'
 class gp_Dir2d(_c.OcpProxy):
@@ -519,10 +533,16 @@ class gp_Pnt2d(_c.OcpProxy):
     _cs = 'gp_Pnt2d'
 class gp_Quaternion(_c.OcpProxy):
     _cs = 'gp_Quaternion'
+class gp_Sphere(_c.OcpProxy):
+    _cs = 'gp_Sphere'
+class gp_Torus(_c.OcpProxy):
+    _cs = 'gp_Torus'
 class gp_Trsf(_c.OcpProxy):
     _cs = 'gp_Trsf'
 class gp_Vec(_c.OcpProxy):
     _cs = 'gp_Vec'
+class gp_Vec2d(_c.OcpProxy):
+    _cs = 'gp_Vec2d'
 class gp_XYZ(_c.OcpProxy):
     _cs = 'gp_XYZ'
 
@@ -1202,6 +1222,8 @@ StdPrs_BRepFont.get_type_descriptor_s = _c.static('StdPrs_BRepFont', 'get_type_d
 StdPrs_BRepFont.get_type_descriptor = StdPrs_BRepFont.get_type_descriptor_s
 StdPrs_BRepFont.FindAndCreate_s = _c.static('StdPrs_BRepFont', 'FindAndCreate')
 StdPrs_BRepFont.FindAndCreate = StdPrs_BRepFont.FindAndCreate_s
+TCollection_ExtendedString.EmptyString_s = _c.static('TCollection_ExtendedString', 'EmptyString')
+TCollection_ExtendedString.EmptyString = TCollection_ExtendedString.EmptyString_s
 TCollection_HAsciiString.get_type_name_s = _c.static('TCollection_HAsciiString', 'get_type_name')
 TCollection_HAsciiString.get_type_name = TCollection_HAsciiString.get_type_name_s
 TCollection_HAsciiString.get_type_descriptor_s = _c.static('TCollection_HAsciiString', 'get_type_descriptor')

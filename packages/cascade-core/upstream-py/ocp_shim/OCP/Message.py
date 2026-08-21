@@ -1,5 +1,5 @@
 # GENERATED OCP.Message — proxies over the embind binding (gen-ocp-shim.mjs)
-from ocp_registry import Message_Gravity  # noqa: F401
+from ocp_registry import Message_Gravity, Message_ProgressRange  # noqa: F401
 Message_Trace = Message_Gravity.Message_Trace
 Message_Info = Message_Gravity.Message_Info
 Message_Warning = Message_Gravity.Message_Warning
@@ -10,6 +10,4 @@ class _Any:
         raise NotImplementedError(
             'OCP.Message.' + self.__class__.__name__ + ' is not in the generated shim')
 class Message(_Any):
-    pass
-class Message_ProgressRange(_Any):
     pass

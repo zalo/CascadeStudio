@@ -174,6 +174,47 @@ while (grew) {
 for (const name of [...closure]) {
   if (/_\d+$/.test(name) && dts[name.replace(/_\d+$/, '')]) { closure.delete(name); }
 }
+// The d.ts sometimes writes typedef'd NCollection names for hand-bound
+// TCol/TopTools instantiations; map them onto the registered classes.
+const TYPEDEF = {
+  'NCollection_Array1<double>': 'TColStd_Array1OfReal',
+  'NCollection_Array1<int>': 'TColStd_Array1OfInteger',
+  'NCollection_Array1<gp_Pnt>': 'TColgp_Array1OfPnt',
+  'NCollection_Array1<gp_Pnt2d>': 'TColgp_Array1OfPnt2d',
+  'NCollection_Array1<gp_Vec>': 'TColgp_Array1OfVec',
+  'NCollection_Array1<gp_Dir>': 'TColgp_Array1OfDir',
+  'NCollection_Array2<gp_Pnt>': 'TColgp_Array2OfPnt',
+  'NCollection_Array2<double>': 'TColStd_Array2OfReal',
+  'NCollection_List<TopoDS_Shape>': 'TopTools_ListOfShape',
+};
+// classes referenced as PARAM types by closure methods/ctors (+ ancestors):
+// the runtime dispatcher must be able to normalize an argument's embind
+// class name and chain-walk it onto the declared param class (the
+// Message_ProgressRange fill was invisible to posScore without this)
+{
+  let grewP = true;
+  while (grewP) {
+    grewP = false;
+    for (const name of [...closure]) {
+      const c = dts[name];
+      const paramLists = [
+        ...c.ctors.map((x) => x.params || []),
+        ...Object.values(c.methods).flat().map((v) => v.params || []),
+      ];
+      for (const ps of paramLists) {
+        for (let t of ps) {
+          t = String(t).trim();
+          if (TYPEDEF[t]) { t = TYPEDEF[t]; }
+          if (!dts[t] || /_\d+$/.test(t) || closure.has(t)) { continue; }
+          closure.add(t);
+          grewP = true;
+          let p = dts[t].parent;
+          while (p && dts[p] && !closure.has(p)) { closure.add(p); p = dts[p].parent; }
+        }
+      }
+    }
+  }
+}
 
 // --------------------------------------------------------------------- //
 // 3. Needed enums                                                        //
@@ -211,6 +252,111 @@ const mapPyParam = (p) => ({
 });
 
 const table = { classes: {}, enums: {}, handleClasses: [] };
+
+// ---- static overload pinning ----------------------------------------- //
+// Coarse-type tags shared with the RUNTIME dispatcher (OcpShim.js argKind):
+//   'b' bool, 'n' number, 's' string, 'e:<Enum>' registered enum,
+//   'c:<Class>' registered class, '?' anything (embind val / unregistered).
+const coarseOf = (t) => {
+  if (t === null || t === undefined) { return '?'; }
+  let ts = String(t).trim();
+  if (TYPEDEF[ts]) { ts = TYPEDEF[ts]; }
+  if (!ts || ts === 'any' || ts === 'GLvoid') { return '?'; }
+  if (/^(Standard_Boolean|bool|boolean)$/.test(ts)) { return 'b'; }
+  if (/^(Standard_(Real|Integer|ShortReal|Size|Byte|ExtCharacter|Utf32Char)|int|double|float|number)$/.test(ts)) { return 'n'; }
+  if (/^(string|Standard_CString|Standard_Character|NCollection_String|XCAFDoc_PartId)$/.test(ts)) { return 's'; }
+  if (dtsEnums[ts]) { return 'e:' + ts; }
+  if (dts[ts] && !/_\d+$/.test(ts)) { return 'c:' + ts; }
+  return '?'; // unregistered token (enum the wasm never bound, etc.)
+};
+const isAncestor = (anc, cls) => {
+  let c = cls;
+  const seen = new Set();
+  while (c && !seen.has(c)) {
+    if (c === anc) { return true; }
+    seen.add(c);
+    c = dts[c] && dts[c].parent;
+  }
+  return false;
+};
+// Can the RUNTIME argKind always separate these two coarse param tags?
+const separable = (a, b) => {
+  if (a === '?' || b === '?') { return false; }  // '?' weak-matches anything
+  if (a === b) { return false; }
+  const ac = a[0] === 'c', bc = b[0] === 'c';
+  if (ac && bc) { return true; }  // distinct classes: exact/ancestor scoring
+  // decides (related classes rank by specificity; a null arg still ties —
+  // the runtime REFUSES in that case rather than guessing)
+  return true;  // prim vs prim / enum vs enum / prim vs class all differ
+};
+const PRIMKEY = (sig) => sig.every((k) => k === 'b' || k === 'n' || k === 's'
+  || k.startsWith('e:'));
+/** Per-arity dispatch for one method's variants:
+ *    {d: js, s: csig}                      exactly one variant at this arity
+ *    {c: [{js, s}], k: {sigkey: js}, a: 1} multiple: typed match at runtime
+ *      (k = exact prim/enum key pins; a=1 marks statically-inseparable pairs
+ *       — the runtime matcher REFUSES on ties instead of guessing)
+ *  Variants with unknown params (hand-registered surface) get NO dispatch
+ *  entry: the runtime keeps the legacy try-in-order path for those. */
+const buildDispatch = (variants) => {
+  const byArity = {};
+  let unknown = 0;
+  for (const v of variants) {
+    if (!v.params) { unknown++; continue; }
+    const ar = v.params.length;
+    (byArity[ar] = byArity[ar] || []).push(v);
+  }
+  const dispatch = {};
+  const kinds = {};
+  for (const [ar, rawVs] of Object.entries(byArity)) {
+    // collapse const/non-const duplicate registrations: identical raw d.ts
+    // param lists with NO 'any' are the same C++ overload bound twice —
+    // keeping the first is pybind's single-overload call, not a guess.
+    // ('any'-typed params are kept: distinct val-typed overloads can share
+    // a raw sig and MUST stay separate → ambiguous → runtime refusal.)
+    const seenRaw = new Set();
+    const vs = [];
+    for (const v of rawVs) {
+      const raw = v.params.join('|');
+      if (!v.csig.includes('?') && seenRaw.has(raw)) { continue; }
+      seenRaw.add(raw);
+      vs.push(v);
+    }
+    if (vs.length === 1 && !unknown) {
+      dispatch[ar] = { d: vs[0].js, s: vs[0].csig };
+      kinds[ar] = 'direct';
+      continue;
+    }
+    const cands = vs.map((v) => ({ js: v.js, s: v.csig }));
+    let amb = false;
+    for (let i = 0; i < cands.length && !amb; i++) {
+      for (let j = i + 1; j < cands.length; j++) {
+        const si = cands[i].s, sj = cands[j].s;
+        if (!si.some((k, p) => separable(k, sj[p]))) { amb = true; break; }
+      }
+    }
+    const entry = { c: cands };
+    // exact-key pins when every candidate is prim/enum-only and keys are
+    // unique: the runtime resolves these with ONE map lookup, no scoring
+    if (cands.every((c) => PRIMKEY(c.s))) {
+      const k = {};
+      let dup = false;
+      for (const c of cands) {
+        const key = c.s.join(',');
+        if (k[key]) { dup = true; break; }
+        k[key] = c.js;
+      }
+      if (!dup) { entry.k = k; }
+    }
+    if (amb || unknown) { entry.a = 1; }
+    dispatch[ar] = entry;
+    kinds[ar] = (amb || unknown) ? 'ambiguous' : 'typed';
+  }
+  return { dispatch, kinds, unknown };
+};
+const report = { direct: 0, typed: 0, ambiguous: 0, unknownOnly: 0,
+  pinnedPrimKeys: 0, runtimeDispatched: [], ambiguousKeys: [] };
+
 for (const cls of [...closure].sort()) {
   const d = dts[cls];
   const pd = defaults[cls] || { ctor: [], methods: {} };
@@ -220,13 +366,43 @@ for (const cls of [...closure].sort()) {
   for (const [js, variants] of Object.entries(d.methods)) {
     const base = js.replace(/_\d+$/, '');
     (byBase[base] = byBase[base] || []).push(
-      ...variants.map((v) => ({ js, static: v.static, params: v.params })));
+      ...variants.map((v) => ({ js, static: v.static, params: v.params,
+        csig: v.params ? v.params.map(coarseOf) : null })));
   }
+  const billEntry = bill.per_class[cls] || null;
+  const tallyDispatch = (owner, kinds, cands, sigSites) => {
+    for (const [ar, kind] of Object.entries(kinds)) {
+      report[kind === 'direct' ? 'direct' : kind === 'typed' ? 'typed' : 'ambiguous']++;
+      if (kind === 'direct') { continue; }
+      const billed = Object.entries(sigSites || {})
+        .filter(([k]) => k.split(':')[0] === ar)
+        .reduce((n, [, c]) => n + c, 0);
+      const rec = {
+        key: owner + '/' + ar,
+        kind,
+        cands: (cands[ar] || []).map((c) => c.js + '(' + c.s.join(',') + ')'),
+        billedSites: billed,
+      };
+      report.runtimeDispatched.push(rec);
+      if (kind === 'ambiguous') { report.ambiguousKeys.push(rec); }
+    }
+  };
   for (const [base, variants] of Object.entries(byBase)) {
     // pybind defaults: look up both Name and Name_s
     const pysig = pd.methods[base] || pd.methods[base + '_s'] || null;
+    const { dispatch, kinds } = buildDispatch(variants);
+    if (!Object.keys(kinds).length) { report.unknownOnly++; }
+    for (const e of Object.values(dispatch)) {
+      if (e.k) { report.pinnedPrimKeys += Object.keys(e.k).length; }
+    }
+    const billedMeth = billEntry
+      && (billEntry.methods[base] || billEntry.methods[base + '_s']) || null;
+    tallyDispatch(cls + '.' + base, kinds,
+      Object.fromEntries(Object.entries(dispatch).map(([a, e]) => [a, e.c || [{ js: e.d, s: e.s }]])),
+      billedMeth && billedMeth.sig_sites);
     methods[base] = {
       variants,
+      dispatch,
       static: variants.every((v) => v.static),
       pybind: pysig ? pysig.sigs.map((s) => ({
         params: s.params.map(mapPyParam),
@@ -234,9 +410,16 @@ for (const cls of [...closure].sort()) {
       tuple_ret: pysig ? pysig.tuple_ret : false,
     };
   }
+  const ctorVariants = d.ctors.map((c) => ({ js: c.js, params: c.params,
+    csig: c.params ? c.params.map(coarseOf) : null }));
+  const { dispatch: cdispatch, kinds: ckinds } = buildDispatch(ctorVariants);
+  tallyDispatch(cls + '.__init__', ckinds,
+    Object.fromEntries(Object.entries(cdispatch).map(([a, e]) => [a, e.c || [{ js: e.d, s: e.s }]])),
+    billEntry && billEntry.ctor && billEntry.ctor.sig_sites);
   table.classes[cls] = {
     parent: d.parent || null,
     ctors: d.ctors,
+    cdispatch,
     pyctor: pd.ctor ? pd.ctor.map((s) => ({
       params: s.params.map(mapPyParam),
     })) : null,
@@ -355,6 +538,40 @@ for (const [mod, src] of Object.entries(moduleFiles)) {
   fs.writeFileSync(join(OUT, 'OCP', mod + '.py'), src);
 }
 fs.writeFileSync(join(HERE, 'closure.json'), JSON.stringify([...closure].sort()));
+// ---- generator SELF-CHECK: every key the runtime still dispatches ------ //
+report.runtimeDispatched.sort((a, b) => b.billedSites - a.billedSites
+  || (a.key < b.key ? -1 : 1));
+report.ambiguousKeys.sort((a, b) => b.billedSites - a.billedSites
+  || (a.key < b.key ? -1 : 1));
+const billedAmb = report.ambiguousKeys.filter((r) => r.billedSites > 0);
+fs.writeFileSync(join(HERE, 'dispatch-report.json'), JSON.stringify({
+  note: 'gen-ocp-shim.mjs self-check: per-(class,method,arity) dispatch. '
+    + 'direct = build-time pinned; typed = runtime coarse-type match, '
+    + 'statically guaranteed decisive; ambiguous = statically inseparable '
+    + 'pair exists (or an unknown-sig hand-registered variant shadows) — '
+    + 'the runtime REFUSES with the candidate list on a tie.',
+  totals: {
+    directKeys: report.direct,
+    typedKeys: report.typed,
+    ambiguousKeys: report.ambiguous,
+    unknownSigOnlyMethods: report.unknownOnly,
+    pinnedPrimTypeKeys: report.pinnedPrimKeys,
+    billedAmbiguousKeys: billedAmb.length,
+  },
+  billedAmbiguous: billedAmb,
+  ambiguous: report.ambiguousKeys,
+  runtimeDispatched: report.runtimeDispatched,
+}, null, 1));
+console.log('dispatch: direct', report.direct, '| typed', report.typed,
+  '| ambiguous', report.ambiguous, '(billed:', billedAmb.length + ')',
+  '| prim-key pins', report.pinnedPrimKeys,
+  '| unknown-sig-only methods', report.unknownOnly);
+if (billedAmb.length) {
+  console.log('BILLED ambiguous keys (runtime will refuse on tie):');
+  for (const r of billedAmb) {
+    console.log('  ' + r.key + ' x' + r.billedSites + '  [' + r.cands.join(' | ') + ']');
+  }
+}
 fs.writeFileSync(join(OUT, 'MANIFEST.json'), JSON.stringify({
   modules: Object.keys(moduleFiles).sort(),
   classCount: closure.size,

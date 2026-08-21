@@ -157,9 +157,13 @@ class Usage:
     def __init__(self):
         # key: (module, cls, meth_or_None, kind) -> list of "file:line"
         self.items: dict[tuple, list[str]] = defaultdict(list)
+        # key -> list of coarse call-site arg signatures (parallel, one per
+        # call site; None for non-call usages). See ModuleScanner._argsig.
+        self.sigs: dict[tuple, list] = defaultdict(list)
 
-    def add(self, module, cls, meth, kind, where):
+    def add(self, module, cls, meth, kind, where, argsig=None):
         self.items[(module, cls, meth, kind)].append(where)
+        self.sigs[(module, cls, meth, kind)].append(argsig)
 
 
 class ModuleScanner(ast.NodeVisitor):
@@ -323,30 +327,82 @@ class ModuleScanner(ast.NodeVisitor):
             if t:
                 self.env[node.target.id] = t
 
+    # -- coarse static typing of a call-site argument -------------------- #
+    # Tags align with the shim's RUNTIME argKind classes (OcpShim.js):
+    #   'b' bool, 'n' number, 's' string, '0' None, 'c:<Class>' OCP class,
+    #   'm:<Type>.<Member>' attr read off an imported OCP name (enum member
+    #   or class constant; the generator resolves enums), '?' unknown.
+    def _coarse(self, node):
+        if isinstance(node, ast.Constant):
+            v = node.value
+            if isinstance(v, bool):
+                return "b"
+            if isinstance(v, (int, float)):
+                return "n"
+            if isinstance(v, str):
+                return "s"
+            if v is None:
+                return "0"
+            return "?"
+        if isinstance(node, ast.UnaryOp) and isinstance(
+                node.op, (ast.USub, ast.UAdd)):
+            return "n" if self._coarse(node.operand) == "n" else "?"
+        t = self.infer(node)
+        if t:
+            return "c:" + t
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            nm = node.value.id
+            if nm in self.alias:
+                return "m:" + self.alias[nm][1] + "." + node.attr
+            if nm in self.modalias:
+                return "m:[" + self.modalias[nm] + "]." + node.attr
+        if isinstance(node, ast.Call):
+            fn = node.func
+            if isinstance(fn, ast.Name):
+                if fn.id == "bool":
+                    return "b"
+                if fn.id in ("int", "float", "len", "abs", "round"):
+                    return "n"
+                if fn.id == "str":
+                    return "s"
+        return "?"
+
+    def _argsig(self, node: ast.Call) -> str:
+        sig = ",".join(self._coarse(a) for a in node.args)
+        kw = sorted(k.arg or "**" for k in node.keywords)
+        if kw:
+            sig += "|kw:" + ",".join(kw)
+        return sig
+
     def visit_Call(self, node):
         f = node.func
         nargs = len(node.args) + len(node.keywords)
+        argsig = self._argsig(node)
         # numpy
         root = self._np_root(f)
         if root:
             self.np.add(root, self.where(node), call=True)
         if isinstance(f, ast.Name) and f.id in self.alias:
             mod, cls = self.alias[f.id]
-            self.usage.add(mod, cls, None, f"ctor/{nargs}", self.where(node))
+            self.usage.add(mod, cls, None, f"ctor/{nargs}", self.where(node),
+                           argsig)
         elif isinstance(f, ast.Attribute):
             # Cls.Meth(...) where Cls imported from OCP
             if isinstance(f.value, ast.Name) and f.value.id in self.alias:
                 mod, cls = self.alias[f.value.id]
-                self.usage.add(mod, cls, f.attr, f"static/{nargs}", self.where(node))
+                self.usage.add(mod, cls, f.attr, f"static/{nargs}",
+                               self.where(node), argsig)
             # modalias.Name(...)  (e.g. ta.TopAbs_XXX -- rare as call)
             elif isinstance(f.value, ast.Name) and f.value.id in self.modalias:
                 mod = self.modalias[f.value.id]
-                self.usage.add(mod, f.attr, None, f"modcall/{nargs}", self.where(node))
+                self.usage.add(mod, f.attr, None, f"modcall/{nargs}",
+                               self.where(node), argsig)
             else:
                 recv = self.infer(f.value)
                 if recv:
                     mod = OCP_CLASS_MODULE.get(recv, ("?",))[0]
-                    self.usage.add(mod, recv, f.attr, f"imeth/{nargs}", self.where(node))
+                    self.usage.add(mod, recv, f.attr, f"imeth/{nargs}",
+                                   self.where(node), argsig)
                 else:
                     # unattributed instance call -- keep the method name if it
                     # LOOKS like an OCCT method (CamelCase) and the receiver is
@@ -356,7 +412,7 @@ class ModuleScanner(ast.NodeVisitor):
                     ) or f.attr in ("X", "Y", "Z"):
                         if not self._is_python_recv(f.value):
                             self.usage.add("?", "?", f.attr, f"unattr/{nargs}",
-                                           self.where(node))
+                                           self.where(node), argsig)
         self.generic_visit(node)
 
     def _is_python_recv(self, node) -> bool:
@@ -637,6 +693,12 @@ def classify(usage: Usage, dts_classes, dts_enums):
             usage.items.items(), key=lambda kv: tuple(str(x) for x in kv[0])):
         count = len(sites)
         base_kind = kind.split("/")[0]
+        # per-call-site coarse arg signatures (kind still carries the arity)
+        sig_counts: dict[str, int] = {}
+        for s in usage.sigs.get((mod, cls, meth, kind), []):
+            if s is None:
+                continue
+            sig_counts[s] = sig_counts.get(s, 0) + 1
 
         if base_kind in ("modattr", "modcall"):
             # module-level name: OCP enums / module constants (ta.TopAbs_VERTEX
@@ -672,10 +734,14 @@ def classify(usage: Usage, dts_classes, dts_enums):
         if base_kind == "ctor":
             nargs = int(kind.split("/")[1])
             cur = entry["ctor"] or {"count": 0, "arities": {}, "status": None,
-                                    "sites": []}
+                                    "sites": [], "sig_sites": {}}
             cur["count"] += count
             cur["arities"][str(nargs)] = cur["arities"].get(str(nargs), 0) + count
             cur["sites"] = (cur["sites"] + sites)[:6]
+            cur.setdefault("sig_sites", {})
+            for sg, c in sig_counts.items():
+                key = f"{nargs}:{sg}"
+                cur["sig_sites"][key] = cur["sig_sites"].get(key, 0) + c
             if dcls is None:
                 # maybe it's an enum type used as constructor-ish (rare) or a
                 # class whose ctor classes exist but base absent
@@ -694,11 +760,17 @@ def classify(usage: Usage, dts_classes, dts_enums):
         # method-level (static / imeth / unattr / attr)
         mrec = entry["methods"].setdefault(meth, {
             "count": 0, "kinds": {}, "sites": [], "pybind": None, "status": None,
-            "tuple_ret": False,
+            "tuple_ret": False, "sig_sites": {},
         })
         mrec["count"] += count
         mrec["kinds"][base_kind] = mrec["kinds"].get(base_kind, 0) + count
         mrec["sites"] = (mrec["sites"] + sites)[:6]
+        mrec.setdefault("sig_sites", {})
+        if "/" in kind:
+            _arity = kind.split("/")[1]
+            for sg, c in sig_counts.items():
+                key = f"{_arity}:{sg}"
+                mrec["sig_sites"][key] = mrec["sig_sites"].get(key, 0) + c
         if pyinfo.get("exists") and pyinfo.get("sigs"):
             mrec["pybind"] = {
                 "kind": pyinfo.get("kind"),

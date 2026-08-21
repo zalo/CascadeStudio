@@ -60,6 +60,7 @@
   "TColStd",
   "TColgp",
   "TCollection",
+  "TDF",
   "TDataStd",
   "TDocStd",
   "TopAbs",
@@ -73,6 +74,6 @@
   "gce",
   "gp"
  ],
- "classCount": 261,
+ "classCount": 271,
  "enumCount": 25
 }
