@@ -1,8 +1,41 @@
 # STAGE 3 — upstream geometry.py + topology/*.py VERBATIM (pytopo=upstream)
 
-**State as of this checkpoint: Phase 3 (the grind), mid-flight.**
-Branch `feat/upstream-full-topology`. Default pytopo stays `lite`
-(`PYTOPO_DEFAULT` in UpstreamB123d.js); nothing in the default modes moved.
+**State as of this checkpoint: Phase 4 gates GREEN; default deliberately
+left OFF (perf shortfall — see the flip decision below).**
+Branch `feat/upstream-full-topology`. `PYTOPO_DEFAULT='lite'` in
+UpstreamB123d.js; nothing in the default modes moved.
+
+## Phase 4 gates (2026-08-21, all on this tree)
+
+- pytopo=upstream harness (r9): **210 PASS / 2 MISMATCH / 3 ERROR /
+  7 TIMEOUT** (`/tmp/pytopo-up-r9.{json,md}` at run time; progression below).
+- pytopo=lite NEUTRALITY harness (micropython, pysrc=upstream default,
+  no CS_PY_TOPO): **205 / 10 / 5 / 2 — per-script IDENTICAL to the
+  committed upstream-Level-A baseline set** (MM: joints x2, projection x2,
+  filter_all_edges_circle, tips/b04, objects_1d, tutorial_joints,
+  bicycle_tire, ex08_algebra; E: objects_2d, dual_color_3mf, sm_hanger,
+  curved_support, Buffer_Stand; T: spitfire, heat_exchanger) — despite the
+  shared-layer changes (jsffi patch 9, enum None-members, deepcopy memo,
+  2-D ConvexHull, collections.abc lazy iterators).
+- Full playwright suite: **96 passed / 1 skipped**. Fast gate green incl.
+  the native-metaclass spec (Align.__members__ now includes NONE — the
+  CPython surface; expectation updated).
+- Gotcha fixed en route: the USED_OCCT_SYMBOLS generator scans RAW TEXT
+  (comments included) — deliberately-absent-symbol probes must use
+  indirect lookups (`oc['Quantity_' + 'Color_1']`).
+
+## Flip decision (this run): DEFAULT STAYS pytopo=lite
+
+pytopo=upstream EXCEEDS the baseline on fidelity (+9 scripts incl. lite's
+entire COMPROMISE(edge-orientation)/(traversal-order) residual set; only
+2 MISMATCH / 3 ERROR, all baseline-family). The honest shortfall is PERF:
+4 scripts regress PASS/MM -> TIMEOUT (clock, algebra_performance b01+all,
+bicycle_tire — bicycle_tire is 4m10s solo vs the 60 s budget;
+b01 is 148 s vs 15 s under pytopo=lite because upstream's own
+Compound.__add__ re-fuses ALL top-level shapes each step and the
+FFI-envelope multiplies the quadratic Python term). Profiles show
+MicroPython VM self-time dominating (~70%), not the shim dispatch.
+Flip when the perf work lands (see next actions).
 
 ## Phase log
 
@@ -25,7 +58,15 @@ Branch `feat/upstream-full-topology`. Default pytopo stays `lite`
 | r5 | 203 | **1** | 11 | 7 | insertion-ordered dedup (MicroPython dicts are UNORDERED — faces()/edges() were SCRAMBLED: the whole ex33/ex34/logo MISMATCH family), glue enum bridge + align translation |
 | r6 | 204 | 1 | 12 | 5 | (r5's tree + ArrowHead/b12/b10-format/user-code-concat partials) |
 | r7 | **209** | 3 | 5 | 5 | hasher functor rebind, deque(maxlen), ljust, ArrowHead-as-upstream-Sketch, chained concat |
-| r8 | (running) | | | | TypeMismatch/ConstructionError exception mapping (twist_extrude, slide_latch), **the jsffi integral-double FFI fix** (PROVENANCE patch 9: integral JS doubles >= 2^31 crossed into Python WRAPPED to int32 — 1e15 -> -1530494976, 1e100 -> 0; found via Edge(Axis) parameter ranges), MakeEdge unbounded-line glue (b10) |
+| r8 | 210 | 3 | 3 | 6 | TypeMismatch/ConstructionError exception mapping (twist_extrude, slide_latch), **the jsffi integral-double FFI fix** (PROVENANCE patch 9: integral JS doubles >= 2^31 crossed into Python WRAPPED to int32 — 1e15 -> -1530494976, 1e100 -> 0; found via Edge(Axis) parameter ranges), MakeEdge unbounded-line glue (b10) |
+| r9 | **210** | **2** | **3** | 7 | None-valued enum members (Align.NONE = None IS a member — objects_sketch defaults) |
+
+**Final r9 per-script classification**: MISMATCH = objects_1d,
+tutorial_joints (both baseline-family). ERROR = dual_color_3mf, objects_2d,
+curved_support (exactly 3 of the baseline's 5 — toy_truck and ttt-ppp0110
+now PASS). TIMEOUT = heat_exchanger + spitfire (the baseline TIMEOUT set)
++ bicycle_tire/clock/algebra_performance-b01/all (PERF — the honest
+shortfall) + selectors_operators (one-run contention flap; PASS in r7/r8).
 
 **The single r5+ MISMATCH is docs/objects_1d — the baseline residual
 (triad labels + DTA trim). Upstream topology FIXED lite's other residual
@@ -84,25 +125,39 @@ tips/b04, sm_hanger — all PASS under pytopo=upstream).**
 
 ## Known open items (next actions, in order)
 
-1. r8 results (in flight): expect b10 + twist_extrude + slide_latch fixed
-   (jsffi fix + exception mapping) — potentially 211-212 PASS / ~3 ERROR.
-2. Phase 4 gates NOT yet run: pytopo=lite harness re-verification
-   (205/10/5/2 per-script — CRITICAL after the jsffi number fix, which
-   touches the shared interpreter), pysrc=lite control, fast spec gate,
-   full playwright suite. THEN the flip decision (perf TIMEOUTs argue for
-   default-off this round; the per-script shortfall is 4 scripts of perf
-   + tutorial_joints magnitude + spitfire reclassification).
-3. Perf: the remaining lever is the FFI envelope x upstream's Python-heavy
-   hot loops (VM self-time dominates profiles). Candidates: batch
-   ListOfShape appends, cache geom_adaptor, MicroPython native-emitter for
-   hot topology modules (interpreter-side, next rebuild).
+1. **PERF (the flip blocker)**: bicycle_tire (250 s solo), clock (text +
+   sequential 2-D fillets), algebra_performance b01/all (quadratic re-fuse).
+   Profile shows MicroPython VM self-time ~70% (wasm-function[462] et al.),
+   proxy conversion ~5%, GC ~1% — the cost is EXECUTING 19.8k lines of
+   upstream Python per hot loop, not the dispatcher. Levers, in rough order
+   of value: (a) MicroPython native-emitter (@micropython.native) or
+   frozen-bytecode for topology modules — interpreter-side, next
+   micropython-cs rebuild (also carry PROVENANCE patch 9 forward properly);
+   (b) targeted memoization of upstream hot properties (geom_adaptor,
+   wrapped-downcast) via loader transforms; (c) a lighter guarded-call
+   envelope (single FFI hop) for _BoundMethod.
+2. tutorial_joints MISMATCH magnitude (hinge_inner bbox off 160 —
+   worse than the baseline's m6_screw-only residual): joint connect_to
+   family, uninvestigated.
+3. spitfire is TIMEOUT here like baseline (gordon at wing scale);
+   selectors_operators flapped TIMEOUT once under contention (PASS solo,
+   r7/r8).
 4. history-step SNAPSHOTS under pytopo are end-of-run only (scene is
    glue-assembled); fnName/line are correct. Recorded as honest partial.
-5. Boot cost: libMs ~600 ms (vs ~305 pre-Stage-3); heap 16 MB holds
-   (32 MB experiment showed no win).
+   GUI pick->line works via TopoDS producingLine tagging.
+5. Boot cost: libMs ~600 ms (vs ~305 for the pre-Stage-3 pytopo=upstream,
+   ~123 ms lite); heap 16 MB holds (32 MB experiment: no win).
+   runtime-comparison.md not yet updated with the full-stack numbers.
 6. FORK-ASKS Stage-3 addendum WRITTEN (Quantity_Color, BOPAlgo setters,
    concrete Geom surface classes, IndexedDataMap Extent, ConnectEdgesToWires
    out-handle, GetEulerAngles helper, ListOfShape iteration).
+7. INVENTORY line-count accounting for the eventual flip: the pytopo=lite
+   seam that upstream topology makes obsolete is ~1,170 lines
+   (topology/__init__ 774 + geometry seam 242 + constrained_bridge 141 +
+   sub stubs 13), replaced by topo_glue 431 (+ topo_bridge 202 shared);
+   the 19,027 vendored upstream lines now run verbatim. Build123dLite.js
+   itself STAYS (it is the pytopo=lite layer, the Brython default, and the
+   glue's kernel-op library) until a post-flip round prunes it.
 
 ## How to run things
 

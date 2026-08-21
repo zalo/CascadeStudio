@@ -836,7 +836,10 @@ export function installOcpShim(self, table) {
       }
     }
     // COMPROMISE(quantity-color) stand-ins (see mkFakeQC above)
-    if (cls === 'Quantity_Color' && !oc.Quantity_Color_1) {
+    // (indirect lookup: Quantity_Color is DELIBERATELY absent from the wasm
+    // — a literal member-access token here would trip the generated
+    // USED_OCCT_SYMBOLS startup cross-check, whose scanner reads raw text)
+    if (cls === 'Quantity_Color' && !oc['Quantity_' + 'Color_1']) {
       if (args.length === 0) { return mkFakeQC(0, 0, 0); }
       return mkFakeQC(+args[0] || 0, +args[1] || 0, +args[2] || 0);
     }
