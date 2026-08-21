@@ -24,7 +24,8 @@ Branch `feat/upstream-full-topology`. Default pytopo stays `lite`
 | r4 | 188 | 15 | 12 | 7 | anytree attach-hooks (Compound(children=) was EMPTY -> project_to_viewport family), Geom_Surface inspection GLUE (dropped concrete surface classes), AsGeomSurface deref, HArray2->Array2, enum ordering, float_info |
 | r5 | 203 | **1** | 11 | 7 | insertion-ordered dedup (MicroPython dicts are UNORDERED — faces()/edges() were SCRAMBLED: the whole ex33/ex34/logo MISMATCH family), glue enum bridge + align translation |
 | r6 | 204 | 1 | 12 | 5 | (r5's tree + ArrowHead/b12/b10-format/user-code-concat partials) |
-| r7 | (running) | | | | hasher functor rebind, deque(maxlen), ljust, ArrowHead-as-upstream-Sketch, chained concat, TypeMismatch/ConstructionError exception mapping |
+| r7 | **209** | 3 | 5 | 5 | hasher functor rebind, deque(maxlen), ljust, ArrowHead-as-upstream-Sketch, chained concat |
+| r8 | (running) | | | | TypeMismatch/ConstructionError exception mapping (twist_extrude, slide_latch), **the jsffi integral-double FFI fix** (PROVENANCE patch 9: integral JS doubles >= 2^31 crossed into Python WRAPPED to int32 — 1e15 -> -1530494976, 1e100 -> 0; found via Edge(Axis) parameter ranges), MakeEdge unbounded-line glue (b10) |
 
 **The single r5+ MISMATCH is docs/objects_1d — the baseline residual
 (triad labels + DTA trim). Upstream topology FIXED lite's other residual
@@ -60,32 +61,48 @@ tips/b04, sm_hanger — all PASS under pytopo=upstream).**
 - collections.abc Iterable is structurally extended at _finalize time
   (build123d classes with an INSTANCE __iter__) and rebound in importers.
 
+## r7 classification vs the baseline band (205/10/5/2)
+
+- **PASS 209 > 205.** Upstream topology ADDITIONALLY passes lite's residual
+  set: joints x2, projection x2, sort_axis, filter_all_edges_circle,
+  tips/b04(→MM parity), sm_hanger, toy_truck, ttt-ppp0110 — the
+  COMPROMISE(edge-orientation)/(traversal-order) families largely RESOLVE
+  when upstream's own traversal runs.
+- MISMATCH 3 (baseline 10): objects_1d (baseline residual, same),
+  tutorial_joints (baseline MISMATCH too; ours adds a hinge_inner 160-off —
+  joints magnitude differs), tips/b04 (identical residual delta 0.2).
+- ERROR 5 (baseline 5): dual_color_3mf / objects_2d / curved_support are
+  BASELINE-PARITY errors; spitfire is ERROR here vs baseline TIMEOUT
+  (gordon returns null fast instead of grinding past budget); b10 was the
+  jsffi integral-double bug — FIXED after r7.
+- TIMEOUT 5 (baseline 2): heat_exchanger (baseline contention flap, same);
+  bicycle_tire (4m10s solo — thicken/wrap in Python x envelope),
+  clock (text+fillet heavy), algebra_performance b01+all (upstream's OWN
+  quadratic re-fuse — Compound.__add__ refuses ALL top-level shapes each
+  step — x the FFI envelope; b01 is 148 s solo vs 15 s for pytopo=lite,
+  which single-fuses. PERF is the honest remaining gap.)
+
 ## Known open items (next actions, in order)
 
-1. r3 results triage. Expected remaining clusters from r2: ZeroDivision x3
-   (logo scripts — user-code line, uninvestigated), AttributeError IsNull x2,
-   AssertionError x2, GeomAPI_Point ctor x2 (truncated name — probably
-   GeomAPI_PointsToBSpline* unbound path), `symbols` x1 (Joint.symbol
-   family), ContinuityLevel `__ge__` x1 (enum ORDERING — shim _Member has no
-   ordering; add int-value comparison), sys.float_info x1,
-   make_mid_way arg-count x1, 'None is not a valid Align' x1,
-   'NoneType not subscriptable' x1, kernel raise x1, max_fillet x1,
-   widths x1. TIMEOUTs grew 5 -> 7 (heat_exchanger + algebra_performance/
-   group_axis — check whether shim overhead or contention).
-2. MISMATCH set (13 at r2) — compare against lite's residual set
-   (joints/projection/sort_axis families) once ERRORs are thinner.
-3. history-step SNAPSHOTS under pytopo are end-of-run only (scene is
+1. r8 results (in flight): expect b10 + twist_extrude + slide_latch fixed
+   (jsffi fix + exception mapping) — potentially 211-212 PASS / ~3 ERROR.
+2. Phase 4 gates NOT yet run: pytopo=lite harness re-verification
+   (205/10/5/2 per-script — CRITICAL after the jsffi number fix, which
+   touches the shared interpreter), pysrc=lite control, fast spec gate,
+   full playwright suite. THEN the flip decision (perf TIMEOUTs argue for
+   default-off this round; the per-script shortfall is 4 scripts of perf
+   + tutorial_joints magnitude + spitfire reclassification).
+3. Perf: the remaining lever is the FFI envelope x upstream's Python-heavy
+   hot loops (VM self-time dominates profiles). Candidates: batch
+   ListOfShape appends, cache geom_adaptor, MicroPython native-emitter for
+   hot topology modules (interpreter-side, next rebuild).
+4. history-step SNAPSHOTS under pytopo are end-of-run only (scene is
    glue-assembled); fnName/line are correct. Recorded as honest partial.
-4. Boot cost: libMs ~600 ms (vs ~305 pre-Stage-3); heap 16 MB holds so far
-   (watch algebra_performance TIMEOUTs for GC pressure —
-   consider MP_HEAP_BYTES bump if pythonWasm memoryStats show pressure).
-5. Phase 4 gates not run yet: pytopo=lite harness re-verification
-   (206/10/5/1 per-script), pysrc=lite control, Brython control, full
-   playwright suite, then the flip decision.
-6. FORK-ASKS addendum to write: Quantity_Color (skip Vec3 ctor),
-   BOPAlgo_Options::SetFuzzyValue/SetNonDestructive/SetRunParallel,
-   ShapeAnalysis_FreeBounds::ConnectEdgesToWires out-handle form (or keep
-   the GLUE), BRepExtrema ParOnEdgeS1 (pre-existing PENDING).
+5. Boot cost: libMs ~600 ms (vs ~305 pre-Stage-3); heap 16 MB holds
+   (32 MB experiment showed no win).
+6. FORK-ASKS Stage-3 addendum WRITTEN (Quantity_Color, BOPAlgo setters,
+   concrete Geom surface classes, IndexedDataMap Extent, ConnectEdgesToWires
+   out-handle, GetEulerAngles helper, ListOfShape iteration).
 
 ## How to run things
 
