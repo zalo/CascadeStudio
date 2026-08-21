@@ -283,3 +283,27 @@ REMAINING (final classification):
 Judgment: the upstream-source-over-lite-seam config is now a PEER of the
 lite source path on this corpus — same pass rate, three scripts better,
 five scripts worse, every difference root-caused above.
+
+## J. Stage 3 (2026-08-21): the seam itself retired under pytopo=upstream
+
+With `pytopo=upstream` the DEFAULT (see
+experiments/upstream-topology-spike/STAGE3-STATE.md and CLAUDE.md), the
+B-section method fills and the seam re-export modules NO LONGER LOAD on the
+default MicroPython path — upstream geometry.py + topology/*.py run
+verbatim and the fills' jobs are done by upstream's own methods:
+
+| Retired under the default (still load under ?pytopo=lite) | lines |
+|---|---|
+| build123d/topology/__init__.py (re-exports + B-section fills) | 774 |
+| build123d/geometry.py (seam adapter) | 242 |
+| ocp_shim/constrained_bridge.py | 141 |
+| topology sub-module stubs | 13 |
+| **total seam obsoleted** | **~1,170** |
+| replaced by ocp_shim/topo_glue.py (worker glue) | 431 |
+
+The pytopo=lite layer is KEPT (the A/B baseline leg and the payload-missing
+fallback), so nothing is deleted from the tree this round; a future prune
+can drop the seam once the lite leg is no longer interesting. lite itself
+(Build123dLite.js) remains load-bearing three ways: the Brython/Pyodide
+`build123d` package, the pytopo=lite layer, and the glue's kernel-op
+library (text, gordon, exporters, quickhull).
