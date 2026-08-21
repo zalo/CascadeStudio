@@ -294,6 +294,15 @@ export function installOcpShim(self, table) {
 
   // table-driven dispatch over completed argument sets.
   //   getFn(js) resolves a variant name to a callable (ctor/static/method).
+  //   A score TIE is RETURNED (not thrown): the caller may still have
+  //   lazily-built default-fill argument sets to try; it throws refuseTie
+  //   only once every phase is exhausted.
+  const refuseTie = (label, tieInfo) => {
+    throw new Error('ocp_shim: ambiguous overload ' + label + '/'
+      + tieInfo.arity + ' — runtime arg types [' + tieInfo.kinds.join(', ')
+      + '] do not decide between [' + tieInfo.cands.join(' | ')
+      + ']; refusing to guess');
+  };
   const runDispatch = (dispatch, getFn, thisArg, argSets, label) => {
     if (!dispatch) { return { done: false }; }
     let lastErr = null, tieInfo = null;
@@ -346,13 +355,7 @@ export function installOcpShim(self, table) {
         lastErr = r.err;
       }
     }
-    if (tieInfo) {
-      throw new Error('ocp_shim: ambiguous overload ' + label + '/'
-        + tieInfo.arity + ' — runtime arg types [' + tieInfo.kinds.join(', ')
-        + '] do not decide between [' + tieInfo.cands.join(' | ')
-        + ']; refusing to guess');
-    }
-    return { done: false, err: lastErr };
+    return { done: false, err: lastErr, tie: tieInfo };
   };
 
   // legacy try-in-order path — ONLY for candidates the table has no coarse
@@ -492,16 +495,38 @@ export function installOcpShim(self, table) {
     },
   };
 
+  // shared two-phase dispatch: raw args first (no allocation), then the
+  // lazily-built pybind default-fills + version-drift progress pads
+  const dispatchPhases = (dispatch, getFn, thisArg, args, kwargs, pybind,
+    variants, label) => {
+    const hasKw = kwargs && Object.keys(kwargs).length;
+    let r = hasKw ? { done: false }
+      : runDispatch(dispatch, getFn, thisArg, [args], label);
+    if (r.done) { return r; }
+    const tie1 = r.tie;
+    const err1 = r.err;
+    const sets = fillDefaults(args, kwargs, pybind);
+    const pad = padProgress(args, variants);
+    if (pad) { sets.push(pad); }
+    for (const f of sets.slice()) {
+      const p = padProgress(f, variants);
+      if (p) { sets.push(p); }
+    }
+    r = runDispatch(dispatch, getFn, thisArg, sets, label);
+    if (r.done) { return r; }
+    return { done: false, err: r.err || err1, tie: r.tie || tie1,
+      sets: [hasKw ? null : args, ...sets] };
+  };
+
   self._csOcpNew = function (cls, args, kwargs) {
     kwargs = normKw(kwargs);
     const t = tableClass(cls);
-    const fills = fillDefaults(args, kwargs, t && t.pyctor);
-    const sets = [(kwargs && Object.keys(kwargs).length) ? null : args, ...fills];
-    sets.push(padProgress(args, t && t.ctors));
-    for (const f of fills) { sets.push(padProgress(f, t && t.ctors)); }
     // 1. pinned dispatch (build-time resolved; refuses on ambiguity)
-    let r = runDispatch(t && t.cdispatch, ocCtor, null, sets, cls + '.__init__');
+    let r = dispatchPhases(t && t.cdispatch, ocCtor, null, args, kwargs,
+      t && t.pyctor, t && t.ctors, cls + '.__init__');
     if (r.done) { return r.value; }
+    const sets = r.sets || [args];
+    const tieInfo = r.tie;
     let lastErr = r.err;
     // 2. legacy try-in-order — ONLY unknown-sig variants / unlisted classes
     const cands = [];
@@ -521,6 +546,7 @@ export function installOcpShim(self, table) {
       if (r.done) { return r.value; }
       lastErr = r.err || lastErr;
     }
+    if (tieInfo) { refuseTie(cls + '.__init__', tieInfo); }
     throw lastErr || new Error('ocp_shim: no matching constructor ' + cls +
       '/' + args.length);
   };
@@ -547,14 +573,12 @@ export function installOcpShim(self, table) {
     }
     const holder = oc[cls];
     if (!holder) { throw new Error('ocp_shim: class not bound: ' + cls); }
-    const sFills = fillDefaults(args, kwargs, m && m.pybind);
-    const sets = [(kwargs && Object.keys(kwargs).length) ? null : args, ...sFills];
-    sets.push(padProgress(args, m && m.variants));
-    for (const f of sFills) { sets.push(padProgress(f, m && m.variants)); }
     // 1. pinned dispatch
-    let r = runDispatch(m && m.dispatch, (js) => holder[js], holder, sets,
-      cls + '.' + name);
+    let r = dispatchPhases(m && m.dispatch, (js) => holder[js], holder,
+      args, kwargs, m && m.pybind, m && m.variants, cls + '.' + name);
     if (r.done) { return deref(r.value); }
+    const sets = r.sets || [args];
+    const tieInfo = r.tie;
     let lastErr = r.err;
     // 2. legacy try-in-order for unknown-sig variants / unlisted methods
     const cands = [];
@@ -576,39 +600,47 @@ export function installOcpShim(self, table) {
       if (r.done) { return deref(r.value); }
       lastErr = r.err || lastErr;
     }
+    if (tieInfo) { refuseTie(cls + '.' + name, tieInfo); }
     throw lastErr || new Error('ocp_shim: no matching static ' + cls + '.' +
       name + '/' + args.length);
+  };
+
+  // (constructor.name, method) -> {m, mcls, glue} — the per-call class-
+  // chain walk and GLUE lookups happen ONCE per (class, method) pair
+  const resolveCache = new Map();
+  const resolveMethod = (cn0, name) => {
+    const key = cn0 + '.' + name;
+    let res = resolveCache.get(key);
+    if (res !== undefined) { return res; }
+    let cn = normCls(cn0), m = null, mcls = null;
+    while (cn) {
+      const t = tableClass(cn);
+      if (t && t.methods[name]) { m = t.methods[name]; mcls = cn; break; }
+      cn = t ? t.parent : null;
+    }
+    const glue = (mcls && GLUE[mcls + '.' + name]) || GLUE[cn0 + '.' + name]
+      || GLUE[normCls(cn0) + '.' + name] || null;
+    res = { m, mcls, glue };
+    resolveCache.set(key, res);
+    return res;
   };
 
   self._csOcpCall = function (ref, name, args, kwargs) {
     kwargs = normKw(kwargs);
     if (!ref) { throw new Error('ocp_shim: method ' + name + ' on null ref'); }
-    // table lookup via the object's own (most-derived) class chain
-    let cn = normCls(ref.constructor && ref.constructor.name), m = null, mcls = null;
-    while (cn) {
-      const t = tableClass(cn);
-      if (t && t.methods[name]) { m = t.methods[name]; mcls = cn; break; }
-      cn = t ? t.parent : (cn = null);
-    }
-    const g = mcls && GLUE[mcls + '.' + name];
-    if (g) { return g(args, ref); }
-    // generic glue lookup by any table ancestor failed: check direct name
-    if (!g) {
-      const g2 = GLUE[(ref.constructor && ref.constructor.name) + '.' + name];
-      if (g2) { return g2(args, ref); }
-    }
-    if (m && m.tuple_ret && !g) {
+    const cn0 = (ref.constructor && ref.constructor.name) || '?';
+    const { m, mcls, glue } = resolveMethod(cn0, name);
+    if (glue) { return glue(args, ref); }
+    if (m && m.tuple_ret) {
       throw new Error('ocp_shim: out-param method needs glue: ' +
-        (mcls || ref.constructor.name) + '.' + name);
+        (mcls || cn0) + '.' + name);
     }
-    const cFills = fillDefaults(args, kwargs, m && m.pybind);
-    const sets = [(kwargs && Object.keys(kwargs).length) ? null : args, ...cFills];
-    sets.push(padProgress(args, m && m.variants));
-    for (const f of cFills) { sets.push(padProgress(f, m && m.variants)); }
     // 1. pinned dispatch
-    let r = runDispatch(m && m.dispatch, (js) => ref[js], ref, sets,
-      (mcls || (ref.constructor && ref.constructor.name)) + '.' + name);
+    let r = dispatchPhases(m && m.dispatch, (js) => ref[js], ref, args,
+      kwargs, m && m.pybind, m && m.variants, (mcls || cn0) + '.' + name);
     if (r.done) { return deref(r.value); }
+    const sets = r.sets || [args];
+    const tieInfo = r.tie;
     let lastErr = r.err;
     // 2. legacy try-in-order for unknown-sig variants / unlisted methods
     const knownJs = new Set();
@@ -634,8 +666,9 @@ export function installOcpShim(self, table) {
       if (r.done) { return deref(r.value); }
       lastErr = r.err || lastErr;
     }
+    if (tieInfo) { refuseTie((mcls || cn0) + '.' + name, tieInfo); }
     const base = 'ocp_shim: no matching overload ' + name + '/' + args.length
-      + ' on ' + (ref.constructor && ref.constructor.name)
+      + ' on ' + cn0
       + ' (pinned dispatch: ' + (m && m.dispatch ? 'yes' : 'no')
       + ', pybind: ' + (m ? 'yes' : 'no') + ')';
     throw new Error(lastErr ? base + ' — last: ' + (lastErr.message || lastErr)

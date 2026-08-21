@@ -113,6 +113,31 @@ strongly-connected layer through shape_core).
   seconds; the whole adapter is 3 commands after a d.ts or bill change:
   `extract_ocp_bill.py` → `dump_ocp_defaults.py` → `gen-ocp-shim.mjs`.
 
+### Perf pass (hardening round, `bench-shim.mjs`, node, load-avg ~9 box)
+
+The comparable for "a direct lite call" is a raw `w.*` bridge call (the
+same `_Fn`/`_csMpCall` guarded envelope every lite JS-op call rides, with a
+trivial body). Numbers are ops/s over 20k iterations, ±10% run-to-run:
+
+| Measurement | before pinning+memo | after | target |
+|---|---|---|---|
+| `p.X()` vs lite-equivalent call | 1.30x | **1.16–1.28x** | ≤ 2x ✔ |
+| `gp_Pnt(1,2,3)` vs lite-equivalent call | 1.50x | **1.23–1.35x** | ≤ 2x ✔ |
+| `filter_by(Plane.XY)` 504 lite faces (upstream ShapeList) | 0.38–0.42 s | 0.39–0.41 s | OCCT/envelope-bound |
+
+What changed: JS memoizes the per-call class-chain walk + GLUE lookup
+(`resolveMethod`), default-fills/progress-pads are built LAZILY (raw args
+dispatch first — the common case allocates nothing), and `wrap()` caches
+the `_csOcpParent` FFI walk for unregistered classes. Two Python-side
+caching attempts were MEASURED AND REJECTED: caching bound methods on the
+instance (setattr per short-lived proxy) and installing methods on the
+proxy class at first miss both regressed the wrap-heavy `filter_by` loop
+~45% (MicroPython attr-lookup cost grows with class/instance dict churn)
+while only the latter helped the same-instance micro loop; the original
+per-access `_BoundMethod` stands. The hot selector loop's time is OCCT +
+FFI-envelope, not dispatch: the dispatcher itself is within ~1.3x of the
+envelope floor.
+
 ## Deliberately NOT done (stop-line honored)
 
 - one_d/two_d/three_d/composite were not attempted (per the mission

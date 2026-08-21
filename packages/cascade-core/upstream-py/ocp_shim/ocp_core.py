@@ -60,6 +60,11 @@ _REF = ['_cs_ref_sentinel']  # first-ctor-arg marker (MicroPython lacks
                              # __init__ with this sentinel)
 
 
+_wrap_walk_cache = {}  # unregistered embind class name -> resolved proxy
+                       # class (caches the _csOcpParent FFI walk; registered
+                       # names hit _registry directly and never enter it)
+
+
 def wrap(v):
     if v is None or isinstance(v, (int, float, bool, str)):
         return v
@@ -70,13 +75,20 @@ def wrap(v):
     if kind == 'plain' or kind == 'other':
         return v  # enum members / OCJS_Out records: raw identity-stable proxy
     # kind is an embind class name: find the nearest generated proxy class
-    name = kind
-    while name:
-        cls = _registry.get(name)
-        if cls is not None:
-            return cls(_REF, v)
-        name = w._csOcpParent(name)
-    return OcpObj(_REF, v)
+    cls = _registry.get(kind)
+    if cls is None:
+        cls = _wrap_walk_cache.get(kind)
+        if cls is None:
+            name = w._csOcpParent(kind)
+            while name:
+                cls = _registry.get(name)
+                if cls is not None:
+                    break
+                name = w._csOcpParent(name)
+            if cls is None:
+                cls = OcpObj
+            _wrap_walk_cache[kind] = cls
+    return cls(_REF, v)
 
 
 def _unwrap_kw(kwargs):
