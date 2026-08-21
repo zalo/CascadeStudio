@@ -1,9 +1,42 @@
 # STAGE 3 — upstream geometry.py + topology/*.py VERBATIM (pytopo=upstream)
 
-**State as of this checkpoint: Phase 4 gates GREEN; default deliberately
-left OFF (perf shortfall — see the flip decision below).**
-Branch `feat/upstream-full-topology`. `PYTOPO_DEFAULT='lite'` in
-UpstreamB123d.js; nothing in the default modes moved.
+**State: FLIPPED. `pytopo=upstream` is the DEFAULT** (PYTOPO_DEFAULT +
+resolvePyTopo; `?pytopo=lite` opts out; missing ocp_shim payload
+warns-and-falls-back). Post-flip default-leg harness: **216 PASS /
+2 MISMATCH / 3 ERROR / 1 TIMEOUT** — every non-PASS is a documented
+honest gap (objects_1d + tips/b04 residual mismatches; dual_color_3mf
+lib3mf / objects_2d drafting / curved_support sympy; spitfire gordon
+TIMEOUT). Branch `feat/upstream-full-topology`.
+
+## The perf round that unlocked the flip (2026-08-21)
+
+The 4 perf TIMEOUTs were NOT VM-bound: a symbolized profile (interpreter
+JSFLAGS_EXTRA + --profiling-funcs) showed the BRIDGE PROTOCOL —
+mp_jsffi_to_js + the mp->js proxy registry (mp_map_lookup 27% +
+mp_obj_equal 15%, one EM_JS round-trip per temp-list registration) and the
+{ok,value} record's two 'get' traps per call. Fixes:
+- the variadic no-proxy fast path: _csMpCallV + _csOcpNewV/CallVar/StaticV
+  (scalar/JsProxy args cross individually; sentinel error returns;
+  container/kwargs keep the deep path) across browser._Fn,
+  topo_bridge._fn_call and ocp_core;
+- _CsOrderedStore replaces OrderedDict in the dedup transforms
+  (MicroPython ordered maps do LINEAR lookup — the r5 fix had made
+  _topods_entities O(n^2));
+- interpreter codegen levers measured and REJECTED (cgoto ~4%, -O3 ~3%
+  at +18% size, 256 MB heap ~4%).
+Solo: b01 148->18 s, bicycle_tire 250->29 s, group_axis 34->7.7 s,
+clock TIMEOUT->21.6 s. Full harness wall 158 s.
+
+Interpreter repo (micropython-cs, cs-patches-v1.28.0, NOT pushed):
+patch 9 landed properly as `83f1550` (out-of-int32 integral JS numbers
+convert as floats + tests/ports/webassembly/int_large.mjs) and `7f63764`
+(JSFLAGS_EXTRA); artifacts re-vendored from source, PROVENANCE updated.
+
+Also fixed en route: tutorial_joints (Compound(joints=) REPARENTS joints —
+pybind's downcast returns the same C++ object, embind casts copy, so
+connect_to's in-place locate() didn't move the new wrapper), and flap
+armor (gp_* ctor failures -> Standard_ConstructionError BY SITE;
+StandardUtils.Remove tolerates raising property traps).
 
 ## Phase 4 gates (2026-08-21, all on this tree)
 
