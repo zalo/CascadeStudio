@@ -393,6 +393,11 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     br._cs_register_module('IPython.lib', 'pass\n', true);
     br._cs_register_module('IPython.lib.pretty', await fetchText('ocp_shim/ipython_pretty.py'), false);
     registerAlias('topo_bridge', await fetchText('ocp_shim/topo_bridge.py'));
+    // the numpy MICRO-shim (array/cross/linspace/3x3 lstsq — exactly the
+    // billed surface of upstream geometry.py + one_d.py) replaces the
+    // honest raising stub ONLY here; everywhere else `import numpy` still
+    // raises on use. Registered AFTER the manifest shims, so this wins.
+    registerAlias('numpy', await fetchText('ocp_shim/numpy_micro.py'));
     const regUpstreamTopo = async (name, asName) => {
       const raw = await fetchText('upstream/topology/' + name + '.py');
       let src = transformUpstreamSource(name, raw);

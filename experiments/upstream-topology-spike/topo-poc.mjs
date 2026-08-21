@@ -235,6 +235,31 @@ except Exception as e:
     assert 'PENDING_FORK_BINDING' in str(e), str(e)
 print('T5 OK tangency tuple+mutation, ProjectPointOnCurve.Parameter, FilletAlgo.Result rebinding, PENDING hooks')
 `,
+  't6-numpy-micro': `
+# pytopo=upstream serves the numpy MICRO-shim (billed surface only):
+# the exact Axis._intersect_axis math, cross, linspace. Anything else
+# raises loudly.
+import numpy as np
+
+p1 = np.array([0.0, 0.0, 0.0])
+d1 = np.array([1.0, 0.0, 0.0])
+p2 = np.array([5.0, -5.0, 0.0])
+d2 = np.array([0.0, 1.0, 0.0])
+system_of_equations = np.array([d1, -d2, np.cross(d1, d2)]).T
+origin_diff = p2 - p1
+t1, _, _ = np.linalg.lstsq(system_of_equations, origin_diff, rcond=None)[0]
+intersection_point = p1 + t1 * d1
+pt = list(intersection_point)
+assert all(abs(a - b) < 1e-9 for a, b in zip(pt, [5.0, 0.0, 0.0])), 'axis intersection ' + str(pt)
+ls = list(np.linspace(0, 1, 5, endpoint=False))
+assert all(abs(a - b) < 1e-12 for a, b in zip(ls, [0.0, 0.2, 0.4, 0.6, 0.8])), 'linspace ' + str(ls)
+try:
+    np.zeros((3, 3))
+    raise AssertionError('np.zeros should raise')
+except (NotImplementedError, AttributeError):
+    pass
+print('T6 OK numpy micro-shim: lstsq intersection, linspace, out-of-bill raises')
+`,
   't4-shape-core-import': `
 import b123d_shape_core_u as sc
 from build123d import *
