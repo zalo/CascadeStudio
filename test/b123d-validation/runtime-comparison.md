@@ -323,6 +323,105 @@ and additionally fails bicycle_tire/ex08_algebra/Buffer_Stand, sm_hanger as
 ERROR, heat_exchanger as a contention TIMEOUT) is recorded in
 `experiments/upstream-on-micropython/INVENTORY.md` §H/§I.
 
+### Custom-interpreter round (2026-08-21 — micropython-cs: four patches into MicroPython v1.28.0)
+
+`?pyruntime=micropython` now boots CUSTOM-PATCHED artifacts
+(`packages/cascade-core/vendor/micropython-cs/`, committed; its PROVENANCE.md
+has the patch SHAs, build command and sizes), falling back to the stock npm
+settrace pair when they are absent from dist (feature-detected in browser.py
+— both paths keep working). Four defects were patched into MicroPython
+v1.28.0 (upstream-submission style, one commit each, each with a test in
+MicroPython's tests/) and the wasm pyscript variant rebuilt with emsdk
+4.0.23:
+
+1. **`sys._getframe`** (`MICROPY_PY_SYS_GETFRAME`, default-on with SETTRACE):
+   frames built ON DEMAND from the code-state chain the settrace feature
+   already maintains unconditionally — identity-stable per activation, LIVE
+   `f_lineno` (recomputed from the saved VM ip on access), `f_back`
+   materialized on demand. Frame construction became LAZY with it, which
+   removed the hidden cost of settrace-capable builds: every call used to
+   allocate a frame + code object even with no tracer (unix port: 200k
+   trivial calls 1.20 s -> 0.021 s). browser.py feature-detects it and
+   installs NO trace function; `_cs_user_line`/`_cs_caller_frame` walk
+   `sys._getframe(0)` — the exact frame `_cur[0]` held on the settrace path,
+   so the caller-frame identity (`is`) rule and live-lineno semantics are
+   unchanged (same for the upstream-seam inspect shim's `currentframe`).
+2. **Nested isinstance/issubclass classinfo tuples** — an upstream MicroPython
+   bug (silently False; CPython accepts arbitrary nesting). The
+   `collections.abc` shim's tuple-valued names now nest correctly.
+3. **Float hashing** — the pyscript variant's ROM level used the fallback
+   truncation hash (`(mp_int_t)val`): every float in (-1, 1) hashed to 0 and
+   coordinate tuples collapsed onto a handful of buckets (the measured ~100x
+   set-probing degradation). High-quality hash enabled at FULL_FEATURES +
+   a high-bits fold for 32-bit `mp_int_t` (without the fold, dyadic
+   fractions 0.5/0.25/... still all hashed to 0 on wasm, and one-decimal
+   floats collided 2:1). The integer-key Vertex equality in lite is
+   belt-and-braces now (kept: exact, cheap, stock-artifact safe).
+4. **Stable `list.sort`/`sorted`** (`MICROPY_PY_BUILTINS_SORT_STABLE`,
+   default-on at extra-features+): bottom-up merge sort, key called ONCE per
+   element. `_stable_sorted`'s probe passes and takes the native path, and
+   the upstream seam now probes before replacing `builtins.sorted` (the
+   decorate-shim is skipped on the custom build).
+
+Measured on this machine (in-worker via probe.mjs unless noted; STOCK = npm
+settrace artifacts with the tracer installed — the previous default):
+
+| Micro | STOCK (settrace) | CUSTOM (getframe) |
+|---|---|---|
+| fib(20), pure Python | 520 ms | **6 ms** (87x) |
+| 512 float-tuple set build+probe | 11 ms | **1 ms** |
+| sorted(4000, key=) | 96 ms | **2 ms** (48x) |
+| hooks: user_line through FRESH depth-20 chains, 2000x | 2205 ms | **46 ms** |
+| 60 `Box(mode=PRIVATE)` in a BuildPart (upstream src) | 113 ms | **48 ms** |
+| distinct hashes: {i/10 for i in range(520)} / dyadics 1..63/64 | 52 / 1 | **520 / 63** |
+| node (proofs.mjs): sorted(4000, key=) with tracer | 1815 ms | 2 ms |
+
+| Boot (upstream src, fetch+init+library registration) | STOCK | CUSTOM |
+|---|---|---|
+| total | ~369–474 ms | ~344–446 ms (unchanged band) |
+
+| Full harness, --pages 4, same day, alternating | STOCK | CUSTOM |
+|---|---|---|
+| micropython + upstream (default) | 205/10/5/2, **200 s** | 205/10/5/2, **171 s** |
+| micropython + lite | 206/10/5/1, 148 s | 206/10/5/1, **142 s** |
+
+**Both legs classify IDENTICALLY to the committed baselines** — the same 10
+MISMATCHes, the same 5 ERRORs, and the same TIMEOUTs (upstream:
+spitfire_wing_gordon + the documented heat_exchanger contention flap; lite:
+spitfire only — heat_exchanger PASSES) — per-script sets verified, not just
+counts. A same-day Brython control run (147 s) reproduced its committed
+mismatch/error sets exactly, with heat_exchanger landing on the PASS side of
+its documented contention flap (206/10/5/1) — the non-MicroPython paths are
+untouched, as expected (no shared files changed).
+
+Hot scripts SOLO (probe wall, includes ~8 s browser+kernel boot):
+
+| Script | STOCK | CUSTOM |
+|---|---|---|
+| examples/extrude (upstream) | 12.2 s | **9.4 s** |
+| docs-selectors/group_axis (upstream) | 11.2 s | **8.9 s** |
+| examples/clock (lite) | 7.2 s | **5.7 s** |
+| examples/clock (upstream) | **40.9 s** | 57.0 s (below) |
+| examples/heat_exchanger (upstream) | **105 s** | 128 s (below) |
+
+**Open item — the clock/heat_exchanger pacing anomaly**: on the two
+guard/boolean-heavy giants in UPSTREAM-source mode the custom build loses
+~25–40% wall DESPITE every Python-level metric measuring faster. Bisected
+exhaustively: identical per-op topology and measurement JSON, identical
+CacheOp misses, identical `Shape.__hash__` (88,744) and `_add_to_context`
+counts; per-phase instrumentation shows most phases FASTER; the loss is
+stochastic multi-second stalls concentrated in the Text-subtract phase whose
+position MOVES between runs. Ruled out by experiment: MicroPython GC (64 MB
+heap and gc-every-100-bridge-calls change nothing), the sort/hash/isinstance
+patches (flag-bisected interpreter builds), the hook bodies (stubbed to
+`return 0` — still slow). The one reproducible correlation: any config with
+the settrace TRACER installed is fast, any without is slow — i.e. the 3–28x
+SLOWER interpreter paces the worker so the browser absorbs the same JS/wasm
+garbage without main-thread stalls. Engine-level scheduling, not a
+correctness issue; the harness classification is unaffected (clock PASSES
+with margin at 4-page contention; heat_exchanger stays the documented
+TIMEOUT flap it already was).
+
 ### Porting notes (what the shared Python source must avoid)
 
 MicroPython has no `type.__new__`/unbound builtin dunders, exposes no `.fget`

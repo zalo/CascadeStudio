@@ -203,11 +203,34 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   switches run-lite.mjs/probe.mjs over.
 - **`?pyruntime=micropython`** (source layer: UPSTREAM build123d by default —
   see the next bullet) swaps the interpreter for MicroPython 1.28 wasm
-  (`packages/cascade-core/src/worker/MicroPythonRuntime.js`; micropython.mjs +
-  the settrace wasm variant, ~228 KB gz combined, copied to dist by the
-  cascade-core build) — the smallest and lowest-memory runtime: ~150 ms boot,
-  ~20 MB interpreter wasm heap after the starter (vs Pyodide's ~45 MB), aimed
-  at memory-budgeted headless execution. The settrace variant powers the two
+  (`packages/cascade-core/src/worker/MicroPythonRuntime.js`, ~237 KB gz,
+  copied to dist by the cascade-core build) — the smallest and lowest-memory
+  runtime: ~150 ms boot, ~20 MB interpreter wasm heap after the starter (vs
+  Pyodide's ~45 MB), aimed at memory-budgeted headless execution.
+  **The interpreter is a CUSTOM-PATCHED build (micropython-cs)**: vendored +
+  committed in `packages/cascade-core/vendor/micropython-cs/` (PROVENANCE.md:
+  base v1.28.0 tag e0e9fbb, six patch SHAs, build command), copied to dist as
+  `micropython-cs.mjs/.wasm` and PREFERRED at boot; the stock npm settrace
+  pair remains the feature-detected fallback (everything works on both —
+  `_pythonBootTiming.artifact/getframe` says which booted, frozen in
+  test/py-runtime.spec.js). The patches: `sys._getframe` built on demand
+  from the settrace code-state chain (identity-stable frames, LIVE
+  f_lineno; browser.py then installs NO tracer, so the settrace ~3.5x
+  pure-Python tax AND the eager per-call frame allocation are gone —
+  fib(20) 520→6 ms in-worker), nested isinstance/issubclass classinfo
+  tuples (upstream MicroPython bug: silently False), high-quality float
+  hashing + a 32-bit high-bits fold (kills the ~100x float-tuple
+  set-probing degradation; lite's integer-key vertex equality is
+  belt-and-braces now), and a STABLE native list.sort/sorted with
+  key-called-once (lite's `_stable_sorted` probe takes the native path; the
+  upstream seam no longer overrides builtins.sorted). Full-harness walls
+  improved (upstream 200→171 s, lite 148→142 s) with BOTH legs classifying
+  per-script IDENTICALLY to the committed baselines. Known open item: on
+  the two guard/boolean-heavy giants (clock, heat_exchanger) in upstream
+  mode the faster interpreter LOSES ~25-40% wall to stochastic browser-side
+  stalls (results identical; bisected to execution pacing, not to any
+  patch) — see runtime-comparison.md §9 "custom-interpreter round".
+  On the stock fallback, the settrace variant powers the two
   runtime hooks (`getPythonUserLine`, `_pythonCallerFrame`) via a
   current-frame tracker + live `f_back` walking (no frame stack — MicroPython
   fires no 'return' event on exception unwind; tracing costs ~3.5x on
