@@ -21,15 +21,28 @@ if (!fs.existsSync(path.join(CORE_DIST, 'cascade-headless.mjs'))) {
 }
 fs.mkdirSync(OUT, { recursive: true });
 
-// The FreeSans family is the only font bundled: build123d's Text() uses it,
-// and the eight-font set the browser ships is 5 MB — more than a Worker's
-// entire compressed size budget. Add more here if a Worker needs them.
+// Fonts are the one asset that has to be rationed. build123d asks for a
+// SPECIFIC family member per FontStyle — FreeSans / FreeSansBold /
+// FreeSansOblique / FreeSansBoldOblique — and a name that is not bundled is
+// now a hard, named error rather than a null shape (it used to surface as
+// "Cannot set properties of undefined (setting 'hash')"; examples/clock hits
+// it with font_style=FontStyle.BOLD). But the four together are 2.20 MB
+// gzipped against 0.84 MB of headroom under Cloudflare's 10 MB compressed
+// limit, so only the two that the validation corpus actually uses ship:
+//
+//   FreeSans     0.93 MB gz   FontStyle.REGULAR (the default)
+//   FreeSansBold 0.51 MB gz   FontStyle.BOLD
+//   (FreeSansOblique 0.46 + FreeSansBoldOblique 0.30 do not fit)
+//
+// Adding one means copying it here AND importing it in src/index.js (a
+// Worker's wasm/data bindings must be static imports).
 const files = [
   ['cascade-headless.mjs', 'cascade-headless.mjs'],
   ['cascadestudio.wasm', 'cascadestudio.wasm'],
   ['micropython-cs.mjs', 'micropython-cs.mjs'],
   ['micropython-cs.wasm', 'micropython-cs.wasm'],
   [path.join('fonts', 'FreeSans.ttf'), 'FreeSans.ttf'],
+  [path.join('fonts', 'FreeSansBold.ttf'), 'FreeSansBold.ttf'],
 ];
 
 let total = 0;

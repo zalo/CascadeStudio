@@ -98,8 +98,106 @@ check('HTTP 422', d.status === 422, String(d.status));
 check('NameError reported', (d.body.errors || []).some((e) => /NameError/.test(e)),
   JSON.stringify(d.body.errors));
 
+console.log('\n=== (e) fonts: build123d FontStyle.BOLD resolves ===');
+const e2 = await render(
+  'from build123d import *\n'
+  + 't = extrude(Text("B", 10, font_style=FontStyle.BOLD), 1)\n'
+  + 'print("bold volume:", round(t.volume, 3))\nshow(t)', ['step']);
+check('HTTP 200', e2.status === 200, String(e2.status) + ' ' + JSON.stringify(e2.body.errors));
+check('bold text produced a solid', (e2.body.logs || []).some((l) => /^bold volume: [1-9]/.test(l)),
+  JSON.stringify(e2.body.logs));
+
+console.log('\n=== (f) an unbundled font fails by NAME, not with a hash TypeError ===');
+const f = await render(
+  'from build123d import *\n'
+  + 'show(extrude(Text("B", 10, font_style=FontStyle.ITALIC), 1))', ['step']);
+check('HTTP 422', f.status === 422, String(f.status));
+check('the error names FreeSansOblique',
+  (f.body.errors || []).some((x) => /FreeSansOblique/.test(x)), JSON.stringify(f.body.errors));
+check('no "setting \'hash\'" TypeError',
+  !(f.body.errors || []).some((x) => /setting 'hash'/.test(x)), JSON.stringify(f.body.errors));
+
+console.log('\n=== (g) POST /render?stream=1 — SSE phase events ===');
+const sse = await renderStream(STARTER, ['step']);
+const phases = sse.events.filter((x) => x.event === 'phase').map((x) => x.data.phase);
+check('events arrived', sse.events.length > 2, JSON.stringify(phases));
+check('phase order is evaluating -> evaluated -> exporting -> done',
+  isSubsequence(['evaluating', 'evaluated', 'exporting'], phases)
+  && sse.events[sse.events.length - 1].event === 'done',
+  JSON.stringify(sse.events.map((x) => x.event + (x.data.phase ? ':' + x.data.phase : ''))));
+const tEvaluating = sse.events.find((x) => x.data.phase === 'evaluating');
+const tDone = sse.events[sse.events.length - 1];
+check('`evaluating` arrives >100 ms before `done` (client clock)',
+  tDone.at - tEvaluating.at > 100, (tDone.at - tEvaluating.at) + ' ms apart');
+check('the evaluated event carries shapeCount',
+  (sse.events.find((x) => x.data.phase === 'evaluated') || {}).data?.shapeCount === 1,
+  JSON.stringify((sse.events.find((x) => x.data.phase === 'evaluated') || {}).data));
+const doneBody = tDone.data;
+check('done carries a STEP', (doneBody.step || '').startsWith('ISO-10303-21'));
+check('done carries the per-op timeline', Array.isArray(doneBody.progressOps)
+  && doneBody.progressOps.length > 5, (doneBody.progressOps || []).length + ' ops');
+// The STEP header carries a write timestamp, so the two runs differ by a few
+// characters there and nowhere else — compare everything below the header.
+const stepBody = (s) => (s || '').slice((s || '').indexOf('DATA;'));
+check('done payload matches the JSON endpoint for the same code',
+  stepBody(doneBody.step) === stepBody(b.body.step)
+  && doneBody.shapeCount === b.body.shapeCount
+  && JSON.stringify(doneBody.logs) === JSON.stringify(b.body.logs),
+  (doneBody.step || '').length + ' vs ' + (b.body.step || '').length + ' bytes');
+console.log('  ' + sse.ms + ' ms   ' + sse.events.map((x) =>
+  (x.data.phase || x.event) + '@' + x.at + 'ms').join('  '));
+
+console.log('\n=== (h) SSE: a failing script ends in a terminal error event ===');
+const sseBad = await renderStream('from build123d import *\nnope()\n', ['step']);
+const last = sseBad.events[sseBad.events.length - 1];
+check('terminal event is `error`', last.event === 'error', JSON.stringify(sseBad.events.map((x) => x.event)));
+check('NameError reported', (last.data.errors || []).some((x) => /NameError/.test(x)),
+  JSON.stringify(last.data.errors));
+check('no exporting phase after a failed evaluation',
+  !sseBad.events.some((x) => x.data.phase === 'exporting'),
+  JSON.stringify(sseBad.events.map((x) => x.data.phase)));
+
 console.log('\n' + (failures === 0 ? 'ALL WORKER CHECKS PASSED' : failures + ' CHECK(S) FAILED'));
 process.exit(failures === 0 ? 0 : 1);
+
+/** POST /render?stream=1 and collect the SSE events with CLIENT-side arrival
+ *  timestamps — the deployed edge freezes Date.now() during CPU work, so
+ *  server-side stamps would all read the same. */
+async function renderStream(code, formats) {
+  const t0 = Date.now();
+  const res = await fetch(BASE + '/render?stream=1', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+    body: JSON.stringify({ code, formats }),
+  });
+  if (!/text\/event-stream/.test(res.headers.get('content-type') || '')) {
+    throw new Error('not an event stream: ' + res.headers.get('content-type'));
+  }
+  const events = [];
+  let buf = '';
+  const decoder = new TextDecoder();
+  for await (const chunk of res.body) {
+    buf += decoder.decode(chunk, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const raw = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      let event = 'message'; let data = '';
+      for (const line of raw.split('\n')) {
+        if (line.startsWith('event: ')) { event = line.slice(7); }
+        else if (line.startsWith('data: ')) { data += line.slice(6); }
+      }
+      events.push({ event, data: data ? JSON.parse(data) : {}, at: Date.now() - t0 });
+    }
+  }
+  return { events, ms: Date.now() - t0 };
+}
+
+function isSubsequence(needles, haystack) {
+  let i = 0;
+  for (const h of haystack) { if (h === needles[i]) { i++; } }
+  return i === needles.length;
+}
 
 function report(body) {
   const m = body.memory || {};

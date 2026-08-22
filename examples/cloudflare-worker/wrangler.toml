@@ -39,10 +39,13 @@ fs = "./src/node-module-stub.js"
 path = "./src/node-module-stub.js"
 url = "./src/node-module-stub.js"
 
-# Free plan: 10 ms CPU. Meshing/booleans on a real part need more, so the
-# starter model wants a paid plan. Uncomment on paid:
-# [limits]
-# cpu_ms = 300
+# CPU time. The free plan caps a request at 10 ms, which is not enough for
+# any real boolean; the paid plan defaults to 30 s and allows up to 5 min.
+# 30 s is a real ceiling for this workload — examples/heat_exchanger spent
+# ~37 s and came back HTTP 503 — so ask for the maximum. A request that
+# still exceeds it is killed and 503s; nothing here can extend it further.
+[limits]
+cpu_ms = 300000
 
 [observability]
 enabled = true

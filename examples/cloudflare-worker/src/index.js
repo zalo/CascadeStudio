@@ -22,8 +22,12 @@ import micropythonWasm from '../assets/micropython-cs.wasm';
 // forbids dynamic import of a URL — cascade-core's MicroPythonRuntime takes
 // the namespace object directly (`_csMicroPythonLocate.mod`).
 import * as micropythonJs from '../assets/micropython-cs.mjs';
-// build123d's Text() needs a font; FreeSans is the family lite ships.
+// build123d's Text() needs a font, and it asks for a SPECIFIC family member
+// per FontStyle. Two of the four FreeSans faces fit under the 10 MB
+// compressed Worker limit (see scripts/prepare-assets.cjs); asking for one
+// of the other two now fails with a message that names it.
 import freeSans from '../assets/FreeSans.ttf';
+import freeSansBold from '../assets/FreeSansBold.ttf';
 
 /** One engine per isolate, booted on the first request and reused. Booting
  *  costs ~0.3 s of CPU and ~32 MB, so this matters. */
@@ -41,7 +45,7 @@ function engine() {
       occtWasm,
       micropythonJs,
       micropythonWasm,
-      fonts: { FreeSans: freeSans },
+      fonts: { FreeSans: freeSans, FreeSansBold: freeSansBold },
     }).catch((e) => { enginePromise = null; throw e; });
   }
   return enginePromise;
@@ -56,12 +60,104 @@ const USAGE = `cascade-headless — build123d -> STEP/BREP/STL on Cloudflare Wor
   curl -sX POST http://localhost:8787/render -H 'content-type: application/json' \\
     -d '{"code":"from build123d import *\\nshow(Box(10,10,10))","formats":["step"]}'
 
-POST /render   {code, formats:[step|brep|stl], language?, mesh?}
-GET  /health   boot + memory
+  curl -sN -X POST 'http://localhost:8787/render?stream=1' \\
+    -H 'content-type: application/json' \\
+    -d '{"code":"from build123d import *\\nshow(Box(10,10,10))","formats":["step"]}'
+
+POST /render            {code, formats:[step|brep|stl], language?}
+POST /render?stream=1   the same job as text/event-stream phase events
+GET  /health            boot + memory
 `;
 
+/** Yield to the event loop so anything already written to a response stream
+ *  is actually flushed to the client before the next synchronous wasm call
+ *  monopolises the isolate. workerd will not flush across a purely
+ *  CPU-bound stretch on its own. */
+const yieldToIo = () => (typeof scheduler !== 'undefined' && scheduler.wait)
+  ? scheduler.wait(0)
+  : new Promise((resolve) => setTimeout(resolve, 0));
+
+/** Parse + validate a /render body. Returns {code, formats} or {error}. */
+function parseRenderBody(body) {
+  const code = body && body.code;
+  if (typeof code !== 'string' || !code.trim()) { return { error: 'missing "code"' }; }
+  const formats = Array.isArray(body.formats) && body.formats.length
+    ? body.formats.map((f) => String(f).toLowerCase())
+    : ['step'];
+  return { code, formats, language: (body && body.language) || 'python' };
+}
+
+/** The whole job, with a hook fired at every real await boundary.
+ *
+ *  `onPhase(name, detail)` may return a promise; the caller awaits it, which
+ *  is what makes the SSE writes flush. The phases ARE the await boundaries —
+ *  there is nothing finer to report honestly, because the evaluation itself
+ *  is one synchronous call into wasm.
+ *
+ *  Returns the same object the JSON endpoint has always returned, plus the
+ *  additive `progressOps` timeline. */
+async function runRender(e, req, onPhase) {
+  const t0 = Date.now();
+  await onPhase('evaluating', { language: req.language, formats: req.formats });
+
+  const result = await e.run(req.code, { language: req.language, mesh: false });
+
+  const out = {
+    ok: result.ok,
+    errors: result.errors,
+    logs: result.logs,
+    shapeCount: result.shapeCount,
+    historySteps: result.historySteps,
+    // ADDITIVE: the worker's per-op Progress timeline ({n, op}). It is a
+    // record of the evaluation, not live progress — see the README.
+    progressOps: result.progressOps || [],
+  };
+
+  await onPhase('evaluated', { shapeCount: out.shapeCount, ok: out.ok,
+    errors: out.ok ? undefined : out.errors });
+
+  if (result.ok && result.shapeCount > 0) {
+    // BREP and STEP are exact; do them before STL, which attaches a
+    // triangulation to the shape. Each is attempted independently: a format
+    // the kernel cannot produce must not suppress one it can (exportSTEP can
+    // recover from a corrupted kernel heap, exportBREP cannot).
+    const exporters = [
+      ['brep', () => e.exportBREP()],
+      ['step', () => e.exportSTEP()],
+      ['stl', () => e.exportSTL()],
+    ];
+    for (const [name, run] of exporters) {
+      if (!req.formats.includes(name)) { continue; }
+      await onPhase('exporting', { format: name });
+      try { out[name] = run(); }
+      catch (err) {
+        out.ok = false;
+        out.errors = out.errors.concat([name + ' export failed: ' + err.message]);
+      }
+    }
+    // Anything the SCRIPT itself wrote with export_step()/export_brep()/
+    // Mesher().write() lives in the engine's in-memory FS.
+    const files = {};
+    for (const name of e.listFiles()) {
+      if (/\.(step|stp|brep|stl|3mf)$/i.test(name)) {
+        files[name] = e.readFile(name);
+      }
+    }
+    if (Object.keys(files).length) { out.files = files; }
+  }
+
+  out.memory = e.memoryStats();
+  out.timings = Object.assign({ totalMs: Date.now() - t0 }, result.timings);
+  // Rewind the kernel so the next request in this isolate starts from a
+  // pristine OCCT heap — cascade-core's reset() restores the boot image,
+  // which is also what stops one corrupting model (maker_coin's fillet)
+  // from poisoning every later export in the isolate.
+  e.reset();
+  return out;
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname === '/health') {
@@ -81,62 +177,75 @@ export default {
     let body;
     try { body = await request.json(); }
     catch (e) { return json({ ok: false, error: 'invalid JSON body' }, 400); }
-    const code = body && body.code;
-    if (typeof code !== 'string' || !code.trim()) {
-      return json({ ok: false, error: 'missing "code"' }, 400);
+    const req = parseRenderBody(body);
+    if (req.error) { return json({ ok: false, error: req.error }, 400); }
+
+    const wantsStream = url.searchParams.get('stream') === '1'
+      || /text\/event-stream/.test(request.headers.get('accept') || '');
+    const cold = enginePromise === null;
+
+    // ---------------------------------------------------------------- //
+    // Plain JSON (unchanged shape, plus the additive progressOps field). //
+    // ---------------------------------------------------------------- //
+    if (!wantsStream) {
+      const t0 = Date.now();
+      let e;
+      try { e = await engine(); }
+      catch (err) { return json({ ok: false, error: 'engine boot failed: ' + err.message }, 500); }
+      const bootedMs = Date.now() - t0;
+      const out = await runRender(e, req, () => {});
+      out.timings.bootedMs = bootedMs;
+      return json(out, out.ok ? 200 : 422);
     }
-    const formats = Array.isArray(body.formats) && body.formats.length
-      ? body.formats.map((f) => String(f).toLowerCase())
-      : ['step'];
 
-    const t0 = Date.now();
-    let e;
-    try { e = await engine(); }
-    catch (err) { return json({ ok: false, error: 'engine boot failed: ' + err.message }, 500); }
-    const bootedMs = Date.now() - t0;
-
-    const result = await e.run(code, {
-      language: body.language || 'python',
-      // STL is the only format that needs triangles, and the engine's
-      // exportSTL meshes on demand — so never pay for the viewport mesh.
-      mesh: false,
-    });
-
-    const out = {
-      ok: result.ok,
-      errors: result.errors,
-      logs: result.logs,
-      shapeCount: result.shapeCount,
-      historySteps: result.historySteps,
+    // ---------------------------------------------------------------- //
+    // Server-sent events, one per real await boundary.                  //
+    // ---------------------------------------------------------------- //
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const enc = new TextEncoder();
+    const send = async (event, data) => {
+      await writer.write(enc.encode('event: ' + event + '\n'
+        + 'data: ' + JSON.stringify(data) + '\n\n'));
+      // Enqueueing is not flushing: without a turn of the event loop the
+      // next phase's synchronous wasm call would hold the isolate and the
+      // client would get every event at once, at the end.
+      await yieldToIo();
     };
 
-    if (result.ok && result.shapeCount > 0) {
+    const pump = (async () => {
       try {
-        // BREP and STEP are exact; do them before STL, which attaches a
-        // triangulation to the shape.
-        if (formats.includes('brep')) { out.brep = e.exportBREP(); }
-        if (formats.includes('step')) { out.step = e.exportSTEP(); }
-        if (formats.includes('stl')) { out.stl = e.exportSTL(); }
-      } catch (err) {
-        out.ok = false;
-        out.errors = out.errors.concat(['export failed: ' + err.message]);
-      }
-      // Anything the SCRIPT itself wrote with export_step()/export_brep()/
-      // Mesher().write() lives in the engine's in-memory FS.
-      const files = {};
-      for (const name of e.listFiles()) {
-        if (/\.(step|stp|brep|stl|3mf)$/i.test(name)) {
-          files[name] = e.readFile(name);
+        const t0 = Date.now();
+        if (cold) { await send('phase', { phase: 'booting' }); }
+        let e;
+        try { e = await engine(); }
+        catch (err) {
+          await send('error', { ok: false, error: 'engine boot failed: ' + err.message });
+          return;
         }
+        const bootedMs = Date.now() - t0;
+        const out = await runRender(e, req,
+          (phase, detail) => send('phase', Object.assign({ phase }, detail)));
+        out.timings.bootedMs = bootedMs;
+        // The terminal event carries exactly the JSON endpoint's payload.
+        await send(out.ok ? 'done' : 'error', out);
+      } catch (err) {
+        try { await send('error', { ok: false, errors: ['worker: ' + err.message] }); }
+        catch (e2) { /* the client is gone */ }
+      } finally {
+        try { await writer.close(); } catch (e) { /* already closed */ }
       }
-      if (Object.keys(files).length) { out.files = files; }
-    }
+    })();
+    if (ctx && ctx.waitUntil) { ctx.waitUntil(pump); }
 
-    out.memory = e.memoryStats();
-    out.timings = Object.assign({ bootedMs, totalMs: Date.now() - t0 }, result.timings);
-    // Free the retained compound so the next request in this isolate starts
-    // from the same footprint.
-    e.reset();
-    return json(out, out.ok ? 200 : 422);
+    return new Response(readable, {
+      headers: {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache',
+        'connection': 'keep-alive',
+        // Nothing downstream should buffer a phase stream.
+        'x-accel-buffering': 'no',
+      },
+    });
   },
 };

@@ -278,6 +278,123 @@ const stillFine = await engine.run('from build123d import *\nshow(Box(2,2,2))');
 check('the engine survives a failed script', stillFine.ok, stillFine.errors.join(' | '));
 
 // ------------------------------------------------------------------ //
+section('(f) fonts: a font that is not loaded fails BY NAME');
+// ------------------------------------------------------------------ //
+// Regression for the Cloudflare "clock" failure: the Worker shipped only
+// FreeSans, examples/clock asks for FontStyle.BOLD (= FreeSansBold), the text
+// builder returned null, and CacheOp died on it with "Cannot set properties
+// of undefined (setting 'hash')" — a message that named neither the font nor
+// the operation.
+// Node loads the whole bundled family, so the Worker's leaner font set is
+// simulated by hiding one face — the same state the engine is in when a host
+// hands over only some of the TTFs.
+const hiddenFace = globalThis.self.loadedFonts.FreeSansBoldOblique;
+delete globalThis.self.loadedFonts.FreeSansBoldOblique;
+const missingFont = await engine.run([
+  'from build123d import *',
+  'show(extrude(Text("B", 10, font_style=FontStyle.BOLDITALIC), 1))',
+].join('\n'));
+globalThis.self.loadedFonts.FreeSansBoldOblique = hiddenFace;
+check('a missing font reports ok=false', missingFont.ok === false);
+check('the error names the font that is missing',
+  missingFont.errors.some((e) => /FreeSansBoldOblique/.test(e)), missingFont.errors.join(' | '));
+check('the error lists what IS loaded',
+  missingFont.errors.some((e) => /loaded: .*FreeSansBold\b/.test(e)), missingFont.errors.join(' | '));
+check('no "setting \'hash\'" TypeError',
+  !missingFont.errors.some((e) => /setting 'hash'/.test(e)), missingFont.errors.join(' | '));
+
+// examples/clock — the model that surfaced it. Every glyph is BOLD.
+const CLOCK = `from build123d import *
+
+clock_radius = 10
+with BuildSketch() as minute_indicator:
+    with BuildLine() as outline:
+        l1 = CenterArc((0, 0), clock_radius * 0.975, 0.75, 4.5)
+        l2 = CenterArc((0, 0), clock_radius * 0.925, 0.75, 4.5)
+        Line(l1 @ 0, l2 @ 0)
+        Line(l1 @ 1, l2 @ 1)
+    make_face()
+    fillet(minute_indicator.vertices(), radius=clock_radius * 0.01)
+
+with BuildSketch() as clock_face:
+    Circle(clock_radius)
+    with PolarLocations(0, 60):
+        add(minute_indicator.sketch, mode=Mode.SUBTRACT)
+    with PolarLocations(clock_radius * 0.875, 12):
+        SlotOverall(clock_radius * 0.05, clock_radius * 0.025, mode=Mode.SUBTRACT)
+    for hour in range(1, 13):
+        with PolarLocations(clock_radius * 0.75, 1, -hour * 30 + 90, 360, rotate=False):
+            Text(
+                str(hour),
+                font_size=clock_radius * 0.175,
+                font_style=FontStyle.BOLD,
+                mode=Mode.SUBTRACT,
+            )
+
+show(clock_face)
+print("clock area:", round(clock_face.sketch.area, 4))
+`;
+const clock = await engine.run(CLOCK);
+check('examples/clock runs', clock.ok, clock.errors.join(' | '));
+check('clock produced one sketch', clock.shapeCount === 1, 'shapeCount=' + clock.shapeCount);
+const clockArea = parseFloat((clock.logs.find((l) => l.startsWith('clock area:')) || '').split(': ')[1]);
+check('clock area ~= 283.12 mm^2', Math.abs(clockArea - 283.1211) < 0.5, String(clockArea));
+check('clock exports STEP', engine.exportSTEP().startsWith('ISO-10303-21'));
+
+// ------------------------------------------------------------------ //
+section('(g) kernel-heap reset: STEP survives an OCCT heap corruption');
+// ------------------------------------------------------------------ //
+// COMPROMISE(kernel-heap-reset). maker_coin's fillet over nine Select.NEW
+// edges makes BRepFilletAPI_MakeFillet::Build scribble over OCCT's heap, and
+// every later `new STEPControl_Writer` traps. Distilled to the two ops that
+// are needed to trigger it.
+const COIN = `from build123d import *
+diameter, thickness = 50 * MM, 10 * MM
+with BuildPart() as coin:
+    with BuildSketch(Plane.XZ) as profile:
+        with BuildLine():
+            l1 = Polyline((0, thickness * 0.6), (0, 0), ((diameter - thickness) / 2, 0))
+            l2 = JernArc(start=l1 @ 1, tangent=l1 % 1, radius=thickness / 2, arc_size=300)
+            l3 = DoubleTangentArc(l1 @ 0, tangent=(1, 0), other=l2)
+        make_face()
+    revolve()
+    with BuildSketch() as detents:
+        with PolarLocations(radius=(diameter + 5) / 2, count=8):
+            Circle(thickness * 1.4 / 2)
+    extrude(amount=thickness, mode=Mode.SUBTRACT)
+    fillet(coin.edges(Select.NEW), 2)
+show(coin)
+print("coin volume:", round(coin.part.volume, 4))
+`;
+const coin = await engine.run(COIN);
+check('the coin evaluates cleanly', coin.ok, coin.errors.join(' | '));
+const coinVol = parseFloat((coin.logs.find((l) => l.startsWith('coin volume:')) || '').split(': ')[1]);
+check('the geometry is correct despite the corruption',
+  Math.abs(coinVol - 13320.036) < 1, String(coinVol));
+check('the kernel IS poisoned by the fillet (the fault this guards against)',
+  engine.kernelHealthy() === false,
+  'kernelHealthy() returned true — has the OCCT build been fixed? '
+  + 'If so, the heal path is dead code and can go.');
+const coinStep = engine.exportSTEP();
+check('exportSTEP heals the kernel and writes a STEP',
+  coinStep.startsWith('ISO-10303-21'), coinStep.length + ' bytes');
+check('the kernel is healthy again afterwards', engine.kernelHealthy() === true);
+
+engine.reset();
+engine.loadExternalFiles({ 'coin.step': coinStep });
+const coinBack = await engine.run([
+  'from build123d import *',
+  'c = import_step("assets/coin.step")',
+  'print("roundtrip:", round(c.volume, 4))',
+  'show(c)',
+].join('\n'));
+check('the healed STEP re-imports', coinBack.ok, coinBack.errors.join(' | '));
+const coinRt = parseFloat((coinBack.logs.find((l) => l.startsWith('roundtrip:')) || '').split(': ')[1]);
+check('the healed STEP round-trips the volume within 0.5%',
+  isFinite(coinRt) && Math.abs(coinRt - coinVol) < 5e-3 * coinVol,
+  coinVol + ' vs ' + coinRt);
+
+// ------------------------------------------------------------------ //
 section('memory summary');
 // ------------------------------------------------------------------ //
 const finalMem = engine.memoryStats();
