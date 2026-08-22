@@ -34,9 +34,79 @@ curl -sX POST http://localhost:8787/render \
 
 | route | |
 |---|---|
-| `POST /render` | `{code, formats:["step","brep","stl"], language?, mesh?}` → the JSON above (`422` when the script fails, with the Python traceback in `errors`) |
+| `POST /render` | `{code, formats:["step","brep","stl"], language?}` → the JSON above (`422` when the script fails, with the Python traceback in `errors`) |
+| `POST /render?stream=1` | the same job as a `text/event-stream` of phase events — see [Progress streaming](#progress-streaming). `Accept: text/event-stream` selects it too |
 | `GET /health` | boots the engine and reports memory (warms the isolate) |
 | `GET /` | usage text |
+
+## Capability envelope
+
+The ladder below is `scripts/edge-bench.mjs`, run against the **deployed**
+Worker (2026-08-22, `formats: ["step"]`). Times are **client-side round
+trips** including network — a deployed Worker freezes `Date.now()` during CPU
+work, so its own `timings` read 0. Memory is what the isolate reports.
+
+| model | | time | isolate | STEP |
+|---|---|---:|---:|---:|
+| `examples/boxes_on_faces` | builder nesting | 6.1 s | 51.5 MB | 144 KB |
+| `examples/maker_coin` | fillets + text + `new_edges` | 51.1 s | 70.8 MB | 1.35 MB |
+| `ttt/ttt-ppp0101` | TTT challenge part | 4.1 s | 70.8 MB | 123 KB |
+| `ttt/ttt-24-SPO-06-Buffer_Stand` | heavier TTT | 8.0 s | 96.4 MB | 147 KB |
+| `examples/intersecting_pipes` | booleans + fillets | 2.5 s | 96.4 MB | 198 KB |
+| `examples/build123d_logo` | text + sketches | 1.6 s | 96.4 MB | 314 KB |
+| `examples/clock` | `FontStyle.BOLD` + 2-D fillets | 20.9 s | 65.0 MB | 787 KB |
+| `examples/heat_exchanger` | ~1000 ops | 72.0 s | 86.6 MB | 3.77 MB |
+| `examples/bicycle_tire` | wrap + thicken, 1081 solids | **422** | 163.3 MB | — |
+
+The first request into a cold isolate adds ~2 s. All of these run in ONE
+isolate, in that order: nothing poisons anything downstream of it any more
+(it used to — see [Two ceilings that were real](#two-ceilings-that-were-real)).
+
+`bicycle_tire` is the one model outside the envelope, for two independent
+reasons, both reported honestly rather than papered over:
+
+1. `BRepOffsetAPI_ThruSections::Build`, inside `thicken()`, corrupts OCCT's
+   heap and takes `BRepTools::Write` down with it — so there is no BREP
+   carrier to rescue the shape with (`COMPROMISE(kernel-heap-reset)`). The
+   geometry is correct: `volume` reads 980681.267 mm³ either way.
+2. It needs **163.3 MB** in the isolate (85.9 MB OCCT + 77.4 MB MicroPython
+   for 1081 solids' worth of Python wrappers), over the 128 MB limit. Local
+   workerd kills the whole process at that point; the edge returns the 422
+   and recycles the isolate.
+
+## Two ceilings that were real
+
+Both were found by `scripts/edge-bench.mjs` against the live Worker, and both
+were something other than what the symptom suggested.
+
+**"export failed: memory access out of bounds" was not the 128 MB cap.** It
+reproduces in plain Node, at 32 MB, with the wasm memory free to grow, and
+the export itself costs ~0 MB. Two OCCT 8.0.1 kernel algorithms scribble over
+their own heap in this wasm build — `BRepFilletAPI_MakeFillet::Build` with
+`ChFi3d_Rational` (maker_coin's nine `Select.NEW` edges) and
+`BRepOffsetAPI_ThruSections::Build` (the ruled wall `thicken()` lofts,
+bicycle_tire). The geometry they return is correct; a live allocation
+elsewhere gets handed out twice, and the casualty is a lazily-built
+singleton, so `new STEPControl_Writer` traps for the rest of the isolate's
+life. That is what made the ladder alternate: once maker_coin had run,
+Buffer_Stand and build123d_logo failed too, though on a fresh isolate they
+export fine.
+
+cascade-core now snapshots OCCT's linear memory right after module init (3.7
+MB of the 32 MB initial heap; ~20 ms to take, ~2 ms to restore) and rewinds
+to it — `COMPROMISE(kernel-heap-reset)` in
+`packages/cascade-core/src/worker/CascadeWorker.js`. `engine.reset()` does it
+between requests, so an isolate is never left poisoned, and `exportSTEP()`
+does it on failure: carry the shape out as BREP, rewind, re-import, write.
+maker_coin's healed STEP round-trips through `import_step` to 7.7e-8 relative
+volume.
+
+**`examples/clock`'s `Cannot set properties of undefined (setting 'hash')`
+was a missing font.** The Worker bundled `FreeSans` only;
+`Text(font_style=FontStyle.BOLD)` asks for `FreeSansBold`, the text builder
+returned null and `CacheOp` died on it. `FreeSansBold` now ships, and a face
+that is genuinely absent raises an error that names it (see
+[Fonts](#fonts)).
 
 ## Verified in this environment
 
@@ -69,15 +139,95 @@ The numbers are identical to the Node leg (`node test/headless-node.mjs`),
 which stays the authoritative regression test.
 
 **Edge-verified** (2026-08-22): `wrangler deploy` to a real Cloudflare
-account succeeded (`Total Upload: 30075.63 KiB / gzip: 9377.62 KiB`, startup
-validation 4 ms) and the full smoke suite passed against the deployed
-`*.workers.dev` URL (`BASE=https://<name>.workers.dev node scripts/smoke.mjs`)
-— all four scenarios, 51.5 MB in the isolate, geometry byte-identical to the
-Node and local-workerd legs. Warm request round-trip for a `Box` render is
+account succeeded (`Total Upload: 31056.16 KiB / gzip: 9908.60 KiB`, startup
+3 ms) and the full smoke suite — now eight groups, including the two font
+cases and the two SSE cases — passed against the deployed `*.workers.dev` URL
+(`BASE=https://<name>.workers.dev node scripts/smoke.mjs`), with geometry
+byte-identical to the Node and local-workerd legs, plus the nine-model
+capability ladder above. Warm request round-trip for a `Box` render is
 ~90–100 ms; a cold isolate adds ~2 s (wasm instantiation + MicroPython boot,
 paid once per isolate). One edge-only quirk: the in-response `timings` fields
 read 0 on deployed Workers because Cloudflare freezes `Date.now()` during
 synchronous CPU work (Spectre mitigation) — measure latency client-side.
+
+## Progress streaming
+
+```bash
+curl -sN -X POST 'http://localhost:8787/render?stream=1' \
+  -H 'content-type: application/json' \
+  -d '{"code":"from build123d import *\nshow(Box(10,10,10))","formats":["step"]}'
+```
+
+```
+event: phase
+data: {"phase":"evaluating","language":"python","formats":["step"]}
+
+event: phase
+data: {"phase":"evaluated","shapeCount":1,"ok":true}
+
+event: phase
+data: {"phase":"exporting","format":"step"}
+
+event: done
+data: {"ok":true,"step":"ISO-10303-21;…","progressOps":[{"n":1,"op":"Box"},…],…}
+```
+
+| event | when |
+|---|---|
+| `phase: booting` | only on a COLD isolate, before the ~2 s wasm + interpreter boot |
+| `phase: evaluating` | before the script runs |
+| `phase: evaluated` | `{shapeCount, ok, errors?}` |
+| `phase: exporting` | once per requested format, `{format}` |
+| `done` / `error` | terminal; carries **exactly** the JSON endpoint's payload |
+
+**The honest limitation: this is phase-level, not per-op.** The evaluation is
+one synchronous call into wasm — the isolate does not yield inside it, so
+anything enqueued mid-evaluation could only be flushed after it finished, and
+"live" per-op events would be a burst at the end pretending to be progress.
+The events above are the real `await` boundaries in the request, and nothing
+finer exists to report. The per-op timeline (`{n, op}`, from the worker's own
+`Progress` messages) is a RECORD and arrives with `done`, in `progressOps`.
+
+Two implementation notes worth keeping:
+
+* enqueueing is not flushing. Each write is followed by `scheduler.wait(0)`;
+  without it workerd delivers every event at once when the handler returns.
+  Verified client-side (`scripts/smoke.mjs` case (g) timestamps arrivals):
+  local workerd `evaluating@18ms evaluated@285ms exporting@296ms done@314ms`,
+  deployed edge `evaluating@23ms evaluated@1028ms exporting@1028ms
+  done@1102ms` on the starter model.
+* phase timestamps must be taken by the CLIENT. A deployed Worker freezes
+  `Date.now()` during CPU work, so server-side stamps inside one synchronous
+  stretch are all equal.
+
+The plain JSON `POST /render` is unchanged; `progressOps` is the only new
+field and it is purely additive.
+
+## Fonts
+
+build123d's `Text()` resolves `font_style` to a SPECIFIC family member, and
+the Worker cannot afford all four:
+
+| face | `FontStyle` | gzip | bundled |
+|---|---|---:|---|
+| `FreeSans` | `REGULAR` (default) | 0.93 MB | yes |
+| `FreeSansBold` | `BOLD` | 0.51 MB | yes |
+| `FreeSansOblique` | `ITALIC` | 0.46 MB | no |
+| `FreeSansBoldOblique` | `BOLDITALIC` | 0.30 MB | no |
+
+All four would be 2.20 MB gz against 0.33 MB of headroom under the 10 MB
+compressed limit. Asking for one that is not bundled is now a `422` naming
+it:
+
+```
+the font "FreeSansOblique" is not available in this engine
+(loaded: FreeSans, FreeSansBold). A headless host supplies fonts itself —
+pass the TTF bytes for it, e.g. createHeadlessCascade({ fonts: { … } }).
+```
+
+To add one: copy it in `scripts/prepare-assets.cjs` AND `import` it in
+`src/index.js` (a Worker's data bindings must be static imports), then hand
+it to `createHeadlessCascade({ fonts })`.
 
 ## Memory and timing
 
@@ -100,18 +250,20 @@ under load is OCCT-side only.
 | asset | raw | gzip |
 |---|---|---|
 | `cascadestudio.wasm` (OCCT 8.0.1) | 27.02 MB | **7.94 MB** |
-| `FreeSans.ttf` | 1.84 MB | 0.98 MB |
+| `FreeSans.ttf` | 1.84 MB | 0.93 MB |
+| `FreeSansBold.ttf` | 0.99 MB | 0.51 MB |
 | `cascade-headless.mjs` | 1.08 MB | 0.30 MB |
 | `micropython-cs.wasm` | 0.49 MB | 0.21 MB |
 | `micropython-cs.mjs` | 0.11 MB | 0.03 MB |
-| **`wrangler deploy --dry-run`** | **30.08 MB** | **9.16 MB** |
+| **`wrangler deploy`** | **31.06 MB** | **9.68 MB** |
 
 Cloudflare's compressed Worker size limit is **10 MB on paid plans** and
-**3 MB on the free plan**. So this deploys on a paid plan with ~0.8 MB of
+**3 MB on the free plan**. So this deploys on a paid plan with ~0.33 MB of
 headroom, and does NOT fit the free plan. If you need room:
 
-* drop `FreeSans.ttf` from `scripts/prepare-assets.cjs` (−0.98 MB gz) — only
-  `Text()`/`Text3D()` need it;
+* drop the fonts from `scripts/prepare-assets.cjs` (−1.44 MB gz) — only
+  `Text()`/`Text3D()` need them, and a script that asks for one now fails
+  with a message that names it;
 * the OCCT wasm is the floor. A smaller kernel build (dropping IGES/STL
   readers, the mesher, `Geom2dGcc`, …) is the only way under 3 MB, and that
   is a fork-level exercise — see `node_modules/opencascade.js/CLAUDE.md`.
@@ -155,13 +307,19 @@ headroom, and does NOT fit the free plan. If you need room:
    `wrangler.toml` so the bundler can resolve them. Verified by deleting the
    `[alias]` block: the build fails with four "Could not resolve" errors.
 4. **CPU time.** The free plan gives 10 ms of CPU — not enough to boot the
-   kernel, let alone model. A paid plan's default is 30 s wall / 30 s CPU
-   (`[limits] cpu_ms`). The starter model is ~450 ms of CPU including the
-   one-time interpreter boot; a heavy part with many fillets can be seconds.
+   kernel, let alone model. A paid plan's DEFAULT is 30 s, and that is a real
+   ceiling for this workload: `examples/heat_exchanger` spent ~37 s and came
+   back **HTTP 503**. `wrangler.toml` therefore asks for the paid maximum,
+   **`[limits] cpu_ms = 300000`** (5 min), under which heat_exchanger
+   completes in 72 s and returns a 3.77 MB STEP. A request that still exceeds
+   it is killed and 503s — nothing in the Worker can extend it further, so
+   anything heavier belongs in a queue/Durable Object, not a single request.
 5. **One engine per isolate.** `enginePromise` is a module global, so the
    ~147 ms boot and 32 MB are paid once and reused; `/render` calls
-   `engine.reset()` afterwards so the next request starts from the same
-   footprint.
+   `engine.reset()` afterwards, which rewinds OCCT to its boot image — the
+   next request gets a pristine allocator (no heap ratcheting) AND an
+   un-poisoned kernel (see
+   [Two ceilings that were real](#two-ceilings-that-were-real)).
 6. **`pySrc: 'lite'`.** The `upstream` source layer (verbatim upstream
    build123d 0.11.1) also works headless, but needs 3.5 MB of extra Python
    text bundled and boots ~5x slower (642 ms vs 122 ms of library load) for
@@ -171,10 +329,11 @@ headroom, and does NOT fit the free plan. If you need room:
 
 ```
 wrangler.toml                 module rules, aliases, why nodejs_compat is off
-src/index.js                  the Worker: POST /render, GET /health
+src/index.js                  the Worker: POST /render (+ ?stream=1), GET /health
 src/node-module-stub.js       resolves the glues' dead node-only imports
 scripts/prepare-assets.cjs    copies cascade-core/dist -> assets/ (gitignored)
-scripts/smoke.mjs             curl-equivalent end-to-end checks
+scripts/smoke.mjs             curl-equivalent end-to-end checks, incl. the SSE stream
+scripts/edge-bench.mjs        the capability ladder (BASE=… node scripts/edge-bench.mjs)
 ```
 
 `assets/` is gitignored: `cascadestudio.wasm` alone is 27 MB. Run

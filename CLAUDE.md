@@ -666,7 +666,9 @@ engine.exportSTEP();      // ISO-10303-21 text     engine.exportBREP();
 engine.exportSTL();       // ASCII STL             engine.readFile('part.step');
 engine.writeFile(name, text);  engine.listFiles();  engine.loadExternalFiles({...});
 engine.memoryStats();     // {occtWasm, pythonWasm, totalWasm, …}
-engine.reset();           // drop the retained compound between requests
+engine.kernelHealthy();   // is OCCT's file-writer machinery still usable?
+engine.resetKernel();     // rewind OCCT's linear memory to its boot image
+engine.reset();           // between requests: resetKernel() + drop logs
 ```
 
 **What made it portable** (each a small seam, browser behaviour unchanged):
@@ -693,6 +695,31 @@ engine.reset();           // drop the retained compound between requests
   (`_csMicroPythonLocate = {mod, wasm}`); the vendored `micropython.mjs` has a
   one-statement patch forwarding `instantiateWasm` (see its PROVENANCE.md).
 
+**COMPROMISE(kernel-heap-reset) — OCCT corrupts its own heap, and STEP export
+is the casualty.** Two 8.0.1 kernel algorithms scribble over the wasm heap in
+this build: `BRepFilletAPI_MakeFillet::Build` with `ChFi3d_Rational`
+(reproduced by maker_coin's nine `Select.NEW` edges; `ChFi3d_Polynomial` on
+the same input does not) and `BRepOffsetAPI_ThruSections::Build` (the ruled
+wall `ThickenSolid` lofts, bicycle_tire). The GEOMETRY is correct — volume,
+bbox, `BRepBuilderAPI_Copy` and meshing all agree with upstream — but a live
+allocation elsewhere gets handed out twice, and the victim is a lazily-built
+singleton, so afterwards `new STEPControl_Writer`/`_Reader` traps with
+"memory access out of bounds" (fillet case) or the STEP transfer AND
+`BRepTools::Write` trap even for a fresh 1 mm box (ThruSections case). It is
+NOT memory pressure: it reproduces in Node at 32 MB with the wasm free to
+grow. The damage is permanent for the realm, which is why one poisoned
+Cloudflare isolate used to fail every later export.
+`CascadeWorker.captureKernelImage()` snapshots OCCT's linear memory right
+after module init (3.7 MB of the 32 MB initial heap; ~20 ms to take, ~2 ms to
+restore) and `restoreKernelImage()` rewinds to it — every OCCT singleton then
+re-initialises from its `.bss` guard. It is a nuclear reset (every embind
+wrapper the host holds dangles afterwards), so it is opt-in
+(`kernelImage: true`): headless turns it on, the browser worker does not.
+`engine.reset()` rewinds between jobs; `exportSTEP`/`exportSTL` heal on
+failure by carrying the shape out as BREP, rewinding and re-importing.
+Only a fork rebuild can actually fix the kernel; until then the writers
+translate the raw trap into a message saying so.
+
 **`pySrc` default is `lite`** headless (switchable): `upstream` works too and
 uses the same memory, but needs 3.5 MB of extra Python text shipped and loads
 its library ~5x slower (642 ms vs 122 ms measured in Node).
@@ -703,7 +730,8 @@ to the unchanged browser worker bundle.
 
 **Tests**: `node test/headless-node.mjs` — plain Node, no Chromium. Boots the
 SHIPPED bundle, runs Box / the Python starter / an `export_step`+`export_brep`
-MEMFS round-trip / JS mode / repeated runs / a failing script, and asserts the
+MEMFS round-trip / JS mode / repeated runs / a failing script / the font-name
+error + `examples/clock` / the kernel-heap heal (52 checks), and asserts the
 memory budget. Measured on this machine:
 
 | | |
@@ -741,11 +769,33 @@ memory budget. Measured on this machine:
   flag stays off and its dead node specifiers (`module`/`fs`/`path`/`url`) are
   still aliased to a stub in `wrangler.toml` (verified: deleting the `[alias]`
   block fails the build with four "Could not resolve" errors).
-- Bundle: 30.08 MB raw / **9.16 MB gzip** (`wrangler deploy --dry-run`) — fits
-  the 10 MB paid limit with ~0.8 MB spare, not the free plan's 3 MB. OCCT's
-  wasm is 7.94 MB gz of that; dropping the bundled FreeSans saves 0.98 MB.
-- CPU: free plan's 10 ms cannot even boot the kernel. Starter model ≈ 450 ms
-  CPU including the one-time interpreter boot.
+- Bundle: 31.06 MB raw / **9.68 MB gzip** (`wrangler deploy`) — fits the 10 MB
+  paid limit with ~0.33 MB spare, not the free plan's 3 MB. OCCT's wasm is
+  7.94 MB gz of that; the two bundled fonts are 1.44 MB gz.
+- **Fonts are rationed**: build123d resolves `font_style` to a specific face,
+  and only `FreeSans` (REGULAR) + `FreeSansBold` (BOLD) fit. `FreeSansOblique`
+  / `FreeSansBoldOblique` do not, and asking for one now raises an error that
+  NAMES it — that missing face was the whole of the `examples/clock` failure
+  ("Cannot set properties of undefined (setting 'hash')": `_opentypeTextFace`
+  returned null and `CacheOp` died on it). Both ends are fixed: the font
+  lookup distinguishes "nothing loaded yet" (the browser's async-startup
+  retry) from "not this face" (permanent, named), and `CacheOp` names the
+  operation when a cacheMiss produces nothing.
+- CPU: free plan's 10 ms cannot even boot the kernel; the paid DEFAULT of 30 s
+  is a real ceiling here (heat_exchanger 503'd at ~37 s), so `wrangler.toml`
+  asks for the paid maximum `[limits] cpu_ms = 300000`. Starter model ≈ 450 ms
+  CPU including the one-time interpreter boot; heat_exchanger 72 s on the edge.
+- **`POST /render?stream=1`** streams `text/event-stream` phase events
+  (`booting`/`evaluating`/`evaluated`/`exporting` + a terminal `done`/`error`
+  carrying the JSON endpoint's payload plus the per-op `progressOps`
+  timeline). Phase-level ONLY, on purpose: the evaluation is one synchronous
+  wasm call, so per-op "live" progress would be a burst at the end. Each write
+  is followed by `scheduler.wait(0)` or workerd flushes nothing until the end.
+- The capability ladder (`examples/cloudflare-worker/scripts/edge-bench.mjs`,
+  measured against the deployed Worker) is in that example's README. 8 of 9
+  corpus models return STEP; `bicycle_tire` is out on both counts —
+  COMPROMISE(kernel-heap-reset) with no BREP carrier, and 163.3 MB against the
+  128 MB isolate.
 
 ## Playwright Testing
 
