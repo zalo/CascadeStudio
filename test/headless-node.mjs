@@ -230,6 +230,24 @@ check('engine STEP and script STEP have the same entity count',
   countStepEntities(engineStep) + ' vs ' + countStepEntities(scriptStep));
 
 // ------------------------------------------------------------------ //
+section('(c2) loadExternalFiles() + import_step()');
+// ------------------------------------------------------------------ //
+// The worker has no filesystem, so import_step() resolves assets the host
+// handed over up front — same contract as CascadeAPI.loadExternalFiles.
+engine.loadExternalFiles({ 'widget.step': scriptStep });
+const imported = await engine.run([
+  'from build123d import *',
+  'w = import_step("assets/widget.step")',
+  'print("imported volume:", w.volume)',
+  'show(w)',
+].join('\n'));
+check('import_step run ok', imported.ok, imported.errors.join(' | '));
+const impVol = parseFloat((imported.logs.find((l) => l.startsWith('imported volume:')) || '').split(': ')[1]);
+check('import_step recovers the exported volume',
+  isFinite(impVol) && Math.abs(impVol - srcVol) < 1e-3 * Math.abs(srcVol),
+  impVol + ' vs ' + srcVol);
+
+// ------------------------------------------------------------------ //
 section('(d) CascadeStudio JS mode + repeated runs');
 // ------------------------------------------------------------------ //
 const jsResult = await engine.run(

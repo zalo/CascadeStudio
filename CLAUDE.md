@@ -12,6 +12,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
 npx playwright test    # 94 tests (incl. 50 frozen build123d example scripts)
+node test/headless-node.mjs   # browser-free engine (Node, no Chromium)
 ```
 
 ## Architecture (Monorepo)
@@ -29,13 +30,18 @@ packages/
         CascadeEngine.js       ← Main-thread API wrapping Worker + MessageBus
         MessageBus.js          ← Typed worker message routing
       worker/
-        CascadeWorker.js       ← Web Worker entry; evaluates user code
+        worker-entry.js        ← Web Worker entry (bundled to cascade-worker.js)
+        CascadeWorker.js       ← The engine class; evaluates user code (no side effects)
+        Emit.js                ← Outbound message seam (postMessage OR an embedder hook)
+        WasmAssets.js          ← Wasm as Module/bytes/URL (workerd needs Module)
+        GlobalSelf.js          ← `self` -> globalThis off-browser
         StandardLibrary.js     ← CAD primitives (Box, Sphere, etc.)
         StandardUtils.js       ← Caching, hashing, history tracking
         ShapeToMesh.js         ← OpenCascade → mesh triangulation (no Three.js)
         FileUtils.js           ← STEP/IGES/STL import/export
       openscad/
         OpenSCADTranspiler.js  ← OpenSCAD → CascadeStudio JS transpiler
+      headless.js              ← createHeadlessCascade() — Node/Deno/Bun/Cloudflare
       index.js                 ← Package entry (exports CascadeEngine, MessageBus, etc.)
     types/
       StandardLibraryIntellisense.ts
@@ -56,6 +62,8 @@ packages/
     css/, textures/, icon/, lib/  ← Static assets
 
 test/                          ← Playwright tests (monorepo root)
+  headless-node.mjs            ← browser-free smoke test (plain node)
+examples/cloudflare-worker/    ← build123d -> STEP/BREP/STL on workerd
 ```
 
 ## Agent API (window.CascadeAPI)
@@ -509,7 +517,7 @@ frozen in `test/python-mode-upstream-exports.spec.js`:
 | Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy`, `Shape.__iter__` | — |
 | Measure | `volume/area/length` (volume = per-solid sum), `center()`, `bounding_box()` (exact Bnd_Box), `.wrapped`, `.is_forward` | mass properties |
 | Stdlib | `math`, `copy` (incl. `copy.copy(<Builder>)` snapshots), `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `os` (PATH ARITHMETIC ONLY — `os.path.join/dirname/abspath/...`, `getcwd`; no filesystem is faked, `os.path.exists` is always False), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d), `scipy.spatial.Voronoi` (2-D, Bowyer-Watson Delaunay circumcentres — `.vertices` only, verified vertex-set-identical to scipy on full_round's inputs), `pytest.approx` (real, documented tolerances) | `numpy`, `sympy`, the rest of `pytest`, 2-D `ConvexHull`, Voronoi ridges/regions (raise loudly), everything else |
-| Export/import | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS), `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | 3MF (no lib3mf — raises), `export_step/gltf` (no-ops), `ExportDXF`, `import_stl`/`import_svg` |
+| Export/import | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS), `export_step` (REAL — STEPControl_Writer into MEMFS, incl. `unit=`; `write_pcurves`/`precision_mode` accepted and ignored), `export_brep`/`import_brep`, `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | 3MF (no lib3mf — raises), `export_gltf` (no-op), `ExportDXF`, `import_stl`/`import_svg` |
 
 **Known honest gaps** (kept as ERRORs rather than fake geometry — see the
 defaults-audit table in report.md for per-script root causes and
@@ -576,6 +584,8 @@ authoritative list):
 - `failure-decode` — OCCT's C++ exceptions arrive in JS as raw pointer numbers. The fork binds `OCJS::getStandard_FailureData` for exactly this, but it is UNCALLABLE here ("unbound types: St9exception" — `Standard_Failure` derives from `std::exception`, which the build never registers) and no runtime helpers (`HEAPU8`/`getValue`/`UTF8ToString`) are exported, so CascadeWorker keeps the wasm `Memory` via Emscripten's `instantiateWasm` hook and StandardUtils reads `Standard_Failure`'s `StringRef` message out of it directly. Users see e.g. "the OCCT kernel raised 'BRep_API: command not done'" instead of "threw '6454200'".
 - `new-edges-partial` — `new_edges()` maps its result back to the corresponding edges OF the combined shape (so it can be filleted like upstream's maker_coin does); an edge that is only PARTLY new has no counterpart and is returned as bare geometry.
 - `triad-labels` — `Compound.make_triad` draws the axes and arrow heads exactly, but not upstream's X/Y/Z labels: those need the `singleline` STROKE font, and this build ships only the outline font FreeSans.
+- `embind-no-eval` (headless/Cloudflare only) — embind builds every method invoker with `new Function`, which Workers forbid. The HEADLESS bundle is built with `createJsInvoker`/`__emval_create_invoker` swapped for closure equivalents (`scripts/build-headless.cjs`) instead of rebuilding the OCCT fork with `-sDYNAMIC_EXECUTION=0`. Semantically identical, marginally slower, browser bundle untouched.
+- `stl-ascii` — `StlAPI_Writer::ASCIIMode` is bound as a getter only, so `engine.exportSTL({binary: true})` is rejected rather than silently writing ASCII.
 
 **Roadmap (deliberately deferred)**:
 - XCAF-based assemblies: real part identities, STEP hierarchy/names/colors, a
@@ -636,6 +646,96 @@ suite) with volumes/bboxes hardcoded from the native run — the newest five cov
 slide_latch (sketch-face alignment + `Select.LAST` vertices) and
 group_properties_with_keys (builder copy snapshots + the exact convex hull +
 `GroupBy.group`).
+
+## Headless / Cloudflare
+
+cascade-core runs **with no browser at all**: same OCCT 8.0.1 kernel, same
+build123d, in Node / Deno / Bun / **Cloudflare Workers (workerd)**. The design
+target is an HTTP endpoint that takes build123d source and returns BREP/STEP/STL
+inside a 128 MB isolate.
+
+```js
+import { createHeadlessCascade } from 'cascade-core/headless';   // or dist/cascade-headless.mjs
+
+const engine = await createHeadlessCascade({
+  runtime: 'micropython', pySrc: 'lite',      // defaults
+  occtWasm, micropythonJs, micropythonWasm, fonts,   // host-supplied assets
+});
+const r = await engine.run(code, { language: 'python', mesh: false });
+// r = {ok, errors, logs, shapeCount, historySteps, guiWidgets, mesh, timings}
+engine.exportSTEP();      // ISO-10303-21 text     engine.exportBREP();
+engine.exportSTL();       // ASCII STL             engine.readFile('part.step');
+engine.writeFile(name, text);  engine.listFiles();  engine.loadExternalFiles({...});
+engine.memoryStats();     // {occtWasm, pythonWasm, totalWasm, …}
+engine.reset();           // drop the retained compound between requests
+```
+
+**What made it portable** (each a small seam, browser behaviour unchanged):
+- `src/worker/Emit.js` — every outbound `postMessage` in the worker modules is
+  now `csEmit`/`csEmitAsync`, and the "throw out of band so `window.onerror`
+  sees it" error path is `csDeferError`. With no `globalThis._csEmit` hook
+  installed these ARE `postMessage`/`setTimeout(throw)`; headless installs
+  collectors, so `run()` RETURNS logs and errors instead of throwing them at
+  the host. GUI widgets (`Slider`, `Checkbox`, …) still work: the widget
+  functions seed `self.GUIState[name]` with the default before emitting, so a
+  script that uses them runs on its defaults and the declarations come back in
+  `result.guiWidgets`.
+- `src/worker/WasmAssets.js` — an asset is a `WebAssembly.Module`, an
+  ArrayBuffer/TypedArray, a URL, or a thunk. The pre-existing `instantiateWasm`
+  hook (kept because the worker must hold the wasm `Memory` for
+  COMPROMISE(failure-decode)) accepts all four.
+- `src/worker/GlobalSelf.js` — `self` aliased to `globalThis`.
+- `CascadeWorker.js` is side-effect free and takes `{assets, installRouter}`;
+  the browser bootstrap lives in `src/worker/worker-entry.js` (the bundle
+  entry). `combineShapes()` builds the exact BREP compound WITHOUT
+  triangulating — meshing is the expensive stage and STEP/BREP do not need it,
+  so `mesh: false` is the headless default.
+- MicroPython takes a pre-imported glue namespace plus compiled-Module/bytes
+  (`_csMicroPythonLocate = {mod, wasm}`); the vendored `micropython.mjs` has a
+  one-statement patch forwarding `instantiateWasm` (see its PROVENANCE.md).
+
+**`pySrc` default is `lite`** headless (switchable): `upstream` works too and
+uses the same memory, but needs 3.5 MB of extra Python text shipped and loads
+its library ~5x slower (642 ms vs 122 ms measured in Node).
+
+**Build**: `packages/cascade-core/scripts/build-headless.cjs` emits
+`packages/cascade-core/dist/cascade-headless.mjs` (esbuild, wasm external) next
+to the unchanged browser worker bundle.
+
+**Tests**: `node test/headless-node.mjs` — plain Node, no Chromium. Boots the
+SHIPPED bundle, runs Box / the Python starter / an `export_step`+`export_brep`
+MEMFS round-trip / JS mode / repeated runs / a failing script, and asserts the
+memory budget. Measured on this machine:
+
+| | |
+|---|---|
+| engine boot (OCCT) | 276 ms, 32.0 MB |
+| MicroPython + build123d-lite boot | 122 ms |
+| after any Python run | **51.5 MB** (32.0 occt + 19.5 python) |
+| starter model eval | 292 ms |
+
+**Cloudflare specifics** — full write-up + measured numbers in
+`examples/cloudflare-worker/README.md` (`npm run dev`, then
+`node scripts/smoke.mjs`; verified against the real workerd via `wrangler dev`):
+- 128 MB isolate; the engine sits at 51.5 MB for the starter model.
+- Wasm **only** as compiled module bindings (`[[rules]] type = "CompiledWasm"`);
+  `WebAssembly.compile` is forbidden. No dynamic `import()` of a URL.
+- **No runtime code generation at all** — which embind violates: it builds
+  every method invoker with `new Function`. The headless bundle is therefore
+  built with a source transform replacing `createJsInvoker` and
+  `__emval_create_invoker` with closure equivalents,
+  `COMPROMISE(embind-no-eval)` (browser bundle untouched; anchors asserted so
+  an opencascade.js bump fails the build). Consequence:
+  `language: 'cascadestudio'` (user JS) is unavailable on Workers — that IS
+  `eval`. Python mode is unaffected.
+- `nodejs_compat` must stay **off**: it defines `process`, which flips OCCT's
+  Emscripten glue into its Node branch. The dead node specifiers
+  (`module`/`fs`/`path`/`url`) are aliased to a stub in `wrangler.toml`.
+- Bundle: 30.08 MB raw / **9.16 MB gzip** (`wrangler deploy --dry-run`) — fits
+  the 10 MB paid limit with ~0.8 MB spare, not the free plan's 3 MB. OCCT's
+  wasm is 7.94 MB gz of that; dropping the bundled FreeSans saves 0.98 MB.
+- CPU: free plan's 10 ms cannot even boot the kernel. Starter model ≈ 450 ms
+  CPU including the one-time interpreter boot.
 
 ## Playwright Testing
 
