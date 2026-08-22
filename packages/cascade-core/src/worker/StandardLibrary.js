@@ -152,7 +152,29 @@ function _kernValue(fontName, leftGlyph, rightGlyph) {
  *  opentype's getPath kerning. Returns the face, or null when the font is
  *  not loaded yet. */
 function _opentypeTextFace(text, size, fontName, perGlyphCompound) {
-    if (self.loadedFonts[fontName] === undefined) { for (let k in self.argCache) delete self.argCache[k]; console.log("Font not loaded or found yet!  Try again..."); return null; }
+    if (self.loadedFonts[fontName] === undefined) {
+      // Two very different situations hide behind "not in loadedFonts":
+      //   * nothing has finished loading yet — the browser's legacy
+      //     async-startup retry (flush the cache, log, let the user
+      //     re-evaluate);
+      //   * fonts ARE loaded but not this one — permanent and actionable
+      //     (a typo, or a headless host that only handed over some TTFs, as
+      //     the Cloudflare example did before it shipped the whole FreeSans
+      //     family: build123d's FontStyle.BOLD asks for FreeSansBold and the
+      //     silent null used to surface as "Cannot set properties of
+      //     undefined (setting 'hash')" from CacheOp).
+      const available = Object.keys(self.loadedFonts || {})
+        .filter((k) => self.loadedFonts[k]).sort();
+      if (available.length === 0) {
+        for (let k in self.argCache) delete self.argCache[k];
+        console.log("Font not loaded or found yet!  Try again...");
+        return null;
+      }
+      throw new Error('the font "' + fontName + '" is not available in this '
+        + 'engine (loaded: ' + available.join(', ') + '). A headless host '
+        + 'supplies fonts itself — pass the TTF bytes for it, e.g. '
+        + 'createHeadlessCascade({ fonts: { ' + fontName + ': <bytes> } }).');
+    }
     let font = self.loadedFonts[fontName];
     let scale = size / font.unitsPerEm;
     let glyphCommandRuns = [];
@@ -3224,9 +3246,28 @@ function ExportSTL(shape, filename, linearDeflection, angularDeflection, asciiFo
  *  build123d-lite's export_brep. */
 function ExportBREP(shape, filename) {
   if (!shape || shape.IsNull()) { console.error("ExportBREP: input shape is null!"); return null; }
-  let done = self.oc.BRepTools.Write_3(shape, "/" + filename, new self.oc.Message_ProgressRange_1());
+  let done;
+  try {
+    done = self.oc.BRepTools.Write_3(shape, "/" + filename, new self.oc.Message_ProgressRange_1());
+  } catch (e) { throw _exporterFault("ExportBREP", e); }
   if (!done) { console.error("ExportBREP: BREP write failed"); return null; }
   return self.oc.FS.readFile("/" + filename, { encoding: "utf8" });
+}
+
+/** Turn a raw wasm trap out of one of the file writers into a message that
+ *  says what actually happened. A writer that traps on a shape whose volume,
+ *  bounding box and mesh are all fine is not a geometry problem: an earlier
+ *  kernel algorithm corrupted OCCT's heap and took the writer's singletons
+ *  with it — see COMPROMISE(kernel-heap-reset) in CascadeWorker.js. */
+function _exporterFault(what, e) {
+  const trap = (e instanceof WebAssembly.RuntimeError)
+    || /memory access out of bounds|null function or function signature/.test(String(e && e.message));
+  if (!trap) { return (e instanceof Error) ? e : new Error(what + ": " + String(e)); }
+  return new Error(what + ": the OCCT kernel's file-writer machinery is "
+    + "unusable — an earlier operation in this evaluation corrupted the "
+    + "kernel heap (a known OCCT 8.0.1 wasm fault; see "
+    + "COMPROMISE(kernel-heap-reset)). The geometry itself is fine. "
+    + "Original trap: " + String(e && e.message ? e.message : e));
 }
 
 /** Write the shape as a STEP (ISO-10303-21) file into the worker's Emscripten
@@ -3243,14 +3284,17 @@ function ExportSTEP(shape, filename, unit) {
     try { oc.Interface_Static.SetCVal("write.step.unit", String(unit)); }
     catch (e) { console.log("ExportSTEP: could not set write.step.unit=" + unit); }
   }
-  const writer = new oc.STEPControl_Writer_1();
-  const transferred = writer.Transfer_1(shape,
-    oc.STEPControl_StepModelType.STEPControl_AsIs, true,
-    new oc.Message_ProgressRange_1());
-  if (transferred !== oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
-    console.error("ExportSTEP: transfer to the STEP writer failed"); return null;
-  }
-  const written = writer.Write("/" + filename);
+  let transferred, written;
+  try {
+    const writer = new oc.STEPControl_Writer_1();
+    transferred = writer.Transfer_1(shape,
+      oc.STEPControl_StepModelType.STEPControl_AsIs, true,
+      new oc.Message_ProgressRange_1());
+    if (transferred !== oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
+      console.error("ExportSTEP: transfer to the STEP writer failed"); return null;
+    }
+    written = writer.Write("/" + filename);
+  } catch (e) { throw _exporterFault("ExportSTEP", e); }
   if (written !== oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
     console.error("ExportSTEP: STEP write failed"); return null;
   }

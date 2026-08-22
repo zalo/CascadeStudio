@@ -90,6 +90,16 @@ class CascadeStudioUtils {
         }
         throw e;
       }
+      // A cacheMiss that produced nothing used to blow up on the next line
+      // with "Cannot set properties of undefined (setting 'hash')" — a
+      // message that says nothing about which operation gave up or why (it
+      // was how a missing FreeSansBold surfaced in the Cloudflare worker).
+      // Every such path has already logged its own console.error; name the
+      // operation and the line so the log and the exception line up.
+      if (toReturn === null || toReturn === undefined) {
+        throw new Error(fnName + " produced no shape (line "
+          + this.currentLineNumber + ") — see the error logged above it.");
+      }
       toReturn.hash = curHash;
       if (self.GUIState["Cache?"]) { this.AddToCache(curHash, toReturn); }
       this.cacheMisses = (this.cacheMisses || 0) + 1;

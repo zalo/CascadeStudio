@@ -279,6 +279,12 @@ class CascadeStudioWorker {
         console.error(message);
       }
 
+      // Snapshot the kernel's pristine linear memory so a poisoned heap can
+      // be rewound (see captureKernelImage). Opt-in: only hosts that can
+      // afford to lose every live shape (headless, one job per request) may
+      // restore it, so only they pay for the snapshot.
+      if (this.options.kernelImage === true) { this.captureKernelImage(); }
+
       // Route incoming messages to registered handlers. Handlers may return
       // a Promise (e.g. meshing that waits on an async Python evaluation);
       // the response is posted once it resolves.
@@ -529,6 +535,98 @@ class CascadeStudioWorker {
       v.delete();
       if (self._csOcpStats) { self._csOcpStats.freed++; }
     } catch (e) { /* best effort */ }
+  }
+
+  // ------------------------------------------------------------------ //
+  // Kernel image: rewinding a heap that OCCT itself corrupted.
+  //
+  // COMPROMISE(kernel-heap-reset). Several OCCT 8.0.1 algorithms scribble
+  // over their own heap in this wasm build. The geometry they return is
+  // correct (volume/bbox/copy/mesh all agree with upstream), but a live
+  // allocation somewhere else has been handed out twice, and the casualty is
+  // usually a lazily-built singleton. Two are reproducible from the
+  // validation corpus, both detectable in plain Node with the wasm memory
+  // free to grow — so this is NOT the 128 MB Cloudflare ceiling, and it does
+  // not need a single extra byte to trigger:
+  //
+  //   examples/maker_coin   BRepFilletAPI_MakeFillet::Build (ChFi3d_Rational,
+  //                         9 Select.NEW edges) -> every later
+  //                         `new STEPControl_Writer`/`_Reader` traps with
+  //                         "memory access out of bounds"; an ALREADY-BUILT
+  //                         writer still transfers and writes correctly.
+  //   examples/bicycle_tire BRepOffsetAPI_ThruSections::Build (the ruled wall
+  //                         ThickenSolid lofts between a boundary wire and
+  //                         its offset image) -> BRepTools::Write AND the
+  //                         STEP transfer trap, even for a fresh 1 mm box.
+  //
+  // The damage is permanent for the isolate: it is what made a Cloudflare
+  // Worker that had once run maker_coin fail every later STEP export.
+  //
+  // The rewind is the cheap, total repair: OCCT's linear memory right after
+  // module init is ~3.7 MB of the 32 MB initial heap (data + bss + stack +
+  // the little embind allocates), so it snapshots in ~20 ms and restores in
+  // ~2 ms, and every OCCT singleton re-initialises lazily from its .bss
+  // guard afterwards. It is a nuclear reset: EVERY embind wrapper the host
+  // still holds dangles afterwards, so a caller must drop sceneShapes,
+  // currentShape, the op cache and any imported assets in the same breath
+  // (headless.js `reset()`/`_healKernel()` do).
+  // ------------------------------------------------------------------ //
+
+  /** Snapshot OCCT's linear memory as it is immediately after module init.
+   *  Trailing all-zero 64 KB pages are dropped (restore zero-fills them), so
+   *  the retained buffer is a few MB rather than the 32 MB initial heap.
+   *  @returns {number} the retained image size in bytes (0 when unavailable) */
+  captureKernelImage() {
+    const mem = self.ocMemory;
+    if (!mem || !mem.buffer) { return 0; }
+    const heap = new Uint8Array(mem.buffer);
+    const PAGE = 65536;
+    let end = heap.length;
+    while (end >= PAGE) {
+      let zero = true;
+      for (let i = end - PAGE; i < end; i++) { if (heap[i] !== 0) { zero = false; break; } }
+      if (!zero) { break; }
+      end -= PAGE;
+    }
+    this._kernelImage = heap.slice(0, end);
+    self._csKernelImageBytes = this._kernelImage.length;
+    return this._kernelImage.length;
+  }
+
+  /** True when a kernel image is available to restore. */
+  hasKernelImage() { return !!this._kernelImage; }
+
+  /** Rewind OCCT's linear memory to the captured image. Every embind object
+   *  created since the capture is dangling afterwards — the caller owns
+   *  dropping them. Returns false when no image was captured. */
+  restoreKernelImage() {
+    const img = this._kernelImage;
+    const mem = self.ocMemory;
+    if (!img || !mem || !mem.buffer) { return false; }
+    const heap = new Uint8Array(mem.buffer);
+    heap.set(img, 0);
+    // Everything above the image was zero at capture time; the wasm memory
+    // only ever grew, so zero the rest back out. Emscripten's sbrk break is
+    // part of the image, so the allocator simply re-uses this space.
+    if (heap.length > img.length) { heap.fill(0, img.length); }
+    return true;
+  }
+
+  /** Is the STEP/BREP writer machinery still usable?
+   *
+   *  Costs one 1 mm box + one STEP transfer (a few ms) and leaks the probe
+   *  objects, so call it on failure paths and between jobs, not per op. */
+  kernelHealthy() {
+    const oc = self.oc;
+    if (!oc) { return false; }
+    try {
+      const probe = new oc.BRepPrimAPI_MakeBox_2(1, 1, 1).Shape();
+      const writer = new oc.STEPControl_Writer_1();
+      const status = writer.Transfer_1(probe,
+        oc.STEPControl_StepModelType.STEPControl_AsIs, true,
+        new oc.Message_ProgressRange_1());
+      return status === oc.IFSelect_ReturnStatus.IFSelect_RetDone;
+    } catch (e) { return false; }
   }
 
   /** Accumulate all shapes in `sceneShapes` into a compound, triangulate

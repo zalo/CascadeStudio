@@ -101,11 +101,18 @@ export async function createHeadlessCascade(options = {}) {
     logs: [],
     errors: [],
     progress: null,
+    progressOps: [],
     historySteps: [],
     guiWidgets: {},
     guiState: Object.assign({ 'Cache?': !!opts.cache }, opts.gui || {}),
     booted: false,
+    externalFiles: null,
+    kernelResets: 0,
   };
+
+  /** Cap on the retained per-op Progress timeline. heat_exchanger emits over
+   *  a thousand ops; the timeline is a diagnostic, not a transcript. */
+  const PROGRESS_LIMIT = 4000;
 
   // ---------------------------------------------------------------- //
   // The emitter seam: collect instead of postMessage.                 //
@@ -121,6 +128,12 @@ export async function createHeadlessCascade(options = {}) {
         return;
       case 'Progress':
         state.progress = msg.payload;
+        // The worker brackets every op with a start (opType set) and an end
+        // (opType null); keep the starts as the op timeline.
+        if (msg.payload && msg.payload.opType
+            && state.progressOps.length < PROGRESS_LIMIT) {
+          state.progressOps.push({ n: msg.payload.opNumber, op: msg.payload.opType });
+        }
         return;
       case 'modelHistory':
         state.historySteps = msg.payload || [];
@@ -177,6 +190,11 @@ export async function createHeadlessCascade(options = {}) {
   const tBoot = now();
   const worker = new CascadeStudioWorker({
     installRouter: false,
+    // Snapshot OCCT's pristine linear memory so a heap that a kernel
+    // algorithm corrupted can be rewound between jobs and around a failed
+    // export — see COMPROMISE(kernel-heap-reset) in CascadeWorker.js.
+    // `kernelImage: false` opts out (saves a few MB, gives up the repair).
+    kernelImage: opts.kernelImage !== false,
     assets: {
       occtWasm: opts.occtWasm,
       fonts: opts.fonts,
@@ -196,6 +214,54 @@ export async function createHeadlessCascade(options = {}) {
     catch (e) { text = null; }
     try { oc().FS.unlink('/' + name); } catch (e) { /* already gone */ }
     return text;
+  };
+
+  /** Rewind OCCT to its boot image and drop every wrapper that pointed into
+   *  the old heap. See COMPROMISE(kernel-heap-reset). */
+  const resetKernel = () => {
+    if (!worker.hasKernelImage()) { return false; }
+    globalThis.self.currentShape = null;
+    globalThis.self.sceneShapes = [];
+    for (const k in globalThis.self.argCache) { delete globalThis.self.argCache[k]; }
+    globalThis.self.externalShapes = {};
+    const ok = worker.restoreKernelImage();
+    if (ok) { state.kernelResets++; }
+    // Assets the host handed over live in OCCT memory too — re-import them
+    // into the fresh heap so `import_step()` keeps working.
+    if (ok && state.externalFiles) {
+      try { worker.fileIO.loadPrexistingExternalFiles(state.externalFiles); }
+      catch (e) { /* the host can re-supply them */ }
+    }
+    return ok;
+  };
+
+  /** Run `write(shape)`; if the kernel's writer machinery has been poisoned,
+   *  carry the shape out as BREP, rewind the kernel and write from the
+   *  re-imported copy. Returns {text, healed}. */
+  const exportOrHeal = (what, shape, write) => {
+    try { return { text: write(shape), healed: false }; }
+    catch (firstError) {
+      if (!worker.hasKernelImage()) { throw firstError; }
+      let brep = null;
+      try { brep = globalThis.self.ExportBREP(shape, '__heal.brep'); }
+      catch (e) { brep = null; }
+      try { oc().FS.unlink('/__heal.brep'); } catch (e) { /* absent */ }
+      if (!brep) {
+        throw new Error(what + ': the kernel heap was corrupted during this '
+          + 'evaluation and BRepTools::Write is down too, so the shape cannot '
+          + 'be carried out of the damaged heap. '
+          + 'COMPROMISE(kernel-heap-reset). ' + firstError.message);
+      }
+      resetKernel();
+      const recovered = globalThis.self.ImportBREP('__heal.brep', brep);
+      try { oc().FS.unlink('/__heal.brep'); } catch (e) { /* absent */ }
+      if (!recovered || recovered.IsNull()) {
+        throw new Error(what + ': recovering the shape through BREP after a '
+          + 'kernel-heap reset produced nothing. ' + firstError.message);
+      }
+      globalThis.self.currentShape = recovered;
+      return { text: write(recovered), healed: true };
+    }
   };
 
   const requireShape = (what) => {
@@ -226,6 +292,7 @@ export async function createHeadlessCascade(options = {}) {
       state.logs = [];
       state.errors = [];
       state.historySteps = [];
+      state.progressOps = [];
       const t0 = now();
 
       worker.evaluate({
@@ -268,6 +335,11 @@ export async function createHeadlessCascade(options = {}) {
         logs: state.logs.slice(),
         shapeCount,
         historySteps: state.historySteps.slice(),
+        // Per-op timeline collected from the worker's Progress messages
+        // ({n, op}). It is a RECORD, not live progress: the evaluation is
+        // one synchronous wasm call, so all of these are emitted before the
+        // host gets control back.
+        progressOps: state.progressOps.slice(),
         guiWidgets: Object.assign({}, state.guiWidgets),
         mesh,
         timings: { evalMs: round1(evalMs), combineMs: round1(now() - tMesh) },
@@ -277,7 +349,8 @@ export async function createHeadlessCascade(options = {}) {
     /** STEP (ISO-10303-21) text for the shape built by the last run(). */
     exportSTEP(o = {}) {
       const name = o.name || DEFAULT_STEP_NAME;
-      const text = globalThis.self.ExportSTEP(requireShape('exportSTEP'), name, o.unit);
+      const { text } = exportOrHeal('exportSTEP', requireShape('exportSTEP'),
+        (shape) => globalThis.self.ExportSTEP(shape, name, o.unit));
       try { oc().FS.unlink('/' + name); } catch (e) { /* already read back */ }
       if (text == null) { throw new Error('exportSTEP: the STEP writer failed'); }
       return text;
@@ -286,6 +359,8 @@ export async function createHeadlessCascade(options = {}) {
     /** BREP text (OCCT's native boundary-representation format). */
     exportBREP(o = {}) {
       const name = o.name || DEFAULT_BREP_NAME;
+      // No heal path: BREP *is* the carrier, so if BRepTools::Write is the
+      // casualty there is nothing to carry the shape out with.
       const text = globalThis.self.ExportBREP(requireShape('exportBREP'), name);
       try { oc().FS.unlink('/' + name); } catch (e) { /* already read back */ }
       if (text == null) { throw new Error('exportBREP: the BREP writer failed'); }
@@ -304,8 +379,9 @@ export async function createHeadlessCascade(options = {}) {
           + '(COMPROMISE(stl-ascii))');
       }
       const name = o.name || DEFAULT_STL_NAME;
-      const text = globalThis.self.ExportSTL(requireShape('exportSTL'), name,
-        o.tolerance || 1e-3, o.angularTolerance || 0.1, true);
+      const { text } = exportOrHeal('exportSTL', requireShape('exportSTL'),
+        (shape) => globalThis.self.ExportSTL(shape, name,
+          o.tolerance || 1e-3, o.angularTolerance || 0.1, true));
       try { oc().FS.unlink('/' + name); } catch (e) { /* already read back */ }
       if (text == null) { throw new Error('exportSTL: the STL writer failed'); }
       return text;
@@ -345,8 +421,20 @@ export async function createHeadlessCascade(options = {}) {
       for (const [name, content] of Object.entries(files || {})) {
         dict[name] = { content };
       }
+      // Retained so a kernel reset can re-import them (their OCCT shapes
+      // live in the heap that the reset wipes).
+      state.externalFiles = Object.assign({}, state.externalFiles || {}, dict);
       return worker.fileIO.loadPrexistingExternalFiles(dict);
     },
+
+    /** Is OCCT's file-writer machinery still usable? (See
+     *  COMPROMISE(kernel-heap-reset) — a few kernel algorithms corrupt the
+     *  heap, and the writers are the usual casualty.) Costs a few ms. */
+    kernelHealthy() { return worker.kernelHealthy(); },
+
+    /** Rewind OCCT to its boot image, dropping every shape. Returns false
+     *  when the engine was created with `kernelImage: false`. */
+    resetKernel() { return resetKernel(); },
 
     /** Wasm/heap footprint, split by owner — the number that has to stay
      *  under a Cloudflare Worker's 128 MB. */
@@ -364,13 +452,23 @@ export async function createHeadlessCascade(options = {}) {
     /** Drop the retained compound (a long-lived isolate serving many
      *  requests should call this between them). */
     reset() {
-      const shape = globalThis.self.currentShape;
-      if (shape) {
-        try { if (shape.$$ && shape.$$.ptr) { shape.delete(); } } catch (e) { /* best effort */ }
-        globalThis.self.currentShape = null;
+      // Rewinding the kernel image is both cheaper and more thorough than
+      // deleting the compound: it hands the next job a pristine allocator
+      // (so a heavy run no longer ratchets the heap) AND undoes any heap
+      // corruption the last job's geometry left behind, which is what made a
+      // Cloudflare isolate that had once run maker_coin fail every later
+      // STEP export. See COMPROMISE(kernel-heap-reset).
+      if (worker.hasKernelImage()) {
+        resetKernel();
+      } else {
+        const shape = globalThis.self.currentShape;
+        if (shape) {
+          try { if (shape.$$ && shape.$$.ptr) { shape.delete(); } } catch (e) { /* best effort */ }
+          globalThis.self.currentShape = null;
+        }
+        globalThis.self.sceneShapes = [];
+        for (const k in globalThis.self.argCache) { delete globalThis.self.argCache[k]; }
       }
-      globalThis.self.sceneShapes = [];
-      for (const k in globalThis.self.argCache) { delete globalThis.self.argCache[k]; }
       state.logs = [];
       state.errors = [];
     },
