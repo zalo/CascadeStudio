@@ -75,7 +75,22 @@ const DEFAULT_STL_NAME = 'cascade-headless.stl';
  *    - `cache`    seed for GUIState['Cache?'] (default true)
  *    - `gui`      initial GUIState values (what a Slider() would return)
  */
+let _engine = null;
+
 export async function createHeadlessCascade(options = {}) {
+  // ONE engine per JS realm. The CAD engine keeps all of its state on the
+  // worker global (`self.oc`, `self.sceneShapes`, the op cache, the Python
+  // runtime singleton) exactly as it does in a Web Worker, so a second
+  // instance would silently share and corrupt the first's scene. On
+  // Cloudflare that is the natural shape anyway: one isolate, one engine,
+  // reused across requests.
+  if (_engine) {
+    throw new Error('createHeadlessCascade: an engine already exists in this '
+      + 'realm — cascade-core keeps its state on the worker global, so reuse '
+      + 'the existing instance (and call reset() between jobs) or run a '
+      + 'second engine in a separate isolate/worker_thread');
+  }
+
   const opts = Object.assign({
     runtime: 'micropython',
     pySrc: 'lite',
@@ -361,6 +376,7 @@ export async function createHeadlessCascade(options = {}) {
     },
   };
 
+  _engine = engine;
   return engine;
 }
 

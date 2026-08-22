@@ -316,4 +316,35 @@ test.describe('Python mode: upstream build123d exports', () => {
     expect(c.pwp2).toBe('([4.0, 6.0, 11.660254], [-0.33512, 0.894169, -0.29691], [0.3, 0.4, 0.866025])');
     expect(c.pwp_perp).toBe("'raises'");
   });
+
+  test('export_step writes a real STEP file into the worker MEMFS', async ({ page }) => {
+    // export_step used to be a print() no-op. It is now STEPControl_Writer
+    // into MEMFS, exactly like export_brep — the headless/Cloudflare entry
+    // point reads those files back out (see the "Headless / Cloudflare"
+    // section of CLAUDE.md), and the browser gets a real STEP too.
+    await gotoAndReady(page);
+    const code = [
+      'from build123d import *',
+      'b = Box(4, 6, 8) - Cylinder(1, 20)',
+      'ok = export_step(b, "part.step")',
+      'print("CHK", "step_ok", repr(ok))',
+      // read it back through the worker's own MEMFS accessor
+      'from browser import self as w',
+      'text = w.oc.FS.readFile("/part.step", {"encoding": "utf8"})',
+      'print("CHK", "step_head", repr(str(text)[:13]))',
+      'print("CHK", "step_tail", repr(str(text).strip()[-17:]))',
+      'print("CHK", "step_big", repr(len(str(text)) > 4000))',
+      // upstream's keyword arguments must not blow up
+      'print("CHK", "step_kwargs", repr(export_step(b, "u.step", unit=Unit.MM,',
+      '                                             write_pcurves=False)))',
+      'show(b)',
+      'print("DONE_UPSTREAM")',
+    ].join('\n');
+    const c = await runChecks(page, code);
+    expect(c.step_ok).toBe('True');
+    expect(c.step_head).toBe("'ISO-10303-21;'");
+    expect(c.step_tail).toBe("'END-ISO-10303-21;'");
+    expect(c.step_big).toBe('True');
+    expect(c.step_kwargs).toBe('True');
+  });
 });

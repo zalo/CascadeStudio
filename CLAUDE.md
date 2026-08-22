@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 94 tests (incl. 50 frozen build123d example scripts)
+npx playwright test    # 102 tests (incl. 50 frozen build123d example scripts)
 node test/headless-node.mjs   # browser-free engine (Node, no Chromium)
 ```
 
