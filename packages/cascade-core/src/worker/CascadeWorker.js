@@ -46,8 +46,12 @@ class CascadeStudioWorker {
     // Forward logs and errors to the main thread
     this._setupConsoleOverrides();
 
-    // Shim importScripts for module workers so Emscripten detects ENVIRONMENT_IS_WORKER
-    // (Module workers don't have importScripts, causing Emscripten to fall into ENVIRONMENT_IS_SHELL)
+    // Shim importScripts for module workers, which don't have it. No longer
+    // needed by OpenCascade's glue — that is built with `-sENVIRONMENT=web`,
+    // so it never sniffs the environment at all — but Brython still decides
+    // `isWebWorker` with `typeof importScripts === "function"`, and answering
+    // "yes" is the truthful answer for this worker. (Anything that actually
+    // CALLS it is asking for a classic-worker feature we cannot provide.)
     if (typeof importScripts === 'undefined') {
       self.importScripts = function() { throw new Error('importScripts is not supported in module workers'); };
     }

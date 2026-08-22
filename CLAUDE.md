@@ -584,7 +584,6 @@ authoritative list):
 - `failure-decode` — OCCT's C++ exceptions arrive in JS as raw pointer numbers. The fork binds `OCJS::getStandard_FailureData` for exactly this, but it is UNCALLABLE here ("unbound types: St9exception" — `Standard_Failure` derives from `std::exception`, which the build never registers) and no runtime helpers (`HEAPU8`/`getValue`/`UTF8ToString`) are exported, so CascadeWorker keeps the wasm `Memory` via Emscripten's `instantiateWasm` hook and StandardUtils reads `Standard_Failure`'s `StringRef` message out of it directly. Users see e.g. "the OCCT kernel raised 'BRep_API: command not done'" instead of "threw '6454200'".
 - `new-edges-partial` — `new_edges()` maps its result back to the corresponding edges OF the combined shape (so it can be filleted like upstream's maker_coin does); an edge that is only PARTLY new has no counterpart and is returned as bare geometry.
 - `triad-labels` — `Compound.make_triad` draws the axes and arrow heads exactly, but not upstream's X/Y/Z labels: those need the `singleline` STROKE font, and this build ships only the outline font FreeSans.
-- `embind-no-eval` (headless/Cloudflare only) — embind builds every method invoker with `new Function`, which Workers forbid. The HEADLESS bundle is built with `createJsInvoker`/`__emval_create_invoker` swapped for closure equivalents (`scripts/build-headless.cjs`) instead of rebuilding the OCCT fork with `-sDYNAMIC_EXECUTION=0`. Semantically identical, marginally slower, browser bundle untouched.
 - `stl-ascii` — `StlAPI_Writer::ASCIIMode` is bound as a getter only, so `engine.exportSTL({binary: true})` is rejected rather than silently writing ASCII.
 
 **Roadmap (deliberately deferred)**:
@@ -709,10 +708,10 @@ memory budget. Measured on this machine:
 
 | | |
 |---|---|
-| engine boot (OCCT) | 276 ms, 32.0 MB |
-| MicroPython + build123d-lite boot | 122 ms |
+| engine boot (OCCT) | 279 ms, 32.0 MB |
+| MicroPython + build123d-lite boot | 124 ms |
 | after any Python run | **51.5 MB** (32.0 occt + 19.5 python) |
-| starter model eval | 292 ms |
+| starter model eval | 299 ms (292 ms before `-sDYNAMIC_EXECUTION=0`) |
 
 **Cloudflare specifics** — full write-up + measured numbers in
 `examples/cloudflare-worker/README.md` (`npm run dev`, then
@@ -720,17 +719,28 @@ memory budget. Measured on this machine:
 - 128 MB isolate; the engine sits at 51.5 MB for the starter model.
 - Wasm **only** as compiled module bindings (`[[rules]] type = "CompiledWasm"`);
   `WebAssembly.compile` is forbidden. No dynamic `import()` of a URL.
-- **No runtime code generation at all** — which embind violates: it builds
-  every method invoker with `new Function`. The headless bundle is therefore
-  built with a source transform replacing `createJsInvoker` and
-  `__emval_create_invoker` with closure equivalents,
-  `COMPROMISE(embind-no-eval)` (browser bundle untouched; anchors asserted so
-  an opencascade.js bump fails the build). Consequence:
-  `language: 'cascadestudio'` (user JS) is unavailable on Workers — that IS
-  `eval`. Python mode is unaffected.
-- `nodejs_compat` must stay **off**: it defines `process`, which flips OCCT's
-  Emscripten glue into its Node branch. The dead node specifiers
-  (`module`/`fs`/`path`/`url`) are aliased to a stub in `wrangler.toml`.
+- **No runtime code generation at all** — which embind violates by default: it
+  builds every method invoker with `new Function`. Fixed at the COMPILER
+  level: the opencascade.js fork is built with **`-sDYNAMIC_EXECUTION=0`**
+  (`builds/cascadestudio.yml`), so emscripten emits closure-based invokers and
+  the shipped glue is eval-free — one glue for every consumer (browser worker,
+  Node, workerd; measured cost +2-4% on model evaluation and +3-8% on the
+  mesh-readback path, which is the hottest embind call shape; nothing on
+  kernel time, and the wasm binary is byte-identical). The fork also builds
+  with **`-sENVIRONMENT=web`** so there is literally one module for all three
+  hosts: no node branch (the thing `nodejs_compat` used to trip) and no
+  classic-worker branch. The old bundle-time invoker swap
+  (`COMPROMISE(embind-no-eval)`) is RETIRED; what remains in
+  `scripts/build-headless.cjs` is a guard that FAILS the build if a future
+  opencascade.js bump brings `new Function`/`eval` back into the glue.
+  Consequence: `language: 'cascadestudio'` (user JS) is unavailable on
+  Workers — that IS `eval`. Python mode is unaffected.
+- `nodejs_compat` must stay **off**: it defines `process`, which flips an
+  all-environments Emscripten glue into its Node branch. OCCT's glue no longer
+  has one (`-sENVIRONMENT=web`), but MicroPython's vendored glue does, so the
+  flag stays off and its dead node specifiers (`module`/`fs`/`path`/`url`) are
+  still aliased to a stub in `wrangler.toml` (verified: deleting the `[alias]`
+  block fails the build with four "Could not resolve" errors).
 - Bundle: 30.08 MB raw / **9.16 MB gzip** (`wrangler deploy --dry-run`) — fits
   the 10 MB paid limit with ~0.8 MB spare, not the free plan's 3 MB. OCCT's
   wasm is 7.94 MB gz of that; dropping the bundled FreeSans saves 0.98 MB.
@@ -995,6 +1005,10 @@ must evaluate with zero errors. `saveProject()` serializes `mode` alongside the 
   and the reason each hand-registered symbol exists are in its CHANGELOG.md.
   The worker cross-checks `USED_OCCT_SYMBOLS` against the module at startup, so
   a renumbered overload or a silently-dropped binding fails loudly.)
+  - Linked `-sDYNAMIC_EXECUTION=0 -sENVIRONMENT=web`: the glue generates no
+    code from strings (embind's `new Function` invokers are the default) and
+    carries no node/classic-worker branches, so the SAME module runs in the
+    browser module worker, in plain Node and on Cloudflare Workers.
   - See `node_modules/opencascade.js/CLAUDE.md` for build details
 - **Three.js r170**: 3D rendering (matcap material, OrbitControls)
   - `THREE.ColorManagement.enabled = false` for legacy rendering

@@ -1,31 +1,29 @@
 /**
  * Bundle src/headless.js -> dist/cascade-headless.mjs.
  *
- * Separate from the plain `npx esbuild` call the worker bundle uses because
- * it needs ONE source transform:
+ * Separate from the plain `npx esbuild` call the worker bundle uses because it
+ * enforces ONE extra invariant: the bundle must contain no runtime code
+ * generation, because Cloudflare Workers refuse it outright ("EvalError: Code
+ * generation from strings disallowed for this context").
  *
- *   COMPROMISE(embind-no-eval) — Emscripten's embind generates every method
- *   invoker with `new Function(argNames, body)`. Cloudflare Workers refuse
- *   ALL runtime code generation ("EvalError: Code generation from strings
- *   disallowed for this context"), so the OCCT module cannot even finish
- *   registering its classes there. Emscripten's own answer is to compile the
- *   glue with `-sDYNAMIC_EXECUTION=0`, which swaps `createJsInvoker` for a
- *   closure-based factory; rebuilding the OCCT fork for that is a separate
- *   (multi-hour) exercise, so this does the same substitution on the shipped
- *   glue: `createJsInvoker` is replaced with a hand-written closure factory
- *   that produces an OBSERVABLY IDENTICAL invoker (same wiring order, same
- *   destructor handling, same `this` semantics, `length` restored so
- *   introspection still matches).
+ * Emscripten's embind used to violate that by construction: it built every
+ * method invoker with `new Function(argNames, body)` (and emval built its call
+ * thunks the same way), so the OCCT module could not even finish registering
+ * its classes on Workers. This script used to swap those two factories for
+ * hand-written closure equivalents at bundle time — COMPROMISE(embind-no-eval).
+ * That workaround is RETIRED: the opencascade.js fork is now compiled with
+ * `-sDYNAMIC_EXECUTION=0` (builds/cascadestudio.yml), so the shipped glue is
+ * eval-free at the compiler level and both bundles — browser worker and
+ * headless — get the same closure-based invokers from emscripten itself.
  *
- *   Scope: the HEADLESS bundle only. The browser worker keeps the stock glue
- *   byte-for-byte — browsers allow `new Function`, and the eval-free path,
- *   while semantically equal, is measurably slower for the hottest call
- *   shape (V8 cannot specialize one shared closure the way it specializes a
- *   generated monomorphic function).
+ * What is left here is the guard. If a future opencascade.js bump loses the
+ * flag, the eval'd invokers come back silently and the Worker dies on its
+ * first request; instead, this build FAILS. Two checks:
  *
- *   The anchors are asserted: if a future opencascade.js changes them, the
- *   build FAILS loudly rather than silently shipping a Worker that dies on
- *   its first request.
+ *   1. the OCCT glue module, as loaded: no `new Function(`, no `eval(`;
+ *   2. the emitted bundle: no `new Function(` at all, and the only `eval(`
+ *      left is CascadeWorker's `language: 'cascadestudio'` path (evaluating
+ *      user JS IS eval — that language is simply unavailable on Workers).
  */
 const fs = require('fs');
 const path = require('path');
@@ -35,132 +33,33 @@ const pkgRoot = path.join(__dirname, '..');
 const monoRoot = path.join(pkgRoot, '..', '..');
 const distDir = path.join(pkgRoot, 'dist');
 
-// --- the eval-free replacement for embind's createJsInvoker -------------- //
-const ANCHOR_START = 'function createJsInvoker(argTypes,isClassMethodFunc,returns,isAsync){';
-const ANCHOR_END = 'return new Function(args1,invokerFnBody)}';
+const NEW_FUNCTION = /new Function\s*\(/;
+const EVAL_CALL = /(^|[^.\w$])eval\s*\(/;
+const FIX = 'opencascade.js must be built with `-sDYNAMIC_EXECUTION=0`'
+  + ' (see builds/cascadestudio.yml in the fork) — Cloudflare Workers reject'
+  + ' code generation from strings.';
 
-const CLOSURE_INVOKER = ANCHOR_START + `
-  // PATCHED by packages/cascade-core/scripts/build-headless.cjs —
-  // COMPROMISE(embind-no-eval). Semantically identical to the generated
-  // invoker; builds it out of closures so no code is generated from strings.
-  var needsDestructorStack = usesDestructorStack(argTypes);
-  var argCount = argTypes.length - 2;
-  // Which wired values get an explicit destructor call, in the exact order
-  // craftInvokerFunction pushes those destructors into the closure args.
-  var dtorSlots = [];
-  if (!needsDestructorStack) {
-    for (var di = isClassMethodFunc ? 1 : 2; di < argTypes.length; ++di) {
-      if (argTypes[di].destructorFunction !== null) { dtorSlots.push(di); }
-    }
-  }
-  return function (humanName, throwBindingError, invoker, fn, runDestructors,
-                   fromRetWire, toClassParamWire) {
-    var extra = Array.prototype.slice.call(arguments, 7);
-    var toArgWire = extra.slice(0, argCount);
-    var dtors = extra.slice(argCount);
-    var invokerFn = function () {
-      var destructors = needsDestructorStack ? [] : null;
-      var wired = [fn];
-      var thisWired;
-      if (isClassMethodFunc) {
-        thisWired = toClassParamWire(destructors, this);
-        wired.push(thisWired);
-      }
-      var argWired = [];
-      for (var i = 0; i < argCount; ++i) {
-        var w = toArgWire[i](destructors, arguments[i]);
-        argWired.push(w);
-        wired.push(w);
-      }
-      var rv = invoker.apply(null, wired);
-      if (needsDestructorStack) {
-        runDestructors(destructors);
-      } else {
-        for (var k = 0; k < dtorSlots.length; ++k) {
-          var slot = dtorSlots[k];
-          dtors[k](slot === 1 ? thisWired : argWired[slot - 2]);
+/** Guard 1: the OCCT glue emscripten produced. */
+const assertEvalFreeOcct = {
+  name: 'cs-assert-eval-free-occt',
+  setup(build) {
+    build.onLoad({ filter: /[\\/]cascadestudio\.js$/ }, async (args) => {
+      const contents = fs.readFileSync(args.path, 'utf8');
+      for (const [re, what] of [[NEW_FUNCTION, 'new Function('], [EVAL_CALL, 'eval(']]) {
+        const m = re.exec(contents);
+        if (m) {
+          const at = contents.slice(Math.max(0, m.index - 60), m.index + 120);
+          throw new Error('build-headless: the OpenCascade glue (' + args.path
+            + ') generates code from strings — found `' + what + '` at offset '
+            + m.index + ':\n    …' + at.replace(/\n/g, ' ') + '…\n  ' + FIX);
         }
       }
-      if (returns) { return fromRetWire(rv); }
-    };
-    try {
-      Object.defineProperty(invokerFn, 'length', { value: argCount, configurable: true });
-    } catch (e) { /* engines that refuse are still functionally correct */ }
-    return invokerFn;
-  };
-}`;
-
-// emval's invoker factory (__emval_create_invoker): reached when C++ calls
-// through an emscripten::val. Same treatment, same reason. Everything from
-// the `functionBody` string assembly to the `new Function(...)` call is
-// replaced by the closure that string was describing.
-const EMVAL_START = 'var functionBody;switch(kind){case 0:functionBody="toValue(handle)";break;';
-const EMVAL_END = 'var invokerFunction=new Function(Object.keys(captures),functionBody)(...Object.values(captures));';
-
-const EMVAL_REPLACEMENT = `var invokerFunction=(function(){
-  // PATCHED by build-headless.cjs — COMPROMISE(embind-no-eval).
-  // kind: 0 = call the value, 1 = call a method on it, 2 = construct it,
-  // 3 = no call (the generated body is just the parenthesised arg list).
-  var toValue = captures.toValue;
-  var n = argFromPtr.length;
-  var call = function (handle, methodName, argv) {
-    var target = toValue(handle);
-    if (kind === 0) { return target.apply(undefined, argv); }
-    if (kind === 1) { var key = getStringOrSymbol(methodName); return target[key].apply(target, argv); }
-    if (kind === 2) { return new (Function.prototype.bind.apply(target, [null].concat(argv)))(); }
-    return argv.length ? argv[argv.length - 1] : undefined;
-  };
-  var readArgs = function (args) {
-    var argv = [];
-    for (var i = 0; i < n; ++i) { argv.push(argFromPtr[i](args + i * GenericWireTypeSize)); }
-    return argv;
-  };
-  if (retType.isVoid) {
-    return function (handle, methodName, destructorsRef, args) {
-      call(handle, methodName, readArgs(args));
-    };
-  }
-  return function (handle, methodName, destructorsRef, args) {
-    return emval_returnValue(toReturnWire, destructorsRef,
-      call(handle, methodName, readArgs(args)));
-  };
-})();`;
-
-function replaceSpan(source, file, startAnchor, endAnchor, replacement, what) {
-  const start = source.indexOf(startAnchor);
-  if (start < 0) {
-    throw new Error('build-headless: could not find ' + what + ' in ' + file
-      + ' — opencascade.js changed; re-derive the COMPROMISE(embind-no-eval) patch.');
-  }
-  const end = source.indexOf(endAnchor, start);
-  if (end < 0) {
-    throw new Error('build-headless: ' + what + ' in ' + file + ' no longer ends with `'
-      + endAnchor.slice(0, 48) + '…` — re-derive the COMPROMISE(embind-no-eval) patch.');
-  }
-  return source.slice(0, start) + replacement + source.slice(end + endAnchor.length);
-}
-
-function patchOcctGlue(source, file) {
-  let out = replaceSpan(source, file, ANCHOR_START, ANCHOR_END, CLOSURE_INVOKER,
-    "embind's createJsInvoker");
-  out = replaceSpan(out, file, EMVAL_START, EMVAL_END, EMVAL_REPLACEMENT,
-    "emval's __emval_create_invoker");
-  if (/new Function\(/.test(out)) {
-    throw new Error('build-headless: `new Function(` still present in ' + file
-      + ' after patching — Cloudflare Workers would reject it.');
-  }
-  return out;
-}
-
-const evalFreeOcct = {
-  name: 'cs-eval-free-occt',
-  setup(build) {
-    build.onLoad({ filter: /[\\/]cascadestudio\.js$/ }, async (args) => ({
-      contents: patchOcctGlue(fs.readFileSync(args.path, 'utf8'), args.path),
-      loader: 'js',
-    }));
+      return { contents, loader: 'js' };
+    });
   },
 };
+
+const outfile = path.join(distDir, 'cascade-headless.mjs');
 
 esbuild.build({
   entryPoints: [path.join(pkgRoot, 'src', 'headless.js')],
@@ -170,13 +69,49 @@ esbuild.build({
   sourcemap: true,
   format: 'esm',
   target: 'es2022',
-  outfile: path.join(distDir, 'cascade-headless.mjs'),
+  outfile,
   external: ['fs', 'path', 'os', 'module', 'worker_threads'],
   loader: { '.wasm': 'file' },
   define: { ESBUILD: 'true' },
   absWorkingDir: monoRoot,
-  plugins: [evalFreeOcct],
+  plugins: [assertEvalFreeOcct],
   logLevel: 'info',
+}).then(() => {
+  // Guard 2: the emitted bundle. `new Function(` must be gone entirely; the
+  // JS-mode `eval(userCode)` in CascadeWorker is the one allowed site.
+  const bundle = fs.readFileSync(outfile, 'utf8');
+  const nf = NEW_FUNCTION.exec(bundle);
+  if (nf) {
+    throw new Error('build-headless: `new Function(` survives in '
+      + path.relative(monoRoot, outfile) + ' at offset ' + nf.index + ':\n    …'
+      + bundle.slice(Math.max(0, nf.index - 80), nf.index + 120).replace(/\n/g, ' ')
+      + '…\n  ' + FIX);
+  }
+  const evals = [];
+  const scan = new RegExp(EVAL_CALL.source, 'g');
+  let m;
+  while ((m = scan.exec(bundle)) !== null) {
+    const before = bundle.slice(Math.max(0, m.index - 120), m.index + m[0].length - 5);
+    evals.push({
+      context: before.slice(-90).replace(/\n/g, ' ') + 'eval(',
+      // The one allowed JS site: `…_evaluatePython(payload);return}try{eval(
+      // userCode)` — CascadeWorker's `language: 'cascadestudio'` branch.
+      allowed: /_evaluatePython/.test(before) && /try\s*\{\s*$/.test(before)
+        // …and PYTHON text embedded in the bundle, which has its own `eval()`
+        // (build123d-lite's exception shim). Minified JS is one long line, so
+        // a newline within the preceding 120 chars means this match is inside
+        // an embedded multi-line source string, not JS the engine will run.
+        || /\n/.test(before),
+    });
+  }
+  const unexpected = evals.filter((e) => !e.allowed).map((e) => e.context);
+  if (unexpected.length > 0) {
+    throw new Error('build-headless: unexpected `eval(` in '
+      + path.relative(monoRoot, outfile) + ' (only CascadeWorker\'s user-JS path'
+      + ' may eval):\n    …' + unexpected.join('…\n    …') + '…\n  ' + FIX);
+  }
+  console.log('[cascade-core] headless bundle is eval-free (0 `new Function`, '
+    + evals.length + ' `eval(` — all in the user-JS branch or embedded Python)');
 }).catch((e) => {
   console.error(e.message || e);
   process.exit(1);

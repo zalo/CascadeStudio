@@ -20,17 +20,19 @@ globs = ["**/*.ttf"]
 fallthrough = false
 
 # --------------------------------------------------------------------------
-# `nodejs_compat` is deliberately NOT enabled. It would define `process`,
-# and OpenCascade's Emscripten glue sniffs `globalThis.process?.versions
-# ?.node` to decide it is running under Node — at which point it reaches for
-# createRequire/fs and dies. Without it the glue takes the plain-web branch,
-# which is exactly right, and `import("module")` (the node-only line it never
-# reaches) is stubbed out by the alias below so the bundler can resolve it.
+# `nodejs_compat` is deliberately NOT enabled. It defines `process`, and an
+# Emscripten glue built for all environments sniffs
+# `globalThis.process?.versions?.node` to decide it is running under Node — at
+# which point it reaches for createRequire/fs and dies. OpenCascade's glue is
+# no longer exposed to that (the fork builds it with `-sENVIRONMENT=web`:
+# there IS no node branch in it any more), but MicroPython's vendored glue
+# still has one, so the flag stays off.
 # --------------------------------------------------------------------------
 #
-# Both Emscripten glues (OpenCascade's and MicroPython's) carry a node-only
-# branch that dynamically imports fs/path/url/module. It is unreachable here,
-# but the bundler still has to resolve the specifiers.
+# MicroPython's glue carries a node-only branch that dynamically imports
+# fs/path/url/module. It is unreachable here, but the bundler still has to
+# resolve the specifiers — verified by deleting this block, which fails the
+# build with four "Could not resolve" errors.
 [alias]
 module = "./src/node-module-stub.js"
 fs = "./src/node-module-stub.js"

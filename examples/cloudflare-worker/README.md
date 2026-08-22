@@ -45,21 +45,21 @@ Everything below was run locally against **workerd** via `wrangler dev`
 
 ```
 === GET /health ===
-  boot 123 ms   occtWasm 32.0 MB
+  boot 147 ms   occtWasm 32.0 MB
   PASS  health ok
 
 === (a) Box(10, 10, 10) -> step + brep + stl ===
   PASS  HTTP 200 / ok / STEP is ISO-10303-21 / BREP non-empty / STL has 12 facets
-  26 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 3 ms)
+  201 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 148 ms)
 
 === (b) PYTHON_STARTER_CODE (flanged bearing mount) ===
   PASS  volume ~= 48603.5 mm^3 / STEP is substantial (117981 bytes)
-  367 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 316 ms)
+  375 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 323 ms)
 
 === (c) export_step() / export_brep() inside the script ===
   PASS  script wrote part.step / part.brep
   PASS  import_brep round-trips the volume  — 1270.353996706151 vs 1270.3539967061508
-  49 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 19 ms)
+  57 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 23 ms)
 
 === (d) a failing script comes back as JSON, not a 500 ===
   PASS  HTTP 422 / NameError reported
@@ -81,10 +81,10 @@ configuration, not code.
 | isolate limit | **128 MB** |
 | after boot (OCCT only) | 32.0 MB |
 | after any Python run (OCCT + MicroPython) | **51.5 MB** |
-| engine boot | ~123 ms |
-| MicroPython + build123d-lite boot (first Python request) | ~134 ms |
-| `Box(10,10,10)` eval | ~3 ms |
-| starter model (fillets, booleans, GridLocations) eval | ~316 ms |
+| engine boot | ~147 ms |
+| MicroPython + build123d-lite boot (first Python request) | ~134 ms (inside request (a)'s 148 ms eval) |
+| `Box(10,10,10)` eval | ~3 ms once the interpreter is warm |
+| starter model (fillets, booleans, GridLocations) eval | ~323 ms |
 
 51.5 MB of 128 MB, with the remaining headroom available for the model
 itself. The MicroPython GC heap is fixed at 16 MB (`CS_MP_HEAP`), so growth
@@ -122,31 +122,39 @@ headroom, and does NOT fit the free plan. If you need room:
      which MicroPython's loader reaches through the `instantiateWasm` hook
      (a one-line patch on the vendored glue, see its `PROVENANCE.md`).
    - Emscripten's **embind generates every method invoker with
-     `new Function`**, which killed the very first boot attempt here. The
-     headless bundle is built with a source transform that swaps
-     `createJsInvoker` and `__emval_create_invoker` for closure-based
-     equivalents — `COMPROMISE(embind-no-eval)` in
-     `packages/cascade-core/scripts/build-headless.cjs`. The browser worker
-     bundle is untouched.
+     `new Function`** by default, which killed the very first boot attempt
+     here. The OpenCascade fork is therefore compiled with
+     **`-sDYNAMIC_EXECUTION=0`** (`builds/cascadestudio.yml`): embind then
+     emits closure-based invokers and emval closure-based call thunks, so the
+     shipped glue never generates code from strings. Same glue everywhere —
+     browser worker, Node and workerd — at a measured +2-4% on model
+     evaluation and +3-8% on the mesh-readback path (the non-specialized
+     invoker is slower; kernel time is untouched, and the wasm binary is
+     byte-identical). `packages/cascade-core/scripts/build-headless.cjs` asserts
+     it: no `new Function(`/`eval(` may reach the bundle from the glue, or the
+     build fails.
    - Consequence: **`language: "cascadestudio"` (the JS standard library) is
      NOT available on Workers** — evaluating user JS is `eval` by
      definition. Python mode is unaffected.
 2. **No dynamic `import()` of a URL.** `micropython-cs.mjs` is imported
    statically and handed to the runtime as a namespace object
    (`_csMicroPythonLocate.mod`).
-3. **`nodejs_compat` is deliberately OFF.** It defines `process`, and
-   OpenCascade's Emscripten glue sniffs `globalThis.process?.versions?.node`
-   to decide it is running under Node — at which point it reaches for
-   `createRequire`/`fs` and dies. The four node specifiers the dead branches
-   mention (`module`, `fs`, `path`, `url`) are aliased to
-   `src/node-module-stub.js` in `wrangler.toml` so the bundler can resolve
-   them.
+3. **`nodejs_compat` is deliberately OFF.** It defines `process`, and an
+   Emscripten glue built for every environment sniffs
+   `globalThis.process?.versions?.node` to decide it is running under Node —
+   at which point it reaches for `createRequire`/`fs` and dies. OpenCascade's
+   glue is immune now (`-sENVIRONMENT=web`: there is no node branch left in
+   it), but MicroPython's vendored glue still has one, so the flag stays off
+   and the four node specifiers its dead branch mentions (`module`, `fs`,
+   `path`, `url`) are still aliased to `src/node-module-stub.js` in
+   `wrangler.toml` so the bundler can resolve them. Verified by deleting the
+   `[alias]` block: the build fails with four "Could not resolve" errors.
 4. **CPU time.** The free plan gives 10 ms of CPU — not enough to boot the
    kernel, let alone model. A paid plan's default is 30 s wall / 30 s CPU
    (`[limits] cpu_ms`). The starter model is ~450 ms of CPU including the
    one-time interpreter boot; a heavy part with many fillets can be seconds.
 5. **One engine per isolate.** `enginePromise` is a module global, so the
-   ~123 ms boot and 32 MB are paid once and reused; `/render` calls
+   ~147 ms boot and 32 MB are paid once and reused; `/render` calls
    `engine.reset()` afterwards so the next request starts from the same
    footprint.
 6. **`pySrc: 'lite'`.** The `upstream` source layer (verbatim upstream
