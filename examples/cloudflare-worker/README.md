@@ -68,11 +68,16 @@ Everything below was run locally against **workerd** via `wrangler dev`
 The numbers are identical to the Node leg (`node test/headless-node.mjs`),
 which stays the authoritative regression test.
 
-**Not verified**: an actual `wrangler deploy` to Cloudflare's edge (no account
-in this environment). Everything up to and including `wrangler deploy
---dry-run` is green, and `wrangler dev` runs the real workerd binary — the
-same runtime, the same restrictions — so the remaining risk is account/limits
-configuration, not code.
+**Edge-verified** (2026-08-22): `wrangler deploy` to a real Cloudflare
+account succeeded (`Total Upload: 30075.63 KiB / gzip: 9377.62 KiB`, startup
+validation 4 ms) and the full smoke suite passed against the deployed
+`*.workers.dev` URL (`BASE=https://<name>.workers.dev node scripts/smoke.mjs`)
+— all four scenarios, 51.5 MB in the isolate, geometry byte-identical to the
+Node and local-workerd legs. Warm request round-trip for a `Box` render is
+~90–100 ms; a cold isolate adds ~2 s (wasm instantiation + MicroPython boot,
+paid once per isolate). One edge-only quirk: the in-response `timings` fields
+read 0 on deployed Workers because Cloudflare freezes `Date.now()` during
+synchronous CPU work (Spectre mitigation) — measure latency client-side.
 
 ## Memory and timing
 
