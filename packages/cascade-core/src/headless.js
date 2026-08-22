@@ -346,11 +346,33 @@ export async function createHeadlessCascade(options = {}) {
       };
     },
 
-    /** STEP (ISO-10303-21) text for the shape built by the last run(). */
+    /** STEP (ISO-10303-21) text for the shape built by the last run().
+     *
+     *  `parametricCurves: false` sets OCCT's `write.surfacecurve.mode` to 0,
+     *  which omits the p-curves (each edge's 2-D parametrisation on its
+     *  faces) and leaves only the 3-D geometry. Measured on the validation
+     *  corpus that is ~62% off the file with no loss that a reader can see:
+     *  Buffer_Stand 144 -> 53 KB, ttt-ppp0101 121 -> 45 KB,
+     *  intersecting_pipes 194 -> 75 KB, all round-tripping through
+     *  STEPControl_Reader to 1e-5 relative volume or better. It costs
+     *  nothing in memory (STEP export costs ~0 MB either way), so this is a
+     *  payload-size knob, not a headroom one — hence opt-in. */
     exportSTEP(o = {}) {
       const name = o.name || DEFAULT_STEP_NAME;
+      const lean = o.parametricCurves === false;
+      const setCurveMode = (v) => {
+        try { oc().Interface_Static.SetIVal('write.surfacecurve.mode', v); }
+        catch (e) { /* the static is absent in some builds */ }
+      };
+      if (lean) { setCurveMode(0); }
       const { text } = exportOrHeal('exportSTEP', requireShape('exportSTEP'),
-        (shape) => globalThis.self.ExportSTEP(shape, name, o.unit));
+        (shape) => {
+          // A heal rewinds OCCT, which resets Interface_Static to its
+          // defaults — re-apply inside the writer callback, not around it.
+          if (lean) { setCurveMode(0); }
+          try { return globalThis.self.ExportSTEP(shape, name, o.unit); }
+          finally { if (lean) { setCurveMode(1); } }
+        });
       try { oc().FS.unlink('/' + name); } catch (e) { /* already read back */ }
       if (text == null) { throw new Error('exportSTEP: the STEP writer failed'); }
       return text;

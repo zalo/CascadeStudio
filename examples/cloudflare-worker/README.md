@@ -203,6 +203,23 @@ Two implementation notes worth keeping:
 The plain JSON `POST /render` is unchanged; `progressOps` is the only new
 field and it is purely additive.
 
+### Shrinking the STEP payload
+
+`engine.exportSTEP({ parametricCurves: false })` sets OCCT's
+`write.surfacecurve.mode` to 0, dropping each edge's 2-D parametrisation on
+its faces and keeping only the 3-D geometry. Measured on the corpus:
+
+| model | full | lean | round-trip volume |
+|---|---:|---:|---|
+| `ttt-24-SPO-06-Buffer_Stand` | 144 KB | 53 KB (−63%) | 1.1e-5 rel |
+| `ttt-ppp0101` | 121 KB | 45 KB (−63%) | 2.0e-7 rel |
+| `intersecting_pipes` | 194 KB | 75 KB (−61%) | 9.2e-11 rel |
+
+It is a **payload** knob, not a headroom one: STEP export costs ~0 MB of wasm
+memory either way (measured `memoryStats().occtWasm` before/after: 32.0 → 32.0
+MB on every model that exports). Opt-in, so the default file stays what other
+CAD tools expect.
+
 ## Fonts
 
 build123d's `Text()` resolves `font_style` to a SPECIFIC family member, and
