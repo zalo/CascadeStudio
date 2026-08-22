@@ -56,7 +56,7 @@ work, so its own `timings` read 0. Memory is what the isolate reports.
 | `examples/build123d_logo` | text + sketches | 1.6 s | 96.4 MB | 314 KB |
 | `examples/clock` | `FontStyle.BOLD` + 2-D fillets | 20.9 s | 65.0 MB | 787 KB |
 | `examples/heat_exchanger` | ~1000 ops | 72.0 s | 86.6 MB | 3.77 MB |
-| `examples/bicycle_tire` | wrap + thicken, 1081 solids | **422** | 163.3 MB | — |
+| `examples/bicycle_tire` | wrap + thicken, 1081 solids | **422 / 503** | 163.3 MB | — |
 
 The first request into a cold isolate adds ~2 s. All of these run in ONE
 isolate, in that order: nothing poisons anything downstream of it any more
