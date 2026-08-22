@@ -1,8 +1,15 @@
-// headless-probe.mjs — ad-hoc single-model probe over the headless bundle.
+// headless-probe.mjs — run validation-corpus models through the headless
+// engine in plain Node, the fast inner loop for anything that only shows up
+// outside the browser (the Cloudflare ladder's failures all reproduce here).
 //
-//   node test/headless-probe.mjs <manifest-id> [--step] [--profile]
+//   node test/headless-probe.mjs <manifest-id> [<manifest-id> …] [--step]
 //
-// Prints eval result, errors, and memoryStats around each export phase.
+// Prints eval time / ok / shape count / errors, and with --step the STEP
+// export plus the occtWasm delta around it. Several ids in one invocation
+// share ONE engine, which is what a Cloudflare isolate does — that is how
+// the "one corrupting model poisons every later export" behaviour shows up.
+//
+// See test/headless-node.mjs for the assertions; this one only reports.
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -43,7 +50,6 @@ for (const id of ids) {
     + '  occt ' + mb(m0.occtWasm) + ' MB  py ' + mb(m0.pythonWasm) + ' MB');
   for (const e of r.errors) { console.log('  ERROR: ' + String(e).split('\n').slice(0, 6).join('\n         ')); }
   if (!doStep || !r.ok) { continue; }
-  globalThis.self._csStepPhaseLog = [];
   const t1 = Date.now();
   let step = null;
   try { step = engine.exportSTEP(); }
@@ -51,9 +57,6 @@ for (const id of ids) {
   const m1 = engine.memoryStats();
   console.log('  step ' + (Date.now() - t1) + ' ms  bytes=' + (step ? step.length : 0)
     + '  occt ' + mb(m1.occtWasm) + ' MB  (delta ' + mb(m1.occtWasm - m0.occtWasm) + ' MB)');
-  for (const [label, bytes] of (globalThis.self._csStepPhaseLog || [])) {
-    console.log('      ' + label.padEnd(28) + mb(bytes) + ' MB');
-  }
   engine.reset();
 }
 process.exit(0);
