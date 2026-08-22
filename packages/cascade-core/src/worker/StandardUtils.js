@@ -1,5 +1,7 @@
 // Miscellaneous Helper Functions used in the Standard Library
 
+import { csEmit } from './Emit.js';
+
 /** Utility class for caching, hashing, and misc helper functions used by the CAD worker. */
 class CascadeStudioUtils {
   constructor() {
@@ -61,7 +63,7 @@ class CascadeStudioUtils {
       ? (self.getPythonUserLine ? self.getPythonUserLine() : 0)
       : CascadeStudioUtils.getCallingLocation()[0];
     self.currentLineNumber = this.currentLineNumber;
-    postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber++, "opType": fnName } });
+    csEmit({ "type": "Progress", "payload": { "opNumber": this.opNumber++, "opType": fnName } });
     self.opNumber = this.opNumber;
 
     let toReturn = null;
@@ -105,7 +107,7 @@ class CascadeStudioUtils {
     // Record this op so the NEXT CacheOp call (or flushHistoryStep) can snapshot its result
     this._pendingHistoryOp = { fnName, lineNumber: this.currentLineNumber };
 
-    postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber, "opType": null } });
+    csEmit({ "type": "Progress", "payload": { "opNumber": this.opNumber, "opType": null } });
     return toReturn;
   }
 
@@ -125,10 +127,10 @@ class CascadeStudioUtils {
       (self.evalLanguage === 'python' && self.getPythonUserLine)
         ? self.getPythonUserLine() : 0;
     self.currentLineNumber = this.currentLineNumber;
-    postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber++, "opType": fnName } });
+    csEmit({ "type": "Progress", "payload": { "opNumber": this.opNumber++, "opType": fnName } });
     self.opNumber = this.opNumber;
     this._pendingHistoryOp = { fnName, lineNumber: this.currentLineNumber };
-    postMessage({ "type": "Progress", "payload": { "opNumber": this.opNumber, "opType": null } });
+    csEmit({ "type": "Progress", "payload": { "opNumber": this.opNumber, "opType": null } });
     return this.currentLineNumber;
   }
 

@@ -9740,9 +9740,20 @@ def export_brep(to_export, file_path):
     return bool(text)
 
 
-def export_step(*args, **kwargs):
-    print('build123d-lite: export_step is a no-op in the browser')
-    return True
+def export_step(to_export, file_path, unit=None, write_pcurves=True,
+                precision_mode=None, **kwargs):
+    """Export the shape to a STEP file (build123d exporters3d.export_step,
+    STEPControl_Writer + STEPControl_AsIs). COMPROMISE(mesher): like
+    export_brep, the file lands in the worker's in-memory Emscripten FS
+    rather than on disk — the headless entry point reads it back with
+    engine.readFile(), and in the browser the STEP text is what
+    CascadeAPI/the download path already consumes. Upstream's
+    write_pcurves/precision_mode knobs are accepted and ignored (the
+    Interface_Static keys behind them are not bound in this wasm build);
+    unit= is honoured via write.step.unit. Returns True like upstream."""
+    text = w.ExportSTEP(_topo(to_export), str(file_path).replace('/', '_'),
+                        str(unit) if unit is not None else None)
+    return bool(text)
 
 
 def export_gltf(*args, **kwargs):

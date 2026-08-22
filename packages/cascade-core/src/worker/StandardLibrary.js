@@ -1,4 +1,5 @@
 import { createGordonEngine } from './GordonSurface.js';
+import { csEmit } from './Emit.js';
 
 // Cascade Studio Standard Library
 // Adding new standard library features and functions:
@@ -515,10 +516,10 @@ function Transform(translation, rotation, scale, shapes) {
   let args = arguments;
   return self.CacheOp(arguments, "Transform", () => {
     if (args.length == 4) {
-      postMessage({ "type": "createTransformHandle", payload: { translation: translation, rotation: rotation, scale: scale, lineAndColumn: self.getCallingLocation() } });
+      csEmit({ "type": "createTransformHandle", payload: { translation: translation, rotation: rotation, scale: scale, lineAndColumn: self.getCallingLocation() } });
       return Translate(translation, Rotate(rotation[0], rotation[1], Scale(scale, shapes)));
     } else {
-      postMessage({ "type": "createTransformHandle", payload: { translation: [0, 0, 0], rotation: [[0, 1, 0], 1], scale: 1, lineAndColumn: self.getCallingLocation() } });
+      csEmit({ "type": "createTransformHandle", payload: { translation: [0, 0, 0], rotation: [[0, 1, 0], 1], scale: 1, lineAndColumn: self.getCallingLocation() } });
       return translation;
     }
   });
@@ -1472,7 +1473,7 @@ function Sketch(startingPoint, plane) {
 // --- GUI Controls ---
 
 function SaveFile(filename, fileURL) {
-  postMessage({
+  csEmit({
     "type": "saveFile",
     payload: { filename: filename, fileURL: fileURL }
   });
@@ -1485,29 +1486,29 @@ function Slider(name = "Val", defaultValue = 0.5, min = 0.0, max = 1.0, realTime
     precision = 2;
   } else if (precision % 1) { console.error("Slider precision must be an integer"); }
 
-  postMessage({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime, step: step, dp: precision } });
+  csEmit({ "type": "addSlider", payload: { name: name, default: defaultValue, min: min, max: max, realTime: realTime, step: step, dp: precision } });
   return self.GUIState[name];
 }
 
 function Button(name = "Action") {
-  postMessage({ "type": "addButton", payload: { name: name } });
+  csEmit({ "type": "addButton", payload: { name: name } });
 }
 
 function Checkbox(name = "Toggle", defaultValue = false) {
   if (!(name in self.GUIState)) { self.GUIState[name] = defaultValue; }
-  postMessage({ "type": "addCheckbox", payload: { name: name, default: defaultValue } });
+  csEmit({ "type": "addCheckbox", payload: { name: name, default: defaultValue } });
   return self.GUIState[name];
 }
 
 function TextInput(name = "Text", defaultValue = "", realTime = false) {
   if (!(name in self.GUIState)) { self.GUIState[name] = defaultValue; }
-  postMessage({ "type": "addTextbox", payload: { name: name, default: defaultValue, realTime: realTime } });
+  csEmit({ "type": "addTextbox", payload: { name: name, default: defaultValue, realTime: realTime } });
   return self.GUIState[name];
 }
 
 function Dropdown(name = "Dropdown", defaultValue = "", options = {}, realTime = false) {
   if (!(name in self.GUIState)) { self.GUIState[name] = defaultValue; }
-  postMessage({ "type": "addDropdown", payload: { name: name, default: defaultValue, options: options, realTime: realTime } });
+  csEmit({ "type": "addDropdown", payload: { name: name, default: defaultValue, options: options, realTime: realTime } });
   return self.GUIState[name];
 }
 
@@ -3228,6 +3229,34 @@ function ExportBREP(shape, filename) {
   return self.oc.FS.readFile("/" + filename, { encoding: "utf8" });
 }
 
+/** Write the shape as a STEP (ISO-10303-21) file into the worker's Emscripten
+ *  MEMFS and return the file's text content — the engine behind
+ *  build123d-lite's export_step. Same calls as FileUtils.saveShapeSTEP, but
+ *  for an arbitrary shape and a caller-chosen MEMFS name so a script can
+ *  export several parts and the host can read them back by name. */
+function ExportSTEP(shape, filename, unit) {
+  if (!shape || shape.IsNull()) { console.error("ExportSTEP: input shape is null!"); return null; }
+  const oc = self.oc;
+  if (unit) {
+    // STEPControl_Writer reads the length unit out of the static interface
+    // parameters, exactly like build123d's export_step(unit=...)
+    try { oc.Interface_Static.SetCVal("write.step.unit", String(unit)); }
+    catch (e) { console.log("ExportSTEP: could not set write.step.unit=" + unit); }
+  }
+  const writer = new oc.STEPControl_Writer_1();
+  const transferred = writer.Transfer_1(shape,
+    oc.STEPControl_StepModelType.STEPControl_AsIs, true,
+    new oc.Message_ProgressRange_1());
+  if (transferred !== oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
+    console.error("ExportSTEP: transfer to the STEP writer failed"); return null;
+  }
+  const written = writer.Write("/" + filename);
+  if (written !== oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
+    console.error("ExportSTEP: STEP write failed"); return null;
+  }
+  return oc.FS.readFile("/" + filename, { encoding: "utf8" });
+}
+
 /** Read a shape from a BREP file in the worker's MEMFS (BRepTools::Read with
  *  a BRep_Builder). fileText, when given, (re)creates the MEMFS file first.
  *  Returns null when the file is missing or unreadable — the engine behind
@@ -4392,6 +4421,7 @@ class CascadeStudioStandardLibrary {
     self.PipeShellSweep = PipeShellSweep;
     self.ExportSTL = ExportSTL;
     self.ExportBREP = ExportBREP;
+    self.ExportSTEP = ExportSTEP;
     self.ImportBREP = ImportBREP;
     self.DraftAngleFaces = DraftAngleFaces;
     self.FaceWithHoles = FaceWithHoles;

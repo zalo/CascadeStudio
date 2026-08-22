@@ -27,7 +27,8 @@
 	],
 	"exports": {
 		".": "./src/index.js",
-		"./worker": "./dist/cascade-worker.js"
+		"./worker": "./dist/cascade-worker.js",
+		"./headless": "./src/headless.js"
 	},
 	"files": [
 		"src/",

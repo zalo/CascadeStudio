@@ -133,6 +133,7 @@ export const USED_OCCT_SYMBOLS = [
   "Handle_TopTools_HSequenceOfShape_2",
   "IFSelect_ReturnStatus",
   "IGESControl_Reader_1",
+  "Interface_Static",
   "LocOpe_DPrism_2",
   "Message_ProgressRange_1",
   "OCJS",

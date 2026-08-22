@@ -39,6 +39,7 @@
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
 import { bootstrapUpstreamB123d, PYTOPO_DEFAULT,
   rewriteListConcatCoercion } from './UpstreamB123d.js';
+import { instantiateWasmSpec } from './WasmAssets.js';
 
 /** MicroPython GC heap. Fixed at boot (it does not grow); build123d-lite +
  *  a typical model's Python-side bookkeeping fit comfortably — shapes
@@ -304,8 +305,13 @@ export function ensureMicroPythonRuntime(pySrc) {
 async function _bootstrap(srcKind) {
   const t0 = performance.now();
   const isBuilt = typeof ESBUILD !== 'undefined';
-  // Node harnesses (experiments/upstream-on-micropython) run this module
-  // outside a worker: they pre-set the interpreter locations explicitly.
+  // Node harnesses (experiments/upstream-on-micropython) and the headless
+  // entry point run this module outside a worker: they pre-set the
+  // interpreter location explicitly via `self._csMicroPythonLocate`, either
+  // as `{mjsURL, wasmURL}` (node paths — dynamic import + Emscripten's own
+  // fs read) or as `{mod, wasm}` with an already-imported glue namespace and
+  // a WebAssembly.Module / byte buffer (Cloudflare Workers, where neither a
+  // URL import nor WebAssembly.compile is allowed).
   // Otherwise PREFER the custom-patched micropython-cs artifacts (vendored
   // in packages/cascade-core/vendor/micropython-cs/, copied to dist as
   // micropython-cs.mjs/.wasm when present — sys._getframe, nested-tuple
@@ -332,17 +338,27 @@ async function _bootstrap(srcKind) {
         },
       ];
   let mod = null, wasmURL = null, artifactKind = null, importErr = null;
-  for (const cand of candidates) {
-    try {
-      mod = await import(/* webpackIgnore: true */ cand.mjs);
-      wasmURL = cand.wasm;
-      artifactKind = cand.kind;
-      break;
-    } catch (e) {
-      importErr = e;
-      if (cand.kind === 'custom') {
-        console.log('[pyruntime] micropython: custom micropython-cs artifacts '
-          + 'not present, using the stock settrace artifacts');
+  if (locate && locate.mod) {
+    // Headless hosts hand the ALREADY-IMPORTED glue namespace over: workerd
+    // forbids dynamic import of a URL entirely, and Node has no fetchable
+    // URL for a file on disk. `locate.wasm` may then be a WebAssembly.Module
+    // (Cloudflare module binding) or the raw bytes (Node).
+    mod = locate.mod;
+    wasmURL = locate.wasm;
+    artifactKind = locate.kind || 'provided';
+  } else {
+    for (const cand of candidates) {
+      try {
+        mod = await import(/* webpackIgnore: true */ cand.mjs);
+        wasmURL = cand.wasm;
+        artifactKind = cand.kind;
+        break;
+      } catch (e) {
+        importErr = e;
+        if (cand.kind === 'custom') {
+          console.log('[pyruntime] micropython: custom micropython-cs artifacts '
+            + 'not present, using the stock settrace artifacts');
+        }
       }
     }
   }
@@ -355,12 +371,26 @@ async function _bootstrap(srcKind) {
   }
   const tFetched = performance.now();
 
-  const mp = await load({
-    url: wasmURL,
+  const loadOptions = {
     heapsize: MP_HEAP_BYTES,
     stdout: (line) => console.log(line),
     stderr: (line) => console.log('[py-stderr] ' + line),
-  });
+  };
+  if (typeof wasmURL === 'string' || wasmURL == null) {
+    loadOptions.url = wasmURL;
+  } else {
+    // A compiled Module / raw bytes: Emscripten's instantiateWasm hook is
+    // the only entry point that takes those. The vendored micropython.mjs
+    // carries a one-statement patch that forwards this option into its
+    // Module (see vendor/micropython-cs/PROVENANCE.md).
+    loadOptions.instantiateWasm = (imports, receiveInstance) => {
+      instantiateWasmSpec(wasmURL, imports).then((result) => {
+        receiveInstance(result.instance, result.module);
+      });
+      return {}; // Emscripten only checks that the hook did not throw
+    };
+  }
+  const mp = await load(loadOptions);
   const tInitialized = performance.now();
 
   // JS side of the guarded call bridge. Everything lite invokes on `w` runs

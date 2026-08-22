@@ -22,10 +22,26 @@ require('./generate-occt-symbols.cjs');
 console.log('[cascade-core] Bundling worker...');
 execFileSync(npx, [
   'esbuild',
-  path.join(pkgRoot, 'src', 'worker', 'CascadeWorker.js'),
+  path.join(pkgRoot, 'src', 'worker', 'worker-entry.js'),
   '--bundle', '--minify', '--keep-names', '--sourcemap',
   '--format=esm', '--target=es2022',
   '--outfile=' + path.join(distDir, 'cascade-worker.js'),
+  '--external:fs', '--external:path', '--external:os',
+  '--external:module', '--external:worker_threads',
+  '--loader:.wasm=file',
+  '--define:ESBUILD=true',
+], { cwd: monoRoot, stdio: 'inherit' });
+
+// 1b. Bundle the HEADLESS entry point (Node / Deno / Bun / Cloudflare
+// Workers). Same engine, no browser: assets are injected by the host, so the
+// wasm/fonts stay external and this file is pure JS.
+console.log('[cascade-core] Bundling headless entry...');
+execFileSync(npx, [
+  'esbuild',
+  path.join(pkgRoot, 'src', 'headless.js'),
+  '--bundle', '--minify', '--keep-names', '--sourcemap',
+  '--format=esm', '--target=es2022',
+  '--outfile=' + path.join(distDir, 'cascade-headless.mjs'),
   '--external:fs', '--external:path', '--external:os',
   '--external:module', '--external:worker_threads',
   '--loader:.wasm=file',

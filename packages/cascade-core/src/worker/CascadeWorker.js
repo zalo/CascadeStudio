@@ -1,15 +1,34 @@
-// CascadeWorker - Main CAD worker entry point (cascade-core)
+// CascadeWorker - Main CAD engine class (cascade-core)
+//
+// This module defines the engine and has NO side effects at import time.
+// Two entry points drive it:
+//   * src/worker/worker-entry.js — the browser Web Worker bundle
+//     (dist/cascade-worker.js): constructs one, installs the onmessage
+//     router, and signals `startupCallback`.
+//   * src/headless.js — the environment-agnostic embedding used by Node and
+//     Cloudflare Workers: constructs one with `installRouter: false`, an
+//     asset provider and an error collector, and calls the methods directly.
 
 import { CascadeStudioStandardLibrary } from './StandardLibrary.js';
 import { CascadeStudioMesher } from './ShapeToMesh.js';
 import { CascadeStudioFileIO } from './FileUtils.js';
 import { USED_OCCT_SYMBOLS } from './UsedOCCTSymbols.generated.js';
 import { ensurePythonRuntime } from './PythonRuntime.js';
+import { csEmit, csEmitAsync, csDeferError } from './Emit.js';
+import { instantiateWasmSpec, assetToArrayBuffer } from './WasmAssets.js';
 
 /** Main CAD worker class. Initializes OpenCascade WASM, loads dependencies,
- *  and orchestrates evaluation/rendering of user CAD code. */
+ *  and orchestrates evaluation/rendering of user CAD code.
+ *
+ *  `options`:
+ *    - `assets`      — see WasmAssets.js / headless.js: `{ occtWasm, fonts,
+ *                      loadAsset }`. Omitted in the browser worker, which
+ *                      keeps fetching the files next to the bundle.
+ *    - `installRouter` (default true) — install the `onmessage` router and
+ *                      emit `startupCallback` once OCCT is up. */
 class CascadeStudioWorker {
-  constructor() {
+  constructor(options = {}) {
+    this.options = options;
     // Define persistent global variables on self for eval() access
     self.oc = null;
     self.externalShapes = {};
@@ -139,13 +158,13 @@ class CascadeStudioWorker {
         // Circular objects (e.g. Brython internals) must not break logging
         try { return JSON.stringify(a); } catch (e) { return String(a); }
       }).join(' ');
-      setTimeout(() => { postMessage({ type: "log", payload: message }); }, 0);
+      csEmitAsync({ type: "log", payload: message });
       realLog.apply(console, args);
     };
 
     console.error = function (err, url, line, colno, errorObj) {
-      postMessage({ type: "resetWorking" });
-      setTimeout(() => {
+      csEmit({ type: "resetWorking" });
+      csDeferError(() => {
         if (err && err.message) {
           err.message = "INTERNAL OPENCASCADE ERROR DURING GENERATE: " + err.message;
           throw err;
@@ -156,7 +175,7 @@ class CascadeStudioWorker {
           throw new Error("INTERNAL OPENCASCADE ERROR: " + (self.describeOCCTException
             ? self.describeOCCTException(err) : err));
         }
-      }, 0);
+      });
       realError.apply(console, arguments);
     };
   }
@@ -169,7 +188,7 @@ class CascadeStudioWorker {
       const ocMod = await import('opencascade.js/dist/cascadestudio.js');
       initOpenCascade = ocMod.default;
     } catch(e) {
-      postMessage({ type: "log", payload: "ERROR loading opencascade: " + e.message });
+      csEmit({ type: "log", payload: "ERROR loading opencascade: " + e.message });
       throw e;
     }
 
@@ -177,7 +196,7 @@ class CascadeStudioWorker {
       const otMod = await import('opentype.js/dist/opentype.module.js');
       opentype = otMod.default;
     } catch(e) {
-      postMessage({ type: "log", payload: "ERROR loading opentype: " + e.message });
+      csEmit({ type: "log", payload: "ERROR loading opentype: " + e.message });
       throw e;
     }
 
@@ -185,7 +204,7 @@ class CascadeStudioWorker {
       const ppMod = await import('potpack');
       potpack = ppMod.default || ppMod.potpack || ppMod;
     } catch(e) {
-      postMessage({ type: "log", payload: "ERROR loading potpack: " + e.message });
+      csEmit({ type: "log", payload: "ERROR loading potpack: " + e.message });
       throw e;
     }
 
@@ -208,6 +227,9 @@ class CascadeStudioWorker {
       }
       return path;
     };
+    // Headless hosts hand the wasm over as bytes (Node) or as an already
+    // compiled Module (Cloudflare Workers) — see WasmAssets.js.
+    const occtSpec = (this.options.assets && this.options.assets.occtWasm) || null;
     try {
       const openCascade = await initOpenCascade({
         locateFile: wasmPath,
@@ -225,17 +247,9 @@ class CascadeStudioWorker {
         // Standard_Failure's message directly (see its layout notes), turning
         // "the kernel threw '6454200'" into OCCT's own diagnostic.
         instantiateWasm(imports, receiveInstance) {
-          const url = wasmPath('cascadestudio.wasm');
           (async () => {
-            let result;
-            try {
-              result = await WebAssembly.instantiateStreaming(fetch(url), imports);
-            } catch (streamError) {
-              // wrong MIME type / no streaming support: fall back exactly like
-              // Emscripten's own instantiateAsync does
-              const bytes = await (await fetch(url)).arrayBuffer();
-              result = await WebAssembly.instantiate(bytes, imports);
-            }
+            const result = await instantiateWasmSpec(
+              occtSpec || wasmPath('cascadestudio.wasm'), imports);
             for (const value of Object.values(result.instance.exports)) {
               if (value instanceof WebAssembly.Memory) { self.ocMemory = value; break; }
             }
@@ -257,55 +271,74 @@ class CascadeStudioWorker {
         const message = "OCCT build is missing " + missingSymbols.length +
           " symbol(s) used by the standard library (overload suffixes may " +
           "have been renumbered by an OCCT upgrade): " + missingSymbols.join(", ");
-        postMessage({ type: "error", payload: message });
+        csEmit({ type: "error", payload: message });
         console.error(message);
       }
 
       // Route incoming messages to registered handlers. Handlers may return
       // a Promise (e.g. meshing that waits on an async Python evaluation);
       // the response is posted once it resolves.
-      onmessage = function (e) {
-        const respond = (response) => {
-          if (response !== undefined || e.data.requestId) {
-            const msg = { "type": e.data.type, payload: response };
-            if (e.data.requestId) { msg.requestId = e.data.requestId; }
-            postMessage(msg);
+      //
+      // Headless embedders (installRouter: false) have no message loop at
+      // all — src/headless.js awaits the handlers directly.
+      if (this.options.installRouter !== false) {
+        onmessage = function (e) {
+          const respond = (response) => {
+            if (response !== undefined || e.data.requestId) {
+              const msg = { "type": e.data.type, payload: response };
+              if (e.data.requestId) { msg.requestId = e.data.requestId; }
+              csEmit(msg);
+            }
+          };
+          let response = self.messageHandlers[e.data.type](e.data.payload);
+          if (response instanceof Promise) {
+            response.then(respond, (err) => {
+              csEmit({ type: "resetWorking" });
+              csDeferError(() => { throw err; });
+            });
+          } else {
+            respond(response);
           }
         };
-        let response = self.messageHandlers[e.data.type](e.data.payload);
-        if (response instanceof Promise) {
-          response.then(respond, (err) => {
-            postMessage({ type: "resetWorking" });
-            setTimeout(() => { throw err; }, 0);
-          });
-        } else {
-          respond(response);
-        }
-      };
+      }
 
       // Signal that the worker is ready
-      postMessage({ type: "startupCallback" });
+      csEmit({ type: "startupCallback" });
     } catch(e) {
-      postMessage({ type: "log", payload: "ERROR loading OpenCascade WASM: " + e.message });
+      csEmit({ type: "log", payload: "ERROR loading OpenCascade WASM: " + e.message });
       throw e;
     }
   }
 
   /** Preload the various fonts available via Text3D. */
-  _loadFonts(opentype) {
+  async _loadFonts(opentype) {
     const fontBase = typeof ESBUILD !== 'undefined' ? './fonts/' : '../../fonts/';
-    const preloadedFonts = [
-      fontBase + 'Roboto.ttf',
-      fontBase + 'Papyrus.ttf',
-      fontBase + 'Consolas.ttf',
-      fontBase + 'LiberationSans-Regular.ttf',
-      fontBase + 'FreeSans.ttf',
-      fontBase + 'FreeSansBold.ttf',
-      fontBase + 'FreeSansOblique.ttf',
-      fontBase + 'FreeSansBoldOblique.ttf'
-    ];
+    const preloadedFonts = CascadeStudioWorker.FONT_NAMES.map((n) => fontBase + n + '.ttf');
     self.loadedFonts = {};
     self.fontKernPairs = {};
+
+    // Headless path: the embedder supplies the TTF bytes (there is no URL to
+    // fetch in Node or workerd). Fonts are OPTIONAL — a headless run that
+    // never calls Text()/Text3D() does not need any, and missing ones are
+    // simply absent from self.loadedFonts.
+    const assets = this.options.assets;
+    if (assets && (assets.fonts || assets.loadAsset)) {
+      for (const name of CascadeStudioWorker.FONT_NAMES) {
+        let buf = null;
+        try {
+          buf = await assetToArrayBuffer(assets, 'fonts', name, 'fonts/' + name + '.ttf');
+        } catch (e) { buf = null; }
+        if (!buf) { continue; }
+        try {
+          self.loadedFonts[name] = opentype.parse(buf);
+          self.fontKernPairs[name] = CascadeStudioWorker._parseKernTable(buf);
+        } catch (e) {
+          console.log('Failed to parse font ' + name + ': ' + (e && e.message));
+        }
+      }
+      return;
+    }
+
     return Promise.all(preloadedFonts.map((fontURL) => new Promise((resolve) => {
       // { isUrl: true } forces XHR instead of require('fs') since workers lack `window`
       opentype.load(fontURL, function (err, font) {
@@ -415,10 +448,10 @@ class CascadeStudioWorker {
     try {
       eval(payload.code);
     } catch (e) {
-      setTimeout(() => {
+      csDeferError(() => {
         e.message = "Line " + self.currentLineNumber + ": " + self.currentOp + "() encountered  " + e.message;
         throw e;
-      }, 0);
+      });
     } finally {
       this._finishEvaluation();
     }
@@ -434,7 +467,7 @@ class CascadeStudioWorker {
       const runtime = await ensurePythonRuntime(payload.pyRuntime, payload.pySrc);
       runtime.run(payload.code);
     } catch (e) {
-      setTimeout(() => { throw e; }, 0);
+      csDeferError(() => { throw e; });
     } finally {
       this._finishEvaluation();
     }
@@ -447,7 +480,7 @@ class CascadeStudioWorker {
     self.flushHistoryStep();
 
     // Send lightweight history metadata to main thread (no shape data)
-    postMessage({
+    csEmit({
       type: "modelHistory",
       payload: self.modelHistory.map((step, i) => ({
         index: i,
@@ -457,8 +490,8 @@ class CascadeStudioWorker {
       }))
     });
 
-    postMessage({ type: "log", payload: "Cache: " + self.cacheHits + " hits, " + self.cacheMisses + " misses" });
-    postMessage({ type: "resetWorking" });
+    csEmit({ type: "log", payload: "Cache: " + self.cacheHits + " hits, " + self.cacheMisses + " misses" });
+    csEmit({ type: "resetWorking" });
     // Clean cache; remove unused objects. In low-memory mode the pruned
     // entries' kernel objects are DELETED (they are provably from previous
     // evaluations: unused this run, and the previous run's scene/history are
@@ -507,6 +540,34 @@ class CascadeStudioWorker {
     return this._combineAndRenderShapes(payload);
   }
 
+  /** Accumulate `sceneShapes` into `self.currentShape` WITHOUT triangulating
+   *  anything. This is the headless BREP/STEP path: meshing is by far the
+   *  most memory-hungry stage (BRepMesh_IncrementalMesh attaches a
+   *  Poly_Triangulation to every face), and an exporter that writes exact
+   *  boundary representation has no use for it. Returns the number of
+   *  top-level shapes that went in. */
+  combineShapes() {
+    const oc = self.oc;
+    if (self.currentShape) {
+      try {
+        if (self.currentShape.$$ && self.currentShape.$$.ptr) { self.currentShape.delete(); }
+      } catch (e) { /* best effort */ }
+      self.currentShape = null;
+    }
+    self.currentShape = new oc.TopoDS_Compound();
+    const builder = new oc.BRep_Builder();
+    builder.MakeCompound(self.currentShape);
+    let count = 0;
+    for (const shape of self.sceneShapes) {
+      if (!shape || !shape.IsNull || shape.IsNull() || !shape.ShapeType) { continue; }
+      builder.Add(self.currentShape, shape);
+      count++;
+    }
+    try { builder.delete(); } catch (e) { /* best effort */ }
+    self.sceneShapes = [];
+    return count;
+  }
+
   /** Synchronous meshing of the accumulated sceneShapes. */
   /** Labeled wasm-heap sample into the attribution buffer (see OcpShim).
    *  With self._csMemFreeProbe set, also counts FREE arena space by
@@ -546,7 +607,7 @@ class CascadeStudioWorker {
     // These flow into the mesh payload so the viewport can map picks → code lines.
     let faceHashToShapeIndex = {}; let edgeHashToShapeIndex = {};
     let shapeLines = [];
-    postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Combining Shapes" } });
+    csEmit({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Combining Shapes" } });
 
     // If there are sceneShapes, iterate through them and add them to currentShape
     if (self.sceneShapes.length > 0) {
@@ -579,19 +640,19 @@ class CascadeStudioWorker {
       }
 
       // Use ShapeToMesh to output triangulated faces and discretized edges to the 3D Viewport
-      postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Triangulating Faces" } });
+      csEmit({ "type": "Progress", "payload": { "opNumber": self.opNumber++, "opType": "Triangulating Faces" } });
       let facesAndEdges = self.ShapeToMesh(self.currentShape,
         payload.maxDeviation || 0.1, fullShapeEdgeHashes, fullShapeFaceHashes,
         faceHashToShapeIndex, edgeHashToShapeIndex);
       CascadeStudioWorker._memMark('mesh-end');
       try { sceneBuilder.delete(); } catch (e) { /* best effort */ }
       self.sceneShapes = [];
-      postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
+      csEmit({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
       return [facesAndEdges, payload.sceneOptions, shapeLines];
     } else {
       console.error("There were no scene shapes returned!");
     }
-    postMessage({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
+    csEmit({ "type": "Progress", "payload": { "opNumber": self.opNumber, "opType": "" } });
   }
 
   /** Triangulate and return the shapes from a specific modeling history step.
@@ -629,8 +690,12 @@ class CascadeStudioWorker {
   }
 }
 
-// Bootstrap the worker
-const worker = new CascadeStudioWorker();
-worker.init();
+/** The TTF families preloaded for Text3D/Text2D (build123d's Text uses the
+ *  FreeSans family). Headless embedders resolve these names through the
+ *  asset provider; the browser worker fetches `./fonts/<name>.ttf`. */
+CascadeStudioWorker.FONT_NAMES = [
+  'Roboto', 'Papyrus', 'Consolas', 'LiberationSans-Regular',
+  'FreeSans', 'FreeSansBold', 'FreeSansOblique', 'FreeSansBoldOblique',
+];
 
 export { CascadeStudioWorker };

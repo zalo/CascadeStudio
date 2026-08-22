@@ -81,6 +81,25 @@ are small in wasm engines) and `-O3` over `-Os` (~3% more, +18% wasm
 size). The real hot-loop win was BRIDGE-protocol work in the app tree
 (the variadic no-proxy fast path — b01 148 s → 18 s), not codegen.
 
+## Post-build glue patch (headless / Cloudflare Workers)
+
+`micropython.mjs` here carries ONE hand-applied edit on top of the build
+output, needed by the headless entry point (`src/headless.js`): the stock
+`loadMicroPython(options)` destructures a fixed option list and builds its
+own Emscripten `Module`, so there is no way to reach `Module.instantiateWasm`
+— which is the ONLY way to boot the interpreter on Cloudflare Workers, where
+wasm arrives as an already-compiled `WebAssembly.Module` binding and
+`WebAssembly.compile()` is forbidden. The patch is a single statement
+appended right after the `let Module = {locateFile: …};` line:
+
+```js
+options.instantiateWasm && (Module.instantiateWasm = options.instantiateWasm);
+```
+
+Re-apply it after any rebuild (grep the .mjs for `options.instantiateWasm`).
+Everything else about the artifact is unchanged, and omitting the option
+keeps the original `url`-based path byte-for-byte.
+
 ## Build command
 
 ```bash

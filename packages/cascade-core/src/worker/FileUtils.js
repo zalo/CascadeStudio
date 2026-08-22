@@ -1,5 +1,7 @@
 // File Import and Export Utilities
 
+import { csEmit } from './Emit.js';
+
 /** Handles file import/export operations for the CAD worker. */
 class CascadeStudioFileIO {
   constructor() {
@@ -79,10 +81,10 @@ class CascadeStudioFileIO {
           if (lastImportedShape) {
             console.log("Imports complete, rendering shapes now...");
             let response = self.messageHandlers["combineAndRenderShapes"]({ maxDeviation: self.GUIState['MeshRes'] || 0.1 });
-            postMessage({ "type": "combineAndRenderShapes", payload: response });
+            csEmit({ "type": "combineAndRenderShapes", payload: response });
           }
         }
-        postMessage({ "type": "loadFiles", payload: extFiles });
+        csEmit({ "type": "loadFiles", payload: extFiles });
       });
     }
   }

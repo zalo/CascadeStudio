@@ -29,6 +29,13 @@ execFileSync(npx, [
   '--outdir=' + distDir, '--entry-names=[name]',
   '--external:fs', '--external:path', '--external:os',
   '--external:module', '--external:worker_threads',
+  // cascade-core's index.js lazily re-exports the HEADLESS entry point
+  // (Node/Cloudflare Workers). It drags in the whole worker — OCCT's
+  // Emscripten glue, the Python runtimes, build123d-lite — which the page
+  // must not pay for: the browser runs that code inside the Web Worker
+  // bundle instead. Keeping the dynamic import external means esbuild
+  // leaves it alone; it is never reached from the browser app.
+  '--external:cascade-core/headless',
   '--alias:openscad-parser=' + path.join(pkgRoot, 'lib', 'openscad-parser', 'openscad-parser.js'),
   '--alias:fs=' + nodeShim,
   '--alias:path=' + nodeShim,

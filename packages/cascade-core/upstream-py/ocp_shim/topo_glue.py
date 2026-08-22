@@ -289,9 +289,14 @@ def import_step(file_name):
     return res
 
 
-def export_step(*args, **kwargs):
-    print('build123d-lite: export_step is a no-op in the browser')
-    return True
+def export_step(to_export, file_path, unit=None, write_pcurves=True,
+                precision_mode=None, **kwargs):
+    """STEP into the worker MEMFS (STEPControl_Writer, same as lite's
+    export_step). COMPROMISE(mesher): the file lands in the in-memory
+    Emscripten FS; write_pcurves/precision_mode are accepted and ignored."""
+    text = w.ExportSTEP(_raw(to_export), str(file_path).replace('/', '_'),
+                        str(unit) if unit is not None else None)
+    return bool(text)
 
 
 def export_gltf(*args, **kwargs):
