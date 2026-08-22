@@ -1,0 +1,4 @@
+# Copied build artifacts (scripts/prepare-assets.cjs) — cascadestudio.wasm
+# alone is 27 MB.
+assets/
+.wrangler/

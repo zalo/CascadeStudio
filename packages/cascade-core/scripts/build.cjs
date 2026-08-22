@@ -36,17 +36,8 @@ execFileSync(npx, [
 // Workers). Same engine, no browser: assets are injected by the host, so the
 // wasm/fonts stay external and this file is pure JS.
 console.log('[cascade-core] Bundling headless entry...');
-execFileSync(npx, [
-  'esbuild',
-  path.join(pkgRoot, 'src', 'headless.js'),
-  '--bundle', '--minify', '--keep-names', '--sourcemap',
-  '--format=esm', '--target=es2022',
-  '--outfile=' + path.join(distDir, 'cascade-headless.mjs'),
-  '--external:fs', '--external:path', '--external:os',
-  '--external:module', '--external:worker_threads',
-  '--loader:.wasm=file',
-  '--define:ESBUILD=true',
-], { cwd: monoRoot, stdio: 'inherit' });
+execFileSync(process.execPath, [path.join(__dirname, 'build-headless.cjs')],
+  { cwd: monoRoot, stdio: 'inherit' });
 
 // 2. Copy OpenCascade WASM to dist/
 console.log('[cascade-core] Copying WASM...');

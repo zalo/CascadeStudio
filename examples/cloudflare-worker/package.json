@@ -1,0 +1,16 @@
+{
+  "name": "cascade-headless-cloudflare-example",
+  "version": "1.0.0",
+  "description": "Turn build123d Python into STEP/BREP/STL inside a Cloudflare Worker, using cascade-core headless.",
+  "scripts": {
+    "prepare-assets": "node scripts/prepare-assets.cjs",
+    "dev": "npm run prepare-assets && wrangler dev",
+    "deploy": "npm run prepare-assets && wrangler deploy",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.125.0"
+  },
+  "private": true,
+  "type": "module"
+}

@@ -67,17 +67,26 @@ for (const f of fs.readdirSync(fontDir)) {
 const { createHeadlessCascade } = await import(
   pathToFileURL(required(join(CORE_DIST, 'cascade-headless.mjs'))).href);
 
+// pysrc=upstream needs the 3.5 MB vendored upstream-build123d tree served to
+// the runtime as text. That extra payload (and ~2x the interpreter boot) is
+// exactly why headless DEFAULTS to lite — CS_PY_SRC=upstream re-measures it.
+const PY_SRC = process.env.CS_PY_SRC || 'lite';
+const upstreamPy = PY_SRC === 'upstream'
+  ? async (rel) => fs.readFileSync(join(CORE_DIST, 'upstream-b123d', rel), 'utf8')
+  : undefined;
+
 // ------------------------------------------------------------------ //
 section('boot');
 // ------------------------------------------------------------------ //
 const tBoot = Date.now();
 const engine = await createHeadlessCascade({
   runtime: 'micropython',
-  pySrc: process.env.CS_PY_SRC || 'lite',
+  pySrc: PY_SRC,
   occtWasm,
   micropythonJs,
   micropythonWasm,
   fonts,
+  upstreamPy,
 });
 const bootMs = Date.now() - tBoot;
 const bootMem = engine.memoryStats();
