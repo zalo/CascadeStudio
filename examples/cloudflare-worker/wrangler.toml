@@ -3,6 +3,39 @@ main = "src/index.js"
 compatibility_date = "2025-08-01"
 
 # --------------------------------------------------------------------------
+# Two deployments of the same code, one per build123d SOURCE FLAVOR. The
+# engine keeps all of its state on the worker global and a Python runtime
+# boots ONE library, so one isolate serves exactly one flavor — this is a
+# wrangler environment, not a query parameter.
+#
+#   (default)      PY_SRC=lite      cascade-headless
+#   --env upstream PY_SRC=upstream  cascade-headless-upstream
+#
+# See README "Source flavors" for what the difference buys.
+# --------------------------------------------------------------------------
+[vars]
+PY_SRC = "lite"
+
+# --------------------------------------------------------------------------
+# Workers Static Assets. Everything the engine can fetch at boot instead of
+# carrying in the script lives here: the four FreeSans faces (2.22 MB gz) and
+# the verbatim-upstream build123d Python layer (0.40 MB gz, one JSON map).
+# scripts/prepare-assets.cjs builds ./public; src/index.js reads it through
+# `env.ASSETS.fetch()`.
+#
+# The .wasm files CANNOT move here — workerd will not compile WebAssembly at
+# runtime, so they have to stay module bindings (see the rules below).
+#
+# `run_worker_first = true`: this Worker owns every route (/, /health,
+# /render and the usage page for anything else). The binding still reaches
+# the Asset Worker directly, so nothing about the public surface changes.
+# --------------------------------------------------------------------------
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+# --------------------------------------------------------------------------
 # Module rules. Cloudflare Workers cannot compile WebAssembly at runtime
 # (`WebAssembly.compile`/`new WebAssembly.Module` throw), so every .wasm is
 # imported as an ALREADY-COMPILED `WebAssembly.Module` binding, which
@@ -48,4 +81,29 @@ url = "./src/node-module-stub.js"
 cpu_ms = 300000
 
 [observability]
+enabled = true
+
+# --------------------------------------------------------------------------
+# The verbatim-upstream flavor. Same script, same wasm, same static assets —
+# the only difference is which Python library boots (PY_SRC), which the fetch
+# handler reads to pick `pySrc` and whether to fetch py/upstream-b123d.json.
+#
+# Non-inheritable keys (vars, assets) are repeated deliberately: wrangler does
+# NOT inherit them into an environment.
+# --------------------------------------------------------------------------
+[env.upstream]
+name = "cascade-headless-upstream"
+
+[env.upstream.vars]
+PY_SRC = "upstream"
+
+[env.upstream.assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[env.upstream.limits]
+cpu_ms = 300000
+
+[env.upstream.observability]
 enabled = true

@@ -22,31 +22,90 @@ import micropythonWasm from '../assets/micropython-cs.wasm';
 // forbids dynamic import of a URL — cascade-core's MicroPythonRuntime takes
 // the namespace object directly (`_csMicroPythonLocate.mod`).
 import * as micropythonJs from '../assets/micropython-cs.mjs';
-// build123d's Text() needs a font, and it asks for a SPECIFIC family member
-// per FontStyle. Two of the four FreeSans faces fit under the 10 MB
-// compressed Worker limit (see scripts/prepare-assets.cjs); asking for one
-// of the other two now fails with a message that names it.
-import freeSans from '../assets/FreeSans.ttf';
-import freeSansBold from '../assets/FreeSansBold.ttf';
+
+// The fonts and the upstream build123d Python layer are WORKERS STATIC
+// ASSETS (`[assets]` in wrangler.toml, ./public built by
+// scripts/prepare-assets.cjs), fetched through `env.ASSETS` at engine-boot
+// time. They used to be module bindings; moving them out took the script
+// from 9909 KiB gz — 97% of Cloudflare's 10240 KiB limit — to ~8434 KiB, and
+// it is what makes the upstream flavor deployable at all. The wasm files
+// CANNOT follow: workerd will not compile WebAssembly at runtime.
+
+/** The four family members build123d names per FontStyle. A face that is
+ *  not shipped is a hard, named error rather than a null shape. All four fit
+ *  now that they are not in the script. */
+const FONT_FACES = ['FreeSans', 'FreeSansBold', 'FreeSansOblique',
+  'FreeSansBoldOblique'];
 
 /** One engine per isolate, booted on the first request and reused. Booting
- *  costs ~0.3 s of CPU and ~32 MB, so this matters. */
+ *  costs ~0.3 s of CPU and ~32 MB (plus ~0.65 s of Python library for the
+ *  upstream flavor), so this matters. */
 let enginePromise = null;
+/** What the boot spent on static assets — reported by /health so the cost of
+ *  the packaging split is measurable from outside. */
+let assetMs = 0;
+let assetBytes = 0;
 
-function engine() {
+/** `env.ASSETS` is only reachable from a fetch handler, which is why engine
+ *  boot is lazy and per-request. Absolute URL required. */
+function assetFetcher(env, request) {
+  const origin = new URL(request.url).origin;
+  return async (p) => {
+    const t0 = Date.now();
+    const res = await env.ASSETS.fetch(new URL(p, origin));
+    if (!res.ok) {
+      throw new Error('static asset ' + p + ': HTTP ' + res.status
+        + ' — run `npm run prepare-assets` and redeploy');
+    }
+    const buf = await res.arrayBuffer();
+    assetMs += Date.now() - t0;
+    assetBytes += buf.byteLength;
+    return buf;
+  };
+}
+
+function engine(env, request) {
   if (!enginePromise) {
-    enginePromise = createHeadlessCascade({
-      runtime: 'micropython',
-      // 'lite' — embedded in the bundle, ~5x faster to boot than the
-      // upstream source layer, and it does not need 3.5 MB of extra Python
-      // assets in a Worker. Switch to 'upstream' only with an `upstreamPy`
-      // loader for the vendored tree.
-      pySrc: 'lite',
-      occtWasm,
-      micropythonJs,
-      micropythonWasm,
-      fonts: { FreeSans: freeSans, FreeSansBold: freeSansBold },
-    }).catch((e) => { enginePromise = null; throw e; });
+    const pySrc = (env && env.PY_SRC) === 'upstream' ? 'upstream' : 'lite';
+    const get = assetFetcher(env, request);
+    enginePromise = (async () => {
+      assetMs = 0;
+      assetBytes = 0;
+      let upstreamPy;
+      if (pySrc === 'upstream') {
+        // ONE fetch for the whole layer. The loader asks for ~120 modules by
+        // relative path; 120 subrequests would cost far more than a single
+        // 3.15 MB / 0.40 MB gz map plus a parse.
+        const tree = JSON.parse(new TextDecoder().decode(
+          await get('/py/upstream-b123d.json')));
+        upstreamPy = async (rel) => {
+          const text = tree[String(rel).replace(/^\.?\//, '')];
+          if (text === undefined) {
+            throw new Error('upstream-b123d: no such module in the asset map: ' + rel);
+          }
+          return text;
+        };
+      }
+      const fonts = {};
+      for (const face of FONT_FACES) {
+        // Thunks: cascade-core resolves them lazily, so a face nothing asks
+        // for is never fetched.
+        fonts[face] = () => get('/fonts/' + face + '.ttf');
+      }
+      return createHeadlessCascade({
+        runtime: 'micropython',
+        // 'lite'     — build123d-lite, embedded in the bundle: ~5x faster to
+        //              boot, 206/222 on the validation corpus.
+        // 'upstream' — build123d 0.11.1's own Python over the OCP shim:
+        //              216/222, ~0.65 s more boot. See README.
+        pySrc,
+        occtWasm,
+        micropythonJs,
+        micropythonWasm,
+        fonts,
+        upstreamPy,
+      });
+    })().catch((e) => { enginePromise = null; throw e; });
   }
   return enginePromise;
 }
@@ -162,8 +221,18 @@ export default {
 
     if (url.pathname === '/health') {
       const t0 = Date.now();
-      const e = await engine();
-      return json({ ok: true, bootMs: Math.round(e.bootMs), elapsedMs: Date.now() - t0,
+      const cold = enginePromise === null;
+      let e;
+      try { e = await engine(env, request); }
+      catch (err) { return json({ ok: false, error: 'engine boot failed: ' + err.message }, 500); }
+      return json({ ok: true,
+        pySrc: (env && env.PY_SRC) || 'lite',
+        bootMs: Math.round(e.bootMs),
+        // Cold-isolate cost of the static-assets split, measured server-side.
+        // (Date.now() freezes during CPU work on the edge, so trust the
+        // CLIENT's round trip for the total — this is the I/O part.)
+        assetMs, assetBytes, cold,
+        elapsedMs: Date.now() - t0,
         memory: e.memoryStats() });
     }
 
@@ -190,7 +259,7 @@ export default {
     if (!wantsStream) {
       const t0 = Date.now();
       let e;
-      try { e = await engine(); }
+      try { e = await engine(env, request); }
       catch (err) { return json({ ok: false, error: 'engine boot failed: ' + err.message }, 500); }
       const bootedMs = Date.now() - t0;
       const out = await runRender(e, req, () => {});
@@ -218,7 +287,7 @@ export default {
         const t0 = Date.now();
         if (cold) { await send('phase', { phase: 'booting' }); }
         let e;
-        try { e = await engine(); }
+        try { e = await engine(env, request); }
         catch (err) {
           await send('error', { ok: false, error: 'engine boot failed: ' + err.message });
           return;

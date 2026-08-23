@@ -2,3 +2,6 @@
 # alone is 27 MB.
 assets/
 .wrangler/
+
+# Static assets tree (scripts/prepare-assets.cjs) — 7 MB of fonts + Python.
+public/

@@ -107,15 +107,32 @@ check('HTTP 200', e2.status === 200, String(e2.status) + ' ' + JSON.stringify(e2
 check('bold text produced a solid', (e2.body.logs || []).some((l) => /^bold volume: [1-9]/.test(l)),
   JSON.stringify(e2.body.logs));
 
-console.log('\n=== (f) an unbundled font fails by NAME, not with a hash TypeError ===');
-const f = await render(
+// The other three FreeSans faces became affordable when the fonts moved out
+// of the Worker script into static assets — ITALIC used to be the "unbundled"
+// case here and now resolves, so the whole family is checked instead.
+console.log('\n=== (f) the whole FreeSans family resolves (static assets) ===');
+for (const [style, face] of [['ITALIC', 'FreeSansOblique'],
+  ['BOLDITALIC', 'FreeSansBoldOblique']]) {
+  const f = await render(
+    'from build123d import *\n'
+    + 't = extrude(Text("B", 10, font_style=FontStyle.' + style + '), 1)\n'
+    + 'print("volume:", round(t.volume, 3))\nshow(t)', ['step']);
+  check(face + ' (FontStyle.' + style + ') resolves', f.status === 200,
+    String(f.status) + ' ' + JSON.stringify(f.body.errors));
+  check(face + ' produced a solid',
+    (f.body.logs || []).some((l) => /^volume: [1-9]/.test(l)), JSON.stringify(f.body.logs));
+}
+// An unknown font NAME falls back to the bundled family rather than failing —
+// what must never come back is the old "Cannot set properties of undefined
+// (setting 'hash')", which named neither the font nor the operation.
+const fx = await render(
   'from build123d import *\n'
-  + 'show(extrude(Text("B", 10, font_style=FontStyle.ITALIC), 1))', ['step']);
-check('HTTP 422', f.status === 422, String(f.status));
-check('the error names FreeSansOblique',
-  (f.body.errors || []).some((x) => /FreeSansOblique/.test(x)), JSON.stringify(f.body.errors));
+  + 't = extrude(Text("B", 10, font="Comic Sans MS"), 1)\n'
+  + 'print("volume:", round(t.volume, 3))\nshow(t)', ['step']);
+check('an unknown font name still renders (falls back)', fx.status === 200,
+  String(fx.status) + ' ' + JSON.stringify(fx.body.errors));
 check('no "setting \'hash\'" TypeError',
-  !(f.body.errors || []).some((x) => /setting 'hash'/.test(x)), JSON.stringify(f.body.errors));
+  !(fx.body.errors || []).some((x) => /setting 'hash'/.test(x)), JSON.stringify(fx.body.errors));
 
 console.log('\n=== (g) POST /render?stream=1 — SSE phase events ===');
 const sse = await renderStream(STARTER, ['step']);
