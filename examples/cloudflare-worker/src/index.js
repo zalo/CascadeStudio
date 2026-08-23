@@ -123,7 +123,7 @@ const USAGE = `cascade-headless — build123d -> STEP/BREP/STL on Cloudflare Wor
     -H 'content-type: application/json' \\
     -d '{"code":"from build123d import *\\nshow(Box(10,10,10))","formats":["step"]}'
 
-POST /render            {code, formats:[step|brep|stl], language?}
+POST /render            {code, formats:[step|brep|stl], language?, measure?}
 POST /render?stream=1   the same job as text/event-stream phase events
 GET  /health            boot + memory
 `;
@@ -143,7 +143,8 @@ function parseRenderBody(body) {
   const formats = Array.isArray(body.formats) && body.formats.length
     ? body.formats.map((f) => String(f).toLowerCase())
     : ['step'];
-  return { code, formats, language: (body && body.language) || 'python' };
+  return { code, formats, language: (body && body.language) || 'python',
+    measure: body && body.measure === true };
 }
 
 /** The whole job, with a hook fired at every real await boundary.
@@ -176,6 +177,14 @@ async function runRender(e, req, onPhase) {
     errors: out.ok ? undefined : out.errors });
 
   if (result.ok && result.shapeCount > 0) {
+    // `{"measure": true}` — the combined scene's volume/area/bbox. Cheap (no
+    // meshing) and it is what lets a client CHECK a result without parsing
+    // the STEP; scripts/edge-bench.mjs uses it to tell the two source
+    // flavors apart on the fidelity ladder.
+    if (req.measure) {
+      try { out.measurement = e.measure(); }
+      catch (err) { out.measurement = { error: err.message }; }
+    }
     // BREP and STEP are exact; do them before STL, which attaches a
     // triangulation to the shape. Each is attempted independently: a format
     // the kernel cannot produce must not suppress one it can (exportSTEP can

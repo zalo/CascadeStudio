@@ -428,6 +428,19 @@ export async function createHeadlessCascade(options = {}) {
       oc().FS.createDataFile('/', name, content, true, true);
     },
 
+    /** Measure the combined scene: `{volume, area, length, nSolids, nFaces,
+     *  nEdges, bbox}` (the standard library's MeasureShape). Cheap — no
+     *  meshing — and it is what makes a headless run CHECKABLE without
+     *  parsing the STEP: the b123d-validation harness compares exactly these
+     *  numbers against native build123d. Returns null when the scene is
+     *  empty. */
+    measure(deflection = 0.1) {
+      const shape = globalThis.self.currentShape;
+      if (!shape || (shape.IsNull && shape.IsNull())) { return null; }
+      try { return globalThis.self.MeasureShape(shape, deflection); }
+      catch (e) { return null; }
+    },
+
     /** List the MEMFS root — a script's exported files show up here. */
     listFiles(dir = '/') {
       try {

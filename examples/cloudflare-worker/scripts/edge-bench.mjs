@@ -49,9 +49,32 @@ const LADDER = [
   'examples/heat_exchanger',          // the CPU-limit probe (~1000 ops)
 ];
 
+// FIDELITY LADDER — scripts where the two source flavors DISAGREE. These are
+// the reason `--env upstream` exists: build123d-lite classifies 206/222 on
+// the validation corpus and the verbatim-upstream layer 216/222, and each of
+// these is in the delta (see experiments/upstream-topology-spike/
+// STAGE3-STATE.md and test/b123d-validation/report.md).
+//
+//   toy_truck        lite: the body fillet raises "INTERNAL OPENCASCADE
+//                    ERROR" (was filed as an 8.0.1 kernel fault); upstream
+//                    Solid.fillet's own call sequence builds it.
+//   ttt-ppp0110      lite: the coplanar-BSpline fuse DROPS an operand and
+//                    even the General-Fuse rebuild cannot recover it
+//                    (volume 0); upstream: PASS.
+//   sort_axis        lite: `revolve(face, -Axis(edge), 90)` sweeps the other
+//                    way (-14.7% volume) because the selected sub-edge's
+//                    TopAbs orientation differs — COMPROMISE(edge-
+//                    orientation); upstream: PASS.
+const FIDELITY = [
+  'examples/toy_truck',
+  'ttt/ttt-ppp0110',
+  'docs-selectors/sort_axis',
+];
+
 const onlyArg = process.argv.indexOf('--only');
 const only = onlyArg >= 0 ? String(process.argv[onlyArg + 1]).split(',') : null;
-const ids = only || LADDER;
+const ids = only
+  || (process.argv.includes('--fidelity') ? FIDELITY : LADDER.concat(FIDELITY));
 
 console.log('BASE ' + BASE);
 for (const id of ids) {
@@ -63,15 +86,21 @@ for (const id of ids) {
     const res = await fetch(BASE + '/render', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code: entry.code, formats: ['step'] }),
+      body: JSON.stringify({ code: entry.code, formats: ['step'], measure: true }),
     });
     const wall = Date.now() - t0;
     let body;
     try { body = await res.json(); } catch (e) { body = { errors: ['<non-JSON ' + res.status + '>'] }; }
     const mem = body.memory ? (body.memory.totalWasm / 1048576).toFixed(1) + ' MB' : '?';
+    // The scene's volume is what tells the two source flavors apart: a
+    // fidelity-ladder script can come back HTTP 200 with the WRONG geometry
+    // (ttt-ppp0110's dropped fuse operand measures 0; sort_axis revolves the
+    // other way and is 14.7% light).
+    const vol = body.measurement && typeof body.measurement.volume === 'number'
+      ? '  vol=' + body.measurement.volume.toFixed(3) : '';
     line = res.ok
       ? 'OK    ' + String(wall).padStart(6) + ' ms  ' + mem.padStart(8)
-        + '  shapes=' + body.shapeCount + '  step=' + (body.step || '').length + ' B'
+        + '  shapes=' + body.shapeCount + '  step=' + (body.step || '').length + ' B' + vol
       : 'HTTP ' + res.status + String(wall).padStart(6) + ' ms  ' + mem.padStart(8) + '  '
         + String((body.errors || [])[0]).split('\n')[0].slice(0, 100);
   } catch (err) {
