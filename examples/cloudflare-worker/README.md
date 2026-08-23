@@ -177,45 +177,49 @@ that is genuinely absent raises an error that names it (see
 
 ## Verified in this environment
 
-Everything below was run locally against **workerd** via `wrangler dev`
-(wrangler 4.125.0), not merely reasoned about:
+Everything below was run against **workerd**, not merely reasoned about.
+
+**Local** (`wrangler dev`, wrangler 4.125.0) — `node scripts/smoke.mjs`
+against `--env=""` AND `--env upstream`: **ALL WORKER CHECKS PASSED** on
+both, eight groups including the FreeSans family and the two SSE cases.
 
 ```
-=== GET /health ===
-  boot 147 ms   occtWasm 32.0 MB
-  PASS  health ok
-
-=== (a) Box(10, 10, 10) -> step + brep + stl ===
-  PASS  HTTP 200 / ok / STEP is ISO-10303-21 / BREP non-empty / STL has 12 facets
-  201 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 148 ms)
-
-=== (b) PYTHON_STARTER_CODE (flanged bearing mount) ===
-  PASS  volume ~= 48603.5 mm^3 / STEP is substantial (117981 bytes)
-  375 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 323 ms)
-
-=== (c) export_step() / export_brep() inside the script ===
-  PASS  script wrote part.step / part.brep
-  PASS  import_brep round-trips the volume  — 1270.353996706151 vs 1270.3539967061508
-  57 ms   occt 32.0 MB + python 19.5 MB = 51.5 MB   (eval 23 ms)
-
-=== (d) a failing script comes back as JSON, not a 500 ===
-  PASS  HTTP 422 / NameError reported
+                                        lite            upstream
+GET /health                             boot 233 ms     boot 167 ms
+                                        assets 29 ms    assets 20 ms
+                                        4.31 MB         7.61 MB
+(a) Box(10,10,10) -> step+brep+stl      359 ms  51.5 MB  758 ms  51.5 MB
+(b) PYTHON_STARTER_CODE                 425 ms  51.5 MB  425 ms  51.5 MB
+(c) export_step()/export_brep()          53 ms  51.5 MB   56 ms  51.5 MB
+    import_brep round-trip              1270.353996706151 on both
 ```
 
-The numbers are identical to the Node leg (`node test/headless-node.mjs`),
-which stays the authoritative regression test.
+**Edge** (2026-08-23) — both flavors deployed from the same script
+(`Total Upload: 28285.76 KiB / gzip: 8417.11 KiB`, startup 3 ms, 5 static
+assets), full smoke suite green against both `*.workers.dev` URLs, geometry
+byte-identical to the Node and local-workerd legs, plus the ladders above.
 
-**Edge-verified** (2026-08-22): `wrangler deploy` to a real Cloudflare
-account succeeded (`Total Upload: 31056.16 KiB / gzip: 9908.60 KiB`, startup
-3 ms) and the full smoke suite — now eight groups, including the two font
-cases and the two SSE cases — passed against the deployed `*.workers.dev` URL
-(`BASE=https://<name>.workers.dev node scripts/smoke.mjs`), with geometry
-byte-identical to the Node and local-workerd legs, plus the nine-model
-capability ladder above. Warm request round-trip for a `Box` render is
-~90–100 ms; a cold isolate adds ~2 s (wasm instantiation + MicroPython boot,
-paid once per isolate). One edge-only quirk: the in-response `timings` fields
-read 0 on deployed Workers because Cloudflare freezes `Date.now()` during
-synchronous CPU work (Spectre mitigation) — measure latency client-side.
+| | lite | upstream |
+|---|---|---|
+| deploy | `cascade-headless` | `cascade-headless-upstream` |
+| smoke | ALL WORKER CHECKS PASSED | ALL WORKER CHECKS PASSED |
+| cold first `/render` | 3033 ms | 5615 ms |
+| warm `Box` round trips | 49, 44, 45, 48, 55, 57, 51 ms | 74, 89, 76, 70, 61, 65, 61 ms |
+| ladder | 8 of 9 return STEP | 6 of 9 |
+
+Two edge-only quirks the numbers depend on:
+
+* the in-response `timings` fields read 0 on a deployed Worker, because
+  Cloudflare freezes `Date.now()` during synchronous CPU work (Spectre
+  mitigation) — measure latency **client-side**;
+* a cold isolate now also pays the static-asset fetch. `/health` reports it
+  separately (`assetMs`, `assetBytes`), and it is the one cost the packaging
+  split ADDED: 0.36-1.15 s for lite's 4.31 MB of fonts, 0.20-0.68 s for
+  upstream's 7.61 MB, once per isolate.
+
+The Node leg (`node test/headless-node.mjs`, and
+`CS_PY_SRC=upstream node test/headless-node.mjs`) stays the authoritative
+regression test — both ALL PASS.
 
 ## Progress streaming
 
@@ -291,7 +295,7 @@ CAD tools expect.
 
 build123d's `Text()` resolves `font_style` to a SPECIFIC family member. All
 four now ship, as **static assets** rather than script bindings — which is
-what made them affordable (they were 2.20 MB gz against 0.33 MB of headroom
+what made them affordable (they were 2.20 MB gz against 331 KiB of headroom
 inside the script):
 
 | face | `FontStyle` | gzip | |
