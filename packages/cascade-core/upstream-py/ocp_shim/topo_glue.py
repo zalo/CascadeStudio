@@ -102,6 +102,20 @@ def _from_raw(topo, cls=None):
     return by_code.get(code, Compound)(p)
 
 
+def _as_imported_compound(topo):
+    """Upstream's importers return a COMPOUND, and upstream means a real
+    TopoDS_Compound: Compound.volume/get_type walk the compound's CHILDREN,
+    so a TopoDS_Solid merely WRAPPED in the Compound class measures 0 (lite's
+    Compound measured the whole shape, which is why the seam never saw this).
+    The worker's readers hand back whatever the file held — a single-solid
+    STEP arrives as a bare TopoDS_Solid — so build the compound for real."""
+    shp = _from_raw(topo)
+    if isinstance(shp, Compound):
+        return shp
+    from build123d.topology.utils import _make_topods_compound_from_shapes
+    return Compound(_make_topods_compound_from_shapes([shp.wrapped]))
+
+
 def _builder_shape(obj):
     """obj._obj when obj is a BUILDER holding a shape with geometry."""
     try:
@@ -268,7 +282,7 @@ def import_brep(file_name):
     topo = w.ImportBREP(name)
     if topo is None or not topo:
         raise ValueError('Could not import ' + str(file_name))
-    res = _from_raw(topo, Compound)
+    res = _as_imported_compound(topo)
     res.label = str(file_name).split('/')[-1]
     return res
 
@@ -284,7 +298,7 @@ def import_step(file_name):
             'The CAD worker has no filesystem; pass the file content with '
             'CascadeAPI.loadExternalFiles({"' + name.split('/')[-1] +
             '": <step text>}) before running the script.')
-    res = _from_raw(topo, Compound)
+    res = _as_imported_compound(topo)
     res.label = name.split('/')[-1]
     return res
 

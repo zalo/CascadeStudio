@@ -283,7 +283,19 @@ class CascadeStudioWorker {
       // be rewound (see captureKernelImage). Opt-in: only hosts that can
       // afford to lose every live shape (headless, one job per request) may
       // restore it, so only they pay for the snapshot.
-      if (this.options.kernelImage === true) { this.captureKernelImage(); }
+      if (this.options.kernelImage === true) {
+        this.captureKernelImage();
+        // …and RE-snapshot once a Python library has finished registering.
+        // The image is what a restore rewinds TO, so anything OCCT-side that
+        // the library allocated at import time has to be inside it. Upstream
+        // build123d's signatures carry `plane: Plane = Plane.XY` DEFAULT
+        // ARGUMENTS whose gp_Pln is built during that import: with only the
+        // pre-Python image, the first reset() dangled every one of them and
+        // the next `Box(1,1,1)` died in `gp_Dir::Cross() - result vector has
+        // zero norm`. Costs one extra ~20 ms snapshot on the first Python
+        // evaluation of the isolate's life. COMPROMISE(kernel-heap-reset).
+        self._csPyLibBooted = () => { this.captureKernelImage(); };
+      }
 
       // Route incoming messages to registered handlers. Handlers may return
       // a Promise (e.g. meshing that waits on an async Python evaluation);
@@ -590,6 +602,9 @@ class CascadeStudioWorker {
     }
     this._kernelImage = heap.slice(0, end);
     self._csKernelImageBytes = this._kernelImage.length;
+    // Everything the OCP shim has minted so far is INSIDE the image now, so
+    // it survives every future restore (see the epoch in OcpShim.js).
+    if (self._csOcpKernelCaptured) { self._csOcpKernelCaptured(); }
     return this._kernelImage.length;
   }
 
@@ -609,6 +624,11 @@ class CascadeStudioWorker {
     // only ever grew, so zero the rest back out. Emscripten's sbrk break is
     // part of the image, so the allocator simply re-uses this space.
     if (heap.length > img.length) { heap.fill(0, img.length); }
+    // Invalidate the OCP shim's lifetime ledger: its queued frees now name
+    // addresses the image owns again, so they must be DROPPED rather than
+    // deleted, and any wrapper the Python side still holds has to start
+    // raising instead of reading a stranger's memory.
+    if (self._csOcpKernelRestored) { self._csOcpKernelRestored(); }
     return true;
   }
 

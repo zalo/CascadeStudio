@@ -585,6 +585,11 @@ async function _bootstrap(srcKind) {
     heapBytes: MP_HEAP_BYTES,
   };
   console.log('[pyruntime] micropython boot ' + JSON.stringify(self._pythonBootTiming));
+  // The Python library has finished importing. A headless host that keeps a
+  // kernel image re-snapshots HERE, so OCCT objects the library allocated at
+  // import time (upstream build123d's `Plane.XY` default arguments) are
+  // inside the image and survive a reset(). COMPROMISE(kernel-heap-reset).
+  if (self._csPyLibBooted) { self._csPyLibBooted(); }
   self._csMpInterpreter = mp; // benchmark/debug access
 
   return {

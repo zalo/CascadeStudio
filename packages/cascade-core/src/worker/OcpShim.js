@@ -98,12 +98,39 @@ export function installOcpShim(self, table) {
   //    double-frees; deleting the Handle_* wrapper is the correct
   //    decrement).
   // Opt-out for A/B: self._csOcpLifetime = 'leak' (?ocplt=leak).
+  //
+  // COMPROMISE(kernel-heap-reset) INTERACTION — the epoch. The headless
+  // engine can rewind OCCT's whole linear memory to a captured boot image
+  // (CascadeWorker.restoreKernelImage), which makes EVERY embind wrapper
+  // minted since the capture point at memory the allocator is free to hand
+  // out again. That is fatal for a ledger that frees: a queued `.delete()`
+  // on a dangled wrapper would run OCCT's destructor over whatever now lives
+  // at that address. So every wrapper carries the epoch it was minted in:
+  //
+  //   * `imageEpoch` — the epoch the current kernel image was captured in.
+  //     Anything stamped <= imageEpoch is INSIDE the image, so it survives a
+  //     restore byte-for-byte and stays valid (this is what keeps upstream
+  //     build123d's module-level `Plane.XY` default arguments alive across a
+  //     reset — see CascadeWorker's post-library recapture).
+  //   * `epoch` — the current generation. A restore bumps it, which
+  //     retroactively marks the whole previous generation dangling.
+  //
+  // Dangled wrappers are DROPPED from the free queue rather than deleted,
+  // and calling into one raises instead of corrupting the fresh heap.
+  let epoch = 0;
+  let imageEpoch = -1;           // no image captured yet
   const freeQueue = [];
   const pinnedOps = new Set();   // fuse-guard operands, pinned Append->Shape
+  /** Does this wrapper point into memory the current heap still owns? */
+  const isLive = (v) => {
+    const e = v._csEpoch;
+    return e === undefined || e <= imageEpoch || e === epoch;
+  };
   const retain = (v) => {
     try {
       if (v && typeof v === 'object' && v.$$ !== undefined) {
         v._csPy = (v._csPy | 0) + 1;
+        v._csEpoch = epoch;
       }
     } catch (e) { /* frozen object: stays foreign, never freed */ }
     return v;
@@ -164,6 +191,10 @@ export function installOcpShim(self, table) {
     for (const v of freeQueue) {
       try {
         if (!v.$$ || !v.$$.ptr) { continue; }        // already deleted
+        if (!isLive(v)) { continue; }                // dangled by a kernel
+                                                     // rewind: DROP, never
+                                                     // delete (the address
+                                                     // belongs to the image)
         if (v._csPy > 0) { continue; }               // re-retained since
         if (protect.has(v)) { keep.push(v); continue; }
         const h = v._csOwnH;                          // deref'd raw: free the
@@ -192,9 +223,34 @@ export function installOcpShim(self, table) {
   };
   self._csOcpFlushFrees = flushFrees;
   self._csOcpEvalReset = () => { pinnedOps.clear(); flushFrees(); };
+
+  // ---- kernel-image hooks (COMPROMISE(kernel-heap-reset)) --------------- //
+  /** OCCT's linear memory was just SNAPSHOT: everything alive right now is
+   *  part of the image and outlives every future restore. */
+  self._csOcpKernelCaptured = () => {
+    imageEpoch = epoch;
+    epoch += 1;
+  };
+  /** OCCT's linear memory was just REWOUND to the image. Every wrapper from
+   *  the generation(s) after the capture is dangling: drop the ledger's
+   *  references to them (deleting would scribble on the restored heap) and
+   *  open a new generation. */
+  self._csOcpKernelRestored = () => {
+    freeQueue.length = 0;
+    pinnedOps.clear();
+    keepAlive.length = 0;
+    scratch = null;
+    epoch += 1;
+    return epoch;
+  };
+  self._csOcpIsLive = (v) => {
+    try { return !v || typeof v !== 'object' || v.$$ === undefined || isLive(v); }
+    catch (e) { return true; }
+  };
   self._csOcpFree = function (v) {
     try {
       if (!v || typeof v !== 'object' || v.$$ === undefined) { return; }
+      if (!isLive(v)) { return; }  // dangled by a kernel rewind
       const n = v._csPy;
       if (!(n > 0)) { return; }   // foreign object (never shim-retained)
       v._csPy = n - 1;
@@ -1021,8 +1077,27 @@ export function installOcpShim(self, table) {
     return v;
   };
 
+  /** Refuse a dispatch that would hand OCCT a wrapper from before the last
+   *  kernel rewind. Cheap (one property read per argument) and it turns a
+   *  silent read of restored-image memory into a named error.
+   *  COMPROMISE(kernel-heap-reset). */
+  const assertLiveArgs = (args, what) => {
+    if (imageEpoch < 0 || !args) { return; }
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a && typeof a === 'object' && a._csEpoch !== undefined && !isLive(a)) {
+        throw new Error('ocp_shim: ' + what + ' received a kernel object from '
+          + 'before the last engine reset() (argument ' + i + ', '
+          + ((a.constructor && a.constructor.name) || '?') + ') — rewinding '
+          + 'OCCT\'s heap invalidates every shape and geometry handle that '
+          + 'existed at the time. Rebuild it after the reset.');
+      }
+    }
+  };
+
   self._csOcpNew = function (cls, args, kwargs) {
     kwargs = normKw(kwargs);
+    assertLiveArgs(args, cls);
     if (HISTORY_FAMILIES.test(cls) && typeof self.recordExternalOp === 'function') {
       self.recordExternalOp(historyName(cls));
     }
@@ -1131,6 +1206,7 @@ export function installOcpShim(self, table) {
 
   self._csOcpStatic = function (cls, name, args, kwargs) {
     kwargs = normKw(kwargs);
+    assertLiveArgs(args, cls + '.' + name);
     // walk the table chain for the method (statics are on the class itself
     // in embind, but keep parent-walk for safety)
     let cn = cls, m = null;
@@ -1201,7 +1277,19 @@ export function installOcpShim(self, table) {
   self._csOcpCall = function (ref, name, args, kwargs) {
     kwargs = normKw(kwargs);
     if (!ref) { throw new Error('ocp_shim: method ' + name + ' on null ref'); }
+    // A wrapper minted before a kernel rewind points into memory that has
+    // been restored from the boot image; calling OCCT through it would read
+    // (or write) an unrelated object. Refuse, by name, instead.
+    // COMPROMISE(kernel-heap-reset).
+    if (!isLive(ref)) {
+      throw new Error('ocp_shim: ' +
+        ((ref.constructor && ref.constructor.name) || '?') + '.' + name +
+        ' was called on a kernel object from before the last engine reset() '
+        + '— rewinding OCCT\'s heap invalidates every shape and geometry '
+        + 'handle that existed at the time. Rebuild it after the reset.');
+    }
     const cn0 = (ref.constructor && ref.constructor.name) || '?';
+    assertLiveArgs(args, cn0 + '.' + name);
     const { m, mcls, glue } = resolveMethod(cn0, name);
     if (glue) { return glue(args, ref); }
     if (m && m.tuple_ret) {

@@ -370,6 +370,11 @@ async function _bootstrap(srcKind) {
     totalMs: +(tDone - t0).toFixed(1),
   };
   console.log('[pyruntime] pyodide boot ' + JSON.stringify(self._pythonBootTiming));
+  // The Python library has finished importing. A headless host that keeps a
+  // kernel image re-snapshots HERE, so OCCT objects the library allocated at
+  // import time (upstream build123d's `Plane.XY` default arguments) are
+  // inside the image and survive a reset(). COMPROMISE(kernel-heap-reset).
+  if (self._csPyLibBooted) { self._csPyLibBooted(); }
 
   return {
     /** Execute user Python source. Throws a JS Error whose message starts
