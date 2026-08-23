@@ -1,14 +1,22 @@
 # cascade-headless on Cloudflare Workers
 
 Turn **build123d Python** into **STEP / BREP / STL** inside a Cloudflare
-Worker — OpenCascade 8.0.1 (wasm) + MicroPython 1.28 (wasm) + build123d-lite,
+Worker — OpenCascade 8.0.1 (wasm) + MicroPython 1.28 (wasm) + build123d,
 all in one 128 MB isolate. No browser, no DOM, no Three.js, no mesher unless
 STL is asked for.
+
+Two deployments, one codebase — see [Source flavors](#source-flavors):
+
+| | build123d | corpus | live |
+|---|---|---|---|
+| default | **build123d-lite** (embedded) | 206/222 | `cascade-headless.makeshifted.workers.dev` |
+| `--env upstream` | **verbatim upstream 0.11.1** over the OCP shim | 216/222 | `cascade-headless-upstream.makeshifted.workers.dev` |
 
 ```bash
 cd examples/cloudflare-worker
 npm install                 # wrangler (a devDependency of THIS example only)
-npm run dev                 # prepare-assets + wrangler dev  -> :8787
+npm run dev                 # prepare-assets + wrangler dev  -> :8787   (lite)
+npm run dev:upstream        # the same, PY_SRC=upstream
 node scripts/smoke.mjs      # drives the same scripts as test/headless-node.mjs
 ```
 
@@ -41,38 +49,97 @@ curl -sX POST http://localhost:8787/render \
 
 ## Capability envelope
 
-The ladder below is `scripts/edge-bench.mjs`, run against the **deployed**
-Worker (2026-08-22, `formats: ["step"]`). Times are **client-side round
-trips** including network — a deployed Worker freezes `Date.now()` during CPU
-work, so its own `timings` read 0. Memory is what the isolate reports.
+`scripts/edge-bench.mjs` against **both deployed** Workers (2026-08-23,
+`formats: ["step"]`, `measure: true`). Times are **client-side round trips**
+including network — a deployed Worker freezes `Date.now()` during CPU work,
+so its own `timings` read 0. Memory is what the isolate reports; `vol` is the
+combined scene's volume, which is the only thing that distinguishes a wrong
+answer from a right one at HTTP 200.
 
-| model | | time | isolate | STEP |
-|---|---|---:|---:|---:|
-| `examples/boxes_on_faces` | builder nesting | 6.1 s | 51.5 MB | 144 KB |
-| `examples/maker_coin` | fillets + text + `new_edges` | 51.1 s | 70.8 MB | 1.35 MB |
-| `ttt/ttt-ppp0101` | TTT challenge part | 4.1 s | 70.8 MB | 123 KB |
-| `ttt/ttt-24-SPO-06-Buffer_Stand` | heavier TTT | 8.0 s | 96.4 MB | 147 KB |
-| `examples/intersecting_pipes` | booleans + fillets | 2.5 s | 96.4 MB | 198 KB |
-| `examples/build123d_logo` | text + sketches | 1.6 s | 96.4 MB | 314 KB |
-| `examples/clock` | `FontStyle.BOLD` + 2-D fillets | 20.9 s | 65.0 MB | 787 KB |
-| `examples/heat_exchanger` | ~1000 ops | 72.0 s | 86.6 MB | 3.77 MB |
-| `examples/bicycle_tire` | wrap + thicken, 1081 solids | **422 / 503** | 163.3 MB | — |
+| model | | lite | | upstream | |
+|---|---|---:|---:|---:|---:|
+| | | time | isolate | time | isolate |
+| `examples/boxes_on_faces` | builder nesting | 0.5 s | 51.5 MB | 5.8 s | 51.5 MB |
+| `examples/maker_coin` | fillets + text + `new_edges` | 36.7 s | 70.8 MB | 30.0 s | 66.0 MB |
+| `ttt/ttt-ppp0101` | TTT challenge part | 2.4 s | 70.8 MB | 4.8 s | 66.0 MB |
+| `ttt/ttt-24-SPO-06-Buffer_Stand` | heavier TTT | 4.2 s | 96.4 MB | 6.5 s | 110.9 MB |
+| `examples/intersecting_pipes` | booleans + fillets | 5.6 s | 51.5 MB | 9.9 s | 51.5 MB |
+| `examples/build123d_logo` | text + sketches | 3.4 s | 51.5 MB | 6.3 s | 51.5 MB |
+| `examples/clock` | `FontStyle.BOLD` + 2-D fillets | 29.8 s | 65.0 MB | **503** | > 128 MB |
+| `examples/heat_exchanger` | ~1000 ops | 84.8 s | 86.6 MB | **503** | > 128 MB |
+| `examples/bicycle_tire` | wrap + thicken, 1081 solids | **503** | 163.3 MB | **503** | > 128 MB |
 
-The first request into a cold isolate adds ~2 s. All of these run in ONE
-isolate, in that order: nothing poisons anything downstream of it any more
-(it used to — see [Two ceilings that were real](#two-ceilings-that-were-real)).
+The first request into a cold isolate adds ~3 s (lite) / ~5.6 s (upstream);
+warm, the same trivial model round-trips in 44-57 ms / 61-89 ms. All of a
+ladder's models run in ONE isolate, in order: nothing poisons anything
+downstream of it any more (it used to — see
+[Two ceilings that were real](#two-ceilings-that-were-real)). A model that
+kills the isolate does cost the NEXT one a 503, so re-run a 503 on its own
+before believing it.
 
-`bicycle_tire` is the one model outside the envelope, for two independent
-reasons, both reported honestly rather than papered over:
+### The fidelity ladder
 
-1. `BRepOffsetAPI_ThruSections::Build`, inside `thicken()`, corrupts OCCT's
-   heap and takes `BRepTools::Write` down with it — so there is no BREP
-   carrier to rescue the shape with (`COMPROMISE(kernel-heap-reset)`). The
-   geometry is correct: `volume` reads 980681.267 mm³ either way.
-2. It needs **163.3 MB** in the isolate (85.9 MB OCCT + 77.4 MB MicroPython
-   for 1081 solids' worth of Python wrappers), over the 128 MB limit. Local
-   workerd kills the whole process at that point; the edge returns the 422
-   and recycles the isolate.
+The three models below are why `--env upstream` exists. `edge-bench.mjs
+--fidelity` runs just these.
+
+| model | lite | upstream | native |
+|---|---|---|---|
+| `docs-selectors/sort_axis` | **200**, vol 8533.385 | **200**, vol **9353.444** | 9353.444 |
+| `ttt/ttt-ppp0110` | **422** "Union produced near-zero volume" | **200**, vol **207159.364** | 207159.364 |
+| `examples/toy_truck` | **422** FilletEdges "BRep_API: command not done" | **503** `exceededMemory` (168.7 MB in Node, where it PASSES in 9.4 s) | 6160.103 (`body`) |
+
+`sort_axis` is the one to look at: both flavors return HTTP 200 and only the
+NUMBER is different. Lite's `revolve(face, -Axis(edge), 90)` sweeps the other
+way because the selected sub-edge's TopAbs orientation differs from OCP 7.x
+over identical curve geometry (`COMPROMISE(edge-orientation)`), so `part`
+comes out 14.7% light; upstream's 9353.444 is `before` 3768.283 + `part`
+5585.161 to the digit. This is exactly the class of difference a corpus score
+summarises, and the reason the bench asks for `measure: true`.
+
+`toy_truck` is the honest counter-example: upstream builds it and lite cannot,
+but the upstream leg needs 168.7 MB to do it, so on the edge it trades a 422
+for a 503. `wrangler tail --env upstream` names the reason —
+`"outcome":"exceededMemory"`.
+
+## Source flavors
+
+Same script, same wasm, same static assets; `PY_SRC` picks which build123d
+boots. One isolate serves one flavor: the engine keeps its state on the
+worker global and a Python runtime registers ONE library, so this is a
+wrangler environment, not a query parameter.
+
+| | `lite` (default) | `upstream` |
+|---|---|---|
+| what runs | `Build123dLite.js` — a re-implementation, embedded in the bundle as a Python string | build123d 0.11.1's OWN `geometry.py` + `topology/*.py` + object/builder layers, **verbatim**, over an OCP-over-embind shim |
+| validation corpus | 206 PASS / 10 MISMATCH / 5 ERROR / 1 TIMEOUT | **216 PASS** / 2 / 3 / 1 |
+| cold first request | **3.0 s** | **5.6 s** |
+| warm trivial model | **44-57 ms** | **61-89 ms** |
+| static assets fetched at boot | 4.31 MB (fonts) | 7.61 MB (fonts + 3.15 MB Python) |
+| `Box`/starter isolate memory | **51.5 MB** | **51.5 MB** — identical, because the shapes live in OCCT's heap either way |
+| heavy models | clock 65.0 MB, heat_exchanger 86.6 MB | clock and heat_exchanger exceed 128 MB |
+| script size | 8417 KiB gz | 8417 KiB gz (the same script) |
+
+The **memory** row is the whole trade. Upstream topology runs every boolean,
+every selector and every glyph through the OCP shim, and each dispatch
+retains ~32-230 B in the interpreter for the duration of the run. That is
+run-scoped — the next run reports ~1.1 MB live — but MicroPython's GC arena
+grows by doubling and NEVER shrinks, so a model that makes millions of FFI
+calls ratchets the isolate past 128 MB and does not give it back.
+`examples/clock` alone takes MicroPython from 19.5 MB to 386 MB in Node.
+Bounding it needs an interpreter patch; see the
+`NOTE(heavy-model memory round)` in
+`packages/cascade-core/upstream-py/ocp_shim/ocp_core.py`.
+
+So: **lite for throughput and heavy models, upstream for fidelity.** If a
+script is in the 10-model delta (or uses an API lite does not have), deploy
+it against `--env upstream` and keep it under the memory line.
+
+```bash
+npx wrangler deploy                  # lite   -> cascade-headless
+npx wrangler deploy --env upstream   # upstream -> cascade-headless-upstream
+BASE=https://cascade-headless-upstream.<subdomain>.workers.dev \
+  node scripts/edge-bench.mjs --fidelity
+```
 
 ## Two ceilings that were real
 
@@ -222,68 +289,91 @@ CAD tools expect.
 
 ## Fonts
 
-build123d's `Text()` resolves `font_style` to a SPECIFIC family member, and
-the Worker cannot afford all four:
+build123d's `Text()` resolves `font_style` to a SPECIFIC family member. All
+four now ship, as **static assets** rather than script bindings — which is
+what made them affordable (they were 2.20 MB gz against 0.33 MB of headroom
+inside the script):
 
-| face | `FontStyle` | gzip | bundled |
+| face | `FontStyle` | gzip | |
 |---|---|---:|---|
-| `FreeSans` | `REGULAR` (default) | 0.93 MB | yes |
-| `FreeSansBold` | `BOLD` | 0.51 MB | yes |
-| `FreeSansOblique` | `ITALIC` | 0.46 MB | no |
-| `FreeSansBoldOblique` | `BOLDITALIC` | 0.30 MB | no |
+| `FreeSans` | `REGULAR` (default) | 0.94 MB | static asset |
+| `FreeSansBold` | `BOLD` | 0.51 MB | static asset |
+| `FreeSansOblique` | `ITALIC` | 0.47 MB | static asset |
+| `FreeSansBoldOblique` | `BOLDITALIC` | 0.30 MB | static asset |
 
-All four would be 2.20 MB gz against 0.33 MB of headroom under the 10 MB
-compressed limit. Asking for one that is not bundled is now a `422` naming
-it:
+A face that is genuinely absent still fails with a `422` naming it, rather
+than the old `Cannot set properties of undefined (setting 'hash')`:
 
 ```
-the font "FreeSansOblique" is not available in this engine
-(loaded: FreeSans, FreeSansBold). A headless host supplies fonts itself —
-pass the TTF bytes for it, e.g. createHeadlessCascade({ fonts: { … } }).
+the font "X" is not available in this engine (loaded: FreeSans, …).
+A headless host supplies fonts itself — pass the TTF bytes for it,
+e.g. createHeadlessCascade({ fonts: { X: <bytes> } }).
 ```
 
-To add one: copy it in `scripts/prepare-assets.cjs` AND `import` it in
-`src/index.js` (a Worker's data bindings must be static imports), then hand
-it to `createHeadlessCascade({ fonts })`.
+An unknown font NAME (`font="Comic Sans MS"`) falls back to the bundled
+family instead. To add a face: drop the TTF in `packages/cascade-core/fonts/`
+— `scripts/prepare-assets.cjs` copies every `FreeSans*.ttf` into
+`public/fonts/` and `src/index.js` fetches it lazily, so no static import is
+needed any more.
 
 ## Memory and timing
 
-| | |
-|---|---|
-| isolate limit | **128 MB** |
-| after boot (OCCT only) | 32.0 MB |
-| after any Python run (OCCT + MicroPython) | **51.5 MB** |
-| engine boot | ~147 ms |
-| MicroPython + build123d-lite boot (first Python request) | ~134 ms (inside request (a)'s 148 ms eval) |
-| `Box(10,10,10)` eval | ~3 ms once the interpreter is warm |
-| starter model (fillets, booleans, GridLocations) eval | ~323 ms |
+| | lite | upstream |
+|---|---|---|
+| isolate limit | **128 MB** | **128 MB** |
+| after boot (OCCT only) | 32.0 MB | 32.0 MB |
+| after any Python run (OCCT + MicroPython) | **51.5 MB** | **51.5 MB** |
+| engine boot (`/health`, `bootMs`) | ~150-360 ms | ~170-580 ms |
+| static-asset fetch on a cold isolate (`assetMs`) | 0.36-1.15 s / 4.31 MB | 0.20-0.68 s / 7.61 MB |
+| Python library registration (first Python request) | ~130 ms | **~640 ms** |
+| cold first `/render` (client round trip) | **3.0 s** | **5.6 s** |
+| warm `Box(1,1,1)` round trip | 44-57 ms | 61-89 ms |
+| starter model (fillets, booleans, `GridLocations`) | ~300 ms eval | ~340 ms eval |
 
-51.5 MB of 128 MB, with the remaining headroom available for the model
-itself. The MicroPython GC heap is fixed at 16 MB (`CS_MP_HEAP`), so growth
-under load is OCCT-side only.
+`/health` reports `pySrc`, `bootMs`, `assetMs`, `assetBytes` and `cold`, so
+the cost of the static-assets split is measurable from outside.
+
+51.5 MB of 128 MB for a basic model on EITHER flavor, with the remaining
+headroom for the model itself. Where they part company is heavy models — see
+[Source flavors](#source-flavors).
 
 ## Bundle size — the real constraint
 
-| asset | raw | gzip |
-|---|---|---|
-| `cascadestudio.wasm` (OCCT 8.0.1) | 27.02 MB | **7.94 MB** |
-| `FreeSans.ttf` | 1.84 MB | 0.93 MB |
-| `FreeSansBold.ttf` | 0.99 MB | 0.51 MB |
-| `cascade-headless.mjs` | 1.08 MB | 0.30 MB |
-| `micropython-cs.wasm` | 0.49 MB | 0.21 MB |
-| `micropython-cs.mjs` | 0.11 MB | 0.03 MB |
-| **`wrangler deploy`** | **31.06 MB** | **9.68 MB** |
+Cloudflare's compressed Worker **script** limit is **10 MiB (10240 KiB)** on
+paid plans and 3 MB on the free plan. Static assets do not count against it.
 
-Cloudflare's compressed Worker size limit is **10 MB on paid plans** and
-**3 MB on the free plan**. So this deploys on a paid plan with ~0.33 MB of
-headroom, and does NOT fit the free plan. If you need room:
+**Worker script** (`assets/`, module bindings — `wrangler deploy` reports the
+bundled figure):
 
-* drop the fonts from `scripts/prepare-assets.cjs` (−1.44 MB gz) — only
-  `Text()`/`Text3D()` need them, and a script that asks for one now fails
-  with a message that names it;
-* the OCCT wasm is the floor. A smaller kernel build (dropping IGES/STL
-  readers, the mesher, `Geom2dGcc`, …) is the only way under 3 MB, and that
-  is a fork-level exercise — see `node_modules/opencascade.js/CLAUDE.md`.
+| asset | raw | gzip | why it must be in the script |
+|---|---|---:|---|
+| `cascadestudio.wasm` (OCCT 8.0.1) | 25.77 MB | **7.62 MB** | workerd will not compile wasm at runtime |
+| `cascade-headless.mjs` | 1.03 MB | 0.29 MB | the engine (build123d-lite's Python is a string inside it) |
+| `micropython-cs.wasm` | 0.46 MB | 0.20 MB | same wasm rule |
+| `micropython-cs.mjs` | 0.10 MB | 0.03 MB | Emscripten glue; workerd forbids `import()` of a URL |
+| **`wrangler deploy`** | **28285 KiB** | **8417 KiB** | **1823 KiB of headroom** |
+
+**Static assets** (`public/`, fetched through the `ASSETS` binding at engine
+boot — 0 KiB of script):
+
+| asset | raw | gzip | fetched by |
+|---|---|---:|---|
+| `fonts/FreeSans*.ttf` (4 faces) | 4.10 MB | 2.22 MB | both flavors, at boot |
+| `py/upstream-b123d.json` (158 modules) | 3.15 MB | 0.40 MB | `PY_SRC=upstream` only |
+
+Before this split the script was **9909 KiB gz — 97% of the limit**, with the
+390 KiB gz upstream Python layer still to fit. Moving the fonts out bought
+1492 KiB and made both flavors deployable from the same 8417 KiB script.
+
+The upstream Python ships as ONE relative-path → text map rather than 158
+files because the loader asks for ~120 modules by name and every
+`env.ASSETS.fetch()` is a Worker subrequest; one fetch plus one
+`JSON.parse` costs 20 ms locally.
+
+The OCCT wasm is the floor. A smaller kernel build (dropping IGES/STL
+readers, the mesher, `Geom2dGcc`, …) is the only way under the free plan's
+3 MB, and that is a fork-level exercise — see
+`node_modules/opencascade.js/CLAUDE.md`.
 
 ## Platform restrictions this example respects
 
@@ -345,13 +435,14 @@ headroom, and does NOT fit the free plan. If you need room:
 ## Files
 
 ```
-wrangler.toml                 module rules, aliases, why nodejs_compat is off
+wrangler.toml                 module rules, [assets], [env.upstream], why nodejs_compat is off
 src/index.js                  the Worker: POST /render (+ ?stream=1), GET /health
 src/node-module-stub.js       resolves the glues' dead node-only imports
-scripts/prepare-assets.cjs    copies cascade-core/dist -> assets/ (gitignored)
+scripts/prepare-assets.cjs    cascade-core/dist -> assets/ (script) + public/ (static)
 scripts/smoke.mjs             curl-equivalent end-to-end checks, incl. the SSE stream
-scripts/edge-bench.mjs        the capability ladder (BASE=… node scripts/edge-bench.mjs)
+scripts/edge-bench.mjs        the capability ladder (+ --fidelity, the flavor delta)
 ```
 
-`assets/` is gitignored: `cascadestudio.wasm` alone is 27 MB. Run
-`npm run build` in the repo root first, then `npm run prepare-assets`.
+Both `assets/` and `public/` are gitignored (`cascadestudio.wasm` alone is
+26 MB). Run `npm run build` in the repo root first, then
+`npm run prepare-assets`.

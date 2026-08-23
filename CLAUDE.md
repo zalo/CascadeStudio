@@ -13,6 +13,7 @@ npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
 npx playwright test    # 102 tests (incl. 50 frozen build123d example scripts)
 node test/headless-node.mjs   # browser-free engine (Node, no Chromium)
+CS_PY_SRC=upstream node test/headless-node.mjs   # …on verbatim build123d 0.11.1
 ```
 
 ## Architecture (Monorepo)
@@ -665,6 +666,7 @@ const r = await engine.run(code, { language: 'python', mesh: false });
 engine.exportSTEP();      // ISO-10303-21 text     engine.exportBREP();
 engine.exportSTL();       // ASCII STL             engine.readFile('part.step');
 engine.writeFile(name, text);  engine.listFiles();  engine.loadExternalFiles({...});
+engine.measure();         // {volume, area, nSolids, nFaces, bbox, …} — no meshing
 engine.memoryStats();     // {occtWasm, pythonWasm, totalWasm, …}
 engine.kernelHealthy();   // is OCCT's file-writer machinery still usable?
 engine.resetKernel();     // rewind OCCT's linear memory to its boot image
@@ -720,9 +722,43 @@ failure by carrying the shape out as BREP, rewinding and re-importing.
 Only a fork rebuild can actually fix the kernel; until then the writers
 translate the raw trap into a message saying so.
 
-**`pySrc` default is `lite`** headless (switchable): `upstream` works too and
-uses the same memory, but needs 3.5 MB of extra Python text shipped and loads
-its library ~5x slower (642 ms vs 122 ms measured in Node).
+Two consequences of "nuclear" that the upstream source flavor forced out:
+
+* **The image is captured TWICE** — once after module init, and again once a
+  Python library has finished registering (`self._csPyLibBooted`, fired by
+  all three runtimes). Upstream build123d's signatures carry
+  `plane: Plane = Plane.XY` DEFAULT ARGUMENTS whose `gp_Pln` is built at
+  import time, so with only the pre-Python image the first `reset()` dangled
+  every one of them and the next `Box(1, 1, 1)` died in
+  `gp_Dir::Cross() - result vector has zero norm`, permanently, for the
+  isolate. Costs one extra ~20 ms snapshot per isolate.
+* **The OCP shim's lifetime ledger is generation-stamped.** `OcpShim.js`
+  retains every embind object it hands to Python (`_csPy`) and frees at op
+  boundaries; after a rewind those queued frees name addresses the restored
+  image owns again. Every wrapper now carries the epoch it was minted in — a
+  capture declares the current generation permanent, a restore opens a new
+  one — so the flush DROPS the dead generation instead of deleting it, and
+  dispatching on a stale wrapper raises by name rather than reading a
+  stranger's memory. (MicroPython has no `__del__`, so the queued-free path
+  is the only deleter there and the queue is normally empty; Pyodide's
+  `ocp_core_pyodide.py` does call it.) Frozen by `(d2)` in
+  `test/headless-node.mjs`.
+
+**`pySrc` default is `lite`** headless (switchable). `upstream` — build123d
+0.11.1's OWN Python over the OCP shim, 216/222 on the validation corpus
+against lite's 206 — is deployed alongside it (see the Cloudflare section)
+and needs `upstreamPy(rel)`, a loader for the 3.5 MB vendored tree. It costs
+~5x the library boot (642 ms vs 122 ms in Node) and the SAME memory for a
+basic model (51.5 MB, byte-identical), but heavy models are a different
+story: upstream topology puts every boolean, selector and glyph through the
+OCP shim, each dispatch retains ~32-230 B in the interpreter for the run, and
+MicroPython's GC arena grows by doubling and never shrinks — `examples/clock`
+alone takes it from 19.5 MB to 386 MB. The retention is run-scoped (~1.1 MB
+live afterwards); the ARENA is not. Bounding it needs an interpreter patch —
+`NOTE(heavy-model memory round)` in
+`packages/cascade-core/upstream-py/ocp_shim/ocp_core.py`. Both flavors are
+gated: `node test/headless-node.mjs` and `CS_PY_SRC=upstream node
+test/headless-node.mjs`.
 
 **Build**: `packages/cascade-core/scripts/build-headless.cjs` emits
 `packages/cascade-core/dist/cascade-headless.mjs` (esbuild, wasm external) next
@@ -769,18 +805,36 @@ memory budget. Measured on this machine:
   flag stays off and its dead node specifiers (`module`/`fs`/`path`/`url`) are
   still aliased to a stub in `wrangler.toml` (verified: deleting the `[alias]`
   block fails the build with four "Could not resolve" errors).
-- Bundle: 31.06 MB raw / **9.68 MB gzip** (`wrangler deploy`) — fits the 10 MB
-  paid limit with ~0.33 MB spare, not the free plan's 3 MB. OCCT's wasm is
-  7.94 MB gz of that; the two bundled fonts are 1.44 MB gz.
-- **Fonts are rationed**: build123d resolves `font_style` to a specific face,
-  and only `FreeSans` (REGULAR) + `FreeSansBold` (BOLD) fit. `FreeSansOblique`
-  / `FreeSansBoldOblique` do not, and asking for one now raises an error that
-  NAMES it — that missing face was the whole of the `examples/clock` failure
-  ("Cannot set properties of undefined (setting 'hash')": `_opentypeTextFace`
-  returned null and `CacheOp` died on it). Both ends are fixed: the font
-  lookup distinguishes "nothing loaded yet" (the browser's async-startup
-  retry) from "not this face" (permanent, named), and `CacheOp` names the
-  operation when a cacheMiss produces nothing.
+- **Static assets carry the Python and the fonts.** `[assets] binding =
+  "ASSETS", run_worker_first = true` over `./public`, fetched at engine boot
+  through `env.ASSETS.fetch()` (which is why boot must stay lazy and
+  per-request — the binding only exists on a fetch handler's `env`). Script
+  **9909 -> 8417 KiB gz** of the 10240 KiB limit, 1823 KiB of headroom, the
+  SAME script for both flavors. The `.wasm` files cannot follow: workerd
+  will not compile WebAssembly at runtime. The upstream Python ships as ONE
+  relative-path -> text JSON (158 modules, 0.40 MB gz) because the loader
+  asks for ~120 modules and every `env.ASSETS.fetch()` is a subrequest.
+- **Two flavors, two wrangler environments.** Default `PY_SRC=lite`
+  (`cascade-headless`), `--env upstream` -> `PY_SRC=upstream`
+  (`cascade-headless-upstream`). One isolate serves one flavor: the engine
+  keeps its state on the worker global and a runtime registers ONE library.
+  Cold first `/render` 3.0 s (lite) / 5.6 s (upstream); warm trivial model
+  44-57 / 61-89 ms; basic-model isolate memory identical at 51.5 MB. The
+  fidelity delta is real and visible — `edge-bench.mjs --fidelity`:
+  `ttt-ppp0110` is a lite 422 ("Union produced near-zero volume") and an
+  upstream 200 at the native 207159.364; `docs-selectors/sort_axis` is 200 on
+  BOTH and only the volume differs (lite 8533.385, upstream 9353.444 =
+  native). `examples/toy_truck` is the counter-example: upstream builds what
+  lite's fillet cannot, but needs 168.7 MB, so the edge trades a 422 for an
+  `exceededMemory` 503.
+- **All four FreeSans faces ship now** (2.22 MB gz, out of the script), so
+  `FontStyle.ITALIC`/`BOLDITALIC` resolve; a face that is genuinely absent
+  still raises an error that NAMES it — that missing face was the whole of
+  the `examples/clock` failure ("Cannot set properties of undefined (setting
+  'hash')": `_opentypeTextFace` returned null and `CacheOp` died on it). Both
+  ends are fixed: the font lookup distinguishes "nothing loaded yet" (the
+  browser's async-startup retry) from "not this face" (permanent, named), and
+  `CacheOp` names the operation when a cacheMiss produces nothing.
 - CPU: free plan's 10 ms cannot even boot the kernel; the paid DEFAULT of 30 s
   is a real ceiling here (heat_exchanger 503'd at ~37 s), so `wrangler.toml`
   asks for the paid maximum `[limits] cpu_ms = 300000`. Starter model ≈ 450 ms
@@ -792,10 +846,13 @@ memory budget. Measured on this machine:
   wasm call, so per-op "live" progress would be a burst at the end. Each write
   is followed by `scheduler.wait(0)` or workerd flushes nothing until the end.
 - The capability ladder (`examples/cloudflare-worker/scripts/edge-bench.mjs`,
-  measured against the deployed Worker) is in that example's README. 8 of 9
-  corpus models return STEP; `bicycle_tire` is out on both counts —
-  COMPROMISE(kernel-heap-reset) with no BREP carrier, and 163.3 MB against the
-  128 MB isolate.
+  measured against the deployed Workers) is in that example's README. On
+  **lite** 8 of 9 corpus models return STEP; `bicycle_tire` is out on both
+  counts — COMPROMISE(kernel-heap-reset) with no BREP carrier, and 163.3 MB
+  against the 128 MB isolate. On **upstream** 6 of 9 do: `clock`,
+  `heat_exchanger` and `bicycle_tire` all 503 with `exceededMemory` (confirmed
+  via `wrangler tail --env upstream`), which is the arena ratchet above, not a
+  CPU limit.
 
 ## Playwright Testing
 
