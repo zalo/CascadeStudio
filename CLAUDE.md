@@ -594,10 +594,13 @@ then fails on `Mesher.write`), `Mesher.read` (the STL round trip through
 `pathlib`/`tempfile` in docs-rst/topology_selection/b10 — no mesh reader, and
 its measured faces are individual BRepMesh triangles),
 `fix_degenerate_edges`/`offset(min_edge_length=)` and `split(Keep.BOTH)`.
-`docs/spitfire_wing_gordon` is a TIMEOUT, not a gap: it runs (real
-`pytest.approx` shim) and spends ~390 s building the wing's Gordon surface
-before returning a null surface — the cost/robustness of
-COMPROMISE(gordon-surface-realization) at that scale. `examples/heat_exchanger`
+`docs/spitfire_wing_gordon` runs (real `pytest.approx` shim) into the
+cost/robustness limit of COMPROMISE(gordon-surface-realization) at wing
+scale. On the 64 KB-stack JS-EH kernel it spent ~390 s and returned a null
+surface; on the pinned native-EH/512 KB-stack build it finishes in ~60 s with
+a VALID wing 10.2% under the reference volume (1.7852 vs 1.9880 e9 mm³,
+identical on lite and upstream), failing the script's own volume assert. The
+60 s harness budget makes it TIMEOUT or ERROR depending on machine load. `examples/heat_exchanger`
 sits right at the 60 s harness budget (~55 s on an idle machine) and times out
 when harness pages contend; it passes on its own.
 Two scripts die in the kernel with byte-identical defaults to upstream: the
