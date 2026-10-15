@@ -376,7 +376,7 @@ def pending_fork_binding(what):
 # ---- build123d 0.13 / OCP 8 glue classes ------------------------------ #
 # The shape Map/DataMap glue is runtime-neutral (hash + IsSame only) and
 # shared with ocp_core_pyodide.py: see ocp_glue.py.
-from ocp_glue import CsShapeMap, CsShapeDataMap  # noqa: E402,F401
+from ocp_glue import CsShapeMap, CsShapeDataMap, CsSLProps  # noqa: E402,F401
 
 
 def cs_brep_adaptor_curve2d(edge, face):
@@ -392,3 +392,20 @@ def cs_brep_adaptor_curve2d(edge, face):
     except _CsWorkerError as e:
         _fail(str(e))
     return wrap(r)
+
+
+def cs_brep_lprop_slprops(surface, u, v, order=2, resolution=1e-7):
+    """BRepLProp_SLProps glue — see ocp_glue.CsSLProps / OcpShim.js
+    _csSLProps (LProp_SLProps' computation on the bound Adaptor3d_Surface
+    D2)."""
+    try:
+        rec = w._csSLProps(_unwrap(surface), float(u), float(v),
+                              float(resolution))
+    except _CsWorkerError as e:
+        _fail(str(e))
+    rec = wrap(rec)
+
+    def _make_dir(x, y, z):
+        from OCP.gp import gp_Dir
+        return gp_Dir(x, y, z)
+    return CsSLProps(rec, _make_dir)

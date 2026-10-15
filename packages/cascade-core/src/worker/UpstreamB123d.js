@@ -36,14 +36,16 @@
 import { installOcpShim } from './OcpShim.js';
 
 /** The TOPOLOGY layer under pysrc=upstream (Stage 3,
- *  experiments/upstream-topology-spike/STAGE3-STATE.md): 'upstream' boots
- *  the generated OCP-over-embind shim (upstream-py/ocp_shim/) and runs
- *  upstream 0.11.1's geometry.py + the WHOLE topology package VERBATIM,
- *  with ocp_shim/topo_glue.py as the worker glue. DEFAULT since the
- *  Stage-3 flip (harness 215/3/3/1 vs the seam's 205/10/5/2, full gates
- *  green); `?pytopo=lite` (localStorage 'cascade-py-topo') opts back into
- *  the seam-over-lite layer, and a missing ocp_shim payload warns and
- *  falls back to lite rather than failing the boot. */
+ *  experiments/upstream-topology-spike/STAGE3-STATE.md): the generated
+ *  OCP-over-embind shim (upstream-py/ocp_shim/) runs upstream's own
+ *  geometry.py + the WHOLE topology package VERBATIM, with
+ *  ocp_shim/topo_glue.py as the worker glue. The ONLY topology layer since
+ *  the build123d 0.13 bump: `?pytopo=lite` (upstream Level-A over a seam of
+ *  lite's classes) was retired — 0.13's builders read the kernel's own
+ *  operation record (topology/history.py ShapeHistory for Select.LAST/NEW)
+ *  and publish through the BuildScope firewall, which lite's topology does
+ *  not model. The flag still parses; it warns and runs upstream. For
+ *  build123d-lite use `pysrc=lite`. */
 export const PYTOPO_DEFAULT = 'upstream';
 
 /** Which vendored upstream source tree is ACTIVE. This is the single
@@ -523,21 +525,18 @@ if _cs_os_shim is not None and not hasattr(_cs_os_shim, 'fspath'):
  *  @param fetchText async (relativePath) => string  — reads dist/upstream-b123d files
  */
 export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
-  let pytopo = pytopoOpt || self._csPyTopo || PYTOPO_DEFAULT;
-  if (pytopo === 'upstream') {
-    // the upstream-topology payload (generated OCP shim + glue) rides in
-    // dist/upstream-b123d/ocp_shim/; when a checkout lacks it, warn and
-    // fall back to the seam-over-lite layer rather than failing the boot
-    try {
-      await fetchText('ocp_shim/MANIFEST.json');
-    } catch (probeErr) {
-      console.warn('[pytopo] upstream-topology payload unavailable — '
-        + 'falling back to pytopo=lite ('
-        + String((probeErr && probeErr.message) || probeErr).split('\n')[0]
-        + ')');
-      pytopo = 'lite';
-    }
+  const requested = pytopoOpt || self._csPyTopo || PYTOPO_DEFAULT;
+  if (requested === 'lite') {
+    console.warn('[pytopo] pytopo=lite was retired with the build123d 0.13 '
+      + 'bump (0.13\'s builders need upstream\'s own topology: ShapeHistory '
+      + 'records, BuildScope publication) — running pytopo=upstream. For '
+      + 'build123d-lite use pysrc=lite.');
   }
+  const pytopo = 'upstream';
+  // the upstream-topology payload (generated OCP shim + glue) rides in
+  // dist/upstream-b123d/ocp_shim/ and is REQUIRED (the runtime probes it
+  // before calling here and falls back to pysrc=lite when it is absent)
+  await fetchText('ocp_shim/MANIFEST.json');
   self._csPyTopoEffective = pytopo;
   const manifest = JSON.parse(await fetchText('manifest.json'));
 
@@ -562,6 +561,15 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     hasMetaclasses = false;
   }
   self._csMpHasMetaclasses = hasMetaclasses;
+  if (!hasMetaclasses) {
+    // upstream geometry (AxisMeta/PlaneMeta) and 0.12+'s BaseObjectMeta
+    // construction firewall are metaclasses; the runtime pre-probes this
+    // and keeps metaclass-free interpreters on pysrc=lite
+    throw new Error('pysrc=upstream (build123d '
+      + ACTIVE_UPSTREAM_VENDOR.replace(/^build123d-/, '') + ') needs an '
+      + 'interpreter with custom metaclasses (the vendored micropython-cs '
+      + 'artifacts); the stock fallback pair can only run pysrc=lite');
+  }
   const transformOpts = { metaclasses: hasMetaclasses,
     upstreamGeometry: pytopo === 'upstream' };
 
@@ -716,20 +724,10 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     await regUpstream(name);
   }
 
-  // 6. the geometry/topology bottom layer.
-  //    pytopo=lite (the default): the SEAM adapter modules re-export lite's
-  //    classes. pytopo=upstream (Stage 3): upstream geometry.py + the WHOLE
+  // 6. the geometry/topology bottom layer: upstream geometry.py + the WHOLE
   //    topology package run VERBATIM over the OCP shim, and lite reduces to
   //    the JS op layer + the worker glue (ocp_shim/topo_glue.py).
-  if (pytopo !== 'upstream') {
-    br._cs_register_module('build123d.geometry', await fetchText('build123d/geometry.py'), false);
-    br._cs_register_module('build123d.topology', await fetchText('build123d/topology/__init__.py'), true);
-    const seamSubs = ['shape_core', 'composite', 'three_d', 'two_d', 'one_d', 'zero_d'];
-    for (const sub of seamSubs) {
-      br._cs_register_module('build123d.topology.' + sub,
-        await fetchText('build123d/topology/' + sub + '.py'), false);
-    }
-  } else {
+  {
     registerAlias('anytree', await fetchText('ocp_shim/anytree.py'));
     br._cs_register_module('IPython', 'pass\n', true);
     br._cs_register_module('IPython.lib', 'pass\n', true);

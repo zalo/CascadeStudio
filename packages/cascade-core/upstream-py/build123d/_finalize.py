@@ -21,10 +21,10 @@ _OPTIONAL = ('objects_part', 'objects_curve', 'objects_sketch', 'joints',
              'pack', 'operations_sketch', 'operations_generic',
              'operations_part', 'drafting')
 
-# Which topology layer is beneath us: 'lite' (the seam re-exports) or
-# 'upstream' (Stage 3: upstream geometry+topology verbatim over the OCP
-# shim, with ocp_shim/topo_glue.py as the worker glue).
-_PYTOPO = getattr(_pkg, '_cs_pytopo', 'lite')
+# The topology layer beneath us is ALWAYS upstream's own (Stage 3: upstream
+# geometry + topology verbatim over the OCP shim, ocp_shim/topo_glue.py as
+# the worker glue). The seam-over-lite layer (pytopo=lite) and its branches
+# here were retired with the build123d 0.13 bump.
 
 
 def _cs_current_builder():
@@ -83,71 +83,39 @@ for _name in dir(_lt):
     if isinstance(_val, type):
         setattr(_pkg, _name, _val)
 
-# viewer + measurement + export hooks (worker/harness contract).
-# pytopo=lite: lite's own hooks work on lite shapes. pytopo=upstream: the
-# worker glue (topo_glue) serves the same contract over UPSTREAM shapes
-# (raw-TopoDS unwrapping); lite-only helper FUNCTIONS with no upstream
-# counterpart still come from lite where they remain shape-compatible.
-if _PYTOPO == 'upstream':
-    import topo_glue as _glue
-    for _name in ('show', 'show_object', 'show_all', 'volume',
-                  '_measure_globals_json', 'export_stl', 'export_step',
-                  'export_gltf', 'export_brep', 'import_brep', 'import_step',
-                  'Mesher', '_cs_after_run'):
-        setattr(_pkg, _name, getattr(_glue, _name))
-    for _name in ('ExportSVG', 'polar', 'delta', 'available_fonts'):
-        if not hasattr(_pkg, _name) and hasattr(_lt, _name):
-            setattr(_pkg, _name, getattr(_lt, _name))
+# viewer + measurement + export hooks (worker/harness contract): the worker
+# glue (topo_glue) serves them over UPSTREAM shapes (raw-TopoDS unwrapping);
+# lite-only helper FUNCTIONS with no upstream counterpart still come from
+# lite where they remain shape-compatible.
+import topo_glue as _glue
+for _name in ('show', 'show_object', 'show_all', 'volume',
+              '_measure_globals_json', 'export_stl', 'export_step',
+              'export_gltf', 'export_brep', 'import_brep', 'import_step',
+              'Mesher', '_cs_after_run'):
+    setattr(_pkg, _name, getattr(_glue, _name))
+for _name in ('ExportSVG', 'polar', 'delta', 'available_fonts'):
+    if not hasattr(_pkg, _name) and hasattr(_lt, _name):
+        setattr(_pkg, _name, getattr(_lt, _name))
 
-    # lite's ArrowHead (drafting) computed lite-side, adopted as an UPSTREAM
-    # Sketch (so Pos * head / .moved() work); enum kwargs translate by name
-    def _cs_arrowhead(size, head_type=None, rotation=0, mode=None):
-        import topo_glue as _g
-        ht = _lt.HeadType.CURVED if head_type is None else \
-            getattr(_lt.HeadType, getattr(head_type, 'name', ''), head_type)
-        res = _lt.ArrowHead(size, head_type=ht, rotation=rotation,
-                            mode=_lt.Mode.PRIVATE)
-        head = _g._from_raw(_lt._topo(res), _topology.Sketch)
-        ctx = _cs_current_builder()
-        if ctx is not None:
-            ctx._add_to_context(
-                head, mode=mode if mode is not None else _enums.Mode.ADD)
-        return head
+# lite's ArrowHead (drafting) computed lite-side, adopted as an UPSTREAM
+# Sketch (so Pos * head / .moved() work); enum kwargs translate by name
+def _cs_arrowhead(size, head_type=None, rotation=0, mode=None):
+    import topo_glue as _g
+    ht = _lt.HeadType.CURVED if head_type is None else \
+        getattr(_lt.HeadType, getattr(head_type, 'name', ''), head_type)
+    res = _lt.ArrowHead(size, head_type=ht, rotation=rotation,
+                        mode=_lt.Mode.PRIVATE)
+    head = _g._from_raw(_lt._topo(res), _topology.Sketch)
+    ctx = _cs_current_builder()
+    if ctx is not None:
+        ctx._add_to_context(
+            head, mode=mode if mode is not None else _enums.Mode.ADD)
+    return head
 
-    if 'build123d.drafting' not in sys.modules:
-        # only when upstream's own drafting module did not load (it carries
-        # the verbatim ArrowHead/Arrow next to Draft/DimensionLine/...)
-        _pkg.ArrowHead = _cs_arrowhead
-else:
-    for _name in ('show', 'show_object', 'show_all', 'volume',
-                  '_measure_globals_json', 'export_stl', 'export_step',
-                  'export_gltf', 'export_brep', 'import_brep', 'import_step',
-                  'Mesher', 'ExportSVG', 'ArrowHead', 'polar', 'delta',
-                  'topo_distance_to', 'edges_to_wires'):
-        if hasattr(_lt, _name):
-            setattr(_pkg, _name, getattr(_lt, _name))
-
-
-# lite operations with NO upstream Level-A counterpart that must also reach
-# an UPSTREAM builder context: call lite's (context-free here — lite's own
-# builder stack is empty in upstream mode), then hand the result to the
-# active upstream builder with the operation's combination mode.
-def _cs_builder_op(fn, mode):
-    def wrapped(*a, **k):
-        res = fn(*a, **k)
-        ctx = _cs_current_builder()
-        if ctx is not None and res is not None and \
-                getattr(res, 'topo', None) is not None:
-            ctx._add_to_context(res, mode=mode)
-        return res
-    return wrapped
-
-
-if _PYTOPO != 'upstream':
-    # upstream 0.11.1 HAS operations_part.draft, but over the LITE seam its
-    # OCP calls cannot run; route to lite's validated draft op. Under
-    # pytopo=upstream the verbatim operations_part.draft is already in _pkg.
-    _pkg.draft = _cs_builder_op(_lt.draft, _enums.Mode.REPLACE)
+if 'build123d.drafting' not in sys.modules:
+    # only when upstream's own drafting module did not load (it carries
+    # the verbatim ArrowHead/Arrow next to Draft/DimensionLine/...)
+    _pkg.ArrowHead = _cs_arrowhead
 
 
 # upstream's Airfoil needs real numpy (an honest raise on this runtime);
@@ -158,10 +126,9 @@ def _cs_airfoil(airfoil_code, n_points=50, finite_te=False,
                 mode=_enums.Mode.ADD):
     res = _lt.Airfoil(airfoil_code, n_points=n_points, finite_te=finite_te,
                       mode=_lt.Mode.PRIVATE)
-    if _PYTOPO == 'upstream':
-        # adopt the lite-built edges as UPSTREAM shapes
-        import topo_glue as _g
-        res = _g._from_raw(_lt._topo(res), _topology.Curve)
+    # adopt the lite-built edges as UPSTREAM shapes
+    import topo_glue as _g
+    res = _g._from_raw(_lt._topo(res), _topology.Curve)
     ctx = _cs_current_builder()
     if ctx is not None and res is not None:
         ctx._add_to_context(*res.edges(), mode=mode)
@@ -171,47 +138,6 @@ def _cs_airfoil(airfoil_code, n_points=50, finite_te=False,
 _pkg.Airfoil = _cs_airfoil
 
 
-# upstream's DoubleTangentArc leaves the tangent TARGET over-extended
-# ("beyond the intersection") and relies on native wire fixing to trim it at
-# face time; this kernel's ShapeFix can't modify topology (the mode setters
-# are unbound), so use lite's validated solver AND trim the target inside the
-# active upstream BuildLine, exactly like lite does in its own builders
-# (COMPROMISE(double-tangent-arc)).
-def _cs_double_tangent_arc(pnt, tangent, other, keep=None, mode=None):
-    # pytopo=lite only (under upstream topology the verbatim objects_curve
-    # DoubleTangentArc runs over the shim's scipy Nelder-Mead shim)
-    lk = getattr(_lt.Keep, getattr(keep, 'name', 'TOP'), _lt.Keep.TOP)
-    arc = _lt.DoubleTangentArc(pnt, tangent, other, keep=lk,
-                               mode=_lt.Mode.PRIVATE)
-    ctx = _cs_current_builder()
-    if ctx is not None and getattr(ctx, '_tag', '') == 'BuildLine' and \
-            ctx._obj is not None and getattr(ctx._obj, 'topo', None) is not None:
-        try:
-            p1 = arc @ 1
-            other_keys = set()
-            for oe in other.edges():
-                other_keys.add(_lt._shape_key(oe, 'edge'))
-            rebuilt = []
-            for e in ctx._obj.edges():
-                if _lt._shape_key(e, 'edge') in other_keys:
-                    try:
-                        u = e.param_at_point(tuple(p1))
-                        if u > 1e-9:
-                            e = e.trim(0.0, u)
-                    except Exception:
-                        pass
-                rebuilt.append(e)
-            ctx._obj = type(ctx._obj)(rebuilt)
-        except Exception:
-            pass
-    if ctx is not None:
-        ctx._add_to_context(*arc.edges(),
-                            mode=mode if mode is not None else _enums.Mode.ADD)
-    return arc
-
-
-if _PYTOPO != 'upstream':
-    _pkg.DoubleTangentArc = _cs_double_tangent_arc
 
 
 
@@ -253,45 +179,44 @@ _common.LocationList.__rmul__ = _loclist_rmul
 # (Vertex(Vector), build_common flattening over Compound/ShapeList/GroupBy
 # ...), so extend the tuple with every build123d class that defines __iter__
 # and rebind the name in every module that imported the OLD tuple.
-if _PYTOPO == 'upstream':
-    # the shim registers under the dotted name in sys.modules (aliased);
-    # `import collections.abc` would need a real collections package
-    _cabc = sys.modules['collections.abc']
+# the shim registers under the dotted name in sys.modules (aliased);
+# `import collections.abc` would need a real collections package
+_cabc = sys.modules['collections.abc']
 
-    _old_iterable = _cabc.Iterable
+_old_iterable = _cabc.Iterable
 
-    def _has_instance_iter(cls):
-        # __iter__ defined on the class CHAIN itself (a metaclass __iter__ —
-        # EnumMeta — makes the CLASS iterable, not its instances)
-        stack = [cls]
-        while stack:
-            k = stack.pop()
-            d = getattr(k, '__dict__', None)
-            if d and '__iter__' in d:
-                return True
-            stack.extend(getattr(k, '__bases__', ()))
-        return False
+def _has_instance_iter(cls):
+    # __iter__ defined on the class CHAIN itself (a metaclass __iter__ —
+    # EnumMeta — makes the CLASS iterable, not its instances)
+    stack = [cls]
+    while stack:
+        k = stack.pop()
+        d = getattr(k, '__dict__', None)
+        if d and '__iter__' in d:
+            return True
+        stack.extend(getattr(k, '__bases__', ()))
+    return False
 
-    _extra = []
-    for _mname, _mod in list(sys.modules.items()):
-        if not _mname.startswith('build123d'):
-            continue
-        for _attr in dir(_mod):
-            _val = getattr(_mod, _attr, None)
-            if isinstance(_val, type) and _has_instance_iter(_val) \
-                    and not issubclass(_val, _old_iterable) \
-                    and _val not in _extra:
-                _extra.append(_val)
-    if _extra:
-        _new_iterable = _old_iterable + tuple(_extra)
-        _cabc.Iterable = _new_iterable
-        for _mod in list(sys.modules.values()):
-            try:
-                _cur = getattr(_mod, 'Iterable', None)
-            except Exception:
-                continue  # raising module __getattr__ (numpy micro-shim)
-            if _cur is _old_iterable:
-                _mod.Iterable = _new_iterable
+_extra = []
+for _mname, _mod in list(sys.modules.items()):
+    if not _mname.startswith('build123d'):
+        continue
+    for _attr in dir(_mod):
+        _val = getattr(_mod, _attr, None)
+        if isinstance(_val, type) and _has_instance_iter(_val) \
+                and not issubclass(_val, _old_iterable) \
+                and _val not in _extra:
+            _extra.append(_val)
+if _extra:
+    _new_iterable = _old_iterable + tuple(_extra)
+    _cabc.Iterable = _new_iterable
+    for _mod in list(sys.modules.values()):
+        try:
+            _cur = getattr(_mod, 'Iterable', None)
+        except Exception:
+            continue  # raising module __getattr__ (numpy micro-shim)
+        if _cur is _old_iterable:
+            _mod.Iterable = _new_iterable
 
 
 def _reset_state():

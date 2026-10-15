@@ -37,7 +37,7 @@
 //    and remapped via sys.modules; the rest import normally from /lib.
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
-import { bootstrapUpstreamB123d, PYTOPO_DEFAULT, ACTIVE_UPSTREAM_VENDOR,
+import { bootstrapUpstreamB123d, ACTIVE_UPSTREAM_VENDOR,
   rewriteListConcatCoercion } from './UpstreamB123d.js';
 import { instantiateWasmSpec } from './WasmAssets.js';
 
@@ -542,6 +542,20 @@ async function _bootstrap(srcKind) {
     let available = true;
     try {
       await fetchText('manifest.json');
+      await fetchText('ocp_shim/MANIFEST.json');
+      // upstream build123d needs interpreter metaclasses (AxisMeta,
+      // BaseObjectMeta): only the custom micropython-cs artifacts have them
+      try {
+        mp.runPython('class _CsMetaProbe(type):\n    pass\n'
+          + 'class _CsMetaProbed(metaclass=_CsMetaProbe):\n    pass\n'
+          + 'del _CsMetaProbe, _CsMetaProbed');
+      } catch (metaErr) {
+        const e = new Error('pysrc=upstream needs the custom micropython-cs '
+          + 'interpreter (custom metaclasses); the ' + artifactKind
+          + ' artifacts booted');
+        e._csPermanent = true;
+        throw e;
+      }
     } catch (probeErr) {
       if (srcKind === 'upstream') { throw probeErr; }
       available = false;
@@ -603,8 +617,7 @@ async function _bootstrap(srcKind) {
       self._pythonRuntimeKind = 'micropython';
       self._pythonSrcKind = effectiveSrc;
       self._b123dSceneDefined = false;
-      if (effectiveSrc === 'upstream' &&
-          (self._csPyTopo || PYTOPO_DEFAULT) === 'upstream') {
+      if (effectiveSrc === 'upstream') {
         // USER code runs verbatim over upstream ShapeLists; MicroPython's
         // list.__add__ refuses list subclasses on the right, so the same
         // line-preserving coercion the library sources get applies here

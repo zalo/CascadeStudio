@@ -537,6 +537,7 @@ const CLASS_GLUE = {
   TopTools_MapOfShape: 'CsShapeMap',
   TopTools_DataMapOfShapeShape: 'CsShapeDataMap',
   BRepAdaptor_Curve2d: 'cs_brep_adaptor_curve2d',
+  BRepLProp_SLProps: 'cs_brep_lprop_slprops',
 };
 const moduleFiles = {};
 for (const [mod, names] of Object.entries(importMap)) {

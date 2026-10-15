@@ -141,3 +141,51 @@ class CsShapeDataMap:
         self._n = 0
 
 
+
+
+class CsSLProps:
+    """BRepLProp_SLProps(surface, u, v, order, resolution) stand-in (the fork
+    never bound it; 0.13 Face.convexity). Holds the values the JS glue
+    (OcpShim.js _csSLProps — LProp_SLProps' own computation on the bound
+    Adaptor3d_Surface::D2) returned; Normal() builds a real gp_Dir proxy."""
+
+    def __init__(self, rec, make_dir):
+        self._rec = rec
+        self._make_dir = make_dir
+
+    def IsCurvatureDefined(self):
+        return bool(self._rec[0])
+
+    def IsNormalDefined(self):
+        r = self._rec
+        return bool(r[0]) or (r[1] != 0 or r[2] != 0 or r[3] != 0)
+
+    def _need(self):
+        if not self._rec[0]:
+            try:
+                from OCP.LProp import LProp_NotDefined as _nd
+            except ImportError:
+                _nd = RuntimeError
+            raise _nd('BRepLProp_SLProps: curvature not defined')
+
+    def Normal(self):
+        if not self.IsNormalDefined():
+            self._need()
+        r = self._rec
+        return self._make_dir(float(r[1]), float(r[2]), float(r[3]))
+
+    def MinCurvature(self):
+        self._need()
+        return float(self._rec[4])
+
+    def MaxCurvature(self):
+        self._need()
+        return float(self._rec[5])
+
+    def MeanCurvature(self):
+        self._need()
+        return float(self._rec[6])
+
+    def GaussianCurvature(self):
+        self._need()
+        return float(self._rec[7])
