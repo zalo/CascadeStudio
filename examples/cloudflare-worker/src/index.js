@@ -12,9 +12,8 @@
 //             when a script first uses it
 //
 // Total Upload ~25 MiB of Cloudflare's 64 MiB (uncompressed — the only size
-// limit since 2026-09-04, Free and Paid alike) with the native-EH OCCT build;
-// ~32 MiB on the JS-EH pin. build123d-lite's Python is a string inside
-// cascade-headless.mjs.
+// limit since 2026-09-04, Free and Paid alike) with the native-EH OCCT build.
+// build123d-lite's Python is a string inside cascade-headless.mjs.
 
 import { env } from 'cloudflare:workers';
 import { createWorker } from './app.js';

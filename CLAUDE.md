@@ -1272,9 +1272,9 @@ must evaluate with zero errors. `saveProject()` serializes `mode` alongside the 
 ## Key Dependencies
 
 - **opencascade.js**: Custom fork of OCCT 8.0.1 compiled with emsdk 4.0.23
-  (branch `cascadestudio-v3-occt801` of the fork checkout — the native-EH
-  artifacts below are on `cascadestudio-v3-occt801-wasmeh`, pending the
-  repin; the build pipeline
+  (pinned to branch `cascadestudio-v3-occt801-wasmeh` @99482df of the fork
+  checkout — `cascadestudio-v3-occt801` plus the native-EH/8 MB/512 KB-stack
+  build below; the build pipeline
   and the reason each hand-registered symbol exists are in its CHANGELOG.md.
   The worker cross-checks `USED_OCCT_SYMBOLS` against the module at startup, so
   a renumbered overload or a silently-dropped binding fails loudly.)

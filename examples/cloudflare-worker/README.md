@@ -408,7 +408,7 @@ Everything is therefore a module of the script (`assets/`, built by
 
 | module | raw | type | |
 |---|---:|---|---|
-| `cascadestudio.wasm` (OCCT 8.0.1, the fork's native-EH artifact) | 19.66 MB (25.77 MB on today's JS-EH pin) | CompiledWasm | workerd will not compile wasm at runtime |
+| `cascadestudio.wasm` (OCCT 8.0.1, the fork's native-EH artifact) | 19.66 MB (25.77 MB for the JS-EH debug artifact) | CompiledWasm | workerd will not compile wasm at runtime |
 | `cascade-headless.mjs` | 1.08 MB | bundled JS | the engine (build123d-lite 0.13's Python is a string inside it) |
 | `micropython-cs.wasm` | 0.62 MB | CompiledWasm | the patched interpreter (patches 11/12) |
 | `micropython-cs.mjs` | 0.10 MB | bundled JS | Emscripten glue; workerd forbids `import()` of a URL |
@@ -416,8 +416,8 @@ Everything is therefore a module of the script (`assets/`, built by
 | `upstream-b123d.json` (build123d 0.13.0 + shim + glue) | 3.41 MB | Data | upstream and real entries; decoded once at boot, then the buffer is detached (`transfer(0)`) so its backing store is freed |
 | `pyodide/*` (`prepare-pyodide.mjs`) | ~20 MB | CompiledWasm / Data / JS | real entry only: interpreter, 13 numpy side modules, 28 precompiled signatures, stdlib, wheels |
 
-`wrangler deploy --dry-run --outdir` with the native-EH artifacts (the gates'
-state; add ~7.2 MB per entry on today's JS-EH pin):
+`wrangler deploy --dry-run --outdir` with the pinned native-EH artifacts
+(~7.2 MB more per entry if the JS-EH debug artifact were shipped instead):
 
 | entry | Total Upload | of 64 MiB |
 |---|---:|---:|
@@ -437,8 +437,8 @@ The OCCT wasm is no longer a floor that matters, but it is still the
 biggest thing here, and the cheapest CPU win as well: rebuilt with native
 wasm exceptions it is 19.66 MB (−27%) and evaluates models 10-73% faster
 with identical geometry. That build is now the fork's default
-(`cascadestudio-v3-occt801-wasmeh`, pending the repin; the Total Uploads
-above), together with `-sINITIAL_MEMORY=8MB` and `-sSTACK_SIZE=512KB`
+(`cascadestudio-v3-occt801-wasmeh` @99482df, which CascadeStudio pins; the
+Total Uploads above), together with `-sINITIAL_MEMORY=8MB` and `-sSTACK_SIZE=512KB`
 (SIZE-INVESTIGATION.md §7).
 The example ships **only** that default artifact: `prepare-assets.cjs`
 copies `cascadestudio.wasm` and never the JS-exceptions debug pair

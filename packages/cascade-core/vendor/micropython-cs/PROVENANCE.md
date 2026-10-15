@@ -9,10 +9,10 @@ in `dist/` (see the build script's copy step and the runtime's probe).
 - MicroPython **v1.28.0**, tag commit `e0e9fbb` — the same source release the
   npm package `@micropython/micropython-webassembly-pyscript@1.28.0-6`
   (the stock artifacts CascadeStudio falls back to) was built from.
-- Local patched checkout: `~/Desktop/micropython-cs` (patches 1-10, branch
-  `cs-patches-v1.28.0`); patch 11 lives on the local branch
-  `cs-gc-incremental` (worktree `~/Desktop/mp-cf-fidelity`) with patches 11-12,
-  stacked on it.
+- Patched source: `zalo/micropython` branch `cs-patches-v1.28.0` (patches
+  1-10; local checkout `~/Desktop/micropython-cs`) and branch
+  `cs-gc-incremental` @3647b6a, which stacks patches 11-12 on it (local
+  worktree `~/Desktop/mp-cf-fidelity`). Both are pushed.
 
 ## Patches applied (in order, on top of e0e9fbb)
 

@@ -470,8 +470,8 @@ gates and `smoke.mjs` against `wrangler dev` on all three environments.
 ## 7. Adopted (2026-10-15): native EH by default, 8 MB initial memory, 512 KB stack
 
 The user approved the switch. The fork branch
-**`cascadestudio-v3-occt801-wasmeh`** (local, commit **`99482df`**, not
-pushed) ships two artifact pairs from one binding list:
+**`cascadestudio-v3-occt801-wasmeh`** (commit **`99482df`**, pushed and
+pinned by CascadeStudio on 2026-10-15) ships two artifact pairs from one binding list:
 
 | artifact | exceptions | wasm | glue | `.d.ts` | role |
 |---|---|---:|---:|---|---|

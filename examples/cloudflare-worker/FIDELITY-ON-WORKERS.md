@@ -132,7 +132,7 @@ heap ends at 64.3 MB on the stock interpreter and 16.3 MB on the patched one
 
 ### The fix: interpreter patch 11
 
-`zalo/micropython` fork, local branch `cs-gc-incremental`, commit `8a616fb`:
+`zalo/micropython` fork, branch `cs-gc-incremental`, commit `8a616fb`:
 "webassembly: Collect garbage during execution in the pyscript variant".
 
 The roots are made visible at link time instead of deferring collection:
@@ -615,7 +615,7 @@ so it is listed rather than run.
   out of lane.
 - **The browser worker bundle** is still built with `--keep-names` (same
   heap waste in the browser).
-- **Reproducibility.** The interpreter patches live on the local branch
-  `cs-gc-incremental` of `~/Desktop/mp-cf-fidelity` (a worktree of
-  `~/Desktop/micropython-cs`), not pushed. The vendored artifacts and
-  PROVENANCE.md are enough to rebuild.
+- **Reproducibility.** The interpreter patches live on `zalo/micropython`
+  branch `cs-gc-incremental` (pushed 2026-10-15; local worktree
+  `~/Desktop/mp-cf-fidelity`). The vendored artifacts and PROVENANCE.md are
+  enough to rebuild.
