@@ -11,7 +11,8 @@ in `dist/` (see the build script's copy step and the runtime's probe).
   (the stock artifacts CascadeStudio falls back to) was built from.
 - Local patched checkout: `~/Desktop/micropython-cs` (patches 1-10, branch
   `cs-patches-v1.28.0`); patch 11 lives on the local branch
-  `cs-gc-incremental` (worktree `~/Desktop/mp-cf-fidelity`), stacked on it.
+  `cs-gc-incremental` (worktree `~/Desktop/mp-cf-fidelity`) with patches 11-12,
+  stacked on it.
 
 ## Patches applied (in order, on top of e0e9fbb)
 
@@ -28,6 +29,7 @@ in `dist/` (see the build script's copy step and the runtime's probe).
 | `83f1550` | ports/webassembly: Convert out-of-int32 integral JS numbers as floats. |
 | `7f63764` | ports/webassembly: Append JSFLAGS_EXTRA to JSFLAGS. |
 | `8a616fb` | webassembly: Collect garbage during execution in the pyscript variant. |
+| `3647b6a` | webassembly/variants/pyscript: Start with 6 MiB of linear memory. |
 
 What they give this runtime (each feature-detected in browser.py /
 Build123dLite.js, so the stock artifacts keep working):
@@ -107,6 +109,15 @@ Build123dLite.js, so the stock artifacts keep working):
   limit. `GC_SPILL_POINTERS=0` restores upstream's deferred collection.
   Tests: tests/ports/webassembly unchanged; proofs in
   experiments/cf-fidelity/ (churn loop heap 64.3 -> 16.3 MB).
+
+- **6 MiB initial linear memory** (`3647b6a`): emscripten's default
+  INITIAL_MEMORY (16 MiB, `(memory 261 …)`) was mostly untouched reservation
+  — the worker passes a 4 MiB GC heap (MicroPythonRuntime.js MP_HEAP_BYTES)
+  and live Python after loading the library is 0.8 MB (lite) / 1.15 MB
+  (upstream). Now `(memory 96 …)`; ALLOW_MEMORY_GROWTH covers the rest.
+  pythonWasm for a basic model 16.3 -> 6.0 MiB; upstream clock /
+  bicycle_tire / heat_exchanger 8.4 MiB; lite clock (9.7 MB live) 16.7 MiB.
+  Boot/eval times unchanged.
 
 Measured and NOT adopted (2026-08-21 Stage-3 perf round):
 `-DMICROPY_OPT_COMPUTED_GOTO=1` (~4% on the b01 hot loop, br_table gains

@@ -65,7 +65,15 @@ esbuild.build({
   entryPoints: [path.join(pkgRoot, 'src', 'headless.js')],
   bundle: true,
   minify: true,
-  keepNames: true,
+  // NOT keepNames. With it esbuild wraps every named function expression in
+  // a `__name(fn, "x")` call — a defineProperty that gives the function its
+  // own property backing store — and the embind glue creates its invoker
+  // closures PER BOUND METHOD at registration time: ~216k closures, measured
+  // 52.8 MB of V8 heap in Node (125.8 -> 73.0 MB after engine boot; roughly
+  // half that under workerd's pointer compression) for names nothing reads
+  // (embind names its classes itself; cascade-core passes op names as
+  // strings). The isolate budget is 128 MB. CS_KEEP_NAMES=1 restores it.
+  keepNames: process.env.CS_KEEP_NAMES === '1',
   sourcemap: true,
   format: 'esm',
   target: 'es2022',
