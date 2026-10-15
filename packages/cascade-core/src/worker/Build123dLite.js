@@ -53,7 +53,7 @@ THOU = 0.0254
 # challenge scripts to convert a volume into a mass check
 G = 1.0
 KG = 1000.0
-LB = 453.59237
+LB = 453.59237   # G_PER_LB * G
 
 _TOL = 1e-9
 _TOL_1E6 = 1e-6      # build123d's TOLERANCE
@@ -120,16 +120,20 @@ class Keep:
 
 
 class Unit:
-    """Standard units (build123d's Unit enum) — Mesher(unit=...)."""
-    MC = 'MC'
-    MM = 'MM'
-    CM = 'CM'
-    M = 'M'
-    IN = 'IN'
-    FT = 'FT'
+    """Standard units (build123d 0.12's Unit StrEnum: the members ARE their
+    symbols, Unit.MM == 'mm'), lengths and - for mass() - masses."""
+    MC = '\\u00b5m'  # MICRO
+    MM = 'mm'
+    CM = 'cm'
+    M = 'm'
+    IN = 'in'
+    FT = 'ft'
+    G = 'g'
+    KG = 'kg'
+    LB = 'lb'
 
 
-# build123d build_common's unit conversions (UNITS_PER_METER[Unit.MM] = 1000)
+# build_constants' unit conversions (UNITS_PER_METER[Unit.MM] = 1000)
 UNITS_PER_METER = {
     Unit.IN: M / IN,
     Unit.FT: M / FT,
@@ -138,6 +142,18 @@ UNITS_PER_METER = {
     Unit.CM: M / CM,
     Unit.M: 1,
 }
+
+G_PER_LB = 453.59237
+
+UNITS_PER_KILOGRAM = {
+    Unit.G: KG / G,
+    Unit.KG: 1,
+    Unit.LB: KG / LB,
+}
+
+# OCCT write.step.unit names for the length units (export_step)
+_STEP_UNIT_NAMES = {Unit.MC: 'UM', Unit.MM: 'MM', Unit.CM: 'CM', Unit.M: 'M',
+                    Unit.IN: 'INCH', Unit.FT: 'FT'}
 
 
 class ApproxOption:
@@ -376,6 +392,19 @@ def _stable_sorted(seq, key=None, reverse=False):
     return [t[2] for t in dec]
 
 
+_WARNED = set()
+
+
+def _warn(message, category='UserWarning'):
+    """warnings.warn stand-in (lite ships no warnings module): printed once
+    per message, the way Python's default filter shows a warning once per
+    call site."""
+    if message in _WARNED:
+        return
+    _WARNED.add(message)
+    print(category + ': ' + message)
+
+
 def _is_nested_seq(x):
     """True when x is a non-empty sequence whose first element is itself a
     sequence — the points-list-vs-*points overload check. Portable: hasattr
@@ -545,9 +574,6 @@ class Vector:
         (the joint math only ever rotates direction vectors)."""
         R = _axis_angle_mat(tuple(axis.direction), angle)
         return Vector(_mat_vec(R, self._v))
-
-    def to_tuple(self):
-        return self._v
 
     def __repr__(self):
         return 'Vector' + repr(self._v)
@@ -1046,10 +1072,11 @@ class Location:
             rz = 0.0
         return Vector(math.degrees(rx), math.degrees(ry), math.degrees(rz))
 
-    def to_tuple(self):
-        """((x, y, z), (rx, ry, rz)) — translation plus intrinsic-XYZ Euler
-        DEGREES (build123d Location.to_tuple)."""
-        return tuple(self.position), tuple(self.orientation)
+    def __iter__(self):
+        """tuple(location) -> (position, orientation): the translation and
+        the intrinsic-XYZ Euler DEGREES (build123d 0.12 replaced
+        Location.to_tuple with iteration)."""
+        return iter((self.position, self.orientation))
 
     @property
     def x_axis(self):
@@ -1545,8 +1572,6 @@ def _wrap_like(obj, topo):
         cls = Curve
     elif cls is Face:
         cls = Sketch
-    elif cls is Vertex:
-        cls = Part
     res = object.__new__(cls)
     Shape.__init__(res, topo)
     if isinstance(res, Mixin1D):
@@ -1569,6 +1594,89 @@ def _tolist(objs):
         # either (build123d's add() coerces obj._obj per element)
         return [objs]
     return list(objs)
+
+
+class ShapeHistory:
+    """The record of what an operation did to its inputs' sub-shapes
+    (build123d 0.12+ topology.ShapeHistory, wrapping the kernel's own
+    BRepTools_History). Booleans, unify-cleans and fillets/chamfers hand
+    over their record (the JS primitives keep it on the result as
+    ._csHist); records chain with merge(). 'before' are the inputs that were
+    already there and 'brought' the ones the operation brought in: Select.LAST
+    keeps a result sub-shape that descends (untouched or rebuilt) from
+    something brought in - or from no input at all - and Select.NEW one that
+    descends from no input in any form. The Trace itself runs in JS
+    (HistClassify) over IsSame-keyed maps, like upstream's."""
+
+    def __init__(self, history=None, before=(), brought=()):
+        self.wrapped = history      # JS BRepTools_History, None = empty record
+        self.before = list(before)  # raw TopoDS inputs
+        self.brought = list(brought)
+
+    @classmethod
+    def of(cls, *shapes):
+        """The records the given shapes carry, merged into one, or None."""
+        found = []
+        for shape in shapes:
+            if isinstance(shape, (list, tuple)):
+                nested = cls.of(*shape)
+                if nested is not None:
+                    found.append(nested)
+            else:
+                history = getattr(shape, '_history', None)
+                if isinstance(history, ShapeHistory):
+                    found.append(history)
+        if not found:
+            return None
+        if len(found) == 1:
+            return found[0]
+        merged = cls(before=[s for h in found for s in h.before],
+                     brought=[s for h in found for s in h.brought])
+        for history in found:
+            merged.merge(history)
+        return merged
+
+    def copy(self):
+        return ShapeHistory(self.wrapped, self.before, self.brought)
+
+    def merge(self, later):
+        """Extend this record with the operation that came after it."""
+        if later is not None:
+            self.wrapped = w.HistMerge(self.wrapped, later.wrapped)
+        return self
+
+    def with_inputs(self, before, brought):
+        """Say which inputs were already there and which were brought in."""
+        self.before = list(before)
+        self.brought = list(brought)
+        return self
+
+    def _flags(self, topos):
+        if not topos:
+            return []
+        return list(w.HistClassify(self.wrapped, self.before, self.brought,
+                                   list(topos)))
+
+    def is_last(self, shape):
+        return bool(self._flags([_topo(shape)])[0] & 1)
+
+    def is_new(self, shape):
+        return bool(self._flags([_topo(shape)])[0] & 2)
+
+
+def _record_of(topo, before, brought):
+    """The ShapeHistory a history-recording JS primitive left on its result
+    (HistRecord), with the inputs exactly as that operation saw them (a
+    CacheOp hit hands back the record of THAT result); an empty record over
+    the given inputs when the result carries none."""
+    rec = w.HistRecord(topo) if topo is not None else None
+    if rec is None:
+        return ShapeHistory(None, before, brought)
+    rec = list(rec)
+    args = list(rec[1])
+    tools = list(rec[2])
+    return ShapeHistory(rec[0], args if args else before,
+                        tools if tools else brought)
 
 
 class Shape:
@@ -1602,6 +1710,36 @@ class Shape:
         # here so joints / locate() / .position can reason about frames.
         self._loc = None  # None = identity
         self.joints = {}
+        # how this shape was made (build123d 0.12 _made_by): Select.LAST/NEW
+        self._history = None
+
+    def _made_by(self, history):
+        """Note the record of how this shape was made (Select.LAST/NEW)."""
+        self._history = history
+        return self
+
+    def _select(self, shapes, select):
+        """Narrow a list of this shape's sub-shapes by what the last
+        operation did (upstream Shape._select)."""
+        if select is None or select == Select.ALL:
+            return shapes
+        if select != Select.LAST and select != Select.NEW:
+            raise ValueError('Invalid input, must be one of ' +
+                             repr([Select.ALL, Select.LAST, Select.NEW]))
+        record = self._history
+        if record is None:
+            raise ValueError('Select.' + str(select) + ' needs a record of '
+                             'how this shape was made, and this one has none '
+                             '- it is the result of no recorded operation')
+        if len(shapes) == 0:
+            return ShapeList()
+        flags = record._flags([s.topo for s in shapes])
+        bit = 1 if select == Select.LAST else 2
+        out = ShapeList()
+        for i in range(len(shapes)):
+            if flags[i] & bit:
+                out.append(shapes[i])
+        return out
 
     @property
     def wrapped(self):
@@ -1686,7 +1824,7 @@ class Shape:
         if len(topos) == 1:
             return _wrap_like(self, topos[0])
         vols = [_solid_volume(t) for t in topos]
-        fused = w.Union(topos)
+        fused = w.Union(topos, False, None, False, True)
         # COMPROMISE(kernel-guard): this OCCT 8.0.1 wasm build has a known
         # kernel fault where BooleanFuse SILENTLY DROPS an operand when
         # coplanar faces meet along BSpline edges. The JS Union now detects
@@ -1704,7 +1842,9 @@ class Shape:
                     'rebuild could not recover it. This build\\'s '
                     'BooleanFuse mishandles coplanar BSpline-edged contact '
                     'faces; offset or restructure the touching geometry.')
-        return _wrap_like(self, fused)
+        # the left operand was there before, the rest is brought in
+        record = _record_of(fused, topos[:1], topos[1:])
+        return _wrap_like(self, fused)._made_by(record)
 
     def __iter__(self):
         """Iterate contained shapes like build123d Compound iteration:
@@ -1726,16 +1866,29 @@ class Shape:
         if len(others) == 0:
             return _wrap_like(self, self.topo)
         tools = [_topo(o) for o in others]
+        originals = list(tools)
+        tool_record = None
         if len(tools) > 1:
             # fuse the tools first: ONE boolean cut, like build123d — the
             # sequential per-tool cuts are also less robust in this OCCT
-            tools = [w.Union(tools)]
-        return _wrap_like(self, w.Difference(self.topo, tools))
+            fused_tools = w.Union(tools, False, None, False, True)
+            tool_record = _record_of(fused_tools, tools[:1], tools[1:])
+            tools = [fused_tools]
+        cut = w.Difference(self.topo, tools, False, None, False, True)
+        # upstream records ONE cut with every tool brought in; the tool
+        # pre-fuse chains in front of it (BRepTools_History merge)
+        record = _record_of(cut, [self.topo], tools)
+        if tool_record is not None:
+            record = tool_record.copy().merge(record)
+        record.with_inputs([self.topo], originals)
+        return _wrap_like(self, cut)._made_by(record)
 
     def __and__(self, other):
         others = _tolist(other)
         topos = [self.topo] + [_topo(o) for o in others]
-        return _wrap_like(self, w.Intersection(topos))
+        common = w.Intersection(topos, False, None, False, True)
+        return _wrap_like(self, common)._made_by(
+            _record_of(common, topos[:1], topos[1:]))
 
     def __neg__(self):
         """Reversed-orientation copy (build123d's Mixin2D.__neg__:
@@ -1769,8 +1922,10 @@ class Shape:
         return self.__and__(list(others))
 
     # --- selectors ---
-    def edges(self, indices=None):
-        """All (unique) edges as a ShapeList of Edge. indices=[...] is the
+    def edges(self, select=None, indices=None):
+        """All (unique) edges as a ShapeList of Edge, or those the operation
+        that made this shape brought in or created (select=Select.LAST) or
+        created outright (Select.NEW) - build123d 0.12. indices=[...] is the
         CascadeStudio escape hatch used by the GUI Fillet tool."""
         if self.topo is None:
             return ShapeList()
@@ -1781,9 +1936,9 @@ class Shape:
         for i in range(len(idxs)):
             if indices is None or idxs[i] in indices:
                 out.append(Edge(raws[i], parent=self, index=idxs[i]))
-        return out
+        return self._select(out, select)
 
-    def faces(self):
+    def faces(self, select=None):
         if self.topo is None:
             return ShapeList()
         sel = w.Faces(self.topo)
@@ -1792,9 +1947,9 @@ class Shape:
         out = ShapeList()
         for i in range(len(idxs)):
             out.append(Face(raws[i], parent=self, index=idxs[i]))
-        return out
+        return self._select(out, select)
 
-    def vertices(self):
+    def vertices(self, select=None):
         if self.topo is None:
             return ShapeList()
         out = ShapeList()
@@ -1806,25 +1961,34 @@ class Shape:
                 seen.add(key)
                 out.append(Vertex(vtx, parent=self))
         w.ForEachVertex(self.topo, _cb)
-        return out
+        return self._select(out, select)
 
-    def solids(self):
+    def solids(self, select=None):
         if self.topo is None:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
             out.append(Solid(s))
         w.ForEachSolid(self.topo, _cb)
-        return out
+        return self._select(out, select)
 
-    def wires(self):
+    def shells(self, select=None):
+        if self.topo is None:
+            return ShapeList()
+        out = ShapeList()
+        def _cb(i, s):
+            out.append(Shell(s))
+        w.ForEachShell(self.topo, _cb)
+        return self._select(out, select)
+
+    def wires(self, select=None):
         if self.topo is None:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
             out.append(Wire(s))
         w.ForEachWire(self.topo, _cb)
-        return out
+        return self._select(out, select)
 
     def face(self):
         fs = self.faces()
@@ -4125,16 +4289,35 @@ class Vertex(Shape):
             topo = w.PointVertex(list(pt))
         Shape.__init__(self, topo)
         self.parent = parent
+
+    def _xyz(self):
+        """The CURRENT point (build123d 0.12 reads BRep_Tool.Pnt, so a
+        moved/located vertex reports where it is now), cached per topo."""
+        topo = self.topo
+        cache = getattr(self, '_xyz_cache', None)
+        if cache is not None and cache[0] is topo:
+            return cache[1]
         p = w._vertexPoint(topo)
         # float() NOW: on MicroPython the elements arrive as JS number
         # proxies and every later arithmetic op would cross the FFI
-        self.X, self.Y, self.Z = float(p[0]), float(p[1]), float(p[2])
+        xyz = (float(p[0]), float(p[1]), float(p[2]))
+        self._xyz_cache = (topo, xyz)
+        return xyz
+
+    @property
+    def X(self):
+        return self._xyz()[0]
+
+    @property
+    def Y(self):
+        return self._xyz()[1]
+
+    @property
+    def Z(self):
+        return self._xyz()[2]
 
     def center(self, center_of=CenterOf.GEOMETRY):
-        return Vector(self.X, self.Y, self.Z)
-
-    def to_tuple(self):
-        return (self.X, self.Y, self.Z)
+        return Vector(self._xyz())
 
     def __iter__(self):
         return iter((self.X, self.Y, self.Z))
@@ -4604,7 +4787,7 @@ class ShapeList(list):
             def pred(s):
                 try:
                     for v in s.vertices():
-                        d = (Vector(v.to_tuple()) - Vector(f.origin)).dot(
+                        d = (Vector(tuple(v)) - Vector(f.origin)).dot(
                             Vector(f.z_dir))
                         if abs(d) > tolerance:
                             return False
@@ -4815,6 +4998,19 @@ _builders = []
 _loc_stack = []
 
 
+class _ObjectScope:
+    """The construction firewall around a custom Base*Object (build123d 0.12
+    BaseObjectMeta + an isolated BuildScope): while the object's __init__
+    runs, the objects and builders it creates see NO builder and NO location
+    context, so nothing it makes for itself leaks into the caller's builder
+    or gets replicated by the caller's Locations. Pushed onto _builders by
+    _BaseObjectMeta.__call__; the finished object is then placed and
+    published to the caller like any built-in object."""
+
+    def __init__(self):
+        self._loc_depth = len(_loc_stack)
+
+
 def _reset_state():
     """Clear the builder/location context stacks. Called by the worker
     before every user evaluation: the build123d module instance persists
@@ -4829,29 +5025,36 @@ def _active_builder(cls=None):
     if not _builders:
         return None
     b = _builders[-1]
+    if isinstance(b, _ObjectScope):
+        return None
     if cls is not None and not isinstance(b, cls):
         return None
     return b
 
 
 def _ctx_locations():
-    """The active local locations, in the CURRENT builder's scope only.
+    """The active locations, in the CURRENT scope only.
 
-    build123d 0.11.1 gives every builder a fresh location context on entry
-    (build_common Builder.__enter__ sets local_locations = LocationList(
-    [Location()])), so a Locations context wrapping a builder does NOT
-    replicate what the builder constructs - the builder always builds locally.
-    Truncating at the builder's own stack depth reproduces that exactly; before
-    this, an enclosing GridLocations fanned out objects created inside a nested
-    BuildSketch (key_concepts_builder's documented "Locations around a builder"
-    case built four rectangles instead of one)."""
-    builder = _active_builder()
-    start = builder._loc_depth if (builder is not None and
-                                   builder._loc_depth is not None) else 0
+    build123d gives every builder (and, since 0.12, every custom object
+    construction) a fresh identity location context on entry, so a Locations
+    context wrapping a builder does NOT replicate what the builder constructs
+    - the builder always builds locally on Plane.XY. Since 0.12 the enclosing
+    locations instead PLACE the builder's finished result (its publication
+    locations, captured in Builder.__enter__). Truncating at the innermost
+    scope's stack depth reproduces both."""
+    top = _builders[-1] if _builders else None
+    start = top._loc_depth if (top is not None and
+                               top._loc_depth is not None) else 0
     locs = [Location()]
     for ctx in _loc_stack[start:]:
         locs = [a * b for a in locs for b in ctx.locations]
     return locs
+
+
+def _loc_is_identity(loc):
+    t = loc._t
+    return _mat_is_identity(loc._R) and abs(t[0]) <= _TOL and \
+        abs(t[1]) <= _TOL and abs(t[2]) <= _TOL
 
 
 def _sub_shapes_of(shape, kind):
@@ -4898,7 +5101,8 @@ def _shape_key(shape, kind):
 def new_edges(*objects, combined=None):
     """build123d's new_edges(): the edges of 'combined' that none of 'objects'
     contributed - i.e. the edges the combining operation created
-    (topology/utils.py). Used by 'builder.edges(Select.NEW)'."""
+    (topology/utils.py). It predates 0.12's operation record and still
+    compares shapes geometrically, like upstream's."""
     if combined is None:
         raise ValueError('new_edges() requires combined=')
     topos = []
@@ -4984,52 +5188,149 @@ def _align_sketch_faces(obj):
     return Sketch(topos[0] if len(topos) == 1 else w.MakeCompound(topos))
 
 
+def _pieces_of(obj):
+    """The separate objects an operation brings into a builder: a Compound's
+    DIRECT children (upstream _add_to_context reads them with
+    Compound.get_type), otherwise the object itself. Kept separate so the
+    fuse sees each piece as its own tool, like upstream's
+    self._obj.fuse(*solids) - and so the record knows each piece was brought
+    in."""
+    if obj is None or obj.topo is None:
+        return []
+    kids = list(w.DirectChildren(obj.topo))
+    if len(kids) > 1 and obj.topo.ShapeType().value == 0:
+        return [_wrap_like(obj, k) for k in kids]
+    return [obj]
+
+
 def _combine(builder, obj, mode, warn_cls=None):
-    """Merge obj into builder._obj per mode. Returns the CREATED object."""
+    """Merge obj into builder._obj per mode (upstream Builder._add_to_context
+    for the builder's own shape type) and leave the operation's record on
+    the result for Select.LAST/NEW: what was there before, what the
+    operation brought in, and the kernel's history of the combining
+    boolean. Returns the CREATED object."""
     if builder is None or mode == Mode.PRIVATE:
+        return obj
+    if isinstance(builder, BuildLine):
+        builder._add_curve(obj, mode)
         return obj
     if isinstance(builder, BuildSketch) and obj is not None and \
             getattr(obj, 'topo', None) is not None:
         obj = _align_sketch_faces(obj)
     before = builder._obj
-    pre = builder._sub_shape_lists()
-    if mode == Mode.REPLACE or builder._obj is None or builder._obj.topo is None:
+    if before is not None and before.topo is None:
+        before = None
+    pieces = _pieces_of(obj)
+    before_topos = [before.topo] if before is not None else []
+    if mode == Mode.REPLACE:
+        # the replacement IS the result, so nothing was brought in; its own
+        # record (a fillet's, a split's...) relates it to what it replaces
+        record = ShapeHistory.of(obj)
+        record = record.copy() if record is not None else ShapeHistory()
+        builder._obj = builder._wrap(obj.topo)
+        builder._obj._made_by(record.with_inputs(before_topos, []))
+        return obj
+    if before is None:
         if mode == Mode.SUBTRACT:
             raise ValueError('Mode.SUBTRACT with nothing to subtract from')
         if mode == Mode.INTERSECT:
             raise ValueError('Mode.INTERSECT with nothing to intersect')
-        builder._obj = builder._wrap(obj.topo)
+        if len(pieces) > 1:
+            fused = pieces[0] + pieces[1:]
+            builder._obj = builder._wrap(fused.topo)
+            record = fused._history.copy() if fused._history is not None \
+                else ShapeHistory()
+        else:
+            builder._obj = builder._wrap(obj.topo)
+            record = ShapeHistory()    # nothing changed: all untouched
     elif mode == Mode.ADD:
-        builder._obj = builder._wrap((builder._obj + obj).topo)
+        result = before + pieces
+        builder._obj = builder._wrap(result.topo)
+        record = result._history.copy()
     elif mode == Mode.SUBTRACT:
-        builder._obj = builder._wrap((builder._obj - obj).topo)
+        result = before - pieces
+        builder._obj = builder._wrap(result.topo)
+        record = result._history.copy()
     elif mode == Mode.INTERSECT:
-        builder._obj = builder._wrap((builder._obj & obj).topo)
+        result = before & obj
+        builder._obj = builder._wrap(result.topo)
+        record = result._history.copy()
     else:
         raise ValueError('unsupported mode ' + repr(mode))
-    builder._record_lasts(pre, obj, before)
+    builder._obj._made_by(record.with_inputs(before_topos,
+                                             [p.topo for p in pieces]))
     return obj
 
 
+def _publish_to(target, placed, mode):
+    """Hand a finished builder's PLACED result to the builder it was nested
+    in (upstream _PublicationService.publish -> target._add_to_context):
+    a BuildPart takes faces as pending faces and a line as the pending
+    path, a BuildSketch takes a line as pending edges, everything else is
+    combined per mode."""
+    if target is None or placed is None or mode == Mode.PRIVATE:
+        return
+    if isinstance(target, BuildLine):
+        target._add_curve(placed, mode)
+    elif isinstance(target, BuildSketch):
+        if isinstance(placed, Mixin1D):
+            specs = placed._specs if placed._specs else \
+                _specs_from_topo_edges(placed)
+            target.pending_edge_specs.extend(specs)
+        else:
+            _combine(target, placed, mode)
+    elif isinstance(target, BuildPart):
+        if isinstance(placed, Mixin1D):
+            # a BuildLine directly inside BuildPart provides the sweep() path
+            target.pending_path = placed
+        elif placed.topo is not None and len(placed.solids()) == 0 and \
+                len(placed.faces()) > 0:
+            for f in placed.faces():
+                target.pending_faces.append(Sketch(f.topo))
+                target.pending_face_planes.append(Plane(f))
+        else:
+            _combine(target, placed, mode)
+
+
+def _builder_placement(p):
+    if isinstance(p, Location):
+        return p
+    if isinstance(p, Plane):
+        return p.location
+    if isinstance(p, Face):
+        return Plane(p).location
+    raise ValueError('Builder does not accept placement ' + type(p).__name__)
+
+
 class Builder:
+    """Base of the three builders (build123d 0.12 BuildScope model): a
+    builder constructs LOCALLY on Plane.XY - its selectors, _obj and
+    <part|sketch|line>_local are all local - and on exit PUBLISHES its
+    result through its output placement(s) and the locations of any
+    enclosing Locations context (so an enclosing Locations now positions a
+    builder), handing the placed result to the builder it is nested in."""
+
     _shape_cls = Part
     _tag = 'part'
+    _obj_name = 'None'
+    build123d_type = 'Builder'
 
-    def __init__(self, *workplanes, mode=Mode.ADD):
-        planes = []
-        for wp in workplanes:
-            if isinstance(wp, Plane):
-                planes.append(wp)
-            elif isinstance(wp, Location):
-                planes.append(Plane(wp))
-            elif isinstance(wp, Face):
-                planes.append(Plane(wp))
+    def __init__(self, *placements, mode=Mode.ADD):
+        locs = []
+        for p in placements:
+            if isinstance(p, (list, tuple)):
+                locs.extend(_builder_placement(q) for q in p)
             else:
-                raise TypeError('workplane must be a Plane/Location/Face')
-        self.workplanes = planes or [Plane.XY]
+                locs.append(_builder_placement(p))
+        self.output_placements = tuple(locs) if locs else (Location(),)
+        self.placements = self.output_placements
         self.mode = mode
+        self._label = ''
         self._obj = None
         self._loc_depth = None
+        self._publication_locations = (Location(),)
+        self._placed_obj = None
+        self._parent = None
         self.pending_faces = []        # [Face/Sketch] for BuildPart
         self.pending_face_planes = []  # parallel [Plane] (build123d layout)
         self.joints = {}               # joints created with to_part=None
@@ -5037,6 +5338,23 @@ class Builder:
 
     def _wrap(self, topo):
         return self._shape_cls(topo)
+
+    @property
+    def label(self):
+        """Label assigned to the builder's output object (0.12)."""
+        return self._label
+
+    @label.setter
+    def label(self, value):
+        self._label = value
+
+    @property
+    def max_dimension(self):
+        """Maximum size of the object in all directions."""
+        o = self._obj
+        if o is None or o.topo is None:
+            return 0.0
+        return o.bounding_box().diagonal
 
     def _lite_copy(self):
         """copy.copy(<builder>) — a SHALLOW copy of the builder, exactly like
@@ -5051,13 +5369,18 @@ class Builder:
         return clone
 
     def __enter__(self):
+        # where the ENCLOSING location context publishes this builder's
+        # result (0.12: an enclosing Locations positions a builder) - read
+        # BEFORE this builder's own (fresh) location scope starts
+        self._publication_locations = tuple(_ctx_locations())
         self._loc_depth = len(_loc_stack)
+        self._placed_obj = None
         # build123d only transfers a builder's result to the enclosing
         # builder when both with-statements share a stack frame (an inner
         # builder inside e.g. a BaseSketchObject subclass __init__ must NOT
         # auto-combine — the object machinery adds it instead)
         self._python_frame = w._pythonCallerFrame()
-        enclosing = _builders[-1] if _builders else None
+        enclosing = _active_builder()
         if enclosing is not None and \
                 enclosing._python_frame is self._python_frame:
             self._parent = enclosing
@@ -5066,118 +5389,132 @@ class Builder:
         _builders.append(self)
         return self
 
+    def _exit_extras(self):
+        """Any builder specific exit actions."""
+
     def __exit__(self, exc_type, exc, tb):
         del _loc_stack[self._loc_depth:]
-        _builders.pop()
+        for i in range(len(_builders) - 1, -1, -1):
+            if _builders[i] is self:
+                del _builders[i:]
+                break
         if exc_type is not None:
             return False
-        self._finalize(self._parent)
-        # transfer joints created in this context onto the result shape
-        # (build123d BuildPart._exit_extras)
-        if self.joints and self._obj is not None:
-            self._obj.joints = self.joints
-            for j in self.joints.values():
-                j.parent = self._obj
+        self._exit_extras()
+        local = self._obj
+        if local is not None and local.topo is None:
+            local = None
+        if local is not None and self._label:
+            local.label = self._label
+        placed = self._place(local)
+        self._placed_obj = placed
+        parent = self._parent
+        if parent is not None and self.mode != Mode.PRIVATE:
+            if placed is None:
+                _warn(self._obj_name + ' is None - ' + type(self).__name__ +
+                      " didn't create anything")
+            else:
+                _publish_to(parent, placed, self.mode)
         return False
 
-    def _finalize(self, parent):
-        if parent is not None and self._obj is not None and self._obj.topo is not None:
-            _combine(parent, self._obj, self.mode)
+    def _place(self, local):
+        """Apply every publication location x output placement combination
+        once (upstream _PublicationService.place)."""
+        if local is None or local.topo is None:
+            return None
+        combos = [p * o for p in self._publication_locations
+                  for o in self.output_placements]
+        if len(combos) == 1 and _loc_is_identity(combos[0]):
+            return local
+        placed = [loc * local for loc in combos]
+        if len(placed) == 1:
+            result = placed[0]
+        else:
+            result = self._place_many(placed)
+        if local.label and not result.label:
+            result.label = local.label
+        if local.color is not None and result.color is None:
+            result.color = local.color
+        if getattr(local, '_material', None) is not None and \
+                getattr(result, '_material', None) is None:
+            result._material = local._material
+        return result
+
+    def _place_many(self, placed):
+        return self._shape_cls(w.MakeCompound([p.topo for p in placed]))
+
+    def _output_obj(self):
+        """The PLACED result: after exit the published object; inside the
+        builder's own scope it is placed on demand; inside a nested location
+        context (where the scope belongs to the Locations) upstream hands
+        back the local object."""
+        if self._placed_obj is not None:
+            return self._placed_obj
+        if _builders and _builders[-1] is self and \
+                len(_loc_stack) == self._loc_depth:
+            return self._place(self._obj)
+        return self._obj
 
     @property
     def location(self):
-        """The result shape's location (build123d BuildPart.location)."""
-        return self._obj.location if self._obj is not None else Location()
+        """The (placed) result's location (build123d BuildPart.location)."""
+        o = self._output_obj()
+        return o.location if o is not None else Location()
 
     def locate(self, loc):
         if self._obj is None:
             raise ValueError('builder has no result to locate')
         return self._obj.locate(loc)
 
-    # ---------------------------------------------------------------- #
-    # Select.LAST / Select.NEW bookkeeping (build123d Builder.lasts)
-    #
-    # Upstream records, per operation, 'post - pre' over the builder's
-    # sub-shapes — except for the builder's OWN shape type, which is just the
-    # objects that were combined in (build_common._add_to_context). The set
-    # difference relies on TopoDS identity surviving a boolean; lite wraps
-    # every shape in a fresh handle, so the difference is taken on GEOMETRY
-    # (vertex position / edge midpoint+length / face center+area / solid
-    # center+volume, rounded to 6 digits), which answers the same question.
-    # ---------------------------------------------------------------- #
-    _SELECT_KINDS = ('vertex', 'edge', 'face', 'solid')
-    # the shape type each builder itself produces (build123d Builder._shape)
-    _core_kind = 'solid'
-
-    def _sub_shape_lists(self):
-        """Current vertices/edges/faces/solids. Topology traversal only — the
-        measurements that turn these into keys are deferred until a
-        Select.LAST/NEW query actually asks for them."""
-        o = self._obj
-        if o is None or o.topo is None:
-            return dict((k, []) for k in Builder._SELECT_KINDS)
-        return {'vertex': list(o.vertices()), 'edge': list(o.edges()),
-                'face': list(o.faces()), 'solid': list(o.solids())}
-
-    def _record_lasts(self, pre, created, before):
-        self._lasts_pre = pre
-        self._lasts_post = self._sub_shape_lists()
-        self._lasts_created = created
-        self._lasts_before = before
-        self._lasts_cache = {}
-
-    def _lasts(self, kind):
-        if not hasattr(self, '_lasts_post'):
-            return ShapeList()
-        if kind in self._lasts_cache:
-            return ShapeList(self._lasts_cache[kind])
-        if kind == self._core_kind:
-            created = self._lasts_created
-            out = ShapeList(_sub_shapes_of(created, kind)) if created is not None \
-                else ShapeList()
-        else:
-            seen = set(_shape_key(s, kind) for s in self._lasts_pre[kind])
-            out = ShapeList([s for s in self._lasts_post[kind]
-                             if _shape_key(s, kind) not in seen])
-        self._lasts_cache[kind] = list(out)
-        return out
-
     @property
     def new_edges(self):
-        """Edges that the last operation CREATED (build123d Builder.new_edges):
-        the combined result's edges cut by the operands' edges."""
-        if self._obj is None or not hasattr(self, '_lasts_created'):
-            return ShapeList()
-        originals = []
-        if self._lasts_before is not None and self._lasts_before.topo is not None:
-            originals.append(self._lasts_before)
-        if self._lasts_created is not None:
-            originals.append(self._lasts_created)
-        return new_edges(*originals, combined=self._obj)
+        """Edges the last operation created outright, as edges(Select.NEW)
+        (deprecated in build123d 0.12)."""
+        _warn('Builder.new_edges is deprecated; use edges(Select.NEW) '
+              'instead.', 'DeprecationWarning')
+        return self.edges(Select.NEW)
 
+    # ---------------------------------------------------------------- #
+    # Select.LAST / Select.NEW (build123d 0.12): read from the record the
+    # last operation left on the builder's object (see _combine and
+    # ShapeHistory) - the kernel's own history, so a face an operation
+    # merely trimmed is NOT last, and NEW works for every shape type.
+    # ---------------------------------------------------------------- #
     def _selection_shape(self):
-        """The shape the selectors read. BuildLine overrides it so that
-        mid-context selectors (side_line.vertices() inside the with-block, which
-        the sheet-metal examples fillet) see the line built SO FAR - _obj only
-        exists after __exit__."""
         return self._obj
 
-    # selector passthroughs (builder.edges() etc.)
-    def edges(self, select=Select.ALL):
-        if select == Select.LAST:
-            return self._lasts('edge')
-        if select == Select.NEW:
-            return self.new_edges
+    def _selected(self, kind, select):
         shape = self._selection_shape()
-        return shape.edges() if shape is not None else ShapeList()
+        if shape is None or shape.topo is None:
+            return ShapeList()
+        return getattr(shape, kind)(select)
+
+    @property
+    def lasts(self):
+        return dict((k, self._selected(k, Select.LAST))
+                    for k in ('vertices', 'edges', 'faces', 'solids'))
+
+    @property
+    def news(self):
+        return dict((k, self._selected(k, Select.NEW))
+                    for k in ('vertices', 'edges', 'faces', 'solids'))
+
+    def vertices(self, select=Select.ALL):
+        return self._selected('vertices', select)
+
+    def edges(self, select=Select.ALL):
+        return self._selected('edges', select)
 
     def wires(self, select=Select.ALL):
-        if select == Select.LAST:
-            return ShapeList(edges_to_wires(self._lasts('edge')))
-        if select == Select.NEW:
-            raise ValueError('Select.NEW only valid for edges')
-        shape = self._selection_shape()
-        return shape.wires() if shape is not None else ShapeList()
+        if select == Select.ALL:
+            return self._selected('wires', select)
+        return ShapeList(edges_to_wires(self.edges(select)))
+
+    def faces(self, select=Select.ALL):
+        return self._selected('faces', select)
+
+    def solids(self, select=Select.ALL):
+        return self._selected('solids', select)
 
     # singular getters (build_common Builder.vertex/edge/wire/face/solid):
     # exactly one sub-shape must be selected, like upstream
@@ -5221,116 +5558,170 @@ class Builder:
                              str(solid_count))
         return all_solids[0]
 
-    def faces(self, select=Select.ALL):
-        if select == Select.LAST:
-            return self._lasts('face')
-        if select == Select.NEW:
-            raise ValueError('Select.NEW only valid for edges')
-        shape = self._selection_shape()
-        return shape.faces() if shape is not None else ShapeList()
-
-    def vertices(self, select=Select.ALL):
-        if select == Select.LAST:
-            return self._lasts('vertex')
-        if select == Select.NEW:
-            raise ValueError('Select.NEW only valid for edges')
-        shape = self._selection_shape()
-        return shape.vertices() if shape is not None else ShapeList()
-
-    def solids(self, select=Select.ALL):
-        if select == Select.LAST:
-            return self._lasts('solid')
-        if select == Select.NEW:
-            raise ValueError('Select.NEW only valid for edges')
-        shape = self._selection_shape()
-        return shape.solids() if shape is not None else ShapeList()
-
 
 class BuildPart(Builder):
     _shape_cls = Part
     _tag = 'part'
-    _core_kind = 'solid'
+    _obj_name = 'part'
+    build123d_type = 'BuildPart'
 
     @property
     def part(self):
+        """The PLACED part (0.12; part_local is the local construction)."""
+        return self._output_obj()
+
+    @property
+    def part_local(self):
         return self._obj
 
     @property
     def _snapshot(self):
         return self._obj
 
+    def _exit_extras(self):
+        # transfer joints created in this context onto the (local) result
+        # shape (build123d BuildPart._exit_extras)
+        if self.joints and self._obj is not None:
+            self._obj.joints = self.joints
+            for j in self.joints.values():
+                j.parent = self._obj
+
 
 class BuildSketch(Builder):
     _shape_cls = Sketch
     _tag = 'sketch'
-    _core_kind = 'face'
+    _obj_name = 'sketch'
+    build123d_type = 'BuildSketch'
 
     @property
     def sketch(self):
-        """The sketch PLACED on the workplane (unlike _obj, which is local —
-        matching build123d's sketch_local semantics)."""
-        if self._obj is None or self._obj.topo is None:
-            return self._obj
-        placed = [wp.location * self._obj for wp in self.workplanes]
-        if len(placed) == 1:
-            return placed[0]
-        return placed[0] + placed[1:]
+        """The PLACED sketch (sketch_local is the construction on
+        Plane.XY)."""
+        return self._output_obj()
 
     @property
     def sketch_local(self):
         return self._obj
 
-    def _finalize(self, parent):
-        if self._obj is None or self._obj.topo is None:
-            return
-        if isinstance(parent, BuildPart):
-            for wp in self.workplanes:
-                placed = wp.location * self._obj
-                parent.pending_faces.append(placed)
-                parent.pending_face_planes.append(wp)
-        elif parent is not None:
-            _combine(parent, self.sketch, self.mode)
+    def solids(self, *args):
+        raise NotImplementedError("solids() doesn't apply to BuildSketch")
 
 
 class BuildLine(Builder):
+    """BuildLine keeps its curve as LOCAL segment specs (so make_face()/
+    sweep() chain exact geometry); _obj / line_local is the curve built from
+    them and .line the placed one. Select.LAST/NEW use the geometric 'post -
+    pre' comparison: the line is re-chained from its specs, so no TopoDS
+    identity survives between operations for a kernel record to describe
+    - COMPROMISE(buildline-select)."""
+
     _shape_cls = Curve
     _tag = 'line'
-    _core_kind = 'edge'
+    _obj_name = 'line'
+    build123d_type = 'BuildLine'
 
-    def __init__(self, *workplanes, mode=Mode.ADD):
-        Builder.__init__(self, *workplanes, mode=mode)
+    def __init__(self, *placements, mode=Mode.ADD):
         self._specs = []
-
-    def _selection_shape(self):
-        return self._obj if self._obj is not None else self.line
+        Builder.__init__(self, *placements, mode=mode)
+        if len(self.output_placements) > 1:
+            raise ValueError('BuildLine only accepts one placement')
+        self._specs = []
+        self._lasts_before = None
+        self._lasts_brought = None
 
     @property
-    def line(self):
-        if self._obj is not None:
-            return self._obj
+    def _obj(self):
         if not self._specs:
             return None
-        # mid-context access (e.g. mirror(bl.line, ...)): build from the
-        # accumulated local segments
         return Curve(w.WireFromSegments(_chain_segments(self._specs)),
                      list(self._specs))
 
-    def _finalize(self, parent):
-        # transform local specs by this builder's workplane
-        wp = self.workplanes[0]
-        loc = wp.location
-        fn_dir = lambda d: _mat_vec(loc._R, d)
-        specs = [_seg_transform(s, loc._transform_point, fn_dir, loc)
-                 for s in self._specs]
-        if specs:
-            self._obj = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
-        if isinstance(parent, BuildSketch):
-            parent.pending_edge_specs.extend(specs)
-        elif isinstance(parent, BuildPart):
-            # a BuildLine directly inside BuildPart provides the sweep() path
-            parent.pending_path = self._obj
-        elif parent is not None and self._obj is not None:
-            _combine(parent, self._obj, self.mode)
+    @_obj.setter
+    def _obj(self, value):
+        if value is None:
+            self._specs = []
+        elif isinstance(value, Mixin1D) and value._specs:
+            self._specs = list(value._specs)
+        else:
+            self._specs = _specs_from_topo_edges(value)
+
+    @property
+    def line(self):
+        """The PLACED line (line_local is the construction on Plane.XY)."""
+        return self._output_obj()
+
+    @property
+    def line_local(self):
+        return self._obj
+
+    # --- spec bookkeeping (every BuildLine operation goes through these) ---
+    def _add_specs(self, specs):
+        self._lasts_before = list(self._specs)
+        self._lasts_brought = list(specs)
+        self._specs.extend(specs)
+
+    def _set_specs(self, specs):
+        """An operation REPLACED the whole line (fillet, offset...)."""
+        self._lasts_before = list(self._specs)
+        self._lasts_brought = []
+        self._specs = list(specs)
+
+    def _add_curve(self, curve, mode):
+        if curve is None or mode == Mode.PRIVATE:
+            return
+        specs = curve._specs if (isinstance(curve, Mixin1D) and curve._specs) \
+            else _specs_from_topo_edges(curve)
+        if mode == Mode.REPLACE:
+            self._set_specs(specs)
+        elif mode == Mode.ADD:
+            self._add_specs(specs)
+        else:
+            raise ValueError(str(mode) + ' is not supported inside BuildLine')
+
+    def _place_many(self, placed):
+        specs = []
+        for p in placed:
+            specs.extend(p._specs or [])
+        return Curve(w.MakeCompound([p.topo for p in placed]), specs)
+
+    def _selected(self, kind, select):
+        line = self._obj
+        if line is None:
+            return ShapeList()
+        if select is None or select == Select.ALL:
+            return getattr(line, kind)()
+        if select != Select.LAST and select != Select.NEW:
+            raise ValueError('Invalid input, must be one of ' +
+                             repr([Select.ALL, Select.LAST, Select.NEW]))
+        key_kind = {'vertices': 'vertex', 'edges': 'edge', 'faces': 'face',
+                    'solids': 'solid'}[kind]
+        if self._lasts_before is None:
+            # never operated on: everything was brought in by nothing
+            return getattr(line, kind)() if select == Select.LAST \
+                else ShapeList()
+
+        def _keys(specs):
+            if not specs:
+                return set()
+            c = Curve(w.WireFromSegments(_chain_segments(specs)), list(specs))
+            return set(_shape_key(s, key_kind) for s in getattr(c, kind)())
+        before = _keys(self._lasts_before)
+        brought = _keys(self._lasts_brought)
+        out = ShapeList()
+        for s in getattr(line, kind)():
+            k = _shape_key(s, key_kind)
+            if select == Select.LAST:
+                if k in brought or k not in before:
+                    out.append(s)
+            elif k not in brought and k not in before:
+                out.append(s)
+        return out
+
+    def faces(self, *args):
+        raise NotImplementedError("faces() doesn't apply to BuildLine")
+
+    def solids(self, *args):
+        raise NotImplementedError("solids() doesn't apply to BuildLine")
 
 
 # Selectors that read the builder in scope: 'edges()' == '<builder>.edges()'
@@ -5347,6 +5738,100 @@ edge = _context_selector('edge')
 wire = _context_selector('wire')
 face = _context_selector('face')
 solid = _context_selector('solid')
+
+
+class _BaseObjectMeta(type):
+    """build123d 0.12 BaseObjectMeta: construct a custom Base*Object behind
+    a builder + placement firewall (an _ObjectScope), then place the finished
+    object at the CALLER's locations and publish it to the caller's builder.
+    So objects a custom object's __init__ creates for itself no longer leak
+    into the caller's builder, and the caller's Locations place the object
+    as a whole."""
+
+    def __call__(cls, *args, **kwargs):
+        caller = _active_builder()
+        applies = getattr(cls, '_lite_applies_to', None)
+        if caller is not None and applies is not None and \
+                not isinstance(caller, _BUILDER_CLASSES[applies]):
+            raise RuntimeError(type(caller).__name__ + " doesn't have a " +
+                               cls.__name__ + ' object or operation (' +
+                               cls.__name__ + " applies to ['" + applies +
+                               "'])")
+        locs = _ctx_locations()
+        scope = _ObjectScope()
+        _builders.append(scope)
+        try:
+            instance = type.__call__(cls, *args, **kwargs)
+        finally:
+            for i in range(len(_builders) - 1, -1, -1):
+                if _builders[i] is scope:
+                    del _builders[i:]
+                    break
+            del _loc_stack[scope._loc_depth:]
+        instance._lite_publish(caller, locs)
+        return instance
+
+
+_BUILDER_CLASSES = {'BuildPart': BuildPart, 'BuildSketch': BuildSketch,
+                    'BuildLine': BuildLine}
+
+
+def _probe_metaclass():
+    """Custom metaclasses run instance construction on CPython, Brython and
+    the patched MicroPython (micropython-cs); the stock MicroPython fallback
+    has none, and keeps the pre-0.12 direct publication path."""
+    try:
+        class _ProbeMeta(type):
+            def __call__(cls, *args, **kwargs):
+                return 'meta'
+
+        _Probe = _ProbeMeta('_Probe', (), {})
+        return _Probe() == 'meta'
+    except Exception:
+        return False
+
+
+_HAS_METACLASS = _probe_metaclass()
+
+
+class _BaseObjectMixin:
+    """Publication behaviour shared by the Base*Object classes."""
+
+    def _lite_publish(self, caller, locs):
+        mode = getattr(self, 'mode', Mode.ADD)
+        if self.topo is None:
+            return
+        if not (len(locs) == 1 and _loc_is_identity(locs[0])):
+            placed = [loc * self for loc in locs]
+            if len(placed) == 1:
+                one = placed[0]
+                topo, loc_, joints = one.topo, one._loc, one.joints
+            else:
+                topo = w.MakeCompound([p.topo for p in placed])
+                loc_, joints = self._loc, self.joints
+            specs = []
+            if isinstance(self, Mixin1D):
+                for p in placed:
+                    specs.extend(p._specs or [])
+            # preserve identity: the instance itself adopts the placement
+            self.topo = topo
+            self._loc = loc_
+            self.joints = dict((k, j._lite_rebind(self))
+                               for k, j in joints.items())
+            if isinstance(self, Mixin1D):
+                self._specs = specs
+        if caller is None or mode == Mode.PRIVATE:
+            return
+        if isinstance(caller, BuildLine):
+            caller._add_curve(self, mode)
+        else:
+            _combine(caller, self, mode)
+
+
+if _HAS_METACLASS:
+    _BaseObject = _BaseObjectMeta('_BaseObject', (_BaseObjectMixin,), {})
+else:
+    _BaseObject = _BaseObjectMixin
 
 
 # ------------------------------------------------- location contexts -----
@@ -5536,18 +6021,17 @@ def _align_shift(align, bbox_min, bbox_max):
 
 def _create_object(cls, topo_maker, analytic_bbox, rotation3, align, mode,
                    builder_cls):
-    """Shared creation pipeline: align (own bbox) -> rotate -> replicate at
-    workplane x location-context products -> combine into the builder."""
+    """Shared creation pipeline: align (own bbox) -> rotate -> place at the
+    active locations -> combine into the builder. Since build123d 0.12 a
+    builder constructs LOCALLY (its placement applies when it publishes), so
+    only the location context places objects; several placements make a
+    Compound, like upstream's BaseObject publication."""
     builder = _active_builder(builder_cls)
-    if builder is None and _builders:
-        raise RuntimeError('a ' + cls.__name__ + ' object cannot be created '
-                           'directly inside a ' + type(_builders[-1]).__name__ +
-                           ' context')
+    top = _active_builder()
+    if builder is None and top is not None:
+        raise RuntimeError(type(top).__name__ + " doesn't have a " +
+                           cls.__name__ + ' object or operation')
     ctx_locs = _ctx_locations()
-    if builder is not None and builder_cls is BuildPart:
-        planes = builder.workplanes
-    else:
-        planes = [Plane.XY]
 
     rot = None
     if rotation3 is not None:
@@ -5558,27 +6042,30 @@ def _create_object(cls, topo_maker, analytic_bbox, rotation3, align, mode,
             rot = Rotation(r[0], r[1], r[2])
 
     results = []
-    for pl in planes:
-        for loc in ctx_locs:
-            topo = topo_maker()
-            if align is not None and any(a is not None for a in align):
-                if analytic_bbox is not None:
-                    bmin, bmax = analytic_bbox
-                else:
-                    bb = list(w.BoundingBox(topo))
-                    bmin, bmax = bb[0:3], bb[3:6]
-                sh = _align_shift(align, bmin, bmax)
-                if sh[0] or sh[1] or sh[2]:
-                    topo = w.Translate(sh, topo)
-            shape = object.__new__(cls)
-            Shape.__init__(shape, topo)
-            if rot is not None:
-                shape = rot * shape
-            full = pl.location * loc
-            shape = full * shape
-            results.append(shape)
+    for loc in ctx_locs:
+        topo = topo_maker()
+        if align is not None and any(a is not None for a in align):
+            if analytic_bbox is not None:
+                bmin, bmax = analytic_bbox
+            else:
+                bb = list(w.BoundingBox(topo))
+                bmin, bmax = bb[0:3], bb[3:6]
+            sh = _align_shift(align, bmin, bmax)
+            if sh[0] or sh[1] or sh[2]:
+                topo = w.Translate(sh, topo)
+        shape = object.__new__(cls)
+        Shape.__init__(shape, topo)
+        if rot is not None:
+            shape = rot * shape
+        if not _loc_is_identity(loc):
+            shape = loc * shape
+        results.append(shape)
 
-    obj = results[0] if len(results) == 1 else results[0] + results[1:]
+    if len(results) == 1:
+        obj = results[0]
+    else:
+        obj = object.__new__(cls)
+        Shape.__init__(obj, w.MakeCompound([r.topo for r in results]))
     # Select.LAST/NEW bookkeeping happens inside _combine for every operation.
     return _combine(builder, obj, mode)
 
@@ -5686,11 +6173,19 @@ def Wedge(xsize, ysize, zsize, xmin, zmin, xmax, zmax, rotation=(0, 0, 0),
     return _create_object(Part, maker, bbox, rotation, align, mode, BuildPart)
 
 
-def _part_maxdim(builder):
+def _through_hole_depth():
+    """build123d 0.12 _BaseHole._through_hole_depth: the part's bounding-box
+    diagonal plus the farthest any active hole location sits from the
+    part's centre (so holes on parts away from the origin still cut
+    through)."""
+    builder = _active_builder(BuildPart)
     if builder is None or builder._obj is None or builder._obj.topo is None:
-        raise ValueError('Hole requires an existing part in a BuildPart context')
-    bb = list(w.BoundingBox(builder._obj.topo, 0.01))
-    return max(bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2])
+        raise ValueError('No depth provided')
+    center = builder._obj.bounding_box().center()
+    dist = 0.0
+    for loc in _ctx_locations():
+        dist = max(dist, (center - loc.position).length)
+    return builder.max_dimension + dist
 
 
 def _hole_length(depth):
@@ -5698,7 +6193,7 @@ def _hole_length(depth):
     build123d holes are CENTERED on the location and span +-depth."""
     if depth is not None:
         return depth
-    return 2.0 * _part_maxdim(_active_builder(BuildPart))
+    return _through_hole_depth()
 
 
 def Hole(radius, depth=None, mode=Mode.SUBTRACT):
@@ -5742,9 +6237,13 @@ def CounterSinkHole(radius, counter_sink_radius, depth=None,
 
 # ------------------------------------------------------- 2D primitives ---
 
-class BasePartObject(Part):
+class BasePartObject(Part, _BaseObject):
     """Base for user-defined part objects: places an existing Part with
-    rotation/align/mode like the built-in primitives (build123d compat)."""
+    rotation/align/mode like the built-in primitives (build123d compat).
+    Constructed behind the _BaseObjectMeta firewall, then placed at the
+    caller's locations and published to the caller's BuildPart (0.12)."""
+
+    _lite_applies_to = 'BuildPart'
 
     def __init__(self, part, rotation=(0, 0, 0),
                  align=None, mode=Mode.ADD):
@@ -5753,15 +6252,36 @@ class BasePartObject(Part):
         created = _create_object(Part, lambda: topo, None, rotation, align3,
                                  mode, BuildPart)
         Shape.__init__(self, created.topo)
+        self.mode = mode
+        if isinstance(rotation, (int, float)):
+            rotation = (0, 0, rotation)
+        self.rotation = Rotation(*rotation) if isinstance(rotation, tuple) \
+            else rotation
+        if isinstance(part, Shape):
+            if part.label:
+                self.label = part.label
+            if getattr(part, '_material', None) is not None:
+                self._material = part._material
+            if part.joints:
+                # 0.12: joints of the input part follow it into the object
+                # (rotated with it) and are re-parented onto the object
+                rotated = self.rotation * part
+                self._loc = rotated._loc
+                self.joints = dict((k, j._lite_rebind(self))
+                                   for k, j in rotated.joints.items())
 
 
-class BaseSketchObject(Sketch):
+class BaseSketchObject(Sketch, _BaseObject):
     """Base for user-defined sketch objects (build123d compat)."""
+
+    _lite_applies_to = 'BuildSketch'
 
     def __init__(self, obj, rotation=0, align=None, mode=Mode.ADD):
         topo = _topo(obj)
         created = _sketch_object(lambda: topo, None, rotation, align, mode)
         Shape.__init__(self, created.topo)
+        self.mode = mode
+        self.rotation = rotation
 
 
 def _sketch_object(topo_maker, analytic_bbox, rotation, align, mode):
@@ -6093,7 +6613,7 @@ def Triangle(a=None, b=None, c=None, A=None, B=None, C=None, align=None,
     def _common_vertex(e1, e2):
         for v1 in e1.vertices():
             for v2 in e2.vertices():
-                if (Vector(v1.to_tuple()) - Vector(v2.to_tuple())).length < \
+                if (Vector(tuple(v1)) - Vector(tuple(v2))).length < \
                         _TOL_1E6:
                     return v1
         raise ValueError('these edges share no vertex')
@@ -6401,37 +6921,85 @@ def _chain_segments(specs):
     return ordered
 
 
+def _place_specs(specs, locs):
+    """Segment specs placed at every location (identity: unchanged)."""
+    if len(locs) == 1 and _loc_is_identity(locs[0]):
+        return specs
+    placed = []
+    for loc in locs:
+        fn_dir = lambda d, loc=loc: _mat_vec(loc._R, d)
+        placed.extend([_seg_transform(s, loc._transform_point, fn_dir, loc)
+                       for s in specs])
+    return placed
+
+
 def _line_object(specs, mode=Mode.ADD):
-    """Register specs with the active BuildLine (if any) and return a Curve."""
+    """Place specs at the active locations (0.12: a Locations context
+    places 1-D objects too, inside a BuildLine and out), register them with
+    the active BuildLine (if any) and return a Curve."""
     builder = _active_builder(BuildLine)
+    specs = _place_specs(specs, _ctx_locations())
     curve = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
     if builder is not None and mode != Mode.PRIVATE:
-        builder._specs.extend(specs)
+        builder._add_specs(specs)
     return curve
 
 
-class BaseLineObject(Curve):
-    """Wrap an already-built wire/curve as a BuildLine object (build123d
-    objects_curve.BaseLineObject): registers the curve with the active
-    BuildLine per mode and becomes that wire. Lite's stock 1-D objects are
-    spec-emitting functions, so this class is the exported subclassing hook —
-    a custom line object builds a Wire/Curve and calls
-    super().__init__(wire, mode)."""
+def _curve_specs_of(curve):
+    if isinstance(curve, Mixin1D) and curve._specs:
+        specs = curve._specs
+    elif isinstance(curve, Shape) and curve.topo is not None:
+        specs = _specs_from_topo_edges(curve)
+    else:
+        specs = []
+    return [_seg_make(s[0], [tuple(p) for p in _seg_pts(s)],
+                      _seg_params(s)) for s in specs]
+
+
+class BaseCurveObject(Curve, _BaseObject):
+    """Wrap an already-built curve as a BuildLine object (build123d
+    objects_curve.BaseCurveObject / BaseLineObject / BaseEdgeObject):
+    constructed behind the _BaseObjectMeta firewall, then placed at the
+    caller's locations and registered with the caller's BuildLine per mode.
+    Lite's stock 1-D objects are spec-emitting functions, so these classes
+    are the exported subclassing hooks — a custom line object builds a
+    Wire/Curve/Edge and calls super().__init__(curve, mode)."""
+
+    _lite_applies_to = 'BuildLine'
 
     def __init__(self, curve, mode=Mode.ADD):
-        if isinstance(curve, Mixin1D) and curve._specs:
-            specs = curve._specs
-        elif isinstance(curve, Shape) and curve.topo is not None:
-            specs = _specs_from_topo_edges(curve)
-        else:
-            specs = []
-        specs = [_seg_make(s[0], [tuple(p) for p in _seg_pts(s)],
-                           _seg_params(s)) for s in specs]
+        specs = _curve_specs_of(curve)
         topo = curve.topo if isinstance(curve, Shape) else curve
         Curve.__init__(self, topo, specs)
-        builder = _active_builder(BuildLine)
-        if builder is not None and mode != Mode.PRIVATE and specs:
-            builder._specs.extend(specs)
+        self.mode = mode
+        if not _HAS_METACLASS:
+            # stock MicroPython (no metaclasses): the pre-0.12 direct path
+            builder = _active_builder(BuildLine)
+            if builder is not None and mode != Mode.PRIVATE and specs:
+                builder._add_specs(specs)
+
+
+class BaseLineObject(BaseCurveObject):
+    """build123d's Wire-based line object base (Polyline, FilletPolyline,
+    Airfoil derive from it upstream)."""
+
+
+class BaseEdgeObject(Edge, _BaseObject):
+    """build123d 0.12's Edge-based line object base (most stock 1-D
+    objects derive from it upstream)."""
+
+    _lite_applies_to = 'BuildLine'
+
+    def __init__(self, curve, mode=Mode.ADD):
+        specs = _curve_specs_of(curve)
+        topo = curve.topo if isinstance(curve, Shape) else curve
+        Edge.__init__(self, topo)
+        self._specs = specs
+        self.mode = mode
+        if not _HAS_METACLASS:
+            builder = _active_builder(BuildLine)
+            if builder is not None and mode != Mode.PRIVATE and specs:
+                builder._add_specs(specs)
 
 
 def Line(*pts, mode=Mode.ADD):
@@ -7155,7 +7723,7 @@ def _tangency_pair(arg):
         p1 = Vector(arg.position) + Vector(arg.direction) * big
         arg = Edge.make_line(p0, p1)
     if isinstance(arg, Vertex):
-        return {'point': list(arg.to_tuple())[:2]}
+        return {'point': list(tuple(arg))[:2]}
     if isinstance(arg, Mixin1D) and getattr(arg, 'topo', None) is not None:
         edge = arg if isinstance(arg, Edge) else _single_edge_of(arg)
         return {'edge': edge.topo, 'qualifier': qualifier}
@@ -7292,401 +7860,6 @@ def ConstrainedLines(*args, angle=None, direction=None, selector=None,
         selector, mode)
 
 
-# ------------------------------------------- deprecated tangent objects ---
-# build123d 0.11's PointArcTangentLine / PointArcTangentArc /
-# ArcArcTangentLine / ArcArcTangentArc (all deprecated upstream in favour of
-# ConstrainedLines/ConstrainedArcs, which lite has on the real Geom2dGcc
-# solvers). Ported statement-for-statement in the workplane's LOCAL frame:
-# inside a BuildLine lite keeps every spec local until __exit__, which is
-# exactly upstream's math evaluated on Plane.XY.
-
-def _tangent_object_plane(name, arcs, points):
-    """The plane the tangent-object math runs in. Inside a BuildLine
-    everything is local, so it is Plane.XY; in algebra mode it is built from
-    the first arc like upstream (origin at its center, z along its normal)
-    and every input is validated coplanar (upstream's common_plane check).
-    Lite's 1-D emitters work in the XY plane, so a non-XY-parallel algebra
-    plane raises instead of emitting wrong geometry."""
-    if _active_builder(BuildLine) is not None:
-        return Plane((0, 0, 0), (1, 0, 0), (0, 0, 1))
-    plane = Plane(arcs[0].arc_center, z_dir=arcs[0].normal())
-    for p in list(points) + [a.arc_center for a in arcs]:
-        if abs(plane.to_local_coords(p).Z) > 1e-4:
-            raise ValueError(name + ' only works on a single plane.')
-    if abs(plane.z_dir.X) > 1e-9 or abs(plane.z_dir.Y) > 1e-9:
-        raise NotImplementedError(
-            name + ': build123d-lite 1-D objects work in the XY plane or a '
-            'BuildLine workplane')
-    return plane
-
-
-def _wp_dir_in(plane, d):
-    """A world direction expressed in the plane's frame (no origin shift)."""
-    d = Vector(d)
-    return Vector(d.dot(plane.x_dir), d.dot(plane.y_dir), d.dot(plane.z_dir))
-
-
-def _wp_dir_out(plane, d):
-    """A plane-frame direction expressed in world coordinates."""
-    d = Vector(d)
-    return plane.x_dir * d.X + plane.y_dir * d.Y + plane.z_dir * d.Z
-
-
-def _tangent_arc_geom_check(arc, message):
-    if _single_edge_of(arc).geom_type != GeomType.CIRCLE:
-        raise ValueError(message)
-
-
-def PointArcTangentLine(point, arc, side=Side.LEFT, mode=Mode.ADD):
-    """Create a straight tangent line from a point to a circular arc
-    (build123d objects_curve.PointArcTangentLine). side picks which of the
-    two tangents to keep."""
-    side_sign = {Side.LEFT: -1, Side.RIGHT: 1}
-    _tangent_arc_geom_check(arc, 'Arc must have GeomType.CIRCLE.')
-    workplane = _tangent_object_plane('PointArcTangentLine', [arc],
-                                      [Vector(point)])
-    tangent_point = workplane.to_local_coords(Vector(point))
-    arc_center = workplane.to_local_coords(arc.arc_center)
-    radius = arc.radius
-    midline = tangent_point - arc_center
-
-    if midline.length <= radius:
-        raise ValueError('Cannot find tangent for point on or inside arc.')
-
-    # Find angle phi between midline and x and angle theta between midline
-    # length and radius; add them with a sign on theta to pick a direction.
-    # This angle is the tangent location around the circle from x.
-    x_dir = Vector(1, 0, 0)
-    phi = midline.get_signed_angle(x_dir)
-    other_leg = math.sqrt(midline.length ** 2 - radius ** 2)
-    theta = Vector(radius, other_leg).get_signed_angle(x_dir)
-    angle = side_sign[side] * theta + phi
-    intersect = Vector(radius * math.cos(math.radians(angle)),
-                       radius * math.sin(math.radians(angle))) + arc_center
-
-    return Line(workplane.from_local_coords(tangent_point),
-                workplane.from_local_coords(intersect), mode=mode)
-
-
-def ArcArcTangentLine(start_arc, end_arc, side=Side.LEFT, keep=Keep.INSIDE,
-                      mode=Mode.ADD):
-    """Create a straight line tangent to two circular arcs (build123d
-    objects_curve.ArcArcTangentLine). side places the tangent, keep picks
-    the INSIDE (crossing) or OUTSIDE tangent pair member."""
-    _tangent_arc_geom_check(start_arc, 'Start arc must have GeomType.CIRCLE.')
-    _tangent_arc_geom_check(end_arc, 'End arc must have GeomType.CIRCLE.')
-    workplane = _tangent_object_plane('ArcArcTangentLine',
-                                      [start_arc, end_arc], [])
-
-    side_sign = 1 if side == Side.LEFT else -1
-    arcs = [start_arc, end_arc]
-    points = [workplane.to_local_coords(a.arc_center) for a in arcs]
-    radii = [a.radius for a in arcs]
-    midline = points[1] - points[0]
-
-    if midline.length <= abs(radii[1] - radii[0]):
-        raise ValueError('Cannot find tangent when one arc contains the '
-                         'other.')
-    if keep == Keep.INSIDE:
-        if midline.length < sum(radii):
-            raise ValueError('Cannot find INSIDE tangent for overlapping '
-                             'arcs.')
-        if midline.length == sum(radii):
-            raise ValueError('Cannot find INSIDE tangent for tangent arcs.')
-
-    # Method: Wikipedia "Tangent lines to two circles" — theta is the angle
-    # formed by the triangle legs midline.length and r0 -+ r1; INSIDE theta
-    # for arc1 is 180 degrees from theta for arc0.
-    x_dir = Vector(1, 0, 0)
-    phi = midline.get_signed_angle(x_dir)
-    radius = radii[0] + radii[1] if keep == Keep.INSIDE else \
-        radii[0] - radii[1]
-    other_leg = math.sqrt(midline.length ** 2 - radius ** 2)
-    theta = Vector(radius, other_leg).get_signed_angle(x_dir)
-    angle = side_sign * theta + phi
-
-    intersect = []
-    for i in range(len(arcs)):
-        angle = i * 180 + angle if keep == Keep.INSIDE else angle
-        intersect.append(Vector(radii[i] * math.cos(math.radians(angle)),
-                                radii[i] * math.sin(math.radians(angle))) +
-                         points[i])
-
-    return Line(workplane.from_local_coords(intersect[0]),
-                workplane.from_local_coords(intersect[1]), mode=mode)
-
-
-def PointArcTangentArc(point, direction, arc, side=Side.LEFT, mode=Mode.ADD):
-    """Create an arc from a point/tangent pair whose other end is tangent to
-    a circular arc (build123d objects_curve.PointArcTangentArc — the tangent
-    radius is found with the same Nelder-Mead minimization, on the scipy
-    shim)."""
-    from scipy.optimize import minimize
-    _tangent_arc_geom_check(arc, 'Arc must have GeomType.CIRCLE')
-    workplane = _tangent_object_plane('PointArcTangentArc', [arc],
-                                      [Vector(point)])
-    arc_point = workplane.to_local_coords(Vector(point))
-    arc_tangent = _wp_dir_in(workplane, direction).normalized()
-    arc_center = workplane.to_local_coords(arc.arc_center)
-    arc_radius = arc.radius
-    z_dir = Vector(0, 0, 1)
-
-    midline = arc_point - arc_center
-    if midline.length == arc_radius:
-        raise ValueError('Cannot find tangent for point on arc.')
-    if midline.length <= arc_radius:
-        raise NotImplementedError('Point inside arc not yet implemented.')
-
-    # Determine where arc_point is located relative to arc: ref forms a
-    # bisecting line parallel to arc tangent with the same distance from the
-    # arc center as arc point in the direction of the arc tangent.
-    tangent_perp = arc_tangent.cross(z_dir)
-    ref_scale = (arc_center - arc_point).dot(-arc_tangent)
-    ref = arc_tangent * ref_scale + arc_center
-    ref_to_point = (arc_point - ref).dot(tangent_perp)
-
-    keep_sign = -1 if side == Side.LEFT else 1
-    # Tangent radius to infinity (and beyond)
-    if keep_sign * ref_to_point == arc_radius:
-        raise ValueError('Point is already tangent to arc, use tangent line.')
-
-    # Use magnitude and sign of ref to arc point along with keep to determine
-    # which "side" angle the arc center will be on.
-    side_sign = 1 if ref_to_point < 0 else -1
-    if abs(ref_to_point) < arc_radius:
-        # point/tangent pointing inside arc, both arcs near
-        arc_type = 1
-        angle = keep_sign * -90
-        if ref_scale > 1:
-            angle = -angle
-    else:
-        # point/tangent pointing outside arc, one near arc one far
-        angle = side_sign * -90
-        if side == Side.LEFT:
-            arc_type = -side_sign
-        else:
-            arc_type = side_sign
-
-    # Protect against massive circles that are effectively straight lines
-    # (upstream: 1000 * the arc+point bounding box diagonal; the full circle
-    # bbox covers any partial arc and stays deterministic in local coords)
-    min_x = min(arc_center.X - arc_radius, arc_point.X)
-    max_x = max(arc_center.X + arc_radius, arc_point.X)
-    min_y = min(arc_center.Y - arc_radius, arc_point.Y)
-    max_y = max(arc_center.Y + arc_radius, arc_point.Y)
-    max_size = 1000 * math.hypot(max_x - min_x, max_y - min_y)
-
-    # Function to be minimized
-    def func(radius_arr, perpendicular_bisector, minimize_type):
-        rr = radius_arr[0]
-        center = arc_point + perpendicular_bisector * rr
-        separation = (arc_center - center).length - arc_radius
-        if minimize_type == 1:
-            # near side arc
-            return abs(separation - rr)
-        # far side arc
-        return abs(separation - rr + arc_radius * 2)
-
-    # Find arc center by minimizing func result
-    rotation_axis = Axis((0, 0, 0), (0, 0, 1))
-    perpendicular_bisector = arc_tangent.rotate(rotation_axis, angle)
-    result = minimize(func, x0=0, args=(perpendicular_bisector, arc_type),
-                      method='Nelder-Mead', bounds=[(0.0, max_size)],
-                      tol=_TOL_1E6)
-    tangent_radius = result.x[0]
-    tangent_center = arc_point + perpendicular_bisector * tangent_radius
-
-    # Check if minimizer hit max size
-    if tangent_radius == max_size:
-        raise RuntimeError('Arc radius very large. Can tangent line be used?')
-
-    # dir needs to be flipped for far arc
-    tangent_normal = (arc_center - tangent_center).normalized()
-    tangent_dir = tangent_normal.cross(z_dir) * arc_type
-    tangent_point = tangent_normal * tangent_radius + tangent_center
-
-    # Sanity checks: the tangent point must be on the arc, and the new
-    # tangent direction colinear with the arc's tangent there (a circle's
-    # tangent is perpendicular to its radius)
-    if abs(arc_radius - (tangent_point - arc_center).length) > _TOL_1E6:
-        raise RuntimeError('No tangent arc found, no tangent point found.')
-    arc_dir = (tangent_point - arc_center).normalized().cross(z_dir)
-    if tangent_dir.cross(arc_dir).length > _TOL_1E6:
-        raise RuntimeError('No tangent arc found, found tangent out of '
-                           'tolerance.')
-
-    return TangentArc(workplane.from_local_coords(arc_point),
-                      workplane.from_local_coords(tangent_point),
-                      tangent=_wp_dir_out(workplane, arc_tangent), mode=mode)
-
-
-def _circle_intersections_2d(c0, r0, c1, r1):
-    """Intersection points of two circles in the local XY plane — the
-    analytic form of the sympy.intersection upstream's ArcArcTangentArc
-    leans on (lite has no sympy; the algebra is exact either way)."""
-    d = (c1 - c0).length
-    if d < 1e-12:
-        return []
-    a = (d * d + r0 * r0 - r1 * r1) / (2.0 * d)
-    h2 = r0 * r0 - a * a
-    if h2 < -1e-9 * max(r0 * r0, 1.0):
-        return []
-    h = math.sqrt(max(h2, 0.0))
-    ex = (c1 - c0) / d
-    ey = Vector(-ex.Y, ex.X, 0.0)
-    base = c0 + ex * a
-    if h < 1e-12:
-        return [base]
-    return [base + ey * h, base - ey * h]
-
-
-def ArcArcTangentArc(start_arc, end_arc, radius, side=Side.LEFT,
-                     keep=(Keep.INSIDE, Keep.INSIDE), short_sagitta=True,
-                     mode=Mode.ADD):
-    """Create an arc of the given radius tangent to two circular arcs
-    (build123d objects_curve.ArcArcTangentArc). keep is a (placement, type)
-    pair: placement is start_arc tangent INSIDE or OUTSIDE the tangent arc
-    (BOTH for overlapping arcs with type INSIDE); type is the tangent arc
-    INSIDE or OUTSIDE start/end arc."""
-    keep_placement, keep_type = (keep, keep) if isinstance(keep, str) \
-        else keep
-
-    if keep_placement == Keep.BOTH and keep_type != Keep.INSIDE:
-        raise ValueError('Keep.BOTH can only be used in configuration: '
-                         '(Keep.BOTH, Keep.INSIDE)')
-    _tangent_arc_geom_check(start_arc, 'Start arc must have GeomType.CIRCLE.')
-    _tangent_arc_geom_check(end_arc, 'End arc must have GeomType.CIRCLE.')
-    workplane = _tangent_object_plane('ArcArcTangentArc',
-                                      [start_arc, end_arc], [])
-
-    arcs = [start_arc, end_arc]
-    points = [workplane.to_local_coords(a.arc_center) for a in arcs]
-    radii = [a.radius for a in arcs]
-    side_sign = 1 if side == Side.LEFT else -1
-    keep_sign = 1 if keep_placement == Keep.OUTSIDE else -1
-    r_sign = 1 if radii[0] < radii[1] else -1
-
-    # Normal vector for sorting intersections
-    z_dir = Vector(0, 0, 1)
-    midline = points[1] - points[0]
-    normal = midline.cross(z_dir) * side_sign
-
-    if midline.length < _TOL_1E6:
-        raise ValueError('Cannot find tangent for concentric arcs.')
-    if abs(midline.length - sum(radii)) < _TOL_1E6 and \
-            keep_type == Keep.INSIDE:
-        raise ValueError('Cannot find tangent type Keep.INSIDE for '
-                         'non-overlapping arcs already tangent.')
-    if abs(midline.length - abs(radii[0] - radii[1])) < _TOL_1E6 and \
-            keep_placement == Keep.INSIDE:
-        raise ValueError('Cannot find tangent placement Keep.INSIDE for '
-                         'completely overlapping arcs already tangent.')
-
-    # Set parameters based on overlap condition and keep configuration
-    min_radius = 0.0
-    max_radius = None
-    x_sign = [1, 1]
-    pick_index = 0
-    if midline.length > abs(radii[0] - radii[1]) and \
-            keep_type == Keep.OUTSIDE:
-        # No full overlap, placed externally
-        ref_radii = [keep_sign * radii[0] + radius,
-                     keep_sign * radii[1] + radius]
-        x_sign = [keep_sign, keep_sign]
-        min_radius = (midline.length - keep_sign * (radii[0] + radii[1])) / 2
-        min_radius = 0 if min_radius < 0 else min_radius
-    elif midline.length > radii[0] + radii[1] and keep_type == Keep.INSIDE:
-        # No overlap, placed inside
-        ref_radii = [abs(radii[0] + keep_sign * radius),
-                     abs(radii[1] - keep_sign * radius)]
-        x_sign = [1, -1] if keep_placement == Keep.OUTSIDE else [-1, 1]
-        min_radius = (midline.length - keep_sign * (radii[0] - radii[1])) / 2
-    elif midline.length <= abs(radii[0] - radii[1]):
-        # Full overlap
-        pick_index = -1
-        if keep_placement == Keep.OUTSIDE:
-            # External tangent to start
-            ref_radii = [radii[0] + r_sign * radius,
-                         radii[1] - r_sign * radius]
-            min_radius = (-midline.length - r_sign * radii[0] +
-                          r_sign * radii[1]) / 2
-            max_radius = (midline.length - r_sign * radii[0] +
-                          r_sign * radii[1]) / 2
-        elif keep_placement == Keep.INSIDE:
-            # Internal tangent to start
-            ref_radii = [abs(radii[0] - radius), abs(radii[1] - radius)]
-            min_radius = (-midline.length + radii[0] + radii[1]) / 2
-            max_radius = (midline.length + radii[0] + radii[1]) / 2
-            if radii[0] < radii[1]:
-                x_sign = [-1, 1]
-            else:
-                x_sign = [1, -1]
-        else:
-            raise ValueError('Keep.BOTH requires partially overlapping arcs.')
-    else:
-        # Partial overlap
-        pick_index = -1
-        if keep_placement == Keep.BOTH:
-            # Internal tangent to both
-            ref_radii = [abs(radii[0] - radius), abs(radii[1] - radius)]
-            max_radius = (-midline.length + radii[0] + radii[1]) / 2
-        elif keep_placement == Keep.OUTSIDE:
-            # External tangent to start
-            ref_radii = [radii[0] + r_sign * radius,
-                         radii[1] - r_sign * radius]
-            max_radius = (midline.length - r_sign * radii[0] +
-                          r_sign * radii[1]) / 2
-        else:
-            # Internal tangent to start
-            ref_radii = [radii[0] - r_sign * radius,
-                         radii[1] + r_sign * radius]
-            max_radius = (midline.length + r_sign * radii[0] -
-                          r_sign * radii[1]) / 2
-
-    if min_radius >= radius:
-        raise ValueError('The arc radius is too small. Should be greater '
-                         'than ' + str(min_radius) + '.')
-    if max_radius is not None and max_radius <= radius:
-        raise ValueError('The arc radius is too large. Should be less than ' +
-                         str(max_radius) + '.')
-
-    # The tangent arc's center is an intersection of the circles offset by
-    # the construction radii (upstream does this with sympy.Circle;
-    # _circle_intersections_2d is the same algebra in closed form)
-    ref_intersections = _circle_intersections_2d(points[0], ref_radii[0],
-                                                 points[1], ref_radii[1])
-    if not ref_intersections:
-        raise ValueError('The arc radius does not produce a tangent arc '
-                         'center (no intersection of the construction '
-                         'circles).')
-    # sort_by(Axis(points[0], normal)): distance along that axis
-    ref_intersections = _stable_sorted(ref_intersections, key=lambda p: (p - points[0]).dot(normal))
-    arc_center = ref_intersections[pick_index]
-
-    # x_sign determines if tangent is near side or far side of circle
-    intersect = [points[i] + (arc_center - points[i]).normalized() *
-                 (x_sign[i] * radii[i]) for i in range(len(arcs))]
-    if side == Side.LEFT:
-        intersect.reverse()
-
-    p0 = workplane.from_local_coords(intersect[0])
-    p1 = workplane.from_local_coords(intersect[1])
-    arc = RadiusArc(p0, p1, radius=radius, short_sagitta=short_sagitta,
-                    mode=Mode.PRIVATE)
-
-    # Check and flip arc if not tangent
-    start_circle = CenterArc(workplane.from_local_coords(points[0]),
-                             radii[0], 0, 360, mode=Mode.PRIVATE)
-    _, _, point = start_circle.distance_to_with_closest_points(arc)
-    circle_tan = start_circle.tangent_at(start_circle.param_at_point(point))
-    arc_tan = arc.tangent_at(arc.param_at_point(point))
-    if circle_tan.cross(arc_tan).length > _TOL_1E6:
-        arc = RadiusArc(p0, p1, radius=-radius, short_sagitta=short_sagitta,
-                        mode=Mode.PRIVATE)
-
-    return BaseLineObject(arc, mode)
-
-
 def BSpline(control_points, knots, degree, weights=None, periodic=False,
             mode=Mode.ADD):
     """An EXACT B-spline edge from poles, a knot sequence and a degree
@@ -7784,10 +7957,10 @@ def BlendCurve(curve0, curve1, continuity=ContinuityLevel.C2, end_points=None,
         best, end_pnts = None, None
         for v0 in curve0.vertices():
             for v1 in curve1.vertices():
-                d = (Vector(v0.to_tuple()) - Vector(v1.to_tuple())).length
+                d = (Vector(tuple(v0)) - Vector(tuple(v1))).length
                 if best is None or d < best:
                     best = d
-                    end_pnts = (v0.to_tuple(), v1.to_tuple())
+                    end_pnts = (tuple(v0), tuple(v1))
     else:
         end_pnts = tuple(end_points)
     end_params = [0, 0]
@@ -8205,12 +8378,12 @@ def make_brake_formed(thickness, station_widths, line=None, side=Side.LEFT,
 
     station_edges = ShapeList()
     for vertex in line_vertices:
-        base = Vector(vertex.to_tuple())
+        base = Vector(tuple(vertex))
         others = offset_vertices.sort_by_distance(base)
         for other in others[1:]:
-            if abs((base - Vector(other.to_tuple())).length - thickness) < 1e-2:
+            if abs((base - Vector(tuple(other))).length - thickness) < 1e-2:
                 station_edges.append(Edge.make_line(base,
-                                                    Vector(other.to_tuple())))
+                                                    Vector(tuple(other))))
                 break
     station_edges = station_edges.sort_by(line)
 
@@ -8417,15 +8590,15 @@ def _wire_fillet_corner(edges, index, vertex, radius):
         trimmed = []
         for e in (e0, e1):
             contact = arc.vertices().sort_by_distance(e)[0]
-            pieces = _split_1d_at_point(e, Vector(contact.to_tuple()))
+            pieces = _split_1d_at_point(e, Vector(tuple(contact)))
             far = [v for v in e.vertices()
-                   if (Vector(v.to_tuple()) - Vector(point)).length > _TOL_1E6]
+                   if (Vector(tuple(v)) - Vector(point)).length > _TOL_1E6]
             keep = None
             for piece in pieces:
                 for v in piece.vertices():
                     for f in far:
-                        if (Vector(v.to_tuple()) -
-                                Vector(f.to_tuple())).length <= _TOL_1E6:
+                        if (Vector(tuple(v)) -
+                                Vector(tuple(f))).length <= _TOL_1E6:
                             keep = piece
             trimmed.append(keep if keep is not None else e)
 
@@ -8454,7 +8627,7 @@ def _wire_fillet_2d(line, vertices, radius):
     plane = _wire_common_plane(line)
     to_local = plane.location.inverse()
     local_line = to_local * line
-    local_points = [to_local._transform_point(v.to_tuple()) for v in vertices]
+    local_points = [to_local._transform_point(tuple(v)) for v in vertices]
     edges = ShapeList([Edge(t) for t in w.OrderedEdges(local_line.topo)])
     start = local_line.position_at(0)
     end = local_line.position_at(1)
@@ -8467,7 +8640,7 @@ def _wire_fillet_2d(line, vertices, radius):
         touching = []
         for i, e in enumerate(edges):
             for ev in e.vertices():
-                if (Vector(ev.to_tuple()) - v).length <= _TOL_1E6:
+                if (Vector(tuple(ev)) - v).length <= _TOL_1E6:
                     touching.append(i)
                     break
         if len(touching) != 2:
@@ -8486,11 +8659,10 @@ def _wire_fillet_2d(line, vertices, radius):
     builder = _active_builder()
     if builder is not None:
         if isinstance(builder, BuildLine):
-            builder._specs = _specs_from_topo_edges(result)
-            builder._obj = result
+            builder._set_specs(_specs_from_topo_edges(result))
         elif (builder._obj is not None and
                 (builder._obj is line or builder._obj.topo is line.topo)):
-            builder._obj = result
+            _replace_obj(builder, result)
     return result
 
 
@@ -8513,12 +8685,31 @@ def _vertex_op_2d(objs, radius, opname):
         raise NotImplementedError('2D vertex fillets on multi-face sketches '
                                   'are not supported in build123d-lite')
     pts = [[v.X, v.Y, v.Z] for v in verts]
-    result = _wrap_like(parent, w.FilletFace2D(faces[0].topo, radius, pts))
+    ftopo = faces[0].topo
+    rtopo = w.FilletFace2D(ftopo, radius, pts, False, True)
+    result = _wrap_like(parent, rtopo)._made_by(
+        _record_of(rtopo, [parent.topo], []))
     builder = _active_builder()
     if builder is not None and builder._obj is not None and \
             (builder._obj is parent or builder._obj.topo is parent.topo):
-        builder._obj = result
+        _replace_obj(builder, result)
     return result
+
+
+def _replace_obj(builder, result):
+    """An operation REPLACED the builder's object (fillet/chamfer/2-D
+    fillet/offset: upstream _add_to_context(..., mode=Mode.REPLACE)): the
+    operation's record relates the result to what it replaces."""
+    if isinstance(builder, BuildLine):
+        builder._set_specs(_curve_specs_of(result))
+        return
+    before = builder._obj
+    record = ShapeHistory.of(result)
+    record = record.copy() if record is not None else ShapeHistory()
+    builder._obj = builder._wrap(result.topo)
+    builder._obj._made_by(record.with_inputs(
+        [before.topo] if before is not None and before.topo is not None
+        else [], []))
 
 
 def _edge_op(objects, jsfunc, value, opname):
@@ -8529,11 +8720,14 @@ def _edge_op(objects, jsfunc, value, opname):
     if parent is None or parent.topo is None:
         raise ValueError(opname + ': edges have no parent shape')
     ptopo = parent.topo
-    result = _wrap_like(parent, jsfunc(ptopo, value, indices))
+    rtopo = jsfunc(ptopo, value, indices, False, True)
+    # the operation's own record (BRepFilletAPI Modified/Generated, like
+    # upstream's ShapeHistory.from_algorithm) rides on the result
+    result = _wrap_like(parent, rtopo)._made_by(_record_of(rtopo, [ptopo], []))
     builder = _active_builder()
     if builder is not None and builder._obj is not None and \
             (builder._obj is parent or builder._obj.topo is ptopo):
-        builder._obj = result
+        _replace_obj(builder, result)
     return result
 
 
@@ -8580,9 +8774,9 @@ def offset(objects=None, amount=0, openings=None, kind=Kind.ARC,
         curve = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
         if isinstance(builder, BuildLine):
             if mode == Mode.REPLACE:
-                builder._specs = list(specs)
+                builder._set_specs(specs)
             elif mode == Mode.ADD:
-                builder._specs.extend(specs)
+                builder._add_specs(specs)
             elif mode != Mode.PRIVATE:
                 raise ValueError('offset: unsupported mode ' + repr(mode) +
                                  ' inside BuildLine')
@@ -8673,7 +8867,7 @@ def mirror(objects=None, about=Plane.XZ, mode=Mode.ADD):
         specs = [_mirror_seg(s) for s in src]
         curve = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
         if isinstance(builder, BuildLine) and mode == Mode.ADD:
-            builder._specs.extend(specs)
+            builder._add_specs(specs)
         return curve
     targets = _tolist(objects) if objects is not None else \
         ([builder._obj] if builder is not None and builder._obj is not None else [])
@@ -8736,7 +8930,7 @@ def scale(objects=None, by=1, about=None, mode=Mode.REPLACE):
     if objects is None and isinstance(builder, BuildLine) and factors is None:
         # scale the accumulated line segments in place (spec-level, so
         # make_face() after scale() still chains exactly)
-        builder._specs = [_seg_scale(s, by) for s in builder._specs]
+        builder._set_specs([_seg_scale(s, by) for s in builder._specs])
         return builder.line
     targets = _tolist(objects) if objects is not None else \
         ([builder._obj] if builder is not None and builder._obj is not None else [])
@@ -8762,13 +8956,17 @@ def scale(objects=None, by=1, about=None, mode=Mode.REPLACE):
     return _combine(builder, obj, mode)
 
 
-def add(objects, rotation=None, clean=True, mode=Mode.ADD):
+def insert(objects, rotation=None, clean=True, mode=Mode.ADD):
+    """Generic object: insert objects into the builder in context (build123d
+    0.12's insert(); add() is its deprecated wrapper). Objects are placed at
+    the active locations in the builder's LOCAL construction coordinates."""
     builder = _active_builder()
     if builder is None:
-        raise ValueError('add() requires an active builder context')
+        raise RuntimeError('Insert must have an active builder context')
     objs = _tolist(objects)
-    # build123d's add() replaces each Builder argument with its result and
-    # drops the ones that have none yet (operations_generic.add's object_iter)
+    # build123d's insert() replaces each Builder argument with its result and
+    # drops the ones that have none yet (operations_generic.insert's
+    # object_iter)
     objs = [(o._obj if isinstance(o, Builder) else o) for o in objs
             if not (isinstance(o, Builder) and o._obj is None)]
     # curves added to a BuildLine contribute their segments (optionally
@@ -8786,24 +8984,24 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
             elif isinstance(o, Mixin1D):
                 specs = _specs_from_topo_edges(o)
             else:
-                raise TypeError('add() to BuildLine expects curves')
+                raise TypeError('insert() to BuildLine expects curves')
             if rot is not None:
                 fn_dir = lambda d: _mat_vec(rot._R, d)
                 specs = [_seg_transform(s, rot._transform_point, fn_dir, rot)
                          for s in specs]
             # replicate at the active Locations contexts, like every other
             # object creation (build123d dimension-arrow pattern)
-            placed_specs = []
-            for loc in ctx_locs:
-                fn_dir = lambda d: _mat_vec(loc._R, d)
-                placed_specs.extend([_seg_transform(s, loc._transform_point,
-                                                    fn_dir, loc)
-                                     for s in specs])
-            builder._specs.extend(placed_specs)
+            placed_specs = _place_specs(specs, ctx_locs)
+            if mode != Mode.PRIVATE:
+                if mode == Mode.REPLACE:
+                    builder._set_specs(placed_specs)
+                else:
+                    builder._add_specs(placed_specs)
             out.append(Curve(w.WireFromSegments(_chain_segments(placed_specs)),
                              placed_specs))
         return out[0] if len(out) == 1 else ShapeList(out)
-    # 2D objects added to a BuildPart become pending sketch faces (build123d)
+    # 2D objects inserted into a BuildPart become pending sketch faces, in
+    # local Plane.XY construction coordinates (build123d 0.12)
     def _is_2d(o):
         if not (isinstance(o, Shape) and o.topo is not None):
             return False
@@ -8814,30 +9012,40 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
         return count[0] == 0 and len(o.faces()) > 0
     if isinstance(builder, BuildPart) and mode == Mode.ADD and \
             all(_is_2d(o) for o in objs):
-        for o in objs:
-            for f in o.faces():
-                n = w._faceNormal(f.topo)
-                c = w._faceCentroid(f.topo)
-                builder.pending_faces.append(Sketch(f.topo))
-                builder.pending_face_planes.append(
-                    Plane(origin=tuple(c), z_dir=tuple(n)))
-        return objs[0] if len(objs) == 1 else ShapeList(objs)
+        placed = []
+        for loc in _ctx_locations():
+            for o in objs:
+                for f in o.faces():
+                    pf = f if _loc_is_identity(loc) else loc * f
+                    builder.pending_faces.append(Sketch(_topo(pf)))
+                    builder.pending_face_planes.append(Plane.XY)
+                    placed.append(pf)
+        return placed[0] if len(placed) == 1 else ShapeList(placed)
     results = []
     for o in objs:
         s = _wrap_like(o, _topo(o))
         if rotation is not None:
             r = tuple(rotation) if not isinstance(rotation, (int, float)) else (0, 0, rotation)
             s = Rotation(r[0], r[1], r[2]) * s
-        # replicate at location contexts / workplanes like object creation
-        locs = _ctx_locations()
-        planes = builder.workplanes if isinstance(builder, BuildPart) else [Plane.XY]
+        # replicate at the active location context, like object creation
         placed = []
-        for pl in planes:
-            for loc in locs:
-                placed.append((pl.location * loc) * _wrap_like(s, w.Translate([0, 0, 0], s.topo, True)))
-        results.append(placed[0] if len(placed) == 1 else placed[0] + placed[1:])
-    obj = results[0] if len(results) == 1 else results[0] + results[1:]
+        for loc in _ctx_locations():
+            placed.append(loc * _wrap_like(s, w.Translate([0, 0, 0], s.topo, True)))
+        if len(placed) == 1:
+            results.append(placed[0])
+        else:
+            results.append(_wrap_like(s, w.MakeCompound([p.topo for p in placed])))
+    if len(results) == 1:
+        obj = results[0]
+    else:
+        obj = _wrap_like(results[0], w.MakeCompound([r.topo for r in results]))
     return _combine(builder, obj, mode)
+
+
+def add(objects, rotation=None, clean=True, mode=Mode.ADD):
+    """Deprecated since build123d 0.12: use insert()."""
+    _warn('add() is deprecated; use insert() instead.', 'DeprecationWarning')
+    return insert(objects, rotation=rotation, clean=clean, mode=mode)
 
 
 def make_face(edges=None, mode=Mode.ADD):
@@ -9164,7 +9372,7 @@ def draft(faces, neutral_plane, angle):
         target.topo, [f.topo for f in face_list], angle,
         list(neutral_plane.origin), list(neutral_plane.z_dir)))
     if builder is not None:
-        builder._obj = builder._wrap(result.topo)
+        _replace_obj(builder, result)
     return result
 
 
@@ -9626,7 +9834,7 @@ class Mesher:
     StlAPI_Writer into the worker's Emscripten MEMFS — there is no lib3mf in
     the WASM build, so .3mf paths raise; read() is not supported."""
 
-    def __init__(self, unit='MM', **kwargs):
+    def __init__(self, unit=Unit.MM, **kwargs):
         self.unit = unit
         self._shapes = []
         self.linear_deflection = 0.001
@@ -9752,7 +9960,8 @@ def export_step(to_export, file_path, unit=None, write_pcurves=True,
     Interface_Static keys behind them are not bound in this wasm build);
     unit= is honoured via write.step.unit. Returns True like upstream."""
     text = w.ExportSTEP(_topo(to_export), str(file_path).replace('/', '_'),
-                        str(unit) if unit is not None else None)
+                        _STEP_UNIT_NAMES.get(unit, str(unit))
+                        if unit is not None else None)
     return bool(text)
 
 
@@ -9781,7 +9990,7 @@ class GeomEncoder(json.JSONEncoder):
             # lite's Color is a stub keeping its constructor args
             return {'Color': tuple(getattr(o, 'args', ()))}
         if isinstance(o, Location):
-            tup = o.to_tuple()
+            tup = tuple(o)
             return {'Location': (tuple(tup[0]), tuple(tup[1]))}
         if isinstance(o, Plane):
             return {'Plane': (tuple(o.origin), tuple(o.x_dir),
@@ -9801,25 +10010,6 @@ class GeomEncoder(json.JSONEncoder):
                     'Plane': Plane, 'Vector': Vector}
         for key, value in json_dict.items():
             return registry[key](*value)
-
-
-class LocationEncoder(json.JSONEncoder):
-    """Custom JSON Encoder for Location values (build123d
-    geometry.LocationEncoder — deprecated upstream in favour of
-    GeomEncoder, kept for compatibility)."""
-
-    def default(self, o):
-        """Return a serializable object"""
-        if not isinstance(o, Location):
-            raise TypeError('Only applies to Location objects')
-        return {'Location': o.to_tuple()}
-
-    @staticmethod
-    def location_hook(obj):
-        """Convert Locations loaded from json to Location objects."""
-        if 'Location' in obj:
-            obj = Location(*[[float(f) for f in v] for v in obj['Location']])
-        return obj
 
 
 def _pack2d(objects, width_fn, length_fn):
