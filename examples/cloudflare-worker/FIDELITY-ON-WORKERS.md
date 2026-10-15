@@ -1,15 +1,52 @@
 # The high-fidelity build123d flavors on Cloudflare Workers
 
 *2026-10-15, branch `feat/cf-fidelity-flavors`. Lane: getting the two
-high-fidelity flavors — **upstream** (build123d 0.11.1's own Python, verbatim,
-on the custom MicroPython) and **real** (the unmodified PyPI wheel + real
-numpy on Pyodide/CPython 3.14) — to fit Cloudflare's limits. Memory first,
-then size and startup. Nothing here was deployed: every number is local
-workerd (`wrangler dev`, wrangler 4.125.0) or plain Node, and the questions
-only the edge can settle are listed at the end with the command that would
-settle each.*
+high-fidelity flavors — **upstream** (build123d's own Python, verbatim, on
+the custom MicroPython) and **real** (the unmodified PyPI wheel + real numpy
+on Pyodide/CPython 3.14) — to fit Cloudflare's limits. Memory first, then
+size and startup.*
 
-## Verdict
+*Everything was measured locally: workerd (`wrangler dev`, wrangler 4.125.0)
+or plain Node. Nothing was deployed. The questions only the edge can settle
+are listed in §6, with the command that would settle each.*
+
+*Sections 1-5 were measured on build123d **0.11.1**. The branch has since
+merged `feat/build123d-0.13`, and the headline numbers were re-measured on
+**0.13.0** right below. The mechanisms and fixes are version-independent:
+they live in the interpreter, the shim and the host.*
+
+## Re-measured on build123d 0.13.0 (after the merge)
+
+The headless corpus ran in Node with a fresh engine per script; peaks are
+`occtWasm + pythonWasm`. The workerd totals add the V8 live heap (after GC,
+via the inspector) and V8's ArrayBuffer backing stores.
+
+| | upstream 0.13.0 | real 0.13.0 |
+|---|---|---|
+| classification (headless) | 232/3/3/1 of 239. The browser baseline is 233/2/3/1. The one difference, `docs-rst/tips/b04`, is a complete-tie `sort_by` that also mismatches headless on the pure `feat/build123d-0.13` build, the stock interpreter and leak mode, so it does not come from this branch. | 232/3/3/1, **0 differences** from `results-013-real.json` |
+| corpus models under 128 MB of wasm | **237 / 238** (only `bracelet`, 179.9) | **237 / 238** (only `bracelet`, 163.8) |
+| median | 38.0 MB | 83.9 MB (the floor) |
+| `heat_exchanger` (wasm, Node) | 69.9 | 104.4 |
+| `bicycle_tire` / `clock` / `toy_truck` | 40.4 / 38.0 / 38.0 | 83.9 each |
+| `projection` / `_algebra` | 105.6 / 87.8 (were 126.1 / 115.9 on 0.11.1) | 89.1 / 89.1 |
+| workerd starter, wasm + V8 / **+ ArrayBuffers** | 56.8 / **66.7** | 113.6 / **133.3** |
+| workerd `maker_coin` | 73.2 / **83.1** | 124.9 / **144.6** |
+| workerd `heat_exchanger` | 116.2 / **126.1** (OCCT 90.3 in workerd vs 63.9 in Node: GC timing against the kernel's transient puts it a growth step higher) | 140.1 / **159.8** |
+| workerd `toy_truck` / `clock` / `bicycle_tire` | 67.9 / 73.3 / 69.4 | — |
+
+**Verdict on 0.13.0:**
+
+- **Upstream:** fits for everything except `bracelet`. `heat_exchanger` now
+  sits at 126 MB in workerd once ArrayBuffers are counted, so it is
+  borderline.
+- **Real:** fits the 64 MiB size limit. Basic models are 114 MB on wasm + V8
+  heap, but 133 MB with ArrayBuffers counted, so whether it fits depends on
+  the edge accounting question in §6.
+
+Raw data: `experiments/cf-fidelity/corpus-013-*.json` and
+`workerd-ladder-013.json`.
+
+## Verdict (measured on 0.11.1; see the 0.13.0 table above)
 
 | flavor | fits 64 MiB script? | fits 128 MB isolate? | cold first render | corpus |
 |---|---|---|---|---|

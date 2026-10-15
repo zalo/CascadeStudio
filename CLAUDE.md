@@ -828,7 +828,8 @@ MicroPython heap to hundreds of MB (clock 386-462 MB); since micropython-cs
 patches 11-12 + the shim lifetime fixes (see the heavy-model memory bullet
 above) the interpreter heap tracks live data — corpus fits under 128 MB of
 wasm and per-script classification are in
-`examples/cloudflare-worker/FIDELITY-ON-WORKERS.md` (CF_FIT_PLACEHOLDER).
+`examples/cloudflare-worker/FIDELITY-ON-WORKERS.md` (on 0.13.0: upstream 237/238 corpus models
+under 128 MB of wasm, real 237/238 — only `bracelet` is over on both).
 A THIRD flavor, `pySrc: 'real'` (`runtime: 'pyodide'`, the PyPI wheel +
 numpy), runs headless through a host seam: `createHeadlessCascade({runtime:
 'pyodide', pyodide: {boot, installWheels}, upstreamPy})` — the host brings

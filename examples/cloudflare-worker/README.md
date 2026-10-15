@@ -128,11 +128,12 @@ interpreter never garbage-collects inside a run, so upstream's millions of
 FFI calls ratcheted it to hundreds of MB (`examples/clock` 19.5 -> 386 MB).
 Since 2026-10-15 (micropython-cs patches 11-12, the JsProxy-driven embind
 lifetime and a shim fix — FIDELITY-ON-WORKERS.md §1) the interpreter heap
-tracks live data and **upstream fits 220 of 221 corpus models under 128 MB
-of wasm** (lite: 221/221). The trade is now boot time (~0.6 s more library
-load) — lite for throughput, upstream for fidelity. `bracelet` (Gordon
-surfaces) and, once the JS heap is counted, `projection` remain over on
-upstream.
+tracks live data and **upstream fits 237 of 238 scored corpus models under
+128 MB of wasm on build123d 0.13.0** (220/221 on 0.11.1; lite 221/221 on
+0.11.1). The trade is now boot time (~0.75 s more library load on 0.13.0) —
+lite for throughput, upstream for fidelity. Only `bracelet` (Gordon surfaces)
+remains over; `heat_exchanger` is borderline once the JS heap and
+ArrayBuffers are counted (126 MB in local workerd).
 
 ```bash
 npx wrangler deploy                  # lite   -> cascade-headless
