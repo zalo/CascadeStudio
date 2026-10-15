@@ -144,8 +144,11 @@ check('phase order is evaluating -> evaluated -> exporting -> done',
   JSON.stringify(sse.events.map((x) => x.event + (x.data.phase ? ':' + x.data.phase : ''))));
 const tEvaluating = sse.events.find((x) => x.data.phase === 'evaluating');
 const tDone = sse.events[sse.events.length - 1];
-check('`evaluating` arrives >100 ms before `done` (client clock)',
-  tDone.at - tEvaluating.at > 100, (tDone.at - tEvaluating.at) + ' ms apart');
+// A burst (nothing flushed until the end) arrives ~0 ms apart. The starter
+// evaluates in ~100-190 ms on the native-exceptions kernel (it was ~300 ms
+// on the JS-exceptions one), so the bar is 50 ms, not 100.
+check('`evaluating` arrives >50 ms before `done` (client clock)',
+  tDone.at - tEvaluating.at > 50, (tDone.at - tEvaluating.at) + ' ms apart');
 check('the evaluated event carries shapeCount',
   (sse.events.find((x) => x.data.phase === 'evaluated') || {}).data?.shapeCount === 1,
   JSON.stringify((sse.events.find((x) => x.data.phase === 'evaluated') || {}).data));

@@ -347,8 +347,8 @@ family instead. To add a face: drop the TTF in `packages/cascade-core/fonts/`
 | | lite | upstream |
 |---|---|---|
 | isolate limit | **128 MB** (JS heap + wasm) | **128 MB** |
-| wasm after boot (OCCT only) | 32.0 MB | 32.0 MB |
-| wasm after any Python run (OCCT + MicroPython) | **51.5 MB** | **51.5 MB** |
+| wasm after boot (OCCT only) | 32.0 MB — **8.0 MB** with the native-EH fork artifacts | same |
+| wasm after any Python run (OCCT + MicroPython) | **51.5 MB** — **27.5 MB** with them | same |
 | V8 heap, fresh isolate (workerd inspector) | 5.1 MB + 4.1 MB font backing stores | 11.4 MB (+ the 3 MB Python string) |
 | V8 heap after 6 Box renders | 18.4 MB used / 29.7 MB total | 39.3 MB / 65.6 MB |
 | engine boot (`/health`, `bootMs`, local workerd) | ~70-110 ms | ~65-180 ms |
@@ -417,8 +417,14 @@ anything now.
 The OCCT wasm is no longer a floor that matters, but it is still the
 biggest thing here, and the cheapest CPU win as well: rebuilt with native
 wasm exceptions it is 19.66 MB (−27%) and evaluates models 10-73% faster
-with identical geometry. That needs a fork rebuild — see
-SIZE-INVESTIGATION.md §3.
+with identical geometry. That build is now the fork's default
+(`cascadestudio-v3-occt801-wasmeh`, pending the repin; Total Upload then
+25,180 KiB lite / 28,408 KiB upstream), together with
+`-sINITIAL_MEMORY=8MB` and `-sSTACK_SIZE=512KB` (SIZE-INVESTIGATION.md §7).
+The example ships **only** that default artifact: `prepare-assets.cjs`
+copies `cascadestudio.wasm` and never the JS-exceptions debug pair
+(`cascadestudio-jseh.*`), which a debugging host can pass to
+`createHeadlessCascade({ occtJs, occtWasm })` itself.
 
 ## Platform restrictions this example respects
 

@@ -697,6 +697,20 @@ engine.reset();           // between requests: resetKernel() + drop logs
   (`_csMicroPythonLocate = {mod, wasm}`); the vendored `micropython.mjs` has a
   one-statement patch forwarding `instantiateWasm` (see its PROVENANCE.md).
 
+**ROOT CAUSE FOUND (2026-10): it was never the heap — it was the shadow
+stack.** Emscripten puts the linear-memory stack directly above
+`.data`/`.bss` and lets it grow DOWN into them, unchecked at `-O3`; the
+fillet / ThruSections recursion peaks at ~82 KB, the 64 KB default stack
+overflowed (canary probe: maker_coin, tea_cup, toy_truck, ttt-ppp0110 ran it
+to the bottom) and the overwritten statics were the STEP/BREP writer
+machinery. The fork's `-sSTACK_SIZE=512KB` (branch
+`cascadestudio-v3-occt801-wasmeh`; corpus-wide high-water 83,552 B) ends it:
+tea_cup and bicycle_tire export STEP and `kernelHealthy()` stays true over
+the whole corpus. The rewind machinery below STAYS — it is the per-job
+pristine allocator and the safety net — and test `(g)` now forces the heal
+path instead of relying on the overflow. The text below is the original
+diagnosis, kept for the record.
+
 **COMPROMISE(kernel-heap-reset) — OCCT corrupts its own heap, and STEP export
 is the casualty.** Two 8.0.1 kernel algorithms scribble over the wasm heap in
 this build: `BRepFilletAPI_MakeFillet::Build` with `ChFi3d_Rational`
@@ -912,8 +926,10 @@ WebGL requires `--use-gl=angle --use-angle=swiftshader` in playwright.config.js 
 
 Environment overrides (for machines where the defaults don't work):
 - `CS_TEST_PORT=8517` — test server port (default 8080; use when 8080 is occupied)
-- `CS_TEST_HEADFUL=1 DISPLAY=:99` — run headful against an X server (use when headless
-  Chromium cannot create a SwiftShader WebGL context, as on this machine)
+- `CS_TEST_HEADFUL=1 DISPLAY=:99` — run headful against an X server (where one exists;
+  on this machine run headless with DISPLAY unset: `env -u DISPLAY npx playwright test`)
+- `CS_TEST_OCCT_EXCEPTIONS=js` — run the whole suite on the JS-exceptions DEBUG build
+  of OCCT (seeds `localStorage['cascade-occt-exceptions']` via storageState)
 
 ```javascript
 await page.goto('http://localhost:8080');
@@ -1160,7 +1176,9 @@ must evaluate with zero errors. `saveProject()` serializes `mode` alongside the 
 ## Key Dependencies
 
 - **opencascade.js**: Custom fork of OCCT 8.0.1 compiled with emsdk 4.0.23
-  (branch `cascadestudio-v3-occt801` of the fork checkout; the build pipeline
+  (branch `cascadestudio-v3-occt801` of the fork checkout — the native-EH
+  artifacts below are on `cascadestudio-v3-occt801-wasmeh`, pending the
+  repin; the build pipeline
   and the reason each hand-registered symbol exists are in its CHANGELOG.md.
   The worker cross-checks `USED_OCCT_SYMBOLS` against the module at startup, so
   a renumbered overload or a silently-dropped binding fails loudly.)
@@ -1168,6 +1186,38 @@ must evaluate with zero errors. `saveProject()` serializes `mode` alongside the 
     code from strings (embind's `new Function` invokers are the default) and
     carries no node/classic-worker branches, so the SAME module runs in the
     browser module worker, in plain Node and on Cloudflare Workers.
+  - **Two artifact pairs (2026-10).** `cascadestudio.{js,wasm}` — the
+    DEFAULT everywhere (browser worker, headless, the Cloudflare example) —
+    is built with **native wasm exceptions** (`-fwasm-exceptions`, legacy
+    encoding, + `-sEXPORT_EXCEPTION_HANDLING_HELPERS`): 19.66 MB vs 27.02 MB
+    and 10-73% less CPU per model, geometry identical. Engine floor:
+    **Chrome 95 / Firefox 100 / Safari 15.2** (Node 17, workerd).
+    `cascadestudio-jseh.{js,wasm}` is the SAME kernel with Emscripten's
+    JS-emulated exceptions — the model every release before 2026-10 shipped
+    — kept ONLY for debuggability: a C++ throw stays in ordinary JS frames as
+    the raw thrown pointer, and it is the A/B reference for "did native EH
+    change this?". Both link `-sINITIAL_MEMORY=8MB -sSTACK_SIZE=512KB` (OCCT
+    sits at 4.1 MiB after init and ~5.7-7.2 MiB after the starter, so a
+    basic request never grows; basic-model isolate wasm 51.5 -> 27.5 MB).
+  - **Selecting the debug artifact.** Browser: `?occtexceptions=js` or
+    `localStorage['cascade-occt-exceptions'] = 'js'`
+    (`resolveOcctExceptions` in EditorManager.js; `CascadeAPI.getOcctExceptions()`
+    / `setOcctExceptions()`; takes effect on reload). CascadeMain forwards it
+    on the worker URL; the worker imports `./cascadestudio-jseh.js` BY URL
+    (never bundled — the debug pair is only fetched when selected) and falls
+    back to the default with a console warning when the pin lacks it. The
+    build actually running is `memoryStats().occtExceptions` ('wasm' |
+    'js'; only the native build exports `getExceptionMessage`). Headless:
+    `createHeadlessCascade({ occtJs: await import('…/cascadestudio-jseh.js'),
+    occtWasm: <cascadestudio-jseh.wasm bytes> })` — a glue only works with
+    its own wasm. The Cloudflare example ships only the default artifact.
+  - COMPROMISE(failure-decode) works on BOTH: native EH throws arrive as
+    `WebAssembly.Exception` and decode through `getExceptionMessage()`
+    (`Standard_Failure::what()`); JS-EH throws are raw pointers read out of
+    linear memory. `isOCCTThrow(e)` covers both. Frozen by headless-node
+    `(d1)` (6 mm chamfer on a 10 mm box -> "BRep_API: command not done",
+    run on each artifact via `CS_OCCT_EXCEPTIONS=js`) and
+    `test/occt-exceptions.spec.js`.
   - See `node_modules/opencascade.js/CLAUDE.md` for build details
 - **Three.js r170**: 3D rendering (matcap material, OrbitControls)
   - `THREE.ColorManagement.enabled = false` for legacy rendering

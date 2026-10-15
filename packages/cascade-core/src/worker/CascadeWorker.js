@@ -649,6 +649,17 @@ class CascadeStudioWorker {
   // The damage is permanent for the isolate: it is what made a Cloudflare
   // Worker that had once run maker_coin fail every later STEP export.
   //
+  // ROOT CAUSE (found 2026-10, see opencascade.js CHANGELOG "a 512 KB
+  // stack"): not the heap at all. Emscripten puts the shadow stack directly
+  // above .data/.bss and lets it grow DOWN into them, unchecked at -O3; the
+  // fillet/ThruSections recursion peaks at ~82 KB and the 64 KB default
+  // stack overflowed into OCCT's statics — the writer singletons were the
+  // nearest victims. Builds linked with -sSTACK_SIZE=512KB (corpus-wide
+  // high-water 83,552 B) no longer overflow: tea_cup and bicycle_tire export
+  // STEP, kernelHealthy() stays true. The image/rewind machinery stays: it is
+  // still the per-job pristine allocator (no heap ratcheting across
+  // requests), and the safety net if a deeper model ever overflows again.
+  //
   // The rewind is the cheap, total repair: OCCT's linear memory right after
   // module init is ~3.7 MB of the 32 MB initial heap (data + bss + stack +
   // the little embind allocates), so it snapshots in ~20 ms and restores in

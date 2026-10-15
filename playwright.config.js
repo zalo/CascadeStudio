@@ -9,6 +9,12 @@ const PORT = parseInt(process.env.CS_TEST_PORT || '8080', 10);
 //   CS_TEST_HEADFUL=1 DISPLAY=:99 npx playwright test
 const HEADLESS = !process.env.CS_TEST_HEADFUL;
 
+// CS_TEST_OCCT_EXCEPTIONS=js runs the whole suite on the JS-emulated-
+// exceptions DEBUG build of OCCT (cascadestudio-jseh.wasm) by seeding
+// localStorage['cascade-occt-exceptions'] in every page — the same switch a
+// user flips with ?occtexceptions=js.
+const OCCT_EXCEPTIONS = process.env.CS_TEST_OCCT_EXCEPTIONS === 'js' ? 'js' : null;
+
 module.exports = defineConfig({
   testDir: './test',
   timeout: 120000,
@@ -21,6 +27,10 @@ module.exports = defineConfig({
     baseURL: `http://localhost:${PORT}`,
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
+    ...(OCCT_EXCEPTIONS ? { storageState: { cookies: [], origins: [{
+      origin: `http://localhost:${PORT}`,
+      localStorage: [{ name: 'cascade-occt-exceptions', value: OCCT_EXCEPTIONS }],
+    }] } } : {}),
   },
   projects: [
     {

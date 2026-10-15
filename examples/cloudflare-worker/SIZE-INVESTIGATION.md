@@ -225,10 +225,9 @@ next to the browser's. With the size limit at 64 MiB and lite inline at
   global scope (§4).
 - **Closure Compiler on the glue**: 235 KB, or 125 KB on (b′). Irrelevant
   next to the wasm.
-- **`-sSTACK_SIZE`**: the edge-limits round found the fillet stack within
-  328 B of emscripten's 64 KB default. Native EH removes the `invoke_*`
-  frames but not the C++ frames. Raise it (256 KB-1 MB costs only
-  reserved linear memory) in the same rebuild. Not measured here.
+- **`-sSTACK_SIZE`**: measured in §7. The 64 KB default was overflowing,
+  and that turned out to be the "kernel heap corruption". 512 KB is now
+  in the fork.
 - **Dropping IGES/XCAF toolkits**: covered by (c).
 
 ## 4. Startup (Q3)
@@ -301,6 +300,18 @@ basic model, on every variant. The JS side shrank:
 
 How Cloudflare's 128 MB counts V8 heap ("used" or "total", with or
 without garbage) is not documented beyond "JS heap + wasm".
+
+These heap figures were read through **explicitly chosen** inspector ports
+(`wrangler dev --inspector-port 9291-9299`; another project's workerd holds
+9229 on this machine). I re-measured them on 9297/9298 with the
+native-exceptions artifact and the same procedure:
+
+| | lite | upstream |
+|---|---|---|
+| fresh isolate | 4.8 MB | 11.2 MB |
+| after 6 Box renders, used / total | 16.9 / 24.9 MB | 37.7 / 64.5 MB |
+
+That agrees with the figures above. The small drop is the smaller glue.
 
 ## 5. Free plan: 10 ms CPU per request (Q4)
 
@@ -381,6 +392,141 @@ gates and `smoke.mjs` against `wrangler dev` on all three environments.
     exceeded CPU time limit") on everything above a bare box.
 11. How the 128 MB is counted: compare the dashboard's isolate memory with
     the V8 heap numbers in §4 on a long-lived isolate.
+
+## 7. Adopted (2026-10-15): native EH by default, 8 MB initial memory, 512 KB stack
+
+The user approved the switch. The fork branch
+**`cascadestudio-v3-occt801-wasmeh`** (local, commit **`99482df`**, not
+pushed) ships two artifact pairs from one binding list:
+
+| artifact | exceptions | wasm | glue | `.d.ts` | role |
+|---|---|---:|---:|---|---|
+| `cascadestudio.{js,wasm}` | native wasm EH + `-sEXPORT_EXCEPTION_HANDLING_HELPERS` | 19,659,264 B | 125,011 B | byte-identical to shipping, 400 `class Handle_` | **default** everywhere |
+| `cascadestudio-jseh.{js,wasm}` | JS-emulated (the old shipping model) | 27,021,699 B | 235,036 B | same | debug / A-B: `?occtexceptions=js` |
+
+Both use `-sINITIAL_MEMORY=8MB -sSTACK_SIZE=512KB`. Only link flags
+changed: the default reuses the native-EH object tree, the debug artifact
+reuses the shipping JS-EH objects. `buildFromYaml` infers the exception
+model from the yml and refuses a contradicting `OCJS_EXCEPTIONS`.
+
+### `-sSTACK_SIZE=512KB`: the 64 KB stack was overflowing
+
+Emscripten places the shadow stack directly above `.data`/`.bss` and lets
+it grow down into them, with no check at `-O3`. A canary probe fills the
+unused stack before each model and finds the deepest overwritten byte.
+
+**On the shipping 64 KB build** (lite), maker_coin and tea_cup hit the
+very bottom, and so did toy_truck and ttt-ppp0110 on upstream. After
+tea_cup, `kernelHealthy()` was **false** and its STEP export failed. That
+is the COMPROMISE(kernel-heap-reset) symptom: what CascadeStudio had
+diagnosed as fillet and ThruSections algorithms scribbling on the heap was
+the stack overflowing into OCCT's statics.
+
+**On 1 MB and 512 KB builds**, the high-water over the whole 247-script
+0.13 corpus plus the starter (lite, JS EH, 1 MB stack) is **83,248 B**,
+from key_cap. The deep models on the final native-EH 512 KB build, both
+flavors, peak at 83,552 B (key_cap, upstream); native and JS EH are within
+~300 B of each other. Not one kernel ends up unhealthy across the corpus.
+Two models that used to fail now work:
+
+- tea_cup exports a 630 KB STEP.
+- bicycle_tire exports STEP. It used to be impossible: `BRepTools::Write`
+  died after the ThruSections walls.
+
+**Choice: 512 KB**, 6.3x the measured peak. Cost:
+
+- 448 KB more reserved linear memory, of which only the used depth (≤ 82
+  KB) is ever touched.
+- +448 KB in the retained kernel image, because the image spans the stack
+  region: 4.13 MiB against 3.69 MiB.
+- ~0.05 ms more per `restoreKernelImage()`.
+
+### `-sINITIAL_MEMORY=8MB`
+
+Footprint of the default build, measured as the last non-zero byte of
+linear memory (MiB):
+
+| state | MiB |
+|---|---:|
+| static data + `.bss` (3,624,654 B) | 3.46 |
+| heap base (top of the 512 KB stack, 4,199,808 B) | 4.01 |
+| after module init (kernel image #1) | 4.12 |
+| after the first Python run (image #2), lite / upstream | 4.13 / 4.19 |
+| after Box → STEP | 4.65 / 4.69 |
+| after the starter model, lite / upstream | **5.69 / 7.17** |
+
+Every basic request therefore runs **without growing** at 8 MB. 4 MB would
+not even hold the boot image. 16 MB would only matter to models that grow
+past 32 MB anyway.
+
+### Before/after (Node headless, one engine per flavor)
+
+Models run in sequence in one engine: Box, starter, heat_exchanger, clock,
+toy_truck, then heat_exchanger again. The 0.11.1 corpus versions are used,
+because the 0.13 clock uses `insert` and lite has no such builder
+operation. Cells read `occt wasm MB / main-thread CPU ms`. The machine
+was shared and loaded, so compare within a row.
+
+| step | shipping (32 MB, 64 KB, JS EH) | **default** (8 MB, 512 KB, native EH) | **debug** (8 MB, 512 KB, JS EH) |
+|---|---|---|---|
+| **lite**: boot | 32.0 / 62 | **8.0** / 55 | **8.0** / 73 |
+| Box → STEP | 32.0 / 160 | 8.0 / 149 | 8.0 / 191 |
+| starter | 32.0 / 300 | 8.0 / **172** | 8.0 / 386 |
+| heat_exchanger | 47.6 (8 grows) / 9,127 | 49.1 (36 grows) / **5,451** | 49.1 (36 grows) / 10,697 |
+| clock | 47.6 / 4,923 | 49.1 / 4,493 | 49.1 / 5,037 |
+| toy_truck (lite's fillet fails, as on every build) | 47.6 / 1,075 | 49.1 / 873 | 49.1 / 1,444 |
+| heat_exchanger again | 47.6 / 9,916 | 49.1 / 5,640 | 49.1 / 12,816 |
+| **upstream**: boot | 32.0 / 73 | **8.0** / 56 | **8.0** / 63 |
+| Box → STEP (incl. library boot) | 32.0 / 748 | 8.0 / 676 | 8.0 / 883 |
+| starter | 32.0 / 400 | 8.0 / **227** | 8.0 / 502 |
+| heat_exchanger | 147.3 (31 grows) / 44,225 | 145.0 (58 grows) / **28,026** | 145.0 (58 grows) / 41,415 |
+| clock | 147.3 / 29,037 | 145.0 / 18,274 | 145.0 / 27,330 |
+| toy_truck | 147.3 / 9,446 | 145.0 / 6,177 | 145.0 / 9,527 |
+
+- **Basic-model isolate wasm: 51.5 MB → 27.5 MB** (8.0 OCCT + 19.5
+  MicroPython).
+- Every model stays geometrically identical (same volumes, same STEP sizes
+  apart from header timestamps) and every kernel stays healthy.
+- **Growth steps cost nothing measurable.** Interleaved lite
+  heat_exchanger, two rounds each: shipping (8 grows) 12.1-12.5 s, debug
+  (36 grows) 10.6-13.4 s, default 6.0-6.9 s. Shipping and debug differ
+  only in memory and stack settings, and the spread between them is noise.
+- Python wasm is unaffected; MicroPython's own arena still doubles.
+- The upstream flavor's huge heavy-model numbers are the known MicroPython
+  arena ratchet, not OCCT.
+
+### Gates on the new artifacts
+
+| gate | default (native EH) | debug (JS EH) |
+|---|---|---|
+| `node test/headless-node.mjs` (lite / `CS_PY_SRC=upstream`) | ALL PASS / ALL PASS | ALL PASS / ALL PASS (`CS_OCCT_EXCEPTIONS=js`) |
+| new `(d1)` kernel-throw decode (`BRep_API: command not done`, JS mode + Python) | PASS (`getExceptionMessage`) | PASS (raw-pointer decode) |
+| `(g)` heal path (now forced deterministically) | PASS, no real damage | PASS, no real damage |
+| b123d-validation, Brython + lite, `--pages 2`, vs `baseline-013-lite.json` | **identical: 191/13/34/1/8** (see below) | – |
+| b123d-validation, MicroPython + upstream, `--pages 2`, vs `baseline-013-upstream.json` | identical except one run-order flap (see below) | – |
+| Playwright full suite (`env -u DISPLAY`, Pyodide fetched so `py-src-real` runs; incl. the new `occt-exceptions.spec.js`) | **105 passed** | **105 passed** with the flag forced (`CS_TEST_OCCT_EXCEPTIONS=js`) |
+| `smoke.mjs` vs `wrangler dev` (default / upstream / warm) | **ALL WORKER CHECKS PASSED** ×3 | – (the example ships only the default) |
+| `wrangler deploy --dry-run` Total Upload | 25,181.25 KiB lite / 28,409.42 KiB upstream | – |
+
+**Harness details.** The base was the merge of `5a3f9a6`, i.e. the
+unchanged 0.11.1-era lite/upstream code the baselines were taken on.
+
+- **Lite:** 190/13/35/1/8 on the first pass. The one delta,
+  `docs-selectors/filter_inner_wire_count`, PASS → ERROR, was
+  environmental: `/tmp/b123d`, the default `B123D_SRC` clone that the
+  harness reads script assets from, no longer exists on this machine, so
+  `nema-17-bracket.step` was never delivered. Re-run with
+  `B123D_SRC=~/Desktop/build123d` it PASSes. The other asset script,
+  `docs/tutorial_joints`, fails `NameError: insert` exactly as in the
+  baseline. The lite leg is therefore identical, script for script, to
+  `baseline-013-lite.json`.
+- **Upstream** (run with the asset clone): 199/6/33/1/8. The one delta is
+  `docs-rst/tips/b04`, MISMATCH → PASS. That is the COMPROMISE(traversal-
+  order) script whose `sort_by(Axis.Z)` is a complete tie, so OCCT's
+  shape-map enumeration, which is pointer-hashed, decides the winner. It
+  depends on page history: a solo re-run gives the baseline's MISMATCH
+  (`bbox[1] -0.5000 vs -0.7000`). Every other script matches the baseline.
+- TIMEOUT on both legs: `docs/spitfire_wing_gordon` (as in the baselines).
 
 ## Reproduce
 
