@@ -2,7 +2,8 @@
 // 0.13.0 entry (`--env upstream`). Same routes (./app.js), same assets as the
 // lite entry, plus the upstream Python layer: 158 modules (vendored sources +
 // shims + the OCP binding table) as ONE relative-path -> source JSON map,
-// imported as a Text module (3.15 MB raw) and parsed once at engine boot.
+// imported as a Data module (3.4 MB raw), parsed once at engine boot and then
+// released (app.js parsedUpstreamTree).
 //
 // It is a separate entry so the lite isolate never holds that 3 MB string.
 
@@ -18,7 +19,7 @@ import FreeSansBold from '../assets/fonts/FreeSansBold.ttf';
 import FreeSansOblique from '../assets/fonts/FreeSansOblique.ttf';
 import FreeSansBoldOblique from '../assets/fonts/FreeSansBoldOblique.ttf';
 
-import upstreamTreeText from '../assets/upstream-b123d.json';
+import upstreamTree from '../assets/upstream-b123d.json';   // Data module (ArrayBuffer)
 
 const worker = createWorker({
   pySrc: 'upstream',
@@ -26,7 +27,7 @@ const worker = createWorker({
   micropythonJs,
   micropythonWasm,
   fonts: { FreeSans, FreeSansBold, FreeSansOblique, FreeSansBoldOblique },
-  upstreamTreeText,
+  upstreamTree,
 });
 
 // `BOOT=warm` is refused for this flavor: the upstream library boot alone is

@@ -52,14 +52,14 @@ const fonts = {};
 for (const f of ['FreeSans', 'FreeSansBold', 'FreeSansOblique', 'FreeSansBoldOblique']) {
   fonts[f] = ab(fs.readFileSync(join(ASSETS, 'fonts', f + '.ttf')));
 }
-const upstreamTreeText = FLAVOR === 'upstream'
-  ? fs.readFileSync(join(ASSETS, 'upstream-b123d.json'), 'utf8') : undefined;
+const upstreamTree = FLAVOR === 'upstream'
+  ? ab(fs.readFileSync(join(ASSETS, 'upstream-b123d.json'))) : undefined;
 const importMs = cpu() - c0;
 
 // ---- the global scope ---------------------------------------------------
 c0 = cpu();
 const worker = createWorker({ pySrc: FLAVOR, occtWasm, micropythonJs, micropythonWasm,
-  fonts, upstreamTreeText });
+  fonts, upstreamTree });
 await worker.bootAtStartup(BOOT);
 const startupMs = cpu() - c0;
 

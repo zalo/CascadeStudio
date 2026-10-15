@@ -23,7 +23,7 @@ import FreeSansBoldOblique from '../assets/fonts/FreeSansBoldOblique.ttf';
 
 // The OCP shim + glue the real wheel runs over ship in the same map as the
 // upstream flavor's vendored sources.
-import upstreamTreeText from '../assets/upstream-b123d.json';
+import upstreamTree from '../assets/upstream-b123d.json';   // Data module (ArrayBuffer)
 
 import { loadPyodide } from '../assets/pyodide/pyodide.mjs';
 import createPyodideModule from '../assets/pyodide/pyodide.asm.mjs';
@@ -65,7 +65,7 @@ const worker = createWorker({
   micropythonJs,       // unused by the Pyodide runtime; harmless
   micropythonWasm,
   fonts: { FreeSans, FreeSansBold, FreeSansOblique, FreeSansBoldOblique },
-  upstreamTreeText,
+  upstreamTree,
   pyodide,
 });
 

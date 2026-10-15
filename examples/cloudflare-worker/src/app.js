@@ -56,10 +56,12 @@ const WARMUP_CODE = 'from build123d import *\nshow(Box(10, 10, 10))\n';
  *  @param {object} o.micropythonJs   the imported micropython-cs.mjs namespace
  *  @param {WebAssembly.Module} o.micropythonWasm
  *  @param {Record<string, ArrayBuffer>} o.fonts
- *  @param {string} [o.upstreamTreeText]  upstream/real flavors: the JSON
- *         relative-path -> source map (vendored build123d + the OCP shim and
- *         glue), as text — parsed at engine boot, the parse dropped once the
- *         library has registered
+ *  @param {ArrayBuffer|string} [o.upstreamTree]  upstream/real flavors: the
+ *         JSON relative-path -> source map (vendored build123d + the OCP shim
+ *         and glue) — a Data module's ArrayBuffer (or text). Parsed once at
+ *         engine boot; the ArrayBuffer is then DETACHED (transfer) so its
+ *         backing store can be collected, and the parsed map is dropped once
+ *         the library has registered. Nothing of it stays in the isolate.
  *  @param {object} [o.pyodide]  real flavor: the host that boots Pyodide from
  *         module bindings ({boot, installWheels}; src/real.js) */
 export function createWorker(o) {
@@ -69,6 +71,31 @@ export function createWorker(o) {
   const boot = { mode: 'request', bootedAtStartup: false, startupMs: null,
     warmupMs: null, error: null };
 
+  /** The upstream/real Python map, parsed once. A Data module arrives as an
+   *  ArrayBuffer: after decoding, `transfer()` detaches it (the module's
+   *  export becomes a 0-byte buffer) so V8 can free the 3.4 MB backing store.
+   *  Cached until the library has registered, so a boot that fails before
+   *  that can be retried. */
+  let treeCache = null;
+  let treeReleased = false;
+  function parsedUpstreamTree() {
+    if (treeCache) { return treeCache; }
+    if (treeReleased) { throw new Error('upstream-b123d: the module map was released after boot'); }
+    const src = o.upstreamTree;
+    if (src == null) { throw new Error('pySrc ' + o.pySrc + ' needs the upstream-b123d.json module'); }
+    let text;
+    if (typeof src === 'string') {
+      text = src;
+    } else {
+      if (src.byteLength === 0) { throw new Error('upstream-b123d: the module map was already released'); }
+      text = new TextDecoder().decode(src);
+      try { if (typeof src.transfer === 'function') { src.transfer(0); } }
+      catch (e) { /* not detachable here: it simply stays resident */ }
+    }
+    treeCache = JSON.parse(text);
+    return treeCache;
+  }
+
   function engine() {
     if (!enginePromise) {
       enginePromise = (async () => {
@@ -76,12 +103,14 @@ export function createWorker(o) {
         let releaseTree = null;
         if (o.pySrc === 'upstream' || o.pySrc === 'real') {
           // The loader asks for ~120 modules by relative path; the whole
-          // layer is one Text module, parsed once. The library reads it only
-          // while it registers (first Python request), so the PARSED map is
-          // dropped afterwards; the Text module's own string stays (a module
-          // export cannot be released) — 3.15 MB of the isolate.
-          let tree = JSON.parse(o.upstreamTreeText);
-          releaseTree = () => { tree = null; };
+          // layer is one module, parsed once. The library reads it only while
+          // it registers (first Python request), so the parsed map is
+          // dropped afterwards — and the module's own bytes are released
+          // right after the parse (see parsedUpstreamTree). Measured in
+          // workerd: a Text module kept ~4.4 MB of V8 heap alive for the
+          // isolate's life, which pushed real's maker_coin past 128 MB.
+          let tree = parsedUpstreamTree();
+          releaseTree = () => { tree = null; treeCache = null; treeReleased = true; };
           upstreamPy = async (rel) => {
             if (!tree) { throw new Error('upstream-b123d: the module map was released after boot: ' + rel); }
             const text = tree[String(rel).replace(/^\.?\//, '')];

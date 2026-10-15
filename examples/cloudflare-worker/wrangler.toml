@@ -52,17 +52,17 @@ fallthrough = false
 
 [[rules]]
 type = "Data"
-globs = ["**/*.ttf", "**/*.zip", "**/*.whl"]
+globs = ["**/*.ttf", "**/*.zip", "**/*.whl", "**/upstream-b123d.json"]
 fallthrough = false
 
-# The upstream build123d Python layer: ONE relative-path -> source map, as a
-# Text module (a string; JSON.parse'd once at engine boot) rather than
-# esbuild's JSON loader, which would turn 3 MB of source into a JS object
-# literal parsed with the script.
-[[rules]]
-type = "Text"
-globs = ["**/upstream-b123d.json"]
-fallthrough = false
+# The upstream build123d Python layer (upstream-b123d.json, in the Data rule
+# above): ONE relative-path -> source map, as a Data module (an ArrayBuffer)
+# rather than esbuild's JSON loader, which would turn 3 MB of source into a
+# JS object literal parsed with the script, or a Text module, whose string
+# could never be released: src/app.js decodes it
+# once at engine boot and detaches the buffer (ArrayBuffer.transfer), so the
+# backing store is collected (measured: 28.6 -> 0 MB of backing storage for a
+# 30 MB test module).
 
 # --------------------------------------------------------------------------
 # `nodejs_compat` is deliberately NOT enabled. It defines `process`, and an
