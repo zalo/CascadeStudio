@@ -151,6 +151,326 @@ UNITS_PER_KILOGRAM = {
     Unit.LB: KG / LB,
 }
 
+# ------------------------------------------------------------ materials ---
+# build123d 0.12 materials (Shape.material / mass()): upstream takes them from
+# the bd_materials package. COMPROMISE(materials): lite embeds bd_materials
+# 0.2.4's NAME -> grade/family/category/density/colour table (all 156
+# registry keys, generated from the package) - everything Shape.material,
+# mass() and the PBR colour side effect need; a grade's other property
+# ranges, finishes, processes and PBR models are inert stand-ins.
+
+_MATERIAL_ROWS = """
+abs|ABS_GENERIC|ABS|plastic|1050|1.0,1.0,1.0,1.0
+abs_flame_retardant|ABS_FLAME_RETARDANT|ABS|plastic|1200|1.0,1.0,1.0,1.0
+abs_generic|ABS_GENERIC|ABS|plastic|1050|1.0,1.0,1.0,1.0
+alloy_steel|AlloySteel_G4140_QUENCHED_TEMPERED|alloy_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+alloysteel.g52100_hardened_low_tempered|AlloySteel.G52100_HARDENED_LOW_TEMPERED|alloy_steel|metal|7810|0.7548,0.7439,0.7314,1.0
+alloysteel_g1215_cold_drawn|AlloySteel_G1215_COLD_DRAWN|alloy_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+alloysteel_g4140_quenched_tempered|AlloySteel_G4140_QUENCHED_TEMPERED|alloy_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+alloysteel_g4340_quenched_tempered|AlloySteel_G4340_QUENCHED_TEMPERED|alloy_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+alu_alsi10mg_as_built|Alu_ALSI10MG_AS_BUILT|aluminum|metal|2670|0.9621,0.9654,0.9658,1.0
+alu_g2024_aerospace|Alu_G2024_AEROSPACE|aluminum|metal|2780|0.9621,0.9654,0.9658,1.0
+alu_g2a12_t4|Alu_G2A12_T4|aluminum|metal|2800|0.9621,0.9654,0.9658,1.0
+alu_g5052_h32|Alu_G5052_H32|aluminum|metal|2680|0.9621,0.9654,0.9658,1.0
+alu_g6061_t6|Alu_G6061_T6|aluminum|metal|2700|0.9621,0.9654,0.9658,1.0
+alu_g7075_t6|Alu_G7075_T6|aluminum|metal|2810|0.9621,0.9654,0.9658,1.0
+aluminum|Alu_G6061_T6|aluminum|metal|2700|0.9621,0.9654,0.9658,1.0
+american_cherry|Hardwood_AMERICAN_CHERRY|cherry|wood|570|0.4431,0.302,0.1922,1.0
+asa|Asa_GENERIC|ASA|plastic|1070|1.0,1.0,1.0,1.0
+asa_generic|Asa_GENERIC|ASA|plastic|1070|1.0,1.0,1.0,1.0
+ash|Hardwood_ASH|ash|wood|670|0.8471,0.7294,0.6471,1.0
+beech|Hardwood_BEECH|beech|wood|720|0.7451,0.5255,0.302,1.0
+birch|Hardwood_BIRCH|birch|wood|660|0.8941,0.8235,0.749,1.0
+borosilicate|Borosilicate_GENERIC|borosilicate|glass|2230|0.9929,0.9978,0.9978,0.3
+borosilicate_generic|Borosilicate_GENERIC|borosilicate|glass|2230|0.9929,0.9978,0.9978,0.3
+brass|Brass_C360_HALF_HARD|brass|metal|8500|0.9593,0.8952,0.6822,1.0
+brass_c360_half_hard|Brass_C360_HALF_HARD|brass|metal|8500|0.9593,0.8952,0.6822,1.0
+brass_c360_soft_annealed|Brass_C360_SOFT_ANNEALED|brass|metal|8500|0.9593,0.8952,0.6822,1.0
+bronze|Bronze_C51000_PHOSPHOR|bronze|metal|8800|0.8338,0.6966,0.5457,1.0
+bronze_c51000_phosphor|Bronze_C51000_PHOSPHOR|bronze|metal|8800|0.8338,0.6966,0.5457,1.0
+bronze_c90500_tin|Bronze_C90500_TIN|bronze|metal|8800|0.8338,0.6966,0.5457,1.0
+bronze_c93200_bearing|Bronze_C93200_BEARING|bronze|metal|8900|0.8338,0.6966,0.5457,1.0
+cardboard|Cardboard_CORRUGATED|corrugated_cardboard|paper|140|0.7294,0.5647,0.302,1.0
+cardboard_corrugated|Cardboard_CORRUGATED|corrugated_cardboard|paper|140|0.7294,0.5647,0.302,1.0
+castable|Castable_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+castable_generic|Castable_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+ceramic|Ceramic_GENERIC|resin|resin|1650|1.0,1.0,1.0,1.0
+ceramic_generic|Ceramic_GENERIC|resin|resin|1650|1.0,1.0,1.0,1.0
+cfrp|CFRP_PLATE|CFRP|plastic|1600|0.1843,0.1843,0.1843,1.0
+cfrp_plate|CFRP_PLATE|CFRP|plastic|1600|0.1843,0.1843,0.1843,1.0
+copper|Copper_C110_ANNEALED|copper|metal|8900|0.9695,0.8112,0.7497,1.0
+copper_c110_annealed|Copper_C110_ANNEALED|copper|metal|8900|0.9695,0.8112,0.7497,1.0
+engineered_wood|EngineeredWood_MDF|mdf|wood|750|0.5843,0.3961,0.2667,1.0
+engineeredwood_mdf|EngineeredWood_MDF|mdf|wood|750|0.5843,0.3961,0.2667,1.0
+engineeredwood_osb|EngineeredWood_OSB|osb|wood|640|0.8196,0.6549,0.451,1.0
+esd|Esd_GENERIC|resin|resin|1300|1.0,1.0,1.0,1.0
+esd_generic|Esd_GENERIC|resin|resin|1300|1.0,1.0,1.0,1.0
+felt|Felt_GENERIC|felt|textile|120|0.6314,0.6235,0.6471,1.0
+felt_generic|Felt_GENERIC|felt|textile|120|0.6314,0.6235,0.6471,1.0
+flexible|Flexible_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+flexible_generic|Flexible_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+foamboard|Foamboard_GENERIC|foamboard|paper|120|0.9216,0.9216,0.9216,1.0
+foamboard_generic|Foamboard_GENERIC|foamboard|paper|120|0.9216,0.9216,0.9216,1.0
+fr4|FR4_GENERIC|FR4|plastic|1850|1.0,1.0,1.0,1.0
+fr4_generic|FR4_GENERIC|FR4|plastic|1850|1.0,1.0,1.0,1.0
+gold|Gold_PURE|gold|metal|19300|1.0,0.8927,0.59,1.0
+gold_pure|Gold_PURE|gold|metal|19300|1.0,0.8927,0.59,1.0
+hardwood|Hardwood_GENERIC|oak|wood|675|0.4745,0.3294,0.2039,1.0
+hardwood_american_cherry|Hardwood_AMERICAN_CHERRY|cherry|wood|570|0.4431,0.302,0.1922,1.0
+hardwood_ash|Hardwood_ASH|ash|wood|670|0.8471,0.7294,0.6471,1.0
+hardwood_beech|Hardwood_BEECH|beech|wood|720|0.7451,0.5255,0.302,1.0
+hardwood_birch|Hardwood_BIRCH|birch|wood|660|0.8941,0.8235,0.749,1.0
+hardwood_generic|Hardwood_GENERIC|oak|wood|675|0.4745,0.3294,0.2039,1.0
+hardwood_maple|Hardwood_MAPLE|maple|wood|705|0.9333,0.8275,0.702,1.0
+hardwood_oak|Hardwood_OAK|oak|wood|755|0.4745,0.3294,0.2039,1.0
+hardwood_walnut|Hardwood_WALNUT|walnut|wood|640|0.349,0.2392,0.1647,1.0
+high_temp|HighTemp_GENERIC|resin|resin|1300|1.0,1.0,1.0,1.0
+hightemp_generic|HighTemp_GENERIC|resin|resin|1300|1.0,1.0,1.0,1.0
+leather|Leather_GENERIC|leather|textile|950|0.4011,0.267,0.153,1.0
+leather_generic|Leather_GENERIC|leather|textile|950|0.4011,0.267,0.153,1.0
+magnesium|Magnesium_GENERIC_STRUCTURAL|magnesium|metal|1810|0.8373,0.8204,0.7966,1.0
+magnesium_generic_structural|Magnesium_GENERIC_STRUCTURAL|magnesium|metal|1810|0.8373,0.8204,0.7966,1.0
+maple|Hardwood_MAPLE|maple|wood|705|0.9333,0.8275,0.702,1.0
+mdf|EngineeredWood_MDF|mdf|wood|750|0.5843,0.3961,0.2667,1.0
+mild_steel|MildSteel_PLAIN_CARBON_GENERIC|mild_steel|metal|7800|0.7548,0.7439,0.7314,1.0
+mildsteel_g1018_cold_drawn|MildSteel_G1018_COLD_DRAWN|mild_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+mildsteel_g1045_cold_drawn|MildSteel_G1045_COLD_DRAWN|mild_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+mildsteel_ga36_hot_rolled|MildSteel_GA36_HOT_ROLLED|mild_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+mildsteel_plain_carbon_generic|MildSteel_PLAIN_CARBON_GENERIC|mild_steel|metal|7800|0.7548,0.7439,0.7314,1.0
+nylon|Nylon_PA12|PA|plastic|1010|1.0,1.0,1.0,1.0
+nylon_pa12|Nylon_PA12|PA|plastic|1010|1.0,1.0,1.0,1.0
+nylon_pa12_gf35|Nylon_PA12_GF35|PA|plastic|1300|1.0,1.0,1.0,1.0
+nylon_pa12_sintered|Nylon_PA12_SINTERED|PA|plastic|1000|1.0,1.0,1.0,1.0
+nylon_pa6|Nylon_PA6|PA|plastic|1140|1.0,1.0,1.0,1.0
+oak|Hardwood_OAK|oak|wood|755|0.4745,0.3294,0.2039,1.0
+osb|EngineeredWood_OSB|osb|wood|640|0.8196,0.6549,0.451,1.0
+paper|Paper_OFFICE|paper|paper|800|0.9608,0.9569,0.949,1.0
+paper_office|Paper_OFFICE|paper|paper|800|0.9608,0.9569,0.949,1.0
+pc|PC_GENERIC|PC|plastic|1200|1.0,1.0,1.0,0.3
+pc_generic|PC_GENERIC|PC|plastic|1200|1.0,1.0,1.0,0.3
+pe|PE_HDPE|PE|plastic|960|1.0,1.0,1.0,1.0
+pe_hdpe|PE_HDPE|PE|plastic|960|1.0,1.0,1.0,1.0
+peek|Peek_MOLDED|PEEK|plastic|1300|1.0,1.0,1.0,1.0
+peek_molded|Peek_MOLDED|PEEK|plastic|1300|1.0,1.0,1.0,1.0
+peek_printed|Peek_PRINTED|PEEK|plastic|1300|1.0,1.0,1.0,1.0
+petg|PETG_GENERIC|PETG|plastic|1270|1.0,1.0,1.0,1.0
+petg_cf|PETG_CF|PETG|plastic|1320|1.0,1.0,1.0,1.0
+petg_generic|PETG_GENERIC|PETG|plastic|1270|1.0,1.0,1.0,1.0
+phenolic|Phenolic_BAKELITE|phenolic|plastic|1300|1.0,1.0,1.0,1.0
+phenolic_bakelite|Phenolic_BAKELITE|phenolic|plastic|1300|1.0,1.0,1.0,1.0
+pine|Softwood_PINE|pine|wood|500|0.8235,0.7255,0.6314,1.0
+pla|PLA_GENERIC|PLA|plastic|1240|1.0,1.0,1.0,1.0
+pla_carbon_filled|PLA_CARBON_FILLED|PLA|plastic|1250|1.0,1.0,1.0,1.0
+pla_generic|PLA_GENERIC|PLA|plastic|1240|1.0,1.0,1.0,1.0
+pmma|PMMA_GENERIC|PMMA|plastic|1180|1.0,1.0,1.0,0.3
+pmma_generic|PMMA_GENERIC|PMMA|plastic|1180|1.0,1.0,1.0,0.3
+pom|POM_GENERIC|POM|plastic|1410|1.0,1.0,1.0,1.0
+pom_generic|POM_GENERIC|POM|plastic|1410|1.0,1.0,1.0,1.0
+pp|PP_GENERIC|PP|plastic|905|1.0,1.0,1.0,1.0
+pp_generic|PP_GENERIC|PP|plastic|905|1.0,1.0,1.0,1.0
+pps|PPS_CF|PPS|plastic|1400|1.0,1.0,1.0,1.0
+pps_cf|PPS_CF|PPS|plastic|1400|1.0,1.0,1.0,1.0
+ptfe|PTFE_GENERIC|PTFE|plastic|2170|1.0,1.0,1.0,1.0
+ptfe_generic|PTFE_GENERIC|PTFE|plastic|2170|1.0,1.0,1.0,1.0
+rubber|Rubber_GENERIC|rubber|plastic|1200|1.0,1.0,1.0,1.0
+rubber_generic|Rubber_GENERIC|rubber|plastic|1200|1.0,1.0,1.0,1.0
+silver|Silver_PURE|silver|metal|10490|0.996,0.9934,0.9885,1.0
+silver_pure|Silver_PURE|silver|metal|10490|0.996,0.9934,0.9885,1.0
+soda_lime|SodaLime_GENERIC|soda_lime|glass|2500|0.9929,0.9978,0.9978,0.3
+sodalime_generic|SodaLime_GENERIC|soda_lime|glass|2500|0.9929,0.9978,0.9978,0.3
+softwood|Softwood_GENERIC|spruce|wood|470|0.9294,0.898,0.7765,1.0
+softwood_generic|Softwood_GENERIC|spruce|wood|470|0.9294,0.898,0.7765,1.0
+softwood_pine|Softwood_PINE|pine|wood|500|0.8235,0.7255,0.6314,1.0
+softwood_spruce|Softwood_SPRUCE|spruce|wood|430|0.9294,0.898,0.7765,1.0
+spring_steel|SpringSteel_GENERIC_QUENCHED_TEMPERED|spring_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+springsteel_generic_quenched_tempered|SpringSteel_GENERIC_QUENCHED_TEMPERED|spring_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+spruce|Softwood_SPRUCE|spruce|wood|430|0.9294,0.898,0.7765,1.0
+stainless|Stainless_G304_ANNEALED|stainless|metal|7930|0.8373,0.8204,0.7966,1.0
+stainless_g201_annealed|Stainless_G201_ANNEALED|stainless|metal|7860|0.8373,0.8204,0.7966,1.0
+stainless_g303_annealed|Stainless_G303_ANNEALED|stainless|metal|8030|0.8373,0.8204,0.7966,1.0
+stainless_g304_annealed|Stainless_G304_ANNEALED|stainless|metal|7930|0.8373,0.8204,0.7966,1.0
+stainless_g316l_annealed|Stainless_G316L_ANNEALED|stainless|metal|8000|0.8373,0.8204,0.7966,1.0
+stainless_g316l_as_built|Stainless_G316L_AS_BUILT|stainless|metal|7990|0.8373,0.8204,0.7966,1.0
+stainless_g430_annealed|Stainless_G430_ANNEALED|stainless|metal|7750|0.8373,0.8204,0.7966,1.0
+stainless_g430_cold_worked|Stainless_G430_COLD_WORKED|stainless|metal|7750|0.8373,0.8204,0.7966,1.0
+standard|Standard_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+standard_generic|Standard_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+titanium|Titanium_GR5_ANNEALED|titanium|metal|4430|0.6951,0.6652,0.635,1.0
+titanium_gr5_annealed|Titanium_GR5_ANNEALED|titanium|metal|4430|0.6951,0.6652,0.635,1.0
+titanium_tc4_as_built|Titanium_TC4_AS_BUILT|titanium|metal|4430|0.6951,0.6652,0.635,1.0
+tool_steel|ToolSteel_D2_HARDENED|tool_steel|metal|7700|0.7548,0.7439,0.7314,1.0
+toolsteel_a2_hardened|ToolSteel_A2_HARDENED|tool_steel|metal|7860|0.7548,0.7439,0.7314,1.0
+toolsteel_a3_hardened|ToolSteel_A3_HARDENED|tool_steel|metal|7860|0.7548,0.7439,0.7314,1.0
+toolsteel_d2_hardened|ToolSteel_D2_HARDENED|tool_steel|metal|7700|0.7548,0.7439,0.7314,1.0
+toolsteel_generic_as_built|ToolSteel_GENERIC_AS_BUILT|tool_steel|metal|7800|0.7548,0.7439,0.7314,1.0
+toolsteel_h13_hardened|ToolSteel_H13_HARDENED|tool_steel|metal|7800|0.7548,0.7439,0.7314,1.0
+toolsteel_o1_hardened|ToolSteel_O1_HARDENED|tool_steel|metal|7830|0.7548,0.7439,0.7314,1.0
+toolsteel_s7_hardened|ToolSteel_S7_HARDENED|tool_steel|metal|7830|0.7548,0.7439,0.7314,1.0
+tough|Tough_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+tough_generic|Tough_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+tpu|TPU_SHORE_95A|TPU|plastic|1200|1.0,1.0,1.0,1.0
+tpu_shore_95a|TPU_SHORE_95A|TPU|plastic|1200|1.0,1.0,1.0,1.0
+tpu_sintered|TPU_SINTERED|TPU|plastic|1200|1.0,1.0,1.0,1.0
+transparent|Transparent_GENERIC|resin|resin|1300|1.0,1.0,1.0,0.3
+transparent_generic|Transparent_GENERIC|resin|resin|1300|1.0,1.0,1.0,0.3
+walnut|Hardwood_WALNUT|walnut|wood|640|0.349,0.2392,0.1647,1.0
+woven|Woven_GENERIC|fabric_weave|textile|500|0.9529,0.9647,0.9804,1.0
+woven_generic|Woven_GENERIC|fabric_weave|textile|500|0.9529,0.9647,0.9804,1.0
+"""
+
+_MATERIAL_FAMILY_MODULES = """
+abs_:plastics alloy_steel:metals aluminum:metals american_cherry:wood
+asa:plastics ash:wood beech:wood birch:wood borosilicate:glass
+brass:metals bronze:metals cardboard:paper castable:resins ceramic:resins
+cfrp:plastics copper:metals engineered_wood:wood esd:resins felt:textile
+flexible:resins foamboard:paper fr4:plastics gold:metals hardwood:wood
+high_temp:resins leather:textile magnesium:metals maple:wood mdf:wood
+mild_steel:metals nylon:plastics oak:wood osb:wood paper:paper pc:plastics
+pe:plastics peek:plastics petg:plastics phenolic:plastics pine:wood
+pla:plastics pmma:plastics pom:plastics pp:plastics pps:plastics
+ptfe:plastics rubber:plastics silver:metals soda_lime:glass softwood:wood
+spring_steel:metals spruce:wood stainless:metals standard:resins
+titanium:metals tool_steel:metals tough:resins tpu:plastics
+transparent:resins walnut:wood woven:textile
+"""
+
+_PROPERTY_UNITS = {
+    'areal_density': 'g/m\\u00b2',
+    'compressive_strength_parallel': 'MPa',
+    'density': 'kg/m\\u00b3',
+    'elongation_at_break': '%',
+    'hardness': 'per hardness_scale',
+    'janka_hardness': 'N',
+    'modulus_of_elasticity': 'GPa',
+    'modulus_of_rupture': 'MPa',
+    'poisson_ratio': '',
+    'shear_modulus': 'GPa',
+    'shear_strength': 'MPa',
+    'tensile_strength': 'MPa',
+    'thickness': 'mm',
+    'yield_strength': 'MPa',
+    'glass_transition_temperature': '\\u00b0C',
+    'heat_deflection_temperature': '\\u00b0C',
+    'max_service_temp': '\\u00b0C',
+    'melting_temperature': '\\u00b0C',
+    'specific_heat_capacity': 'J/(kg\\u00b7K)',
+    'thermal_conductivity': 'W/(m\\u00b7K)',
+    'thermal_expansion': '1/K',
+}
+
+_MATERIAL_TABLE = {}
+
+
+def _material_table():
+    if not _MATERIAL_TABLE:
+        for line in _MATERIAL_ROWS.split(chr(10)):
+            if not line.strip():
+                continue
+            key, grade, family, category, density, color = line.split('|')
+            rgba = tuple(float(x) for x in color.split(',')) if color else None
+            _MATERIAL_TABLE[key] = (grade, family, category, float(density),
+                                    rgba)
+    return _MATERIAL_TABLE
+
+
+def _normalize_material_name(name):
+    return name.strip().lower().replace(' ', '_').replace('-', '_')
+
+
+class _MaterialGrade:
+    """A bd_materials material record (the grade): name, family, category
+    and density in kg/m^3 (the only scalar property)."""
+
+    def __init__(self, name, family, category, density, transparent=False):
+        self.name = name
+        self.family = family
+        self.category = category
+        self.density = density
+        self.transparent = transparent
+
+    def __repr__(self):
+        return (self.category.capitalize() + 'Material(name=' +
+                repr(self.name) + ', family=' + repr(self.family) +
+                ', density=' + repr(self.density) + ')')
+
+
+class _FinishedMaterial:
+    """bd_materials' FinishedMaterial: a material grade plus its finish and
+    per-part appearance (lite keeps the fields; only the grade's density and
+    colour have consequences)."""
+
+    def __init__(self, material, finish=None, color=None, thickness_mm=None,
+                 opacity=None, roughness=None, scale=(1.0, 1.0),
+                 rotation=0.0, process=None, pbr=None):
+        self.material = material
+        self.finish = finish
+        self.color = color
+        self.thickness_mm = thickness_mm
+        self.opacity = opacity
+        self.roughness = roughness
+        self.scale = scale
+        self.rotation = rotation
+        self.process = process
+        self.pbr = pbr
+
+    @property
+    def name(self):
+        return self.material.name
+
+    def __repr__(self):
+        return 'FinishedMaterial(' + self.material.name + ')'
+
+
+def _material_from_row(row, density=None, finish=None, process=None,
+                       color=None):
+    grade, family, category, dens, rgba = row
+    fm = _FinishedMaterial(
+        _MaterialGrade(grade, family, category,
+                       dens if density is None else float(density)),
+        finish=finish, process=process, color=color)
+    fm._lite_rgba = rgba
+    return fm
+
+
+def _material_suggestions(key, names):
+    scored = []
+    for n in names:
+        common = 0
+        for a, b in zip(key, n):
+            if a != b:
+                break
+            common += 1
+        if common or key in n or n in key:
+            scored.append((-common, len(n), n))
+    scored = _stable_sorted(scored)
+    return [t[2] for t in scored[:3]]
+
+
+def _resolve_material(name):
+    """bd_materials.resolve: a fresh FinishedMaterial for a family name
+    (its default grade) or a grade name, matched case-insensitively with
+    spaces/hyphens read as underscores."""
+    table = _material_table()
+    key = _normalize_material_name(str(name))
+    if key not in table:
+        names = sorted(table.keys())
+        hint = _material_suggestions(key, names)
+        raise ValueError('unknown material ' + repr(str(name)) +
+                         (' -- did you mean ' + ', '.join(hint) + '?'
+                          if hint else '') +
+                         ' (bd_materials.material_names() lists all ' +
+                         str(len(names)) + ')')
+    return _material_from_row(table[key])
+
+
+def _material_names():
+    return sorted(_material_table().keys())
+
+
+def _canonical_material_name(material):
+    return _normalize_material_name(material.material.name)
+
+
 # OCCT write.step.unit names for the length units (export_step)
 _STEP_UNIT_NAMES = {Unit.MC: 'UM', Unit.MM: 'MM', Unit.CM: 'CM', Unit.M: 'M',
                     Unit.IN: 'INCH', Unit.FT: 'FT'}
@@ -1110,6 +1430,10 @@ class Location:
     def position(self):
         return Vector(self._t)
 
+    @position.setter
+    def position(self, value):
+        self._t = tuple(_v3(value))
+
     @property
     def orientation(self):
         # Euler intrinsic-XYZ extraction (inverse of _rot_mat)
@@ -1124,6 +1448,11 @@ class Location:
             rx = math.atan2(R[1][0], R[1][1])
             rz = 0.0
         return Vector(math.degrees(rx), math.degrees(ry), math.degrees(rz))
+
+    @orientation.setter
+    def orientation(self, value):
+        r = _v3(value)
+        self._R = _rot_mat(r[0], r[1], r[2])
 
     def __iter__(self):
         """tuple(location) -> (position, orientation): the translation and
@@ -1835,6 +2164,13 @@ class ShapeHistory:
         return bool(self._flags([_topo(shape)])[0] & 2)
 
 
+class _RecordHolder:
+    """Lets ShapeHistory.of() merge bare records."""
+
+    def __init__(self, record):
+        self._history = record
+
+
 def _record_of(topo, before, brought):
     """The ShapeHistory a history-recording JS primitive left on its result
     (HistRecord), with the inputs exactly as that operation saw them (a
@@ -1854,7 +2190,7 @@ class Shape:
     """A shape wrapping a raw OCCT TopoDS shape (self.topo, may be None for
     empty algebra starters like Part()). Supports build123d algebra."""
 
-    material = ''   # upstream Shape surface (BasePartObject reads it)
+    _material = None
     _dim = None     # topological dimension; set per subclass like upstream
 
     def __init__(self, topo=None):
@@ -1950,10 +2286,8 @@ class Shape:
 
     def _extracted_from(self, source):
         """Record that this sub-shape was selected from 'source' (upstream
-        _extracted_from: topo_path grows by the source). The direct source is
-        also kept as lite's selection link (_parent) - deliberately NOT the
-        assembly parent, so selecting never adds children."""
-        self._parent = source
+        _extracted_from: topo_path grows by the source). This is NOT the
+        assembly parent (.parent), so selecting never adds children."""
         if isinstance(source, Shape):
             self.topo_path = tuple(source.topo_path) + (source,)
         return self
@@ -1963,16 +2297,13 @@ class Shape:
         """The OUTERMOST shape this sub-shape was selected through
         (build123d 0.12 topo_path[0])."""
         path = self.topo_path
-        if path:
-            return path[0]
-        return self._parent
+        return path[0] if path else None
 
     @topo_parent.setter
     def topo_parent(self, value):
         # upstream: topo_path = () or (value,); it is not the assembly link,
         # so no children bookkeeping happens here
         self.topo_path = () if value is None else (value,)
-        self._parent = value
 
     @property
     def topo_owner(self):
@@ -1990,11 +2321,26 @@ class Shape:
     # --- location bookkeeping (baked geometry + tracked frame) ---
     @property
     def location(self):
-        return self._loc if self._loc is not None else Location()
+        # a COPY, like upstream's Location(self.wrapped.Location()): editing
+        # the returned location must not move the shape
+        return Location(self._loc) if self._loc is not None else Location()
 
     @location.setter
     def location(self, value):
         self.locate(value)
+
+    @property
+    def global_location(self):
+        """This shape's location composed with every assembly ancestor's
+        (build123d Shape.global_location)."""
+        loc = self.location
+        node = self._parent
+        depth = 0
+        while node is not None and depth < 256:
+            loc = node.location * loc
+            node = node._parent
+            depth += 1
+        return loc
 
     @property
     def position(self):
@@ -2209,6 +2555,92 @@ class Shape:
     def solid(self):
         ss = self.solids()
         return ss[0] if len(ss) > 0 else None
+
+    # --- materials and mass (build123d 0.12) ---
+    @property
+    def material(self):
+        """The shape's material: its own, else the nearest assembly
+        ancestor's (cached once found), else None."""
+        node = self
+        depth = 0
+        while node is not None and depth < 256:
+            m = node._material
+            if m is not None:
+                if node is not self:
+                    self._material = m
+                return m
+            node = node._parent
+            depth += 1
+        return None
+
+    @material.setter
+    def material(self, value):
+        """A bd_materials FinishedMaterial, a material NAME ('brass',
+        'Mild Steel', a grade name...) or None. Sets the colour from the
+        material's PBR colour, like upstream."""
+        if value is None:
+            self._material = None
+            return
+        if isinstance(value, _FinishedMaterial):
+            m = value
+        elif isinstance(value, str):
+            m = _resolve_material(value)
+        else:
+            raise TypeError('Non supported type ' + type(value).__name__ +
+                            ', need FinishedMaterial, str or None')
+        self._material = m
+        rgba = getattr(m, '_lite_rgba', None)
+        if rgba:
+            self.color = Color(*rgba)
+
+    def compute_volume(self):
+        """The GProp measure of the shape (0.12): 0 for a vertex, length
+        for 1-D, area for 2-D, volume for solids."""
+        if self.topo is None:
+            return 0.0
+        st = self.topo.ShapeType().value
+        if st == 7:
+            return 0.0
+        if st in (5, 6):
+            return float(w.EdgeLength(self.topo))
+        if st in (3, 4):
+            return float(w.SurfaceArea(self.topo))
+        return float(self.volume)
+
+    def compute_mass(self, mass_unit=None, length_unit=None):
+        """volume x density in mass_unit (default grams), the volume
+        measured in length_unit^3 (default mm) - build123d 0.12."""
+        mass_unit = Unit.G if mass_unit is None else mass_unit
+        length_unit = Unit.MM if length_unit is None else length_unit
+        if self.topo is None:
+            return 0.0
+        volume = self.volume
+        if volume == 0:
+            return 0.0
+        material = self.material
+        density = material.material.density if \
+            isinstance(material, _FinishedMaterial) else None
+        if density is None:
+            raise ValueError("Shape's density is missing")
+        if density == 0:
+            _warn("Shape's density is 0")
+            return 0.0
+        return volume * density * UNITS_PER_KILOGRAM[mass_unit] / \
+            UNITS_PER_METER[length_unit] ** 3
+
+    def mass(self, mass_unit=None, length_unit=None):
+        """Mass from the material's density (0.12): solids and closed
+        shells weigh their volume; faces, edges and vertices weigh 0."""
+        if self.topo is None:
+            return 0.0
+        if isinstance(self, Shell):
+            return self.compute_mass(mass_unit, length_unit)
+        st = self.topo.ShapeType().value
+        if st in (2, 3):   # solid / shell
+            return self.compute_mass(mass_unit, length_unit)
+        if st in (0, 1):   # compound / compsolid
+            return Compound.mass(self, mass_unit, length_unit)
+        return 0.0
 
     # --- measurement ---
     @property
@@ -2571,6 +3003,23 @@ class Compound(Shape):
     Compound subclasses; builder transfers classify through Compound and
     extract base objects with get_type)."""
 
+    def mass(self, mass_unit=None, length_unit=None):
+        """build123d 0.12 Compound.mass: an assembly sums its children's
+        masses (each with its own material); otherwise every solid and shell
+        weighs in with the compound's material."""
+        if self.children:
+            return sum(c.mass(mass_unit, length_unit) for c in self.children)
+        total = 0.0
+        material = self.material
+        pieces = list(self.get_type(Solid)) + list(self.get_type(Shell))
+        if not pieces and self.topo is not None and \
+                self.topo.ShapeType().value in (2, 3):
+            pieces = [self]
+        for piece in pieces:
+            piece._material = material
+            total += piece.compute_mass(mass_unit, length_unit)
+        return total
+
     @classmethod
     def make_triad(cls, axes_scale):
         """The coordinate-system triad symbol (build123d Compound.make_triad):
@@ -2592,31 +3041,44 @@ class Compound(Shape):
         parts.append(Pos(0, 0, s) * (arrow.rotate(Axis.Y, -90)))
         return Curve(parts)
 
-    def __init__(self, children=None, label='', obj=None, **kwargs):
-        # Compound(shape.wrapped) / Compound(topods): a single raw TopoDS shape
-        # (build123d's Shape(obj) form, used by Compound subclasses that call
-        # super().__init__(builder.part.wrapped, ...) - tutorial_joints' Hinge)
-        if children is None and obj is not None:
-            children = obj  # upstream Compound.__init__'s first kwarg is obj=
-        if children is not None and not isinstance(children, Shape) and \
-                hasattr(children, 'ShapeType'):
-            children = [children]
-        topos = [_topo(c) for c in _tolist(children) if not (isinstance(c, Shape) and c.topo is None)]
+    def __init__(self, obj=None, label='', color=None, material=None,
+                 joints=None, parent=None, children=None, **kwargs):
+        """build123d Compound(obj, label, color, material, joints, parent,
+        children): obj is a raw TopoDS shape or shape(s) gathered into ONE
+        compound; children= builds an ASSEMBLY - the children become the
+        compound's anytree children (their .parent is this compound) and
+        make up its geometry when no obj is given."""
+        if obj is not None and not isinstance(obj, Shape) and \
+                hasattr(obj, 'ShapeType'):
+            obj = [obj]
+        kids = _tolist(children) if children is not None else []
+        source = obj if obj is not None else kids
+        topos = [_topo(c) for c in _tolist(source)
+                 if not (isinstance(c, Shape) and c.topo is None)]
         topo = None
         if len(topos) == 1:
             topo = topos[0]
         elif len(topos) > 1:
             topo = w.MakeCompound(topos)
         Shape.__init__(self, topo)
-        self.label = label
-        self.children = _tolist(children)
+        self.label = label or ''
+        if color is not None:
+            self.color = color
+        if material is not None and material != '':
+            self.material = material
+        self.children = []
+        for kid in kids:
+            if isinstance(kid, Shape):
+                kid._parent = self
+            self.children.append(kid)
         # Compound(..., joints=<dict>) — build123d's Compound.__init__ adopts a
         # joint dict and REPARENTS every joint onto the new compound. This is
         # how a Compound subclass built from a builder keeps the joints the
         # builder collected (tutorial_joints' Hinge).
-        joints = kwargs.get('joints')
         if joints:
             self.joints = {k: j._lite_rebind(self) for k, j in joints.items()}
+        if parent is not None:
+            self.parent = parent
 
     # upstream tags every topology class with its dimension (Shape._dim);
     # operations dispatch fillet/chamfer/offset on it. A generic Compound's
@@ -2748,10 +3210,13 @@ def _apply_compound_kwargs(self, label, color, material, joints, parent,
     self.label = label or ''
     if color is not None:
         self.color = color
-    if material:
+    if material is not None and material != '':
         self.material = material
     if children:
         self.children = list(children)
+        for kid in self.children:
+            if isinstance(kid, Shape):
+                kid._parent = self
     if joints:
         self.joints = {k: j._lite_rebind(self) for k, j in joints.items()}
     if parent is not None:
@@ -2767,7 +3232,7 @@ class Part(Compound):
     _dim = 3
 
     def __init__(self, topo=None, obj=None, label='', color=None,
-                 material='', joints=None, parent=None, children=None,
+                 material=None, joints=None, parent=None, children=None,
                  **kwargs):
         if topo is None and obj is not None:
             topo = obj
@@ -2782,12 +3247,22 @@ class Solid(Shape):
 
     _dim = 3
 
-    def __init__(self, topo=None, obj=None, label='', **kwargs):
+    def __init__(self, topo=None, obj=None, label='', color=None,
+                 material=None, joints=None, parent=None, **kwargs):
         if topo is None and obj is not None:
             topo = obj
         Shape.__init__(self, _adopt_solid_topo(topo))
         if label:
             self.label = label
+        if color is not None:
+            self.color = color
+        if material is not None:
+            self.material = material
+        if joints:
+            self.joints = dict((k, j._lite_rebind(self))
+                               for k, j in joints.items())
+        if parent is not None:
+            self.parent = parent
 
     @classmethod
     def extrude(cls, obj, direction):
@@ -2902,7 +3377,7 @@ class Sketch(Compound):
     _dim = 2
 
     def __init__(self, topo=None, obj=None, label='', color=None,
-                 material='', joints=None, parent=None, children=None,
+                 material=None, joints=None, parent=None, children=None,
                  **kwargs):
         if topo is None and obj is not None:
             topo = obj
@@ -4512,6 +4987,14 @@ class Shell(Shape):
         shell._face_shapes = None
         return shell
 
+    @property
+    def volume(self):
+        """The volume a manifold shell encloses, else 0 (build123d
+        Shell.volume) - what Shell.mass() weighs."""
+        if self.topo is None:
+            return 0.0
+        return float(w.ShellEnclosedVolume([f.topo for f in self.faces()]))
+
     def __init__(self, faces=None):
         if faces is None:
             Shape.__init__(self, None)
@@ -5117,7 +5600,7 @@ def topo_distance_to(other):
         if not isinstance(s, type(sources[0])):
             raise ValueError('Topological distance requires shapes of the '
                              'same type')
-    parent = getattr(sources[0], 'parent', None)
+    parent = sources[0].topo_parent
     if parent is None or parent.topo is None:
         raise ValueError('Topological distance requires shapes with a '
                          'topo_parent')
@@ -8687,8 +9170,7 @@ def topo_explore_connected_edges(edge, parent=None,
     continuity_map = {0: ContinuityLevel.C0, 1: ContinuityLevel.C1,
                       2: ContinuityLevel.C1, 3: ContinuityLevel.C2,
                       4: ContinuityLevel.C2}
-    parent = parent if parent is not None else \
-        getattr(edge, 'topo_parent', None) or edge.parent
+    parent = parent if parent is not None else edge.topo_parent
     if parent is None:
         raise ValueError('edge has no valid parent')
     if edge.wrapped is None:
@@ -9102,9 +9584,11 @@ def _edges_by_parent(objects):
                               builder._obj is not None and
                               builder._obj.topo is not None) else None
     if target is None:
-        target = edges[0].parent
+        # algebra mode: the shape the edges were selected from (upstream
+        # objects[0].topo_parent - the OUTERMOST source)
+        target = edges[0].topo_parent
         for e in edges:
-            if e.parent is not target:
+            if e.topo_parent is not target:
                 raise ValueError('all edges must belong to the same shape')
     if target is None or target.topo is None:
         raise ValueError('these edges have no parent shape, so they cannot be '
@@ -9115,7 +9599,7 @@ def _edges_by_parent(objects):
         keyed[_shape_key(e, 'edge')] = e.index
     indices = []
     for e in edges:
-        if e.parent is target and e.index is not None:
+        if e.topo_owner is target and e.index is not None:
             indices.append(e.index)
             continue
         idx = keyed.get(_shape_key(e, 'edge'))
@@ -9264,23 +9748,32 @@ def _vertex_op_2d(objs, radius, opname):
         raise NotImplementedError('2D vertex chamfers are not supported in '
                                   'build123d-lite')
     verts = [o for o in objs if isinstance(o, Vertex)]
-    parent = verts[0].parent
+    parent = verts[0].topo_parent
     for v in verts:
-        if v.parent is not parent:
+        if v.topo_parent is not parent:
             raise ValueError('all vertices must belong to the same sketch')
     if parent is None or parent.topo is None:
         raise ValueError('fillet: vertices have no parent sketch')
     faces = parent.faces()
     if len(faces) == 0:
         return _wire_fillet_2d(parent, verts, radius)
-    if len(faces) != 1:
-        raise NotImplementedError('2D vertex fillets on multi-face sketches '
-                                  'are not supported in build123d-lite')
-    pts = [[v.X, v.Y, v.Z] for v in verts]
-    ftopo = faces[0].topo
-    rtopo = w.FilletFace2D(ftopo, radius, pts, False, True)
-    result = _wrap_like(parent, rtopo)._made_by(
-        _record_of(rtopo, [parent.topo], []))
+    # upstream fillet()'s 2-D branch: every face of the sketch is filleted at
+    # the given vertices it contains, the others pass through
+    new_topos = []
+    records = []
+    for face in faces:
+        pts = [[v.X, v.Y, v.Z] for v in face.vertices() if v in verts]
+        if pts:
+            ftopo = w.FilletFace2D(face.topo, radius, pts, False, True)
+            records.append(_record_of(ftopo, [face.topo], []))
+            new_topos.append(ftopo)
+        else:
+            new_topos.append(face.topo)
+    rtopo = new_topos[0] if len(new_topos) == 1 else w.MakeCompound(new_topos)
+    record = ShapeHistory.of(*[_RecordHolder(r) for r in records])
+    if record is not None:
+        record = record.copy().with_inputs([parent.topo], [])
+    result = _wrap_like(parent, rtopo)._made_by(record)
     builder = _active_builder()
     if builder is not None and builder._obj is not None and \
             (builder._obj is parent or builder._obj.topo is parent.topo):
@@ -9954,7 +10447,7 @@ def draft(faces, neutral_plane, angle):
     face_list = _tolist(faces)
     if not face_list:
         raise ValueError('draft: no faces given')
-    parent = face_list[0].parent
+    parent = face_list[0].topo_parent
     builder = _active_builder(BuildPart)
     target = parent if parent is not None else \
         (builder._obj if builder is not None else None)
@@ -10033,17 +10526,19 @@ def project(objects=None, workplane=None, target=None, mode=Mode.ADD):
                 if not projected:
                     raise ValueError('project: projection missed the part')
                 # ALL projected surface pieces become pending faces (front
-                # AND back, like build123d's project into BuildPart). Their
-                # pending plane z_dir is the REVERSED projection direction
-                # (validated against 0.11.1 maker_coin: a following
-                # extrude(-depth, SUBTRACT) cuts front pieces INTO the part
-                # and back pieces harmlessly out the back).
-                back = -d
+                # AND back, like build123d's project into BuildPart). Since
+                # 0.12 each goes in through _add_to_context with ITS OWN plane
+                # (Plane(face): the piece's outward normal), so a following
+                # extrude(-depth, SUBTRACT) cuts front AND back pieces into
+                # the part (0.11.1 used the workplane for every piece, which
+                # sent the back pieces harmlessly out the back).
                 for piece in projected:
-                    c = w._faceCentroid(piece.topo)
                     builder.pending_faces.append(Sketch(piece.topo))
-                    builder.pending_face_planes.append(
-                        Plane(origin=tuple(c), z_dir=tuple(back)))
+                    try:
+                        piece_plane = Plane(Face(piece.topo))
+                    except Exception:
+                        piece_plane = Plane.XY
+                    builder.pending_face_planes.append(piece_plane)
         return Sketch(w.MakeCompound(
             [s.topo for s in builder.pending_faces], True)) \
             if len(builder.pending_faces) > 1 else builder.pending_faces[0]

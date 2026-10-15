@@ -4664,6 +4664,34 @@ function ConvexHull3D(points) {
  *  ShapeFix_Solid::SolidFromShell (which also orients the shell outward).
  *  Returns a single solid, or a compound if the faces sew into multiple
  *  closed shells. */
+/** build123d Shell.volume: the volume a MANIFOLD shell encloses (every
+ *  edge shared by exactly two faces), else 0 - ShapeFix_Solid.SolidFromShell
+ *  on the sewn faces, like upstream. */
+function ShellEnclosedVolume(faces) {
+  if (!faces || faces.length === 0) { return 0; }
+  let sew = new self.oc.BRepBuilderAPI_Sewing(1.0e-6, true, true, true, false);
+  for (let i = 0; i < faces.length; i++) { sew.Add(faces[i]); }
+  sew.Perform(new self.oc.Message_ProgressRange_1());
+  let sewed = sew.SewedShape();
+  let shells = [];
+  ForEachShell(sewed, (i, shell) => { shells.push(shell); });
+  if (shells.length !== 1) { return 0; }
+  // manifold: every edge bounds exactly two faces of the shell
+  let counts = [];
+  ForEachFace(shells[0], (i, f) => {
+    for (let ex = new self.oc.TopExp_Explorer_2(f, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+      const e = ex.Current();
+      if (self.oc.BRep_Tool.Degenerated(self.oc.TopoDS_Cast.Edge_1(e))) { continue; }
+      let found = counts.find((c) => c.edge.IsSame(e));
+      if (found) { found.n++; } else { counts.push({ edge: e, n: 1 }); }
+    }
+  });
+  if (counts.some((c) => c.n !== 2)) { return 0; }
+  let solid = new self.oc.ShapeFix_Solid_1().SolidFromShell(shells[0]);
+  if (!solid || solid.IsNull()) { return 0; }
+  return Math.abs(_quickVolume(solid));
+}
+
 function SewSolidFromFaces(faces) {
   let curSolid = self.CacheOp(arguments, "SewSolidFromFaces", () => {
     let sew = new self.oc.BRepBuilderAPI_Sewing(1.0e-6, true, true, true, false);
@@ -4915,6 +4943,7 @@ class CascadeStudioStandardLibrary {
     self.Section = Section;
     self.ConvexHull3D = ConvexHull3D;
     self.SewSolidFromFaces = SewSolidFromFaces;
+    self.ShellEnclosedVolume = ShellEnclosedVolume;
     self.IntersectLineShape = IntersectLineShape;
     self.PointVertex = PointVertex;
     self.ConstrainedArcs2D = ConstrainedArcs2D;
