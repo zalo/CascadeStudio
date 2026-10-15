@@ -345,26 +345,18 @@ class CascadeStudioWorker {
     // simply absent from self.loadedFonts.
     const assets = this.options.assets;
     if (assets && (assets.fonts || assets.loadAsset)) {
+      // The BYTES are resolved here (an asset may be a URL or an async thunk,
+      // and I/O belongs at boot), but each face is PARSED on first use — see
+      // _defineLazyFont. Eagerly parsing the four FreeSans faces cost ~115 ms
+      // of boot CPU and ~100 MB of live JS heap in Node (~50 MB / ~150 ms in
+      // workerd), for a feature most scripts never touch.
       for (const name of CascadeStudioWorker.FONT_NAMES) {
         let buf = null;
         try {
           buf = await assetToArrayBuffer(assets, 'fonts', name, 'fonts/' + name + '.ttf');
         } catch (e) { buf = null; }
         if (!buf) { continue; }
-        // Parsed on FIRST USE, not here: four parsed FreeSans faces (glyph
-        // objects + kern maps) are ~7 MB of JS heap that a model without
-        // Text() never touches — and a Cloudflare isolate's 128 MB counts
-        // the JS heap. Lookups stay synchronous (the bytes are already
-        // here); the getter replaces itself with the parsed value.
-        CascadeStudioWorker._lazyProp(self.loadedFonts, name, () => {
-          try { return opentype.parse(buf); }
-          catch (e) {
-            console.log('Failed to parse font ' + name + ': ' + (e && e.message));
-            return undefined;
-          }
-        });
-        CascadeStudioWorker._lazyProp(self.fontKernPairs, name,
-          () => CascadeStudioWorker._parseKernTable(buf));
+        CascadeStudioWorker._defineLazyFont(name, buf, opentype);
       }
       return;
     }
@@ -387,22 +379,39 @@ class CascadeStudioWorker {
     })));
   }
 
-  /** Parse every format-0 'kern' subtable of a TTF into a Map keyed by
-   *  "leftGid,rightGid" -> kern value in font units. */
-  /** Define obj[name] as a value computed on first read (then a plain data
-   *  property; assigning first also just stores the value). */
-  static _lazyProp(obj, name, make) {
-    const settle = (v) => {
-      Object.defineProperty(obj, name, { value: v, writable: true, configurable: true, enumerable: true });
-      return v;
+  /** Headless fonts: `self.loadedFonts[name]` / `self.fontKernPairs[name]`
+   *  become getters that parse the TTF the first time either is read, then
+   *  cache the result for the life of the realm. Readers are unchanged
+   *  (`_opentypeTextFace`, `Text2D`, `_kernValue`); a face whose parse fails
+   *  reads as `undefined`, exactly like a face that was never supplied.
+   *  (The "which faces exist" error path in StandardLibrary enumerates the
+   *  property descriptors, so it does not force a parse of every face.) */
+  static _defineLazyFont(name, buf, opentype) {
+    let parsed;   // undefined: not yet; null: the parse failed
+    const parse = () => {
+      if (parsed === undefined) {
+        try {
+          parsed = { font: opentype.parse(buf),
+            kern: CascadeStudioWorker._parseKernTable(buf) };
+        } catch (e) {
+          console.log('Failed to parse font ' + name + ': ' + (e && e.message));
+          parsed = null;
+        }
+      }
+      return parsed;
     };
-    Object.defineProperty(obj, name, {
-      configurable: true, enumerable: true,
-      get() { return settle(make()); },
-      set(v) { settle(v); },
+    Object.defineProperty(self.loadedFonts, name, {
+      enumerable: true, configurable: true,
+      get() { const p = parse(); return p ? p.font : undefined; },
+    });
+    Object.defineProperty(self.fontKernPairs, name, {
+      enumerable: true, configurable: true,
+      get() { const p = parse(); return p ? p.kern : undefined; },
     });
   }
 
+  /** Parse every format-0 'kern' subtable of a TTF into a Map keyed by
+   *  "leftGid,rightGid" -> kern value in font units. */
   static _parseKernTable(buf) {
     const pairs = new Map();
     try {

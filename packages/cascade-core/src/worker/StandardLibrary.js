@@ -163,8 +163,13 @@ function _opentypeTextFace(text, size, fontName, perGlyphCompound) {
       //     family: build123d's FontStyle.BOLD asks for FreeSansBold and the
       //     silent null used to surface as "Cannot set properties of
       //     undefined (setting 'hash')" from CacheOp).
-      const available = Object.keys(self.loadedFonts || {})
-        .filter((k) => self.loadedFonts[k]).sort();
+      // A lazily-parsed headless face (a getter, see
+      // CascadeStudioWorker._defineLazyFont) counts as available without
+      // forcing its parse; an eagerly-loaded browser face must be truthy.
+      const available = Object.keys(self.loadedFonts || {}).filter((k) => {
+        const d = Object.getOwnPropertyDescriptor(self.loadedFonts, k);
+        return !!d && (d.get ? true : !!d.value);
+      }).sort();
       if (available.length === 0) {
         for (let k in self.argCache) delete self.argCache[k];
         console.log("Font not loaded or found yet!  Try again...");
