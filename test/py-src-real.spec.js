@@ -145,7 +145,13 @@ test('pysrc=real is pyodide-only and the flag stays default-OFF', async ({ page 
   const errors = await page.evaluate(() => window.CascadeAPI.getErrors());
   expect(errors.join('\n')).toContain('pysrc=real');
 
-  // a bare ?pyruntime=pyodide load still boots build123d-lite (default OFF)
+  // a bare ?pyruntime=pyodide load still boots build123d-lite (default OFF).
+  // That half needs vendor/pyodide, which CI does not fetch.
+  if (!(await realAvailable(page))) {
+    test.info().annotations.push({ type: 'partial',
+      description: 'vendor/pyodide not fetched — default-OFF half not run' });
+    return;
+  }
   await gotoAndReady(page, '?pyruntime=pyodide');
   const r = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
     'import build123d',
