@@ -1,4 +1,6 @@
 from .composite import Compound as Compound, Part as Part
+from .history import ShapeHistory as ShapeHistory
+from .kernel import list_shapes as list_shapes
 from .one_d import Edge as Edge, Mixin1D as Mixin1D, Wire as Wire
 from .shape_core import Joint as Joint, Shape as Shape, ShapeList as ShapeList, TOPODS as TOPODS, downcast as downcast, get_top_level_topods_shapes as get_top_level_topods_shapes, shapetype as shapetype, unwrap_topods_compound as unwrap_topods_compound
 from .two_d import Face as Face, Mixin2D as Mixin2D, Shell as Shell, sort_wires_by_build_order as sort_wires_by_build_order
@@ -6,17 +8,15 @@ from .utils import find_max_dimension as find_max_dimension
 from .zero_d import Vertex as Vertex
 from OCP.TopoDS import TopoDS_Shape as TopoDS_Shape, TopoDS_Solid, TopoDS_Wire as TopoDS_Wire
 from _typeshed import Incomplete
-from build123d.build_enums import CenterOf as CenterOf, GeomType as GeomType, Keep as Keep, Kind as Kind, Transition as Transition, Until as Until
+from bd_materials import FinishedMaterial as FinishedMaterial
+from build123d.build_enums import CenterOf as CenterOf, GeomType as GeomType, Keep as Keep, Kind as Kind, Transition as Transition, Unit as Unit, Until as Until
 from build123d.geometry import Axis as Axis, BoundBox as BoundBox, Color as Color, DEG2RAD as DEG2RAD, Location as Location, OrientedBoundBox as OrientedBoundBox, Plane as Plane, Vector as Vector, VectorLike as VectorLike
 from collections.abc import Iterable
-from typing_extensions import Self
+from typing import ClassVar
 
 class Mixin3D(Shape[TOPODS]):
     """Additional methods to add to 3D Shape classes"""
     find_intersection_points: Incomplete
-    @classmethod
-    def cast(cls, obj: TopoDS_Shape) -> Self:
-        """Returns the right type of wrapper, given a OCCT object"""
     @classmethod
     def extrude(cls, obj: Shape, direction: VectorLike) -> Edge | Face | Shell | Solid | Compound:
         """Unused - only here because Mixin1D is a subclass of Shape"""
@@ -181,10 +181,11 @@ class Solid(Mixin3D[TopoDS_Solid]):
     well-defined manner. Solid modeling operations, such as Boolean
     operations (union, intersection, and difference), are often performed on
     Solid objects to create or modify complex geometries."""
+    build123d_type: ClassVar[str]
     order: float
     material: Incomplete
     joints: Incomplete
-    def __init__(self, obj: TopoDS_Solid | Shell | None = None, label: str = '', color: Color | None = None, material: str = '', joints: dict[str, Joint] | None = None, parent: Compound | None = None) -> None:
+    def __init__(self, obj: TopoDS_Solid | Shell | None = None, label: str = '', color: Color | None = None, material: FinishedMaterial | None = None, joints: dict[str, Joint] | None = None, parent: Compound | None = None) -> None:
         """Build a solid from an OCCT TopoDS_Shape/TopoDS_Solid
 
         Args:
@@ -198,6 +199,8 @@ class Solid(Mixin3D[TopoDS_Solid]):
     @property
     def volume(self) -> float:
         """volume - the volume of this Solid"""
+    def mass(self, mass_unit: Unit = ..., length_unit: Unit = ...) -> float:
+        """mass - the mass of this Solid"""
     def touch(self, other: Shape, tolerance: float = 1e-06, found_solids: ShapeList | None = None) -> ShapeList[Vertex | Edge | Face]:
         """Find where this Solid's boundary contacts another shape.
 

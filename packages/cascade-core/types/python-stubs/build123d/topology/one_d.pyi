@@ -1,5 +1,7 @@
 from .composite import Compound as Compound, Curve as Curve, Part as Part, Sketch as Sketch
-from .shape_core import Shape as Shape, ShapeList as ShapeList, SkipClean as SkipClean, TOPODS as TOPODS, downcast as downcast, get_top_level_topods_shapes as get_top_level_topods_shapes, shapetype as shapetype, topods_dim as topods_dim, unwrap_topods_compound as unwrap_topods_compound
+from .history import ShapeHistory as ShapeHistory, tracked_subshapes as tracked_subshapes
+from .kernel import list_shapes as list_shapes
+from .shape_core import Shape as Shape, ShapeList as ShapeList, SkipClean as SkipClean, TOPODS as TOPODS, downcast as downcast, find_same_topods as find_same_topods, get_top_level_topods_shapes as get_top_level_topods_shapes, relocation_between as relocation_between, topods_dim as topods_dim, unwrap_topods_compound as unwrap_topods_compound
 from .three_d import Solid as Solid
 from .two_d import Face as Face, Shell as Shell
 from .utils import isclose_b as isclose_b
@@ -9,11 +11,11 @@ from OCP.Geom import Geom_Surface as Geom_Surface
 from OCP.Geom2d import Geom2d_Curve as Geom2d_Curve
 from OCP.GeomFill import GeomFill_TrihedronLaw as GeomFill_TrihedronLaw
 from OCP.TopoDS import TopoDS_Edge, TopoDS_Face, TopoDS_Shape as TopoDS_Shape, TopoDS_Wire
-from build123d.build_enums import AngularDirection as AngularDirection, CenterOf as CenterOf, ContinuityLevel as ContinuityLevel, FrameMethod as FrameMethod, GeomType as GeomType, Kind as Kind, PositionMode as PositionMode, Sagitta as Sagitta, Side as Side, Tangency as Tangency
+from build123d.build_enums import AngularDirection as AngularDirection, CenterOf as CenterOf, ContinuityLevel as ContinuityLevel, Convexity as Convexity, FrameMethod as FrameMethod, GeomType as GeomType, Kind as Kind, PositionMode as PositionMode, Sagitta as Sagitta, Select as Select, Side as Side, Tangency as Tangency, Unit as Unit
 from build123d.geometry import Axis as Axis, Color as Color, DEG2RAD as DEG2RAD, Location as Location, Plane as Plane, TOLERANCE as TOLERANCE, TOL_DIGITS as TOL_DIGITS, Vector as Vector, VectorLike as VectorLike, logger as logger
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import overload
+from typing import ClassVar, overload
 from typing_extensions import Self
 
 @dataclass(frozen=True)
@@ -28,7 +30,7 @@ class _WireFilletCorner:
 @dataclass(frozen=True)
 class _WireFilletSolution:
     """Replacement edges for a filleted wire corner."""
-    trimmed_topods_edges: list[TopoDS_Edge]
+    trimmed_topods_edges: list[TopoDS_Edge | None]
     fillet_topods_edge: TopoDS_Edge
 
 CANONICAL_SAMPLES: int
@@ -79,15 +81,36 @@ class Mixin1D(Shape[TOPODS]):
     def is_forward(self) -> bool:
         """Does the Edge/Wire loop forward or reverse"""
     @property
-    def is_interior(self) -> bool:
+    def convexity(self) -> Convexity:
+        """How the shape this edge was selected from sits around it.
+
+        An edge of a solid or shell is a crease between two faces, and the
+        dihedral angle through the material says which way the crease turns:
+        ``CONVEX`` on the outer edge of a box, ``CONCAVE`` at the inner corner
+        of a pocket, ``SMOOTH`` where a fillet meets the face it blends into.
+        The angle is sampled along the edge, so one that turns one way at one
+        end and the other way at the other is a ``SADDLE``. A seam edge, with
+        the same face on both sides, is ``SMOOTH``.
+
+        The faces come from ``topo_parent``, so the edge has to have been
+        selected from a shape rather than built on its own. See
+        :class:`~build_enums.Convexity`.
+
+        Raises:
+            ValueError: the edge has no ``topo_parent``; it lies on one face
+                only, as a boundary edge of a face or open shell does; or more
+                than two faces meet at it
         """
-        Check if the edge is an interior edge.
+    @property
+    def is_interior(self) -> bool:
+        """Is this a concave edge of the shape it was selected from?
 
-        An interior edge lies between surfaces that are part of the body (internal
-        to the geometry) and does not form part of the exterior boundary.
+        Equivalent to ``edge.convexity == Convexity.CONCAVE``: the material
+        closes around the edge by more than half a turn, as at the inner
+        corner of a pocket. See :attr:`convexity`.
 
-        Returns:
-            bool: True if the edge is an interior edge, False otherwise.
+        Raises:
+            ValueError: the edge cannot be classified, see :attr:`convexity`
         """
     @property
     def length(self) -> float:
@@ -110,9 +133,8 @@ class Mixin1D(Shape[TOPODS]):
     @property
     def volume(self) -> float:
         """volume - the volume of this Edge or Wire, which is always zero"""
-    @classmethod
-    def cast(cls, obj: TopoDS_Shape) -> Vertex | Edge | Wire:
-        """Returns the right type of wrapper, given a OCCT object"""
+    def mass(self, mass_unit: Unit = ..., length_unit: Unit = ...) -> float:
+        """mass - the mass of this Edge or Wire, which is always zero"""
     @classmethod
     def extrude(cls, obj: Shape, direction: VectorLike) -> Edge | Face | Shell | Solid | Compound:
         """Unused - only here because Mixin1D is a subclass of Shape"""
@@ -215,7 +237,7 @@ class Mixin1D(Shape[TOPODS]):
         Generate a location along the underlying curve.
 
         Args:
-            distance (float): distance or parameter value
+            distance (float): normalized parameter or length value
             position_mode (PositionMode, optional): position calculation mode.
                 Defaults to PositionMode.PARAMETER.
             frame_method (FrameMethod, optional): moving frame calculation method.
@@ -226,6 +248,12 @@ class Mixin1D(Shape[TOPODS]):
             x_dir (VectorLike, optional): override the x_dir to help with plane
                 creation along a 1D shape. Must be perpendicular to shapes tangent.
                 Defaults to None.
+
+        Note:
+            Numeric values are normally within the shape: ``[0.0, 1.0]`` in
+            parameter mode or ``[0.0, length]`` in length mode. Values outside
+            that range extrapolate or wrap on an Edge where its underlying curve
+            supports it, while a Wire clamps them to its first or last point.
 
         Returns:
             Location: A Location object representing local coordinate system
@@ -272,6 +300,7 @@ class Mixin1D(Shape[TOPODS]):
             closed (bool, optional): if Side!=BOTH, close the LEFT or RIGHT
                 offset. Defaults to True.
         Raises:
+            RuntimeError: 2D offset calculation failed
             RuntimeError: Multiple Wires generated
             RuntimeError: Unexpected result type
 
@@ -294,12 +323,18 @@ class Mixin1D(Shape[TOPODS]):
     def position_at(self, position: float, position_mode: PositionMode = ...) -> Vector:
         """Position At
 
-        Generate a position along the underlying Wire.
+        Generate a position along the underlying 1D shape.
 
         Args:
-            position (float): distance or parameter value
+            position (float): normalized parameter or length value
             position_mode (PositionMode, optional): position calculation mode. Defaults to
                 PositionMode.PARAMETER.
+
+        Note:
+            Numeric values are normally within the shape: ``[0.0, 1.0]`` in
+            parameter mode or ``[0.0, length]`` in length mode. Values outside
+            that range extrapolate or wrap on an Edge where its underlying curve
+            supports it, while a Wire clamps them to its first or last point.
 
         Returns:
             Vector: position on the underlying curve
@@ -380,6 +415,12 @@ class Mixin1D(Shape[TOPODS]):
             position_mode (PositionMode, optional): position calculation mode.
                 Defaults to PositionMode.PARAMETER.
 
+        Note:
+            Numeric positions are normally within the shape: ``[0.0, 1.0]`` in
+            parameter mode or ``[0.0, length]`` in length mode. Values outside
+            that range evaluate the tangent of an extrapolated or periodic Edge
+            where supported, while a Wire uses its first or last tangent.
+
         Returns:
             Vector: tangent value
         """
@@ -392,6 +433,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
     facilitating operations like filleting, chamfering, and Boolean operations. It
     serves as a building block for constructing complex structures, such as wires
     and faces."""
+    build123d_type: ClassVar[str]
     order: float
     def __init__(self, obj: TopoDS_Edge | Axis | None | None = None, label: str = '', color: Color | None = None, parent: Compound | None = None) -> None:
         """Build an Edge from an OCCT TopoDS_Shape/TopoDS_Edge
@@ -462,12 +504,12 @@ class Edge(Mixin1D[TopoDS_Edge]):
     @classmethod
     def make_constrained_arcs(cls, tangency_one: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, tangency_two: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, *, radius: float, sagitta: Sagitta = ...) -> ShapeList[Edge]:
         """
-        Create all planar circular arcs of a given radius that are tangent/contacting
-        the two provided objects on the XY plane.
+        Create all planar circular arcs of a given radius that are tangent to curve
+        inputs or pass through point inputs on the XY plane.
         Args:
             tangency_one, tangency_two
                 (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entities to be contacted/touched by the circle(s)
+                Curve tangency targets or point-incidence targets for the circle(s)
             radius (float): arc radius
             sagitta (LengthConstraint, optional): returned arc selector
                 (i.e. either the short, long or both arcs). Defaults to
@@ -486,7 +528,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         Args:
             tangency_one, tangency_two
                 (tuple[Axus | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entities to be contacted/touched by the circle(s)
+                Curve tangency targets or point-incidence targets for the circle(s)
             center_on (Axis | Edge): center must lie on this object
             sagitta (LengthConstraint, optional): returned arc selector
                 (i.e. either the short, long or both arcs). Defaults to
@@ -497,14 +539,14 @@ class Edge(Mixin1D[TopoDS_Edge]):
         """
     @overload
     @classmethod
-    def make_constrained_arcs(cls, tangency_one: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, tangency_two: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, tangency_three: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, *, sagitta: Sagitta = ...) -> ShapeList[Edge]:
+    def make_constrained_arcs(cls, tangency_one: tuple[Axis | Edge, Tangency] | Axis | Edge, tangency_two: tuple[Axis | Edge, Tangency] | Axis | Edge, tangency_three: tuple[Axis | Edge, Tangency] | Axis | Edge, *, sagitta: Sagitta = ...) -> ShapeList[Edge]:
         """
         Create planar circular arc(s) on XY tangent to three provided objects.
 
         Args:
             tangency_one, tangency_two, tangency_three
-                (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entities to be contacted/touched by the circle(s)
+                (tuple[Axis | Edge, PositionConstraint] | Axis | Edge):
+                Curve tangency targets for the circle(s)
             sagitta (LengthConstraint, optional): returned arc selector
                 (i.e. either the short, long or both arcs). Defaults to
                 LengthConstraint.SHORT.
@@ -517,13 +559,13 @@ class Edge(Mixin1D[TopoDS_Edge]):
     def make_constrained_arcs(cls, tangency_one: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, *, center: VectorLike) -> ShapeList[Edge]:
         """make_constrained_arcs
 
-        Create planar circle(s) on XY whose center is fixed and that are tangent/contacting
-        a single object.
+        Create planar circle(s) on XY whose center is fixed and that are tangent to a
+        curve input or pass through a point input.
 
         Args:
             tangency_one
                 (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entity to be contacted/touched by the circle(s)
+                Curve tangency target or point-incidence target for the circle(s)
             center (VectorLike): center position
 
         Returns:
@@ -535,14 +577,14 @@ class Edge(Mixin1D[TopoDS_Edge]):
         """make_constrained_arcs
 
         Create planar circle(s) on XY that:
-        - are tangent/contacting a single object, and
+        - are tangent to a curve input or pass through a point input, and
         - have a fixed radius, and
         - have their CENTER constrained to lie on a given locus curve.
 
         Args:
             tangency_one
                 (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entity to be contacted/touched by the circle(s)
+                Curve tangency target or point-incidence target for the circle(s)
             radius (float): arc radius
             center_on (Axis | Edge): center must lie on this object
             sagitta (LengthConstraint, optional): returned arc selector
@@ -561,7 +603,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         Args:
             tangency_one, tangency_two
                 (tuple[Edge, Tangency] | Axis | Edge):
-                Geometric entities to be contacted/touched by the line(s).
+                Curves to which the line(s) must be tangent.
 
         Returns:
             ShapeList[Edge]: tangent lines
@@ -576,7 +618,7 @@ class Edge(Mixin1D[TopoDS_Edge]):
         Args:
             tangency_one
                 (tuple[Edge, Tangency] | Edge):
-                Geometric entity to be contacted/touched by the line(s).
+                Curve to which the line(s) must be tangent.
             tangency_two (Vector):
                 Fixed point through which the line(s) must pass.
 
@@ -773,7 +815,9 @@ class Edge(Mixin1D[TopoDS_Edge]):
                 use for variational smoothing. Defaults to None.
             min_deg (int, optional): minimum spline degree. Enforced only when smoothing
                 is None. Defaults to 1.
-            max_deg (int, optional): maximum spline degree. Defaults to 6.
+            max_deg (int, optional): maximum spline degree. Defaults to 6. Raised
+                to 6 when smoothing is used, the lowest degree that can meet the
+                C2 continuity the smoothing algorithm requires.
 
         Raises:
             ValueError: B-spline approximation failed
@@ -975,10 +1019,6 @@ class Edge(Mixin1D[TopoDS_Edge]):
         Returns:
             Edge: reversed
         """
-    def to_axis(self) -> Axis:
-        """Translate a linear Edge to an Axis"""
-    def to_wire(self) -> Wire:
-        """Edge as Wire"""
     def trim(self, start: float | VectorLike, end: float | VectorLike) -> Edge:
         """trim
 
@@ -1037,6 +1077,7 @@ class Wire(Mixin1D[TopoDS_Wire]):
     components in modeling complex objects, defining boundaries for surfaces or
     solids. They store information about the connectivity and order of edges,
     allowing precise definition of paths within a 3D model."""
+    build123d_type: ClassVar[str]
     order: float
     @overload
     def __init__(self, obj: TopoDS_Wire, label: str = '', color: Color | None = None, parent: Compound | None = None) -> None:
@@ -1208,8 +1249,8 @@ class Wire(Mixin1D[TopoDS_Wire]):
         """
     def close(self) -> Wire:
         """Close a Wire"""
-    def edges(self) -> ShapeList[Edge]:
-        """edges - all the edges in this Shape"""
+    def edges(self, select: Select = ...) -> ShapeList[Edge]:
+        """edges - all the edges in this Shape, in connection order"""
     def fillet_2d(self, radius: float, vertices: Iterable[Vertex]) -> Wire:
         """fillet_2d
 
@@ -1325,8 +1366,6 @@ class Wire(Mixin1D[TopoDS_Wire]):
         Returns:
             Wire: stitched wires
         """
-    def to_wire(self) -> Wire:
-        """Return Wire - used as a pair with Edge.to_wire when self is Wire | Edge"""
     def trim(self, start: float | VectorLike, end: float | VectorLike) -> Wire:
         """Trim a wire between [start, end] normalized over total length.
 
@@ -1359,8 +1398,17 @@ def topo_explore_connected_edges(edge: Edge, parent: Shape | None = None, contin
         parent: Optional parent Shape. If None, uses edge.topo_parent.
         continuity: Minimum required continuity (C0/G0, C1/G1, C2/G2).
 
+    The edge may be a moved copy of one of the parent's edges - it shares that
+    edge's TShape at another Location - in which case the connected edges are
+    returned in the moved edge's frame.
+
     Returns:
         ShapeList[Edge]: Connected edges meeting the continuity requirement.
     """
 def topo_explore_connected_faces(edge: Edge, parent: Shape | None = None) -> list[TopoDS_Face]:
-    """Given an edge extracted from a Shape, return the topods_faces connected to it"""
+    """Given an edge extracted from a Shape, return the topods_faces connected to it
+
+    The edge may be a moved copy of one of the parent's edges - it shares that
+    edge's TShape at another Location - in which case the faces are returned in
+    the moved edge's frame. An edge the parent doesn't contain has no faces.
+    """

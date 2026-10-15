@@ -1,11 +1,14 @@
 // @ts-check
-// Tests for the upstream-export parity round: the build123d 0.11.1 __all__
-// names that build123d-lite gained (constants, enums, topology helpers,
-// singular getters, encoders, Matrix, OrientedBoundBox, the deprecated
-// tangent objects, BREP round-trips, project_workplane, FontManager).
-// Every numeric expectation below is HARDCODED from running the same script
-// through real build123d 0.11.1 in the reference venv
-// (~/Desktop/ocjs-deps/b123d-ref-venv) — see the values marked "native".
+// Tests for the upstream-export surface: the build123d __all__ names that
+// build123d-lite carries (constants, enums, topology helpers, singular
+// getters, encoders, Matrix, OrientedBoundBox, BREP round-trips,
+// project_workplane, FontManager) and, since the 0.13.0 bump, the names
+// 0.12 REMOVED (the tangent objects, LocationEncoder, to_tuple, the center
+// arcs' end_angle) and ADDED (insert, Superellipse, Base{Curve,Edge}Object,
+// export_obj, Convexity, G_PER_LB, UNITS_PER_KILOGRAM). Every numeric
+// expectation below is HARDCODED from running the same script through real
+// build123d (0.11.1 for the unchanged surface, 0.13.0 for the new one) in the
+// native venvs — see the values marked "native".
 const { test, expect } = require('@playwright/test');
 
 /** Navigate to the app and wait until it's fully ready. */
@@ -113,7 +116,7 @@ test.describe('Python mode: upstream build123d exports', () => {
     expect(c.bl_len).toBe('20');
   });
 
-  test('Matrix, Geom/Location encoders, OrientedBoundBox, FontManager', async ({ page }) => {
+  test('Matrix, GeomEncoder, OrientedBoundBox, FontManager', async ({ page }) => {
     await gotoAndReady(page);
     const code = [
       'from build123d import *',
@@ -139,10 +142,8 @@ test.describe('Python mode: upstream build123d exports', () => {
       '                object_hook=GeomEncoder.geometry_hook)',
       'print("CHK", "geom_rt", repr([round(x, 6) for x in',
       '                              tuple(rt.position) + tuple(rt.orientation)]))',
-      'rt2 = json.loads(json.dumps(dict(j=loc), cls=LocationEncoder, indent=4),',
-      '                 object_hook=LocationEncoder.location_hook)["j"]',
-      'print("CHK", "loc_rt", repr([round(x, 6) for x in',
-      '                             tuple(rt2.position) + tuple(rt2.orientation)]))',
+      '# LocationEncoder was removed in 0.12 (GeomEncoder replaces it)',
+      'print("CHK", "loc_rt", repr("LocationEncoder" in dir(__import__("build123d"))))',
       '# a multi-key dict raises through geometry_hook, exactly like upstream',
       'try:',
       '    json.loads(json.dumps(dict(a=Axis.X, b=Vector(1, 2, 3)), cls=GeomEncoder),',
@@ -182,7 +183,7 @@ test.describe('Python mode: upstream build123d exports', () => {
     expect(c.m3_v).toBe('[1.0, 2.0, 0.0]');
     expect(c.dec_v).toBe('[1.0, 2.0, 3.0]');
     expect(c.geom_rt).toBe('[1.0, 2.0, 3.0, 10.0, 20.0, 30.0]');
-    expect(c.loc_rt).toBe('[1.0, 2.0, 3.0, 10.0, 20.0, 30.0]');
+    expect(c.loc_rt).toBe('False');
     expect(c.multi).toBe("'raises'");
     expect(c.obb_size).toBe('[10.0, 20.0, 30.0]');   // native
     expect(c.obb_diag).toBe('37.416574');            // native
@@ -198,79 +199,47 @@ test.describe('Python mode: upstream build123d exports', () => {
     expect(c.dae).toBe('True');
   });
 
-  test('deprecated tangent objects match native build123d', async ({ page }) => {
+  test('0.12 removals are gone and the 0.12 additions exist (native 0.13.0)', async ({ page }) => {
     await gotoAndReady(page);
     const code = [
-      'from build123d import *',
-      '',
-      'def dump(name, e):',
-      '    p0, p1 = e @ 0, e @ 1',
-      '    print("CHK", name, repr((round(e.length, 6),',
-      '                             [round(v, 6) for v in p0],',
-      '                             [round(v, 6) for v in p1])))',
-      '',
-      'with BuildLine() as bl1:',
-      '    c = CenterArc((20, 5), 5, 0, 360)',
-      '    t = PointArcTangentLine((0, 0), c, side=Side.LEFT)',
-      'dump("patl_l", t)',
-      'with BuildLine() as bl2:',
-      '    c = CenterArc((20, 5), 5, 0, 360)',
-      '    t = PointArcTangentLine((0, 0), c, side=Side.RIGHT)',
-      'dump("patl_r", t)',
-      'with BuildLine() as bl3:',
-      '    c1 = CenterArc((0, 0), 5, 0, 360)',
-      '    c2 = CenterArc((30, 10), 8, 0, 360)',
-      '    for side in (Side.LEFT, Side.RIGHT):',
-      '        for keep in (Keep.INSIDE, Keep.OUTSIDE):',
-      '            t = ArcArcTangentLine(c1, c2, side=side, keep=keep,',
-      '                                  mode=Mode.PRIVATE)',
-      '            dump("aatl_" + side + "_" + keep, t)',
-      'with BuildLine() as bl4:',
-      '    c = CenterArc((30, 5), 6, 0, 360)',
-      '    for side in (Side.LEFT, Side.RIGHT):',
-      '        t = PointArcTangentArc((0, 0), (1, 0.4), c, side=side,',
-      '                               mode=Mode.PRIVATE)',
-      '        dump("pata_" + side, t)',
-      'with BuildLine() as bl5:',
-      '    c1 = CenterArc((0, 0), 5, 0, 360)',
-      '    c2 = CenterArc((30, 10), 8, 0, 360)',
-      '    for side in (Side.LEFT, Side.RIGHT):',
-      '        for keep in ((Keep.INSIDE, Keep.INSIDE),',
-      '                     (Keep.OUTSIDE, Keep.OUTSIDE),',
-      '                     (Keep.OUTSIDE, Keep.INSIDE)):',
-      '            t = ArcArcTangentArc(c1, c2, 40, side=side, keep=keep,',
-      '                                 mode=Mode.PRIVATE)',
-      '            dump("aata_" + side + "_" + keep[0] + "_" + keep[1], t)',
-      '# algebra mode (no builder context)',
-      'c = CenterArc((20, 5), 5, 0, 360, mode=Mode.PRIVATE)',
-      't = PointArcTangentLine((0, 0), c, side=Side.LEFT, mode=Mode.PRIVATE)',
-      'dump("alg_patl", t)',
-      'show(Box(1, 1, 1))',
-      'print("DONE_UPSTREAM")',
+      "from build123d import *",
+      "print(\"CHK\", \"consts\", repr((G_PER_LB, sorted((str(k), round(v, 9)) for k, v in UNITS_PER_KILOGRAM.items()))))",
+      "print(\"CHK\", \"unit\", repr((Unit.MM == \"mm\", Unit.IN == \"in\", Unit.LB == \"lb\", str(Unit.CM) if False else Unit.CM == \"cm\")))",
+      "print(\"CHK\", \"convexity\", repr([Convexity.CONVEX.name, Convexity.SADDLE.name]))",
+      "for name in (\"PointArcTangentLine\", \"ArcArcTangentLine\", \"PointArcTangentArc\", \"ArcArcTangentArc\", \"LocationEncoder\", \"Workplanes\"):",
+      "    print(\"CHK\", \"gone_\" + name, repr(name in dir(__import__(\"build123d\"))))",
+      "print(\"CHK\", \"new_names\", repr(all(n in dir(__import__(\"build123d\")) for n in (\"insert\", \"Superellipse\", \"BaseCurveObject\", \"BaseEdgeObject\", \"export_obj\", \"Convexity\", \"G_PER_LB\", \"UNITS_PER_KILOGRAM\"))))",
+      "print(\"CHK\", \"no_to_tuple\", repr((hasattr(Vector(1, 2, 3), \"to_tuple\"), hasattr(Location(), \"to_tuple\"), hasattr(Vertex(1, 2, 3), \"to_tuple\"))))",
+      "print(\"CHK\", \"loc_tuple\", repr([tuple(round(x, 6) for x in v) for v in Location((1, 2, 3), (10, 20, 30))]))",
+      "try:",
+      "    ParabolicCenterArc((0, 0), 0.25, -60, 60)",
+      "    print(\"CHK\", \"arc_end\", repr(\"accepted\"))",
+      "except TypeError:",
+      "    print(\"CHK\", \"arc_end\", repr(\"TypeError\"))",
+      "print(\"CHK\", \"arcs\", repr([round(EllipticalCenterArc((0, 0), 2, 3, 0, arc_size=90).length, 6),",
+      "                           round(ParabolicCenterArc((0, 0), 0.25, -60, arc_size=120).length, 6),",
+      "                           round(HyperbolicCenterArc((0, 0), 0.5, 1, 0, arc_size=180).length, 6)]))",
+      "print(\"CHK\", \"btypes\", repr([Box(1, 1, 1).build123d_type, Vector().build123d_type, Pos(1, 2, 3).build123d_type, BuildPart.build123d_type]))",
+      "show(Box(1, 1, 1))",
+      "print(\"DONE_UPSTREAM\")",
     ].join('\n');
     const c = await runChecks(page, code);
-    // every value below is the native build123d 0.11.1 result, verbatim
-    // (lengths and endpoints to 6 decimals)
-    const native = {
-      patl_l: '(20.0, [0.0, 0.0, 0.0], [17.647059, 9.411765, 0.0])',
-      patl_r: '(20, [0.0, 0.0, 0.0], [20.0, 0.0, 0.0])',
-      aatl_LEFT_INSIDE: '(28.827071, [0.508646, 4.974061, 0.0], [29.186166, 2.041503, 0.0])',
-      aatl_LEFT_OUTSIDE: '(31.480152, [-2.024008, 4.572023, 0.0], [26.761588, 17.315237, 0.0])',
-      aatl_RIGHT_INSIDE: '(28.827071, [3.391354, -3.674061, 0.0], [24.573834, 15.878497, 0.0])',
-      aatl_RIGHT_OUTSIDE: '(31.480152, [1.124008, -4.872023, 0.0], [31.798412, 2.204763, 0.0])',
-      pata_LEFT: '(29.918505, [0.0, 0.0, 0.0], [27.960113, 10.642593, 0.0])',
-      pata_RIGHT: '(28.322732, [-0.0, 0.0, 0.0], [27.575763, -0.488449, 0.0])',
-      aata_LEFT_INSIDE_INSIDE: '(28.747011, [22.959013, 13.797961, 0.0], [1.749417, -4.683966, 0.0])',
-      aata_LEFT_OUTSIDE_OUTSIDE: '(27.640454, [24.508159, 15.817189, 0.0], [-0.327894, 4.989237, 0.0])',
-      aata_LEFT_OUTSIDE_INSIDE: '(31.169002, [32.526072, 2.409285, 0.0], [2.210635, 4.484762, 0.0])',
-      aata_RIGHT_INSIDE_INSIDE: '(28.747011, [-1.410846, 4.796823, 0.0], [26.645987, 2.737039, 0.0])',
-      aata_RIGHT_OUTSIDE_OUTSIDE: '(27.640454, [2.731227, -4.188126, 0.0], [29.096841, 2.051145, 0.0])',
-      aata_RIGHT_OUTSIDE_INSIDE: '(31.169002, [4.459365, -2.261429, 0.0], [27.466428, 17.588215, 0.0])',
-      alg_patl: '(20.0, [0.0, 0.0, 0.0], [17.647059, 9.411765, 0.0])',
-    };
-    for (const [name, value] of Object.entries(native)) {
-      expect(c[name], name).toBe(value);
-    }
+    // every value below is the native build123d 0.13.0 result, verbatim
+    expect(c["consts"], "consts").toBe("(453.59237, [('g', 1000.0), ('kg', 1), ('lb', 2.204622622)])");
+    expect(c["unit"], "unit").toBe("(True, True, True, True)");
+    expect(c["convexity"], "convexity").toBe("['CONVEX', 'SADDLE']");
+    expect(c["gone_PointArcTangentLine"], "gone_PointArcTangentLine").toBe("False");
+    expect(c["gone_ArcArcTangentLine"], "gone_ArcArcTangentLine").toBe("False");
+    expect(c["gone_PointArcTangentArc"], "gone_PointArcTangentArc").toBe("False");
+    expect(c["gone_ArcArcTangentArc"], "gone_ArcArcTangentArc").toBe("False");
+    expect(c["gone_LocationEncoder"], "gone_LocationEncoder").toBe("False");
+    expect(c["gone_Workplanes"], "gone_Workplanes").toBe("False");
+    expect(c["new_names"], "new_names").toBe("True");
+    expect(c["no_to_tuple"], "no_to_tuple").toBe("(False, False, False)");
+    expect(c["loc_tuple"], "loc_tuple").toBe("[(1.0, 2.0, 3.0), (10.0, 20.0, 30.0)]");
+    expect(c["arc_end"], "arc_end").toBe("'TypeError'");
+    expect(c["arcs"], "arcs").toBe("[3.96636, 3.171186, 3.891089]");
+    expect(c["btypes"], "btypes").toBe("['Part', 'Vector', 'Location', 'BuildPart']");
   });
 
   test('BREP round-trip and project_workplane match native', async ({ page }) => {

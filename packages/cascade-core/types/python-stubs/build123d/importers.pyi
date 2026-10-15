@@ -1,11 +1,11 @@
 from _typeshed import Incomplete
-from build123d.build_common import CM as CM, FT as FT, IN as IN, M as M, MC as MC, MM as MM
+from build123d.build_constants import CM as CM, FT as FT, IN as IN, M as M, MC as MC, MM as MM
 from build123d.build_enums import Align as Align, Unit as Unit
 from build123d.geometry import Color as Color, Location as Location, TOLERANCE as TOLERANCE, TOL_DIGITS as TOL_DIGITS, Vector as Vector, to_align_offset as to_align_offset
 from build123d.topology import Compound as Compound, Edge as Edge, Face as Face, Shape as Shape, ShapeList as ShapeList, Shell as Shell, Solid as Solid, Vertex as Vertex, Wire as Wire, downcast as downcast
 from os import PathLike
 from pathlib import Path
-from typing import Literal, TextIO, overload
+from typing import Literal, TextIO
 
 topods_lut: Incomplete
 
@@ -68,7 +68,22 @@ def import_svg_as_buildline_code(file_name: PathLike | str | bytes, precision: i
     Returns:
         tuple[str, str]: code, builder instance name
     """
-@overload
-def import_svg(svg_file: str | Path | TextIO, *, flip_y: bool = True, align: Align | tuple[Align, Align] | None = ..., ignore_visibility: bool = False, label_by: Literal['id', 'class', 'inkscape:label'] | str = 'id') -> ShapeList[Wire | Face]: ...
-@overload
-def import_svg(svg_file: str | Path | TextIO, *, flip_y: bool = True, align: Align | tuple[Align, Align] | None = ..., ignore_visibility: bool = False, label_by: Literal['id', 'class', 'inkscape:label'] | str = 'id', is_inkscape_label: bool | None = None) -> ShapeList[Wire | Face]: ...
+def import_svg(svg_file: str | Path | TextIO, *, flip_y: bool = True, align: Align | tuple[Align, Align] | None = ..., ignore_visibility: bool = False, label_by: Literal['id', 'class', 'inkscape:label'] | str = 'id') -> ShapeList[Wire | Face]:
+    '''import_svg
+
+    Args:
+        svg_file (Union[str, Path, TextIO]): svg file
+        flip_y (bool, optional): flip objects to compensate for svg orientation. Defaults to True.
+        align (Align | tuple[Align, Align] | None, optional): alignment of the SVG\'s viewbox,
+            if None, the viewbox\'s origin will be at `(0,0,0)`. Defaults to Align.MIN.
+        ignore_visibility (bool, optional): Defaults to False.
+        label_by (str, optional): XML attribute to use for imported shapes\' `label` property.
+            Defaults to "id".
+            Use `inkscape:label` to read labels set from Inkscape\'s "Layers and Objects" panel.
+
+    Raises:
+        ValueError: unexpected shape type
+
+    Returns:
+        ShapeList[Union[Wire, Face]]: objects contained in svg
+    '''

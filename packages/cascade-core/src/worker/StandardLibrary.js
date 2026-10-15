@@ -567,15 +567,26 @@ function _boolOpH(kind, a, b, state) {
     : (kind === 'cut' ? new self.oc.BRepAlgoAPI_Cut_1() : new self.oc.BRepAlgoAPI_Common_1());
   const args = new self.oc.TopTools_ListOfShape(); args.Append(a);
   const tools = new self.oc.TopTools_ListOfShape(); tools.Append(b);
-  op.SetArguments(args); op.SetTools(tools);
-  op.SetNonDestructive(true);
-  op.Build(new self.oc.Message_ProgressRange_1());
-  const shape = op.Shape();
-  if (state && state.ok) {
-    const handle = op.History();
-    state.hist = HistMerge(state.hist, handle.IsNull() ? null : handle.get());
+  const range = new self.oc.Message_ProgressRange_1();
+  try {
+    op.SetArguments(args); op.SetTools(tools);
+    op.SetNonDestructive(true);
+    op.Build(range);
+    const shape = op.Shape();  // a copy: survives deleting the op
+    if (state && state.ok) {
+      const handle = op.History();
+      if (!handle.IsNull()) {
+        // chain into the state's OWN record, so the op (and its whole
+        // boolean data structure) can be released right away
+        if (!state.hist) { state.hist = new self.oc.BRepTools_History(); }
+        state.hist.Merge_2(handle.get());
+      }
+      handle.delete();
+    }
+    return shape;
+  } finally {
+    op.delete(); args.delete(); tools.delete(); range.delete();
   }
-  return shape;
 }
 
 /** Merge a ShapeUpgrade_UnifySameDomain's record into `state`. */
@@ -583,8 +594,15 @@ function _histMergeUnify(state, fusor) {
   if (!state || !state.ok) { return; }
   try {
     const handle = fusor.History_1();
-    state.hist = HistMerge(state.hist, handle.IsNull() ? null : handle.get());
-  } catch (e) { state.ok = false; state.hist = null; }
+    if (!handle.IsNull()) {
+      if (!state.hist) { state.hist = new self.oc.BRepTools_History(); }
+      state.hist.Merge_2(handle.get());
+    }
+    handle.delete();
+  } catch (e) {
+    if (state.hist) { state.hist.delete(); }
+    state.ok = false; state.hist = null;
+  }
 }
 
 /** The record an operation left on its result: [hist|null, args, tools]
@@ -846,7 +864,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges, history) {
         if (!rebuilt) { throw fuseErr; }
         console.log("Union: BRepAlgoAPI_Fuse raised on these operands (known OCCT 8.0.1 wasm fault family); rebuilt the union from the General-Fuse partition.");
         combined = rebuilt;
-        if (hstate) { hstate.ok = false; hstate.hist = null; }
+        if (hstate) { if (hstate.hist) { hstate.hist.delete(); } hstate.ok = false; hstate.hist = null; }
       }
     }
 
@@ -859,7 +877,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges, history) {
       if (rebuilt && _quickVolume(rebuilt) >= maxInput * 0.999 - 1e-9) {
         console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); rebuilt the union from the General-Fuse partition.");
         combined = rebuilt;
-        if (hstate) { hstate.ok = false; hstate.hist = null; }
+        if (hstate) { if (hstate.hist) { hstate.hist.delete(); } hstate.ok = false; hstate.hist = null; }
       } else {
         // Third try: the LIST-based BRepAlgoAPI_Fuse takes a different
         // kernel route than the fork's OCJS.BooleanFuse and sometimes
@@ -879,8 +897,10 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges, history) {
             combined = listFused;
             if (hstate) {
               const handle = fuse.History();
+              if (hstate.hist) { hstate.hist.delete(); }
               hstate.ok = true;
-              hstate.hist = handle.IsNull() ? null : HistMerge(null, handle.get());
+              hstate.hist = handle.IsNull() ? null : HistMerge(handle.get());
+              handle.delete();
             }
           }
         } catch (e) { /* keep the (guarded) original result */ }
@@ -896,6 +916,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges, history) {
         let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
         combined = fusor.Shape();
         _histMergeUnify(hstate, fusor);
+        fusor.delete();
       } catch (unifyErr) {
         console.log("Union: UnifySameDomain raised on this result (known OCCT 8.0.1 wasm fault family); keeping the un-unified fuse result.");
       }
@@ -962,6 +983,7 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
       let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(difference, true, true, false); fusor.Build();
       difference = fusor.Shape();
       _histMergeUnify(hstate, fusor);
+      fusor.delete();
     }
 
     difference.hash = self.ComputeHash(arguments);
@@ -1016,6 +1038,7 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges, his
       let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(intersected, true, true, false); fusor.Build();
       intersected = fusor.Shape();
       _histMergeUnify(hstate, fusor);
+      fusor.delete();
     }
 
     if (hstate && objectsToIntersect.length > 1) {

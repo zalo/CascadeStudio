@@ -3748,6 +3748,12 @@ class Mixin1D(Shape):
             out.append(Edge.make_line(pnt, pnt + kappa_dir * length))
         return out
 
+    def common_plane(self, *lines, tolerance=1e-6):
+        """The plane containing this and the given edges/wires, or None
+        (build123d Mixin1D.common_plane, including its CPython-set-order
+        choice of normal sign - see _cpy_set_order)."""
+        return _common_plane([self] + list(lines), tolerance)
+
     @property
     def convexity(self):
         """How the shape this edge was selected from sits around it
@@ -7056,29 +7062,6 @@ class PolarLocations(LocationList):
         LocationList.__init__(self, locs)
 
 
-class Workplanes(LocationList):
-    """with Workplanes(*planes): — fan objects out over full plane bases.
-    The location-fanout stack (Locations/GridLocations/PolarLocations)
-    always carries complete Locations, and a Plane's basis IS its
-    location (rotation + origin), so Workplanes shares that exact code
-    path: every object created inside is replicated onto each plane with
-    the plane's orientation applied — 0.11.1 semantics."""
-
-    def __init__(self, *objs):
-        locs = []
-        for o in objs:
-            if isinstance(o, Plane):
-                locs.append(o.location)
-            elif isinstance(o, Location):
-                locs.append(Location(o))
-            elif isinstance(o, Face):
-                locs.append(Plane(o).location)
-            else:
-                raise TypeError('Workplanes expects Planes, Faces or '
-                                'Locations')
-        LocationList.__init__(self, locs or [Location()])
-
-
 # ----------------------------------------------------- object creation ---
 
 def _norm_align(align, n):
@@ -8315,6 +8298,201 @@ def _closest_on_curve(samples, p):
     return dist, tuple(q), e0, u
 
 
+# --- CPython set ordering (for upstream code that iterates list(set(...))) -
+# build123d's Mixin1D.common_plane picks its plane from the max-area triangle
+# over list(set(points)), so the plane normal's SIGN follows CPython's set
+# iteration order of Vector keys (tuples of floats rounded to 5 digits). These
+# helpers reproduce CPython 3.11+'s float hash, xxHash tuple hash and set
+# table probing exactly (validated against CPython 3.13 on random keys), so
+# lite's common_plane - and DoubleTangentArc's TOP/BOTTOM - agree on every
+# interpreter.
+_M64 = (1 << 64) - 1
+_P61 = (1 << 61) - 1
+
+
+def _frexp(v):
+    if v == 0.0:
+        return 0.0, 0
+    a = abs(v)
+    e = int(math.floor(math.log2(a))) + 1
+    m = a / (2.0 ** e)
+    while m >= 1.0:
+        m /= 2.0
+        e += 1
+    while m < 0.5:
+        m *= 2.0
+        e -= 1
+    return (m if v > 0 else -m), e
+
+
+def _cpy_hash_float(v):
+    m, e = _frexp(float(v))
+    sign = 1
+    if m < 0:
+        sign = -1
+        m = -m
+    x = 0
+    while m:
+        x = ((x << 28) & _P61) | (x >> 33)
+        m *= 268435456.0
+        e -= 28
+        y = int(m)
+        m -= y
+        x += y
+        if x >= _P61:
+            x -= _P61
+    if e >= 0:
+        e = e % 61
+    else:
+        e = 60 - ((-1 - e) % 61)
+    x = ((x << e) & _P61) | (x >> (61 - e))
+    x = x * sign
+    if x == -1:
+        x = -2
+    return x
+
+
+def _cpy_hash_tuple(t):
+    acc = 2870177450012600261
+    for item in t:
+        lane = _cpy_hash_float(item) & _M64
+        acc = (acc + lane * 14029467366897019727) & _M64
+        acc = ((acc << 31) | (acc >> 33)) & _M64
+        acc = (acc * 11400714785074694791) & _M64
+    acc = (acc + (len(t) ^ (2870177450012600261 ^ 3527539))) & _M64
+    if acc == _M64:
+        return 1546275796
+    return acc - (1 << 64) if acc >> 63 else acc
+
+
+def _cpy_set_order(items, key):
+    """The order list(set(items)) has on CPython, items equal (and hashed)
+    by key(item) - a tuple of floats."""
+    size = 8
+    table = [None] * size
+    fill = 0
+
+    def insert_clean(tab, mask, entry):
+        h = entry[1]
+        perturb = h & _M64
+        i = perturb & mask
+        while True:
+            if tab[i] is None:
+                tab[i] = entry
+                return
+            if i + 9 <= mask:
+                for j in range(1, 10):
+                    if tab[i + j] is None:
+                        tab[i + j] = entry
+                        return
+            perturb >>= 5
+            i = (i * 5 + 1 + perturb) & mask
+    for item in items:
+        k = key(item)
+        h = _cpy_hash_tuple(k)
+        mask = size - 1
+        perturb = h & _M64
+        i = perturb & mask
+        done = False
+        while not done:
+            probes = 9 if i + 9 <= mask else 0
+            j = i
+            for _p in range(probes + 1):
+                ent = table[j]
+                if ent is None:
+                    table[j] = (item, h, k)
+                    fill += 1
+                    done = True
+                    break
+                if ent[1] == h and ent[2] == k:
+                    done = True
+                    break
+                j += 1
+            if done:
+                break
+            perturb >>= 5
+            i = (i * 5 + 1 + perturb) & mask
+        if fill * 5 >= mask * 3:
+            minused = fill * 2 if fill > 50000 else fill * 4
+            newsize = 8
+            while newsize <= minused:
+                newsize <<= 1
+            newtab = [None] * newsize
+            for ent in table:
+                if ent is not None:
+                    insert_clean(newtab, newsize - 1, ent)
+            table = newtab
+            size = newsize
+    return [ent[0] for ent in table if ent is not None]
+
+
+def _vector_key5(v):
+    return (round(v.X, 5) + 0.0, round(v.Y, 5) + 0.0, round(v.Z, 5) + 0.0)
+
+
+def _common_plane(lines, tolerance=1e-6):
+    """build123d Mixin1D.common_plane over the given edges/wires: the plane
+    containing them all (None if there is none), centred on the lines."""
+    all_lines = [l for l in lines if l is not None]
+    all_edges = []
+    for l in all_lines:
+        all_edges.extend(l.edges())
+    result = None
+    if all(e.geom_type == GeomType.LINE for e in all_edges):
+        axes = [Axis(e @ 0, e % 0) for e in all_edges]
+        coaxial = True
+        for a0 in axes:
+            for a1 in axes:
+                d0, d1 = Vector(a0.direction), Vector(a1.direction)
+                if d0.cross(d1).length > 1e-5:
+                    coaxial = False
+                off = Vector(a1.position) - Vector(a0.position)
+                if off.cross(d0).length > 1e-5:
+                    coaxial = False
+        if coaxial:
+            result = Plane(axes[0].position,
+                           z_dir=Plane(axes[0].position,
+                                       z_dir=axes[0].direction).x_dir)
+    if result is None:
+        points = []
+        for line in all_lines:
+            is_line = isinstance(line, Edge) and line.geom_type == GeomType.LINE
+            n = 2 if is_line else 8
+            points.extend([Vector(line.position_at(i / (n - 1)))
+                           for i in range(n)])
+        points = _cpy_set_order(points, _vector_key5)
+        extreme_areas = {}
+        count = len(points)
+        for a in range(count):
+            for b in range(a + 1, count):
+                for c in range(b + 1, count):
+                    v1 = points[b] - points[a]
+                    v2 = points[c] - points[a]
+                    extreme_areas[0.5 * v1.cross(v2).length] = \
+                        (points[a], points[b], points[c])
+        if not extreme_areas:
+            return None
+        extremes = extreme_areas[_stable_sorted(list(extreme_areas.keys()))[-1]]
+        x_dir = (extremes[1] - extremes[0]).normalized()
+        z_dir = (extremes[2] - extremes[0]).cross(x_dir)
+        if z_dir.length <= 1e-12:
+            return None
+        origin = (extremes[0] + extremes[1] + extremes[2]) * (1.0 / 3.0)
+        c_plane = Plane(origin, z_dir=z_dir)
+        zn = Vector(c_plane.z_dir)
+        for p in points:
+            if abs((p - Vector(c_plane.origin)).dot(zn)) > tolerance:
+                return None
+        result = c_plane
+    total = Vector(0, 0, 0)
+    for l in all_lines:
+        total = total + Vector(l.position_at(0.5))
+    center = total * (1.0 / len(all_lines))
+    zn = Vector(result.z_dir)
+    shift = (center - Vector(result.origin)).dot(zn)
+    return result.shift_origin(center - zn * shift)
+
+
 def DoubleTangentArc(pnt, tangent, other, keep=Keep.TOP, mode=Mode.ADD):
     """Arc tangent to a point/tangent pair AND to another curve.
     COMPROMISE(double-tangent-arc): upstream solves radius with
@@ -8328,9 +8506,13 @@ def DoubleTangentArc(pnt, tangent, other, keep=Keep.TOP, mode=Mode.ADD):
         raise ValueError('Only the TOP or BOTTOM options are supported')
     arc_pt = _v3(pnt)
     t = Vector(tangent).normalized()
-    # BuildLine geometry is local-XY planar; upstream flips the derived
-    # common plane, making the rotation axis -Z
-    axis_dir = (0.0, 0.0, -1.0)
+    # upstream: workplane = -common_plane(Line(pnt, pnt + tangent), *edges)
+    # ("flip to help with TOP/BOTTOM"); the rotation axis is its z
+    coplane = _common_plane([Edge.make_line(arc_pt, Vector(arc_pt) + t)] +
+                            list(other.edges()))
+    if coplane is None:
+        raise ValueError('DoubleTangentArc only works on a single plane')
+    axis_dir = tuple(-Vector(coplane.z_dir))
     samples = _sample_curve(other, 512)
     bb = other.bounding_box()
     mins = [min(bb.min[i], arc_pt[i]) for i in range(3)]
@@ -11947,6 +12129,220 @@ def shuffle(x):
     for i in range(len(x) - 1, 0, -1):
         j = _randbelow(i + 1)
         x[i], x[j] = x[j], x[i]
+`,
+  _bd_materials_shim: `
+# bd_materials shim (build123d-lite): the materials API build123d 0.12+
+# documents (resolve/material_names, the category modules' family
+# functions, custom_<category>, finishes, core.PROPERTY_UNITS) over lite's
+# embedded name table. COMPROMISE(materials): grades carry name, family,
+# category and density only; finishes and processes are inert records.
+# build123d is imported lazily: shims load before build123d-lite does.
+
+_FAMILIES = """
+abs_:plastics alloy_steel:metals aluminum:metals american_cherry:wood
+asa:plastics ash:wood beech:wood birch:wood borosilicate:glass
+brass:metals bronze:metals cardboard:paper castable:resins ceramic:resins
+cfrp:plastics copper:metals engineered_wood:wood esd:resins felt:textile
+flexible:resins foamboard:paper fr4:plastics gold:metals hardwood:wood
+high_temp:resins leather:textile magnesium:metals maple:wood mdf:wood
+mild_steel:metals nylon:plastics oak:wood osb:wood paper:paper pc:plastics
+pe:plastics peek:plastics petg:plastics phenolic:plastics pine:wood
+pla:plastics pmma:plastics pom:plastics pp:plastics pps:plastics
+ptfe:plastics rubber:plastics silver:metals soda_lime:glass softwood:wood
+spring_steel:metals spruce:wood stainless:metals standard:resins
+titanium:metals tool_steel:metals tough:resins tpu:plastics
+transparent:resins walnut:wood woven:textile
+"""
+
+PROPERTY_UNITS = {
+    'areal_density': 'g/m\\u00b2',
+    'compressive_strength_parallel': 'MPa',
+    'density': 'kg/m\\u00b3',
+    'elongation_at_break': '%',
+    'hardness': 'per hardness_scale',
+    'janka_hardness': 'N',
+    'modulus_of_elasticity': 'GPa',
+    'modulus_of_rupture': 'MPa',
+    'poisson_ratio': '',
+    'shear_modulus': 'GPa',
+    'shear_strength': 'MPa',
+    'tensile_strength': 'MPa',
+    'thickness': 'mm',
+    'yield_strength': 'MPa',
+    'glass_transition_temperature': '\\u00b0C',
+    'heat_deflection_temperature': '\\u00b0C',
+    'max_service_temp': '\\u00b0C',
+    'melting_temperature': '\\u00b0C',
+    'specific_heat_capacity': 'J/(kg\\u00b7K)',
+    'thermal_conductivity': 'W/(m\\u00b7K)',
+    'thermal_expansion': '1/K',
+}
+
+
+def _b():
+    import build123d
+    return build123d
+
+
+def resolve(name):
+    return _b()._resolve_material(name)
+
+
+def material_names():
+    return _b()._material_names()
+
+
+def canonical_name(material):
+    return _b()._canonical_material_name(material)
+
+
+def factory(name):
+    def make(**kwargs):
+        return _family_material(name, None, kwargs)
+    return make
+
+
+def _family_material(key, grade, kwargs):
+    b = _b()
+    fm = b._resolve_material(grade if isinstance(grade, str) else key)
+    density = kwargs.get('density')
+    if density is not None:
+        fm.material.density = float(density)
+    for attr in ('finish', 'process', 'color', 'thickness_mm', 'opacity',
+                 'roughness', 'scale', 'rotation', 'pbr'):
+        if kwargs.get(attr) is not None:
+            setattr(fm, attr, kwargs[attr])
+    return fm
+
+
+class _Category:
+    """One bd_materials catalog module (metals, plastics, wood, ...)."""
+
+    def __init__(self, name, category):
+        self.__name__ = 'bd_materials.materials.' + name
+        self._category = category
+
+
+def _make_family(key):
+    def family(grade=None, **kwargs):
+        return _family_material(key, grade, kwargs)
+    return family
+
+
+def _make_custom(category):
+    def custom(name, density, family=None, **kwargs):
+        b = _b()
+        fm = b._FinishedMaterial(b._MaterialGrade(name, family or name,
+                                                  category, float(density)))
+        for attr in ('finish', 'process', 'color', 'thickness_mm', 'opacity',
+                     'roughness', 'pbr'):
+            if kwargs.get(attr) is not None:
+                setattr(fm, attr, kwargs[attr])
+        return fm
+    return custom
+
+
+_CATEGORY = {'metals': 'metal', 'plastics': 'plastic', 'resins': 'resin',
+             'glass': 'glass', 'wood': 'wood', 'paper': 'paper',
+             'textile': 'textile'}
+metals = _Category('metals', 'metal')
+plastics = _Category('plastics', 'plastic')
+resins = _Category('resins', 'resin')
+glass = _Category('glass', 'glass')
+wood = _Category('wood', 'wood')
+paper = _Category('paper', 'paper')
+textile = _Category('textile', 'textile')
+_MODULES = {'metals': metals, 'plastics': plastics, 'resins': resins,
+            'glass': glass, 'wood': wood, 'paper': paper, 'textile': textile}
+for _entry in _FAMILIES.split():
+    _key, _mod = _entry.split(':')
+    setattr(_MODULES[_mod], _key, _make_family(_key.rstrip('_')))
+for _mod in _MODULES:
+    setattr(_MODULES[_mod], 'custom_' + _CATEGORY[_mod],
+            _make_custom(_CATEGORY[_mod]))
+
+
+class Finish:
+    def __init__(self, name, notes=None):
+        self.name = name
+        self.notes = notes
+
+    def __repr__(self):
+        return 'Finish(name=' + repr(self.name) + ', notes=' + \
+            repr(self.notes) + ')'
+
+
+class AppliedFinish:
+    def __init__(self, finish, color=None, sheen=None, scale=(1.0, 1.0),
+                 rotation=0.0):
+        self.finish = finish
+        self.color = color
+        self.sheen = sheen
+        self.scale = scale
+        self.rotation = rotation
+
+    def __repr__(self):
+        return ('AppliedFinish(finish=' + repr(self.finish) + ', color=' +
+                repr(self.color) + ', sheen=' + repr(self.sheen) +
+                ', scale=' + repr(self.scale) + ', rotation=' +
+                repr(self.rotation) + ')')
+
+
+def _finish(label):
+    def apply(color=None, sheen=None, scale=(1.0, 1.0), rotation=0.0):
+        return AppliedFinish(Finish(label), color, sheen, scale, rotation)
+    return apply
+
+
+bead_blast = _finish('Bead Blast')
+brushed = _finish('Brushed')
+fine_sanding = _finish('Fine Sanding')
+smooth_machining = _finish('Smooth Machining')
+electropolish = _finish('Electropolish')
+anodize = _finish('Anodize')
+chem_film = _finish('Chem Film')
+conductive_oxidation = _finish('Conductive Oxidation')
+black_oxide = _finish('Black Oxide')
+passivate = _finish('Passivate')
+pickle = _finish('Pickle')
+dye = _finish('Dye')
+chrome = _finish('Chrome')
+gold_plate = _finish('Gold Plate')
+nickel_plate = _finish('Nickel Plate')
+silver_plate = _finish('Silver Plate')
+tin_plate = _finish('Tin Plate')
+pvd = _finish('Pvd')
+zinc_plate = _finish('Zinc Plate')
+vacuum_plating = _finish('Vacuum Plating')
+powder_coat = _finish('Powder Coat')
+spray_paint = _finish('Spray Paint')
+electrophoresis = _finish('Electrophoresis')
+laser_engrave = _finish('Laser Engrave')
+etch = _finish('Etch')
+silkscreen = _finish('Silkscreen')
+
+
+class _Namespace:
+    pass
+
+
+finishes = _Namespace()
+for _name in ['bead_blast', 'brushed', 'fine_sanding', 'smooth_machining', 'electropolish', 'anodize', 'chem_film', 'conductive_oxidation', 'black_oxide', 'passivate', 'pickle', 'dye', 'chrome', 'gold_plate', 'nickel_plate', 'silver_plate', 'tin_plate', 'pvd', 'zinc_plate', 'vacuum_plating', 'powder_coat', 'spray_paint', 'electrophoresis', 'laser_engrave', 'etch', 'silkscreen']:
+    setattr(finishes, _name, globals()[_name])
+core = _Namespace()
+core.PROPERTY_UNITS = PROPERTY_UNITS
+`,
+  bd_materials: `
+# Package marker (see the scipy shim) for the bd_materials.* submodules.
+if '__path__' not in globals():
+    __path__ = []
+from _bd_materials_shim import resolve, material_names, canonical_name, factory, metals, plastics, resins, glass, wood, paper, textile, finishes, core
+`,
+  'bd_materials.core': `
+from _bd_materials_shim import PROPERTY_UNITS
+`,
+  'bd_materials.finishes': `
+from _bd_materials_shim import Finish, AppliedFinish, bead_blast, brushed, fine_sanding, smooth_machining, electropolish, anodize, chem_film, conductive_oxidation, black_oxide, passivate, pickle, dye, chrome, gold_plate, nickel_plate, silver_plate, tin_plate, pvd, zinc_plate, vacuum_plating, powder_coat, spray_paint, electrophoresis, laser_engrave, etch, silkscreen
 `,
   _scipy_shim: `
 # scipy shim implementation module (imported by the 'scipy' package shims).

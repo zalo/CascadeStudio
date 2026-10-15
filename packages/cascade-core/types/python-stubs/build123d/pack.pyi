@@ -1,6 +1,6 @@
 from build123d.geometry import Location as Location, Pos as Pos
 from build123d.topology.shape_core import Shape as Shape
-from collections.abc import Callable as Callable, Collection
+from collections.abc import Collection
 
 def pack(objects: Collection[Shape], padding: float, align_z: bool = False) -> Collection[Shape]:
     """Pack objects in a squarish area in Plane.XY.

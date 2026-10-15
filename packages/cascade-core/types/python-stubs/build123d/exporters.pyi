@@ -1,9 +1,9 @@
 import xml.etree.ElementTree as ET
 from OCP.Geom import Geom_BezierCurve as Geom_BezierCurve
 from _typeshed import Incomplete
-from build123d.build_common import UNITS_PER_METER as UNITS_PER_METER
+from build123d.build_constants import UNITS_PER_METER as UNITS_PER_METER
 from build123d.build_enums import GeomType as GeomType, Unit as Unit
-from build123d.geometry import Color as Color, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike
+from build123d.geometry import Color as Color, ColorLike as ColorLike, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike
 from build123d.topology import BoundBox as BoundBox, Compound as Compound, Edge as Edge, Shape as Shape, Wire as Wire
 from collections.abc import Iterable
 from enum import Enum
@@ -11,7 +11,7 @@ from ezdxf.colors import RGB
 from io import BytesIO
 from os import PathLike
 from typing import TypeAlias
-from typing_extensions import Self
+from typing_extensions import Self, sentinel
 
 PathSegment: TypeAlias
 
@@ -207,12 +207,12 @@ class ExportSVG(Export2D):
             should fit the strokes of the shapes. Defaults to True.
         precision (int, optional): The number of decimal places used for rounding
             coordinates in the SVG. Defaults to 6.
-        fill_color (ColorIndex |  RGB |  None, optional): The default fill color
-            for shapes. It can be specified as a ColorIndex, an RGB tuple, or None.
-            Defaults to None.
-        line_color (ColorIndex |  RGB |  None, optional): The default line color for
-            shapes. It can be specified as a ColorIndex or an RGB tuple, or None.
-            Defaults to Export2D.DEFAULT_COLOR_INDEX.
+        fill_color (ColorLike | None, optional): The fill color for shapes. When
+            omitted, Face colors are used, falling back to no fill. Defaults to
+            INHERIT_COLOR.
+        line_color (ColorLike | None, optional): The line color for shapes. When
+            omitted, Edge and Wire colors are used, falling back to black. Defaults
+            to INHERIT_COLOR.
         line_weight (float, optional): The default line weight (stroke width) for
             shapes, in millimeters. Defaults to Export2D.DEFAULT_LINE_WEIGHT.
         line_type (LineType, optional): The default line type for shapes. It should be
@@ -227,7 +227,7 @@ class ExportSVG(Export2D):
         .. code-block:: python
 
             exporter = ExportSVG(unit=Unit.MM, line_weight=0.5)
-            exporter.add_layer("Layer 1", fill_color=(255, 0, 0), line_color=(0, 0, 255))
+            exporter.add_layer("Layer 1", fill_color="red", line_color="blue")
             exporter.add_shape(shape_object, layer="Layer 1")
             exporter.write("output.svg")
 
@@ -237,32 +237,34 @@ class ExportSVG(Export2D):
     '''
     class _Layer:
         name: Incomplete
+        fill_color_override: Incomplete
+        line_color_override: Incomplete
         fill_color: Incomplete
         line_color: Incomplete
         line_weight: Incomplete
         line_type: Incomplete
         elements: list[ET.Element]
-        def __init__(self, name: str, fill_color: ColorIndex | RGB | Color | None, line_color: ColorIndex | RGB | Color | None, line_weight: float, line_type: LineType) -> None: ...
+        def __init__(self, name: str, fill_color: ColorLike | ColorIndex | RGB | None | sentinel, line_color: ColorLike | ColorIndex | RGB | None | sentinel, line_weight: float, line_type: LineType) -> None: ...
     unit: Incomplete
     scale: Incomplete
     margin: Incomplete
     fit_to_stroke: Incomplete
     precision: Incomplete
     dot_length: Incomplete
-    def __init__(self, unit: Unit = ..., scale: float = 1, margin: float = 0, fit_to_stroke: bool = True, precision: int = 6, fill_color: ColorIndex | RGB | Color | None = None, line_color: ColorIndex | RGB | Color | None = ..., line_weight: float = ..., line_type: LineType = ..., dot_length: DotLength | float = ...) -> None: ...
-    def add_layer(self, name: str, *, fill_color: ColorIndex | RGB | Color | None = None, line_color: ColorIndex | RGB | Color | None = ..., line_weight: float = ..., line_type: LineType = ...) -> Self:
+    def __init__(self, unit: Unit = ..., scale: float = 1, margin: float = 0, fit_to_stroke: bool = True, precision: int = 6, fill_color: ColorLike | ColorIndex | RGB | None | sentinel = ..., line_color: ColorLike | ColorIndex | RGB | None | sentinel = ..., line_weight: float = ..., line_type: LineType = ..., dot_length: DotLength | float = ...) -> None: ...
+    def add_layer(self, name: str, *, fill_color: ColorLike | ColorIndex | RGB | None | sentinel = ..., line_color: ColorLike | ColorIndex | RGB | None | sentinel = ..., line_weight: float = ..., line_type: LineType = ...) -> Self:
         """add_layer
 
         Adds a new layer to the SVG export with the given properties.
 
         Args:
             name (str): The name of the layer. Must be unique among all layers.
-            fill_color (ColorIndex |  RGB |  Color |  None, optional): The fill color for shapes
-                on this layer. It can be specified as a ColorIndex, an RGB tuple,
-                a Color, or None.  Defaults to None.
-            line_color (ColorIndex |  RGB |  Color |  None, optional): The line color for shapes on
-                this layer. It can be specified as a ColorIndex or an RGB tuple,
-                a Color, or None.  Defaults to Export2D.DEFAULT_COLOR_INDEX.
+            fill_color (ColorLike | None, optional): The fill color for shapes on
+                this layer. When omitted, Face colors are used, falling back to no
+                fill. Defaults to INHERIT_COLOR.
+            line_color (ColorLike | None, optional): The line color for shapes on
+                this layer. When omitted, Edge and Wire colors are used, falling
+                back to black. Defaults to INHERIT_COLOR.
             line_weight (float, optional): The line weight (stroke width) for shapes on
                 this layer, in millimeters. Defaults to Export2D.DEFAULT_LINE_WEIGHT.
             line_type (LineType, optional): The line type for shapes on this layer.

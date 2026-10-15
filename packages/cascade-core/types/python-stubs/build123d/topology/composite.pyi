@@ -1,17 +1,20 @@
+from .history import ShapeHistory as ShapeHistory
 from .one_d import Edge as Edge, Mixin1D as Mixin1D, Wire as Wire
-from .shape_core import Joint as Joint, Shape as Shape, ShapeList as ShapeList, downcast as downcast, shapetype as shapetype, topods_dim as topods_dim
+from .shape_core import Joint as Joint, Shape as Shape, ShapeList as ShapeList, downcast as downcast, topods_dim as topods_dim
 from .three_d import Mixin3D as Mixin3D, Solid as Solid
 from .two_d import Face as Face, Shell as Shell
 from .utils import tuplify as tuplify, unwrapped_shapetype as unwrapped_shapetype
 from .zero_d import Vertex as Vertex
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Common as BRepAlgoAPI_Common, BRepAlgoAPI_Section as BRepAlgoAPI_Section
-from OCP.TopoDS import TopoDS_Compound, TopoDS_Shape as TopoDS_Shape
+from OCP.Font import Font_SystemFont as Font_SystemFont
+from OCP.TopoDS import TopoDS_Compound
 from _typeshed import Incomplete
-from build123d.build_enums import Align as Align, CenterOf as CenterOf, FontStyle as FontStyle, TextAlign as TextAlign
+from bd_materials import FinishedMaterial as FinishedMaterial
+from build123d.build_enums import Align as Align, CenterOf as CenterOf, FontStyle as FontStyle, Select as Select, TextAlign as TextAlign, Unit as Unit
 from build123d.geometry import Axis as Axis, Color as Color, Location as Location, Plane as Plane, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike, logger as logger
 from build123d.text import FONT_ASPECT as FONT_ASPECT, FontManager as FontManager
 from collections.abc import Iterable, Iterator, Sequence
 from os import PathLike
+from typing import ClassVar
 from typing_extensions import Self
 
 class Compound(Mixin3D[TopoDS_Compound]):
@@ -23,11 +26,12 @@ class Compound(Mixin3D[TopoDS_Compound]):
     composition and structure of intricate 3D models in computer-aided design
     (CAD) applications, allowing engineers and designers to work with assemblies
     of shapes as unified entities for efficient modeling and analysis."""
+    build123d_type: ClassVar[str]
     order: float
     material: Incomplete
     joints: Incomplete
     children: Incomplete
-    def __init__(self, obj: TopoDS_Compound | Iterable[Shape] | None = None, label: str = '', color: Color | None = None, material: str = '', joints: dict[str, Joint] | None = None, parent: Compound | None = None, children: Sequence[Shape] | None = None) -> None:
+    def __init__(self, obj: TopoDS_Compound | Iterable[Shape] | None = None, label: str = '', color: Color | None = None, material: FinishedMaterial | None = None, joints: dict[str, Joint] | None = None, parent: Compound | None = None, children: Sequence[Shape] | None = None) -> None:
         """Build a Compound from Shapes
 
         Args:
@@ -42,9 +46,15 @@ class Compound(Mixin3D[TopoDS_Compound]):
     @property
     def volume(self) -> float:
         """volume - the volume of this Compound"""
-    @classmethod
-    def cast(cls, obj: TopoDS_Shape) -> Vertex | Edge | Wire | Face | Shell | Solid | Compound:
-        """Returns the right type of wrapper, given a OCCT object"""
+    def mass(self, mass_unit: Unit = ..., length_unit: Unit = ...) -> float:
+        """mass - the mass of this Compound
+
+        An assembly is summed over its children so each one contributes its own
+        material; Shape.material walks up the tree for children that don't
+        declare one. A Compound with no children is summed over its topology
+        instead, where the sub-shapes are not build123d objects and can only
+        take this Compound's material.
+        """
     @classmethod
     def extrude(cls, obj: Shell, direction: VectorLike) -> Compound:
         """extrude
@@ -61,6 +71,21 @@ class Compound(Mixin3D[TopoDS_Compound]):
         Returns:
             Edge: extruded shape
         """
+    @staticmethod
+    def resolve_font(font: str = 'Arial', font_path: PathLike[str] | str | None = None, font_style: FontStyle = ...) -> tuple[str, str, Font_SystemFont]:
+        '''Resolve a requested font to its name, path, and system font.
+
+        Args:
+            font (str, optional): requested font name. Defaults to "Arial"
+            font_path (PathLike | str, optional): system path to font file.
+                Defaults to None
+            font_style (FontStyle, optional): requested font style.
+                Defaults to FontStyle.REGULAR
+
+        Returns:
+            tuple[str, str, Font_SystemFont]: resolved font name, resolved font
+                path, and OpenCascade system font
+        '''
     @classmethod
     def make_text(cls, txt: str, font_size: float, font: str = 'Arial', font_path: PathLike[str] | str | None = None, font_style: FontStyle = ..., text_align: tuple[TextAlign, TextAlign] = ..., align: Align | tuple[Align, Align] | None = None, position_on_path: float = 0.0, text_path: Edge | Wire | None = None, single_line_width: float = 0.0) -> Compound:
         '''Text that optionally follows a path.
@@ -212,6 +237,7 @@ class Compound(Mixin3D[TopoDS_Compound]):
 
 class Curve(Compound):
     """A Compound containing 1D objects - aka Edges"""
+    build123d_type: ClassVar[str]
     __add__: Incomplete
     def __matmul__(self, position: float) -> Vector:
         """Position on curve operator @ - only works if continuous"""
@@ -219,13 +245,15 @@ class Curve(Compound):
         """Tangent on wire operator % - only works if continuous"""
     def __xor__(self, position: float) -> Location:
         """Location on wire operator ^ - only works if continuous"""
-    def wires(self) -> ShapeList[Wire]:
+    def wires(self, select: Select = ...) -> ShapeList[Wire]:
         """A list of wires created from the edges"""
 
 class Sketch(Compound):
     """A Compound containing 2D objects - aka Faces"""
+    build123d_type: ClassVar[str]
     def __iadd__(self, other: None | Shape | Iterable[Shape]) -> Sketch: ...
 
 class Part(Compound):
     """A Compound containing 3D objects - aka Solids"""
+    build123d_type: ClassVar[str]
     def __iadd__(self, other: None | Shape | Iterable[Shape]) -> Part: ...

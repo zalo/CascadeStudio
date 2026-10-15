@@ -47,7 +47,8 @@ const PY_USER_MODULE = 'main';
  *  stdlib. Everything else in PY_SHIM_MODULES is a Brython gap filler and is
  *  replaced by the real CPython module. */
 const PYODIDE_SHIMS = ['logging', '_scipy_shim', 'scipy', 'scipy.optimize',
-  'scipy.spatial', 'pytest'];
+  'scipy.spatial', 'pytest', '_bd_materials_shim', 'bd_materials',
+  'bd_materials.core', 'bd_materials.finishes'];
 
 /** pysrc=real (REAL build123d 0.11.1 over the OCP shim) drops the logging
  *  swallower: real CPython logging runs for real — build123d's module
