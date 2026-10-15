@@ -2,7 +2,7 @@
 
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
-import { resolvePyRuntime } from './EditorManager.js';
+import { resolvePyRuntime, resolveOcctExceptions } from './EditorManager.js';
 
 /** Exposes window.CascadeAPI for programmatic control of Cascade Studio.
  *  Designed for use by AI agents (via Playwright) and developer tooling. */
@@ -242,6 +242,20 @@ Revolve(profile, 360);`,
         kind === 'pyodide' ? 'pyodide' : 'brython');
     } catch (e) { console.error('setPyRuntime: ' + e.message); }
     return this.getPyRuntime();
+  }
+
+  /** Which OCCT build was REQUESTED for this page: 'wasm' (default, native
+   *  wasm exceptions) or 'js' (the JS-emulated-exceptions debug artifact).
+   *  Set with `?occtexceptions=js` or setOcctExceptions('js') + reload. The
+   *  build actually running is `(await _memoryStats()).occtExceptions` — it
+   *  falls back to 'wasm', with a console warning, when the debug artifact is
+   *  not in this build. */
+  getOcctExceptions() { return resolveOcctExceptions(); }
+  setOcctExceptions(kind) {
+    try {
+      window.localStorage.setItem('cascade-occt-exceptions', kind === 'js' ? 'js' : 'wasm');
+    } catch (e) { console.error('setOcctExceptions: ' + e.message); }
+    return this.getOcctExceptions();
   }
 
   // Debug / history inspection

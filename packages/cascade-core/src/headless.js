@@ -56,7 +56,15 @@ const DEFAULT_STL_NAME = 'cascade-headless.stl';
  *  bundle; all REQUIRED in Node and workerd). Every one accepts a
  *  `WebAssembly.Module`, an `ArrayBuffer`/TypedArray, a URL string, or a
  *  thunk returning any of those:
- *    - `occtWasm`        — cascadestudio.wasm (the OCCT kernel, ~27 MB raw)
+ *    - `occtWasm`        — cascadestudio.wasm (the OCCT kernel, ~20 MB raw)
+ *    - `occtJs`          — OPTIONAL: the Emscripten glue to pair with
+ *                          occtWasm, as an imported module namespace (or its
+ *                          default export). Omit it for the default build,
+ *                          whose glue is bundled. Pass it to run the
+ *                          JS-emulated-exceptions DEBUG artifact:
+ *                            occtJs:   await import('…/dist/cascadestudio-jseh.js'),
+ *                            occtWasm: <bytes of …/dist/cascadestudio-jseh.wasm>
+ *                          (a glue only works with its own wasm).
  *    - `micropythonJs`   — the ALREADY-IMPORTED micropython.mjs namespace
  *                          (workerd cannot `import()` a URL at runtime)
  *    - `micropythonWasm` — micropython.wasm
@@ -197,6 +205,7 @@ export async function createHeadlessCascade(options = {}) {
     kernelImage: opts.kernelImage !== false,
     assets: {
       occtWasm: opts.occtWasm,
+      occtJs: opts.occtJs,
       fonts: opts.fonts,
       loadAsset: opts.loadAsset,
     },

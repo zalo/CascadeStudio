@@ -61,6 +61,21 @@ export function resolvePyTopo() {
   return 'upstream';
 }
 
+/** Which OCCT build the worker loads: 'wasm' (default — native wasm
+ *  exceptions) or 'js' (the JS-emulated-exceptions DEBUG artifact,
+ *  cascadestudio-jseh.{js,wasm}: same kernel, every C++ throw stays in
+ *  ordinary JS frames as a raw pointer — easier to step through, and the
+ *  A/B reference for "did native EH change this?"). `?occtexceptions=js`
+ *  or localStorage['cascade-occt-exceptions'] = 'js'. Read once at worker
+ *  start (CascadeMain), so a change takes effect on reload. */
+export function resolveOcctExceptions() {
+  try {
+    const fromURL = new URLSearchParams(window.location.search).get('occtexceptions');
+    if (fromURL) { return fromURL === 'js' ? 'js' : 'wasm'; }
+    return window.localStorage.getItem('cascade-occt-exceptions') === 'js' ? 'js' : 'wasm';
+  } catch (e) { return 'wasm'; }
+}
+
 /** Low-memory evaluation mode: `?lowmem=1` (or localStorage
  *  ['cascade-low-memory'] = '1'). The worker keeps modeling-history METADATA
  *  but drops the per-step shape refs (timeline scrubbing degrades with a

@@ -20,7 +20,10 @@
 // through import_brep with an equal volume, and occtWasm + pythonWasm stay
 // well under the 128 MB a Cloudflare Worker isolate gets.
 //
-// Env knobs: CS_PY_SRC=lite|upstream, CS_MP_HEAP=<bytes>.
+// Env knobs: CS_PY_SRC=lite|upstream, CS_MP_HEAP=<bytes>,
+//   CS_OCCT_EXCEPTIONS=js — boot the JS-emulated-exceptions DEBUG artifact
+//   (dist/cascadestudio-jseh.{js,wasm}, passed as occtJs + occtWasm) instead
+//   of the default native-exceptions build.
 
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -53,7 +56,15 @@ function required(p) {
   return p;
 }
 
-const occtWasm = fs.readFileSync(required(join(CORE_DIST, 'cascadestudio.wasm')));
+// The default OCCT build (native wasm exceptions; its glue is bundled) or,
+// with CS_OCCT_EXCEPTIONS=js, the debug pair — a glue only works with its own
+// wasm, so the host hands both over.
+const OCCT_EXCEPTIONS = process.env.CS_OCCT_EXCEPTIONS === 'js' ? 'js' : 'default';
+const occtWasm = fs.readFileSync(required(join(CORE_DIST,
+  OCCT_EXCEPTIONS === 'js' ? 'cascadestudio-jseh.wasm' : 'cascadestudio.wasm')));
+const occtJs = OCCT_EXCEPTIONS === 'js'
+  ? await import(pathToFileURL(required(join(CORE_DIST, 'cascadestudio-jseh.js'))).href)
+  : undefined;
 const micropythonWasm = fs.readFileSync(required(join(CORE_DIST, 'micropython-cs.wasm')));
 const micropythonJs = await import(
   pathToFileURL(required(join(CORE_DIST, 'micropython-cs.mjs'))).href);
@@ -83,6 +94,7 @@ const engine = await createHeadlessCascade({
   runtime: 'micropython',
   pySrc: PY_SRC,
   occtWasm,
+  occtJs,
   micropythonJs,
   micropythonWasm,
   fonts,
@@ -93,6 +105,12 @@ const bootMem = engine.memoryStats();
 console.log('  boot ' + bootMs + ' ms   occtWasm ' + mb(bootMem.occtWasm)
   + '   pythonWasm ' + mb(bootMem.pythonWasm) + ' (interpreter not booted yet)');
 check('boot produced no errors', engine.errors.length === 0, engine.errors.join(' | '));
+console.log('  OCCT exception model: ' + bootMem.occtExceptions
+  + (OCCT_EXCEPTIONS === 'js' ? '  (CS_OCCT_EXCEPTIONS=js: the debug artifact)' : ''));
+if (OCCT_EXCEPTIONS === 'js') {
+  check('the debug artifact is the JS-exceptions build', bootMem.occtExceptions === 'js',
+    String(bootMem.occtExceptions));
+}
 
 // ------------------------------------------------------------------ //
 section('(a) Box(1, 1, 1)');
@@ -268,6 +286,36 @@ check('the scene was reset between runs', again.shapeCount === 1,
   'shapeCount=' + again.shapeCount);
 
 // ------------------------------------------------------------------ //
+section('(d1) a kernel throw is decoded into OCCT\'s own message');
+// ------------------------------------------------------------------ //
+// COMPROMISE(failure-decode), on WHICHEVER exception model this build uses:
+// a JS-emulated throw arrives as the raw Standard_Failure pointer and is read
+// out of linear memory; a native one arrives as a WebAssembly.Exception and
+// is decoded through the module's getExceptionMessage(). A 6 mm chamfer on a
+// 10 mm box is a deterministic BRepFilletAPI_MakeChamfer failure
+// (StdFail_NotDone -> "BRep_API: command not done").
+const KERNEL_MSG = "the OCCT kernel raised 'BRep_API: command not done'";
+const jsThrow = await engine.run(
+  'let b = Box(10, 10, 10);\nChamferEdges(b, 6, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);',
+  { language: 'cascadestudio' });
+check('JS mode: the chamfer fails', !jsThrow.ok);
+check('JS mode: the error names OCCT\'s message (' + bootMem.occtExceptions + ' exceptions)',
+  jsThrow.errors.some((x) => x.includes(KERNEL_MSG)), JSON.stringify(jsThrow.errors).slice(0, 240));
+if (PY_SRC === 'lite') {
+  // (upstream build123d catches StdFail_NotDone itself and raises its own
+  // ValueError, so only lite surfaces the kernel message from Python)
+  const pyThrow = await engine.run(
+    'from build123d import *\nb = chamfer(Box(10, 10, 10).edges(), 6)\nshow(b)');
+  check('Python: the chamfer fails', !pyThrow.ok);
+  check('Python: the traceback carries OCCT\'s message',
+    pyThrow.errors.some((x) => x.includes(KERNEL_MSG)), JSON.stringify(pyThrow.errors).slice(0, 240));
+}
+check('no raw pointer / opaque exception leaked into the message',
+  !jsThrow.errors.some((x) => /kernel threw '(\d+|\[object WebAssembly\.Exception\])'/.test(x)),
+  JSON.stringify(jsThrow.errors).slice(0, 240));
+engine.reset();
+
+// ------------------------------------------------------------------ //
 section('(d2) reset() between jobs — the kernel-image / OCP-ledger seam');
 // ------------------------------------------------------------------ //
 // What a long-lived Cloudflare isolate actually does: job, reset, job,
@@ -398,12 +446,15 @@ check('clock area ~= 283.12 mm^2', Math.abs(clockArea - 283.1211) < 0.5, String(
 check('clock exports STEP', engine.exportSTEP().startsWith('ISO-10303-21'));
 
 // ------------------------------------------------------------------ //
-section('(g) kernel-heap reset: STEP survives an OCCT heap corruption');
+section('(g) kernel-heap reset: STEP survives a damaged kernel');
 // ------------------------------------------------------------------ //
 // COMPROMISE(kernel-heap-reset). maker_coin's fillet over nine Select.NEW
-// edges makes BRepFilletAPI_MakeFillet::Build scribble over OCCT's heap, and
-// every later `new STEPControl_Writer` traps. Distilled to the two ops that
-// are needed to trigger it.
+// edges used to leave OCCT unable to construct a STEPControl_Writer. Root
+// cause (2026-10): the fillet recursion overflowed emscripten's 64 KB
+// default SHADOW STACK, which grows down into .bss unchecked, and the
+// overwritten statics were the writer machinery. Builds linked with
+// -sSTACK_SIZE=512KB (measured peak 81,632 B) no longer overflow, so on them
+// the kernel stays healthy; the heal path is exercised below either way.
 const COIN = `from build123d import *
 diameter, thickness = 50 * MM, 10 * MM
 with BuildPart() as coin:
@@ -427,27 +478,30 @@ check('the coin evaluates cleanly', coin.ok, coin.errors.join(' | '));
 const coinVol = parseFloat((coin.logs.find((l) => l.startsWith('coin volume:')) || '').split(': ')[1]);
 check('the geometry is correct despite the corruption',
   Math.abs(coinVol - 13320.036) < 1, String(coinVol));
-// Whether the fault FIRES is a property of the exact BRepFilletAPI call
-// sequence, and the two source flavors do not make the same one: lite's
-// fillet over `Select.NEW` reliably scribbles on OCCT's heap here, upstream
-// topology's does not (measured, both flavors, same geometry and the same
-// 13320.0365 mm^3 result). So the guard's TRIGGER is only asserted on lite;
-// what both flavors must do is export and round-trip, which is checked below
-// either way.
+// Whether the overflow happens depends on the build's stack size AND on the
+// exact BRepFilletAPI call sequence (lite's fillet over `Select.NEW` went
+// deeper than upstream topology's on the 64 KB stack), so it is REPORTED,
+// not asserted. Then the heal path is forced deterministically: the first
+// STEP write throws as a poisoned writer would, and exportSTEP() must carry
+// the shape out as BREP, rewind the kernel image, re-import and write.
 const poisoned = engine.kernelHealthy() === false;
-if (PY_SRC === 'upstream') {
-  console.log('  NOTE  kernel poisoned by the coin fillet: ' + poisoned
-    + '  (upstream topology usually avoids the fault; the heal path is still '
-    + 'exercised by the lite run)');
-} else {
-  check('the kernel IS poisoned by the fillet (the fault this guards against)',
-    poisoned,
-    'kernelHealthy() returned true — has the OCCT build been fixed? '
-    + 'If so, the heal path is dead code and can go.');
+console.log('  NOTE  kernel damaged by the coin fillet: ' + poisoned
+  + (poisoned ? '  (a 64 KB-stack build: the shadow stack overflowed into .bss)'
+    : '  (no shadow-stack overflow on this build)'));
+const realExportSTEP = globalThis.self.ExportSTEP;
+let forcedFaults = 0;
+if (!poisoned) {
+  globalThis.self.ExportSTEP = function (...a) {
+    if (forcedFaults++ === 0) { throw new WebAssembly.RuntimeError('memory access out of bounds (forced by the test)'); }
+    return realExportSTEP.apply(this, a);
+  };
 }
-const coinStep = engine.exportSTEP();
+let coinStep;
+try { coinStep = engine.exportSTEP(); } finally { globalThis.self.ExportSTEP = realExportSTEP; }
 check('exportSTEP heals the kernel and writes a STEP',
-  coinStep.startsWith('ISO-10303-21'), coinStep.length + ' bytes');
+  coinStep.startsWith('ISO-10303-21'), coinStep.length + ' bytes'
+  + (poisoned ? ' (real damage)' : ' (forced writer fault: ' + forcedFaults + ' calls)'));
+check('the heal path ran', poisoned || forcedFaults === 2, 'writer calls: ' + forcedFaults);
 check('the kernel is healthy again afterwards', engine.kernelHealthy() === true);
 
 engine.reset();

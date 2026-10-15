@@ -141,6 +141,9 @@ class CascadeStudioWorker {
       jsHeapUsed: mem.usedJSHeapSize || 0,
       jsHeapTotal: mem.totalJSHeapSize || 0,
       occtWasm: self.ocMemory ? self.ocMemory.buffer.byteLength : 0,
+      // 'wasm' (native exceptions, the default artifact) | 'js' (the
+      // JS-emulated-exceptions debug artifact)
+      occtExceptions: self.occtExceptions || null,
       pythonWasm,
       bootTiming: self._pythonBootTiming || null,
       argCacheCount: Object.keys(self.argCache || {}).length,
@@ -188,9 +191,36 @@ class CascadeStudioWorker {
   async init() {
     let initOpenCascade, opentype, potpack;
 
+    // WHICH OCCT build. The default artifact uses native wasm exceptions;
+    // `cascadestudio-jseh.{js,wasm}` is the same kernel built with
+    // Emscripten's JS-emulated exceptions, kept for debuggability (a throw
+    // stays in ordinary JS frames as a raw pointer). A headless host selects
+    // it by passing its glue as `assets.occtJs` (+ its wasm as occtWasm);
+    // the browser by `?occtexceptions=js` on the worker URL (CascadeMain
+    // forwards the page's flag). Its glue is imported BY URL, never bundled.
+    let occtWasmName = 'cascadestudio.wasm';
+    const hostGlue = this.options.assets && this.options.assets.occtJs;
     try {
-      const ocMod = await import('opencascade.js/dist/cascadestudio.js');
-      initOpenCascade = ocMod.default;
+      if (hostGlue) {
+        const g = typeof hostGlue === 'function' && !hostGlue.default ? hostGlue : await hostGlue;
+        initOpenCascade = g.default || g;
+      } else if (CascadeStudioWorker.requestedOcctExceptions() === 'js') {
+        try {
+          const glueURL = typeof ESBUILD !== 'undefined'
+            ? new URL('./cascadestudio-jseh.js', self.location.href).href
+            : new URL('../../node_modules/opencascade.js/dist/cascadestudio-jseh.js', self.location.href).href;
+          initOpenCascade = (await import(glueURL)).default;
+          occtWasmName = 'cascadestudio-jseh.wasm';
+        } catch (debugErr) {
+          console.warn('[occt] occtexceptions=js asked for the JS-exceptions debug '
+            + 'artifact, but it is not in this build (' + debugErr.message
+            + ') — using the default native-exceptions build');
+        }
+      }
+      if (!initOpenCascade) {
+        const ocMod = await import('opencascade.js/dist/cascadestudio.js');
+        initOpenCascade = ocMod.default;
+      }
     } catch(e) {
       csEmit({ type: "log", payload: "ERROR loading opencascade: " + e.message });
       throw e;
@@ -227,7 +257,7 @@ class CascadeStudioWorker {
     const wasmPath = (path) => {
       if (path.endsWith('.wasm')) {
         // In build mode, WASM is copied to the build output directory
-        return typeof ESBUILD !== 'undefined' ? './cascadestudio.wasm' : '../../node_modules/opencascade.js/dist/cascadestudio.wasm';
+        return typeof ESBUILD !== 'undefined' ? './' + occtWasmName : '../../node_modules/opencascade.js/dist/' + occtWasmName;
       }
       return path;
     };
@@ -264,6 +294,10 @@ class CascadeStudioWorker {
 
       // Register the "OpenCascade" WebAssembly Module under the shorthand "oc"
       self.oc = openCascade;
+      // Which C++ exception model this kernel was built with: only the
+      // native-EH build exports getExceptionMessage (its link adds
+      // -sEXPORT_EXCEPTION_HANDLING_HELPERS). Bracket access: optional member.
+      self.occtExceptions = typeof openCascade['getExceptionMessage'] === 'function' ? 'wasm' : 'js';
 
       // Numbered Embind overload suffixes (e.g. BRepBuilderAPI_MakeEdge_24)
       // are derived from each class's overload set and can be renumbered by
@@ -377,6 +411,16 @@ class CascadeStudioWorker {
         }).catch(() => resolve());
       }, { isUrl: true });
     })));
+  }
+
+  /** The OCCT artifact the page asked for: 'js' (the JS-emulated-exceptions
+   *  debug build) when the worker URL carries `?occtexceptions=js`, else
+   *  'wasm' (the default build). No location (headless) -> 'wasm'. */
+  static requestedOcctExceptions() {
+    try {
+      const search = (self.location && self.location.search) || '';
+      return new URLSearchParams(search).get('occtexceptions') === 'js' ? 'js' : 'wasm';
+    } catch (e) { return 'wasm'; }
   }
 
   /** Headless fonts: `self.loadedFonts[name]` / `self.fontKernPairs[name]`

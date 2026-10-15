@@ -41,9 +41,24 @@ execFileSync(process.execPath, [path.join(__dirname, 'build-headless.cjs')],
 
 // 2. Copy OpenCascade WASM to dist/
 console.log('[cascade-core] Copying WASM...');
-const wasmSrc = path.join(monoRoot, 'node_modules', 'opencascade.js', 'dist', 'cascadestudio.wasm');
+const ocDist = path.join(monoRoot, 'node_modules', 'opencascade.js', 'dist');
+const wasmSrc = path.join(ocDist, 'cascadestudio.wasm');
 if (fs.existsSync(wasmSrc)) {
   fs.copyFileSync(wasmSrc, path.join(distDir, 'cascadestudio.wasm'));
+}
+// The DEBUG artifact: the same kernel built with Emscripten's JS-emulated
+// exceptions (opencascade.js builds/cascadestudio-jseh.yml). Its glue is NOT
+// bundled — the worker imports it by URL only when `?occtexceptions=js`
+// (browser) selects it, and headless hosts pass it explicitly — so it costs
+// nothing unless used. Absent from older opencascade.js pins; skipped then.
+for (const f of ['cascadestudio-jseh.wasm', 'cascadestudio-jseh.js']) {
+  const src = path.join(ocDist, f);
+  const dest = path.join(distDir, f);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, dest);
+  } else if (fs.existsSync(dest)) {
+    fs.unlinkSync(dest);   // never ship a debug pair from a different pin
+  }
 }
 
 // 3. Copy Brython (lazy-loaded by the worker for Python/build123d mode)

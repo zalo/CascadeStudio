@@ -4,7 +4,7 @@
 import { createDockview } from '../lib/dockview-core/dockview-core.js';
 import { CascadeEnvironment } from './CascadeView.js';
 import { CascadeEngine, OpenSCADTranspiler } from 'cascade-core';
-import { EditorManager } from './EditorManager.js';
+import { EditorManager, resolveOcctExceptions } from './EditorManager.js';
 import { ConsoleManager } from './ConsoleManager.js';
 import { GUIManager } from './GUIManager.js';
 import { OpenSCADMonaco } from './openscad/OpenSCADMonaco.js';
@@ -75,7 +75,11 @@ class CascadeStudioApp {
   /** Start the application: create the engine, wire up events, and initialize. */
   start() {
     // Create the CascadeEngine (wraps Worker + MessageBus)
-    const workerPath = typeof ESBUILD !== 'undefined' ? './cascade-worker.js' : './js/CADWorker/CascadeStudioMainWorker.js';
+    let workerPath = typeof ESBUILD !== 'undefined' ? './cascade-worker.js' : './js/CADWorker/CascadeStudioMainWorker.js';
+    // `?occtexceptions=js`: boot the JS-emulated-exceptions debug build of
+    // OCCT instead of the default (see resolveOcctExceptions). The worker
+    // reads it from its own URL, before any message can arrive.
+    if (resolveOcctExceptions() === 'js') { workerPath += '?occtexceptions=js'; }
     this.engine = new CascadeEngine({ workerUrl: workerPath });
 
     // Create subsystem managers
