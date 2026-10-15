@@ -8,18 +8,92 @@ Investigated 2026-10-15 on branch `feat/cf-workers-size` (based on
 with `wrangler deploy --dry-run --outdir`. Edge-only questions are listed
 at the end with the commands that would answer them.
 
+## Where we stand (2026-10-15, merged branch)
+
+All three memory reductions are in this state:
+
+- the opencascade.js fork's native-EH artifacts, with 8 MB initial memory
+  and a 512 KB stack (§7);
+- MicroPython's 6 MiB reservation and mid-run GC, from the fidelity round;
+- the JS-heap fixes: `keep_names = false`, lazy fonts, and the Python map
+  released after boot.
+
+Measurement conditions:
+
+- **Memory** is local workerd, read through the inspector with the fidelity
+  agent's `experiments/cf-fidelity/workerd-ladder.mjs`, one fresh isolate
+  per model, on inspector port 9301 (another project holds 9229). "Live" is
+  wasm plus the V8 heap after a full GC. **+AB** adds V8's ArrayBuffer
+  backing stores (fonts, kernel image, MEMFS); whether Cloudflare counts
+  those is an edge question.
+- **CPU** is main-thread CPU in Node (`scripts/startup-bench.mjs`, idle
+  machine, load < 1), through the Worker's own fetch handler.
+- **Sizes** are `wrangler deploy --dry-run`.
+- Raw rows: `experiments/cf-fidelity/workerd-ladder-013-merged.json`. The
+  high-fidelity flavors in depth: [FIDELITY-ON-WORKERS.md](FIDELITY-ON-WORKERS.md).
+
+**Size and startup**
+
+| entry | Total Upload (of 64 MiB) | global-scope startup CPU (of 1 s) | cold first `/render`, local workerd |
+|---|---:|---|---:|
+| lite (`src/index.js`) | **25,354 KiB** (39%) | 0 (`BOOT=request`); 41 ms (`startup`) | 234 ms |
+| warm (`--env warm`) | 25,354 KiB (39%) | **224 ms** (`warm`) | **42 ms** |
+| upstream (`src/index-upstream.js`) | **28,688 KiB** (44%) | 0; ~45 ms (`startup`); 668 ms if warm were allowed (the entry refuses it, see the notes) | 686 ms |
+| real (`src/real.js`) | **48,649 KiB** (74%) | 0 (imports only; Pyodide boots on the first request) | 1,835 ms |
+
+**Basic-model memory and per-request CPU**
+
+| entry | starter, live / +AB (of 128 MB) | Box → STEP CPU, warm (Free: 10 ms) | 4-hole plate CPU | starter CPU |
+|---|---|---:|---:|---:|
+| lite | **27.3 / 36.3 MB** | **3 ms** | 15 ms | 85 ms |
+| warm | as lite | 3 ms | 15 ms | 85 ms |
+| upstream | **31.0 / 41.3 MB** | **5 ms** | 17 ms | 140 ms |
+| real | **87.8 / 107.9 MB** | ~32 ms (eval, local workerd) | – | ~224 ms (eval) |
+
+**Heavy models, live / +AB, MB (of 128)**
+
+| entry | maker_coin | heat_exchanger | bracelet |
+|---|---|---|---|
+| lite | 71.6 / 80.6 | 65.2 / 74.2 | 114.0 / 123.0 |
+| upstream | 70.1 / 80.4 | 117.2 / **127.5** (borderline) | **198.0** / 208.3 (over) |
+| real | 122.5 / **142.6** (fits only if AB are not counted) | **137.2** / 157.3 (over) | **192.8** / 212.9 (over) |
+
+Before this merge, on 32 MB OCCT, the fidelity branch's own ladder had
+upstream at 56.8 / 66.7 for the starter and real at 113.6 / 133.3. The
+real starter now fits even with ArrayBuffers counted.
+
+**Reading it:**
+
+- **64 MiB:** every entry fits. Real is the largest at 74%.
+- **128 MB:** every basic model fits on every flavor. Lite fits every heavy
+  model measured, `bracelet` included. Upstream fits all but `bracelet`.
+  Real fits basic models and fits `maker_coin` live, but not the heaviest
+  models.
+- **Warm isolates:** a warm isolate keeps its OCCT high-water, because wasm
+  memory never shrinks (FIDELITY-ON-WORKERS.md §7).
+- **1 s startup:**
+  - Lite can boot and warm at global scope with 4.5x headroom on this
+    machine.
+  - Upstream's warm boot is down to 0.67 s from ~1.0 s, thanks to native
+    EH, 0.13 and the interpreter patches. That is 1.5x headroom, which is
+    not enough to switch on without an edge measurement, so
+    `index-upstream.js` still downgrades `warm` to `startup`.
+  - Real can only boot lazily.
+- **CPU:**
+  - **Free** (10 ms per request) holds a single primitive with a STEP
+    export, and nothing with a boolean.
+  - **Paid** has the CPU for everything in the corpus.
+
 ## The answer
 
 **Size is no longer the problem, CPU is.** Cloudflare dropped the
-compressed-size limit, so the whole engine (OCCT, MicroPython, both
-build123d flavors, all four fonts) ships inline at 31.7 MiB (lite) or
-34.9 MiB (upstream) of the 64 MiB limit. With the native-wasm-exceptions
-OCCT build measured here it is 24.6 / 27.7 MiB, and the same build cuts
-model CPU by 10-73%. The Free plan's 10 ms per request is out of reach for
-real models, even with every boot cost moved to global scope: a box
-exports in 4-10 ms, a plate with four holes takes 26-39 ms, the starter
-model 100-290 ms. **Paid is the answer.** On Paid, the remaining levers
-are the fork rebuild (CPU) and the startup cost of cold isolates.
+compressed-size limit, and every entry fits 64 MiB inline. The Free
+plan's 10 ms per request is out of reach for real models, even with every
+boot cost moved to global scope and the native-EH kernel: a box exports in
+~3 ms, a plate with four holes takes ~15 ms, the starter ~85 ms. **Paid is
+the answer.** The sections below are the investigation as it happened.
+§2-§6 were measured before the fork rebuild and before the merge, under
+machine load; §7 is the adopted build.
 
 ## 1. The limits as of today
 
@@ -527,6 +601,31 @@ unchanged 0.11.1-era lite/upstream code the baselines were taken on.
   depends on page history: a solo re-run gives the baseline's MISMATCH
   (`bbox[1] -0.5000 vs -0.7000`). Every other script matches the baseline.
 - TIMEOUT on both legs: `docs/spitfire_wing_gordon` (as in the baselines).
+
+### Gates after the merge with `feat/build123d-0.13` (d28c47e)
+
+These ran with the native-EH artifacts copied into `node_modules` (the pin
+is unchanged) and Pyodide fetched:
+
+- **Playwright, full suite** (`env -u DISPLAY`): **114 passed**.
+- **headless-node**: ALL PASS on lite and upstream with the default
+  artifact, and on lite and upstream with the debug artifact
+  (`CS_OCCT_EXCEPTIONS=js`).
+- **smoke.mjs vs `wrangler dev`**: ALL WORKER CHECKS PASSED on lite,
+  upstream, warm and real. Real had one SSE-export failure in its first
+  run (the terminal event was `error` at the export phase). It did not
+  reproduce in two more full runs, nor in 6 looped smoke sequences in one
+  isolate. Logged as a flake.
+- **b123d-validation, all four legs**, `--pages 2`,
+  `B123D_SRC=~/Desktop/ocjs-deps/src/build123d-v0.13.0`: per script
+  **identical** to `results-013-{lite,lite-micropython,upstream,real}.json`
+  in one pass (223/9/6/1/8, 223/9/6/1/8, 233/2/3/1/8, 232/3/3/1/8). No
+  TIMEOUT flap needed a solo re-run; `tips/b04` happened to match.
+  - The stack fix does **not** flip toy_truck or ttt-ppp0110 on lite: both
+    fail identically with no overflow.
+  - It removes the heap flaps for which the committed lite legs had needed
+    solo re-runs: tea_cup(_algebra), key_cap(_algebra), ttt-ppp0102 and
+    sort_distance_from. None needed a retry here.
 
 ## Reproduce
 
