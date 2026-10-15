@@ -469,7 +469,7 @@ Dry run, not deployed: `wrangler deploy --dry-run --env real`.
 | engine bundle + glue | ~1.5 MB |
 | **Total Upload** | **48,745 KiB of 65,536 KiB** (gzip 17,977 KiB, which no longer matters) |
 
-Fonts and the Python text stay static assets, as for the other flavors.
+Fonts and the Python text were static assets on this branch. After the merge with `feat/cf-workers-size` every entry carries them as modules (SIZE-INVESTIGATION.md), and the real script is 48,648 KiB with the 8 MB native-EH OCCT artifact.
 
 ### Startup and memory
 

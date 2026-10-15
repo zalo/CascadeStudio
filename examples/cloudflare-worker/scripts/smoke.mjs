@@ -108,9 +108,10 @@ check('bold text produced a solid', (e2.body.logs || []).some((l) => /^bold volu
   JSON.stringify(e2.body.logs));
 
 // The other three FreeSans faces became affordable when the fonts moved out
-// of the Worker script into static assets — ITALIC used to be the "unbundled"
+// of the 10 MiB-gzip budget (static assets, and since 2026-10 Data modules of
+// the 64 MiB script) — ITALIC used to be the "unbundled"
 // case here and now resolves, so the whole family is checked instead.
-console.log('\n=== (f) the whole FreeSans family resolves (static assets) ===');
+console.log('\n=== (f) the whole FreeSans family resolves ===');
 for (const [style, face] of [['ITALIC', 'FreeSansOblique'],
   ['BOLDITALIC', 'FreeSansBoldOblique']]) {
   const f = await render(

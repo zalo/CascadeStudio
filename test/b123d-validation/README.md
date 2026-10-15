@@ -220,6 +220,18 @@ TIMEOUT/heap flaps merged):
 | Brython + lite (default) | **223** | 9 | 6 | 1 | 8 |
 | MicroPython + pysrc=lite | **223** | 9 | 6 | 1 | 8 |
 
+**On the opencascade.js fork's 512 KB-stack artifacts** (native-EH default,
+branch `cascadestudio-v3-occt801-wasmeh`; 2026-10-15, `feat/cf-workers-size`
+merged with this branch), all four legs — these two, MicroPython + upstream
+and Pyodide + real — reproduce `results-013-*.json` script for script in ONE
+`--pages 2` pass, with no solo re-run and no fresh-page retry. The committed
+lite legs had needed solo re-runs for heap flaps (tea_cup, tea_cup_algebra /
+key_cap, key_cap_algebra, ttt-ppp0102, sort_distance_from): those were
+emscripten's 64 KB default shadow stack overflowing into OCCT's statics on
+the deepest fillet recursions (peak 83,552 B, key_cap), which the 512 KB
+stack ends. toy_truck and ttt-ppp0110 stay ERROR on lite — they fail
+identically with no overflow, so they are not that fault.
+
 Both lite legs started from the same unmodified baseline, 191/13/34/1/8
 (`baseline-013-lite.json`, `baseline-013-lite-micropython.json`): 33
 improvements each, no per-script regression, identical classification on

@@ -408,14 +408,23 @@ Everything is therefore a module of the script (`assets/`, built by
 
 | module | raw | type | |
 |---|---:|---|---|
-| `cascadestudio.wasm` (OCCT 8.0.1) | 25.77 MB | CompiledWasm | workerd will not compile wasm at runtime |
-| `cascade-headless.mjs` | 1.03 MB | bundled JS | the engine (build123d-lite's Python is a string inside it) |
-| `micropython-cs.wasm` | 0.46 MB | CompiledWasm | |
+| `cascadestudio.wasm` (OCCT 8.0.1, the fork's native-EH artifact) | 19.66 MB (25.77 MB on today's JS-EH pin) | CompiledWasm | workerd will not compile wasm at runtime |
+| `cascade-headless.mjs` | 1.08 MB | bundled JS | the engine (build123d-lite 0.13's Python is a string inside it) |
+| `micropython-cs.wasm` | 0.62 MB | CompiledWasm | the patched interpreter (patches 11/12) |
 | `micropython-cs.mjs` | 0.10 MB | bundled JS | Emscripten glue; workerd forbids `import()` of a URL |
 | `fonts/FreeSans*.ttf` (4 faces) | 4.11 MB | Data | parsed on first use |
-| `upstream-b123d.json` (158 modules) | 3.15 MB | Text | upstream entry only, `JSON.parse`d once at boot |
-| **Total Upload, lite** | **32,492.57 KiB = 31.7 MiB** | | **50% of 64 MiB** |
-| **Total Upload, upstream** | **35,720.74 KiB = 34.9 MiB** | | **55% of 64 MiB** |
+| `upstream-b123d.json` (build123d 0.13.0 + shim + glue) | 3.41 MB | Text | upstream and real entries; parsed once at boot, the parse dropped after |
+| `pyodide/*` (`prepare-pyodide.mjs`) | ~20 MB | CompiledWasm / Data / JS | real entry only: interpreter, 13 numpy side modules, 28 precompiled signatures, stdlib, wheels |
+
+`wrangler deploy --dry-run --outdir` with the native-EH artifacts (the gates'
+state; add ~7.2 MB per entry on today's JS-EH pin):
+
+| entry | Total Upload | of 64 MiB |
+|---|---:|---:|
+| lite (`src/index.js`) | **25,353.27 KiB** = 24.8 MiB | 39% |
+| warm (`--env warm`, same script) | 25,353.27 KiB | 39% |
+| upstream (`src/index-upstream.js`) | **28,686.80 KiB** = 28.0 MiB | 44% |
+| real (`src/real.js`) | **48,648.06 KiB** = 47.5 MiB | 74% |
 
 The fonts and the upstream Python used to be Workers Static Assets fetched
 through `env.ASSETS` at boot, purely to fit the old 10 MiB-gzip cap (the
@@ -428,9 +437,9 @@ The OCCT wasm is no longer a floor that matters, but it is still the
 biggest thing here, and the cheapest CPU win as well: rebuilt with native
 wasm exceptions it is 19.66 MB (−27%) and evaluates models 10-73% faster
 with identical geometry. That build is now the fork's default
-(`cascadestudio-v3-occt801-wasmeh`, pending the repin; Total Upload then
-25,180 KiB lite / 28,408 KiB upstream), together with
-`-sINITIAL_MEMORY=8MB` and `-sSTACK_SIZE=512KB` (SIZE-INVESTIGATION.md §7).
+(`cascadestudio-v3-occt801-wasmeh`, pending the repin; the Total Uploads
+above), together with `-sINITIAL_MEMORY=8MB` and `-sSTACK_SIZE=512KB`
+(SIZE-INVESTIGATION.md §7).
 The example ships **only** that default artifact: `prepare-assets.cjs`
 copies `cascadestudio.wasm` and never the JS-exceptions debug pair
 (`cascadestudio-jseh.*`), which a debugging host can pass to
