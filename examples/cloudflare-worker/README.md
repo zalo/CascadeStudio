@@ -19,10 +19,14 @@ Four entries, one codebase — see [Source flavors](#source-flavors):
 
 | | build123d | corpus | live |
 |---|---|---|---|
-| default | **build123d-lite** (embedded) | 223/239 (0.13.0 reference; the live deployment predates the bump: 206/222) | `cascade-headless.makeshifted.workers.dev` |
-| `--env warm` | lite, engine booted + warmed at global scope (`BOOT=warm`) | as lite | not deployed (`npm run dev:warm`) |
-| `--env upstream` | **verbatim upstream 0.13.0** over the OCP shim | 233/239 (0.13.0 reference; the live deployment predates the bump: 0.11.1, 216/222) | `cascade-headless-upstream.makeshifted.workers.dev` |
-| `--env real` | **the PyPI build123d 0.13.0 wheel + numpy** on Pyodide 314, same shim | 232/239 (0.13.0 reference) | not deployed (`npm run dev:real`) |
+| default | **build123d-lite** (embedded) | 223/239 (0.13.0 reference) | `cascade-headless.makeshifted.workers.dev` |
+| `--env warm` | lite, engine booted + warmed at global scope (`BOOT=warm`) | as lite | `cascade-headless-warm.makeshifted.workers.dev` |
+| `--env upstream` | **verbatim upstream 0.13.0** over the OCP shim | 233/239 (0.13.0 reference) | `cascade-headless-upstream.makeshifted.workers.dev` |
+| `--env real` | **the PyPI build123d 0.13.0 wheel + numpy** on Pyodide 314, same shim | 232/239 (0.13.0 reference) | `cascade-headless-real.makeshifted.workers.dev` |
+
+All four were deployed from `feat/build123d-0.13` on 2026-10-15; the edge
+ladder and startup times are in
+[SIZE-INVESTIGATION.md](SIZE-INVESTIGATION.md#edge-verification-2026-10-15-deployed).
 
 ```bash
 cd examples/cloudflare-worker
@@ -383,7 +387,7 @@ model itself. Where they part company is heavy models — see
 |---|---|---|
 | `request` (default) | nothing — the first request boots the engine | 0 |
 | `startup` | OCCT instantiate + embind registration + init + kernel snapshot | ~80-120 ms |
-| `warm` | `startup` + the Python boot + a Box -> BREP + STEP warm-up | ~290-350 ms |
+| `warm` | `startup` + the Python boot + a Box -> BREP + STEP warm-up | ~224 ms locally, **844 ms** as Cloudflare's "Worker Startup Time" (2026-10-15 deploy) |
 
 Top-level await works here only because every asset is a module: the boot
 then settles through microtasks alone (workerd rejects a top-level await
@@ -391,8 +395,10 @@ that waits on I/O: "Top-level await in module is unsettled"). The warm-up
 lends its one `exportSTEP()` a plausible clock — workerd's `Date.now()` is
 0 at global scope and OCCT's `Quantity_Date` rejects years before 1979.
 The upstream entry downgrades `warm` to `startup`: its library boot alone
-is ~1 s of CPU. `warm` is opt-in until a real deploy has printed its
-"Worker Startup Time".
+was ~1 s of CPU (0.67 s locally since 0.13 + native EH, which at the
+edge's ~4x startup factor would still blow the 1 s limit). `warm` stays
+opt-in: the edge prints 844 ms for lite, too close to the limit to be a
+default.
 
 ## Bundle size
 

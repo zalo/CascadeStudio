@@ -3,10 +3,56 @@
 Investigated 2026-10-15 on branch `feat/cf-workers-size` (based on
 `feat/build123d-0.13`), with fork-side experiments on
 `zalo/opencascade.js` branch `cf-size-experiments` (local, not pushed).
-**Nothing was deployed.** Everything below was measured locally: in Node
-22.22 (V8 12.4), in local workerd (`wrangler dev`, wrangler 4.125.0), and
-with `wrangler deploy --dry-run --outdir`. Edge-only questions are listed
-at the end with the commands that would answer them.
+The investigation itself was local: Node 22.22 (V8 12.4), local workerd
+(`wrangler dev`, wrangler 4.125.0) and `wrangler deploy --dry-run --outdir`.
+All four entries were then deployed on 2026-10-15; the edge results are the
+next section and supersede the local predictions where they disagree.
+
+## Edge verification (2026-10-15, deployed)
+
+Commit `5c0635f` (native-EH OCCT `99482df`), deployed with wrangler 4.125.0:
+
+| entry | worker | Total Upload | Worker Startup Time | live smoke |
+|---|---|---:|---:|---|
+| lite | `cascade-headless` | 25,354 KiB | 4 ms | all pass |
+| warm | `cascade-headless-warm` | 25,354 KiB | **844 ms** (224 ms locally) | all pass |
+| upstream | `cascade-headless-upstream` | 28,688 KiB | 3 ms | all pass |
+| real | `cascade-headless-real` | 48,649 KiB | 5-12 ms | all pass (after `5c0635f`, see below) |
+
+`scripts/edge-bench.mjs` ladder against the live URLs. Times are client-side
+round trips including a cold boot on the first row; MB is the worker's own
+`memory.totalWasm` (wasm linear memory only, no V8 heap):
+
+| model | lite | upstream | real |
+|---|---|---|---|
+| boxes_on_faces | OK 14.0 MB | OK 14.0 MB | OK 59.9 MB (22 s incl. Pyodide cold boot) |
+| maker_coin | OK 47.3 MB | OK 42.6 MB | **OK 83.7 MB** |
+| ttt-ppp0101, Buffer_Stand, intersecting_pipes, build123d_logo | OK | OK | OK |
+| bicycle_tire (1081 solids) | **503, `exceededMemory`** during the STEP write, 104 s CPU | **OK 44.9 MB**, 234 s | 503 |
+| clock | OK 17.5 MB | OK 44.9 MB | OK 61.8 MB |
+| heat_exchanger | OK 50.5 MB, 29 s | OK 101.7 MB, 32 s | **OK 108.9 MB**, 38 s |
+| bracelet | OK 100.1 MB, 41 s | 422 at 184.9 MB: STEP export failed | 503 |
+
+What the deploy settled:
+
+- **The local "+AB" column was too pessimistic.** Real's maker_coin
+  (local 122.5 live / 142.6 +AB) and heat_exchanger (137.2 / 157.3, "over")
+  both complete on the edge.
+- **Enforcement is not a hard 128 MB line on wasm memory.** Upstream's
+  bracelet reached 184.9 MB of wasm and the isolate still answered (its STEP
+  export then failed); lite's bicycle_tire was killed with
+  `exceededMemory`. Budget against the ladder, not against the local model.
+- **Upstream now runs bicycle_tire**, the August edge holdout, in 45 MB:
+  MicroPython's mid-run GC (patch 11) removed the 77 MB of shim wrappers.
+  Lite still exceeds memory on it.
+- **`BOOT=warm` costs ~4x more startup on the edge than locally** (844 ms
+  vs 224 ms, against 1 s). Lite warm fits; upstream warm (668 ms locally)
+  would not, so `index-upstream.js` keeps refusing it.
+- **Edge-only bug, fixed in `5c0635f`:** a deployed Worker freezes
+  `Date.now()` during synchronous work, so MEMFS mtimes never moved after
+  the wheels were unpacked and Python's import cache hid `build123d`
+  (`ModuleNotFoundError` on every request; `wrangler dev` passed).
+  `importlib.invalidate_caches()` before the import fixes it.
 
 ## Where we stand (2026-10-15, merged branch)
 
