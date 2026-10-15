@@ -176,7 +176,8 @@ def main():
     ids = sorted(set(ra) & set(rb))
     if args.ids_from:
         src = json.load(open(args.ids_from))
-        keep = {e["id"] for e in src} if isinstance(src, list) else set(src)
+        keep = ({e if isinstance(e, str) else e["id"] for e in src}
+                if isinstance(src, list) else set(src))
         ids = [i for i in ids if i in keep]
     delta = compare(ra, rb, ids)
     if args.json:
