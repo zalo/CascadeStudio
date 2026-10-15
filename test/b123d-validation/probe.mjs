@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
-import { readAssets } from './run-lite.mjs';
+import { readAssets, headlessBrowserEnv } from './run-lite.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
@@ -56,6 +56,7 @@ const serverProc = await ensureServer();
 const browser = await chromium.launch({
   headless: !process.env.CS_TEST_HEADFUL,
   args: ['--use-gl=angle', '--use-angle=swiftshader'],
+  env: headlessBrowserEnv(!process.env.CS_TEST_HEADFUL),
 });
 const page = await browser.newPage();
 page.on('pageerror', () => {});
