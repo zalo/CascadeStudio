@@ -4160,10 +4160,12 @@ class Edge(Mixin1D):
     def position_at(self, u):
         # orientation-aware like build123d (Axis(edge) stays raw-curve).
         # COMPROMISE(edge-orientation): which end of a selector edge is
-        # FORWARD depends on the kernel's construction history, and OCCT
-        # 8.0.1 (wasm) does not always orient sub-edges the way OCP 7.x
-        # does — scripts that measure along Axis(edge) of a selected edge
-        # (the joints examples) can legitimately land at the opposite end.
+        # FORWARD depends on the CONSTRUCTION history of the shape, and lite
+        # builds its shapes through different operations than upstream (the
+        # kernel is not the cause: native build123d on OCP 7.9.3 and on OCP
+        # 8.0.1 agree byte for byte, and upstream's own topology on this same
+        # wasm kernel matches them) — scripts that measure along Axis(edge)
+        # of a selected edge (the joints examples) can land at the other end.
         uu = u if self.is_forward else 1.0 - u
         return Vector(tuple(w._edgePointAt(self.topo, float(uu))))
 
@@ -5836,10 +5838,11 @@ class ShapeList(list):
         ties carry the incoming order - which is itself a useful contract for
         CHAINED sorts (sort_by(SortBy.RADIUS).sort_by(Axis.Z) keeps the radius
         order inside each equal-Z group). COMPROMISE(traversal-order): that
-        incoming order is the CAD kernel's traversal of lite's construction,
-        so a script that resolves a COMPLETE tie this way (or keeps whichever
-        of two symmetric results came last) can land on the other candidate
-        than it does on OCP 7.x - which is exactly the ambiguity the canonical
+        incoming order is the CAD kernel's traversal of lite's construction
+        (not a kernel-version effect: native OCP 7.9.3 and 8.0.1 agree), so a
+        script that resolves a COMPLETE tie this way (or keeps whichever of
+        two symmetric results came last) can land on the other candidate
+        than upstream's construction does - which is exactly the ambiguity the canonical
         rule below exists to remove, opt-in on both sides. tie_break=True instead resolves ties
         with _canonical_sort_key, so identical geometry always sorts identically
         rather than in the kernel's traversal order (see Curve.canonical). Like
@@ -6820,8 +6823,10 @@ _BUILDER_CLASSES = {'BuildPart': BuildPart, 'BuildSketch': BuildSketch,
 
 def _probe_metaclass():
     """Custom metaclasses run instance construction on CPython, Brython and
-    the patched MicroPython (micropython-cs); the stock MicroPython fallback
-    has none, and keeps the pre-0.12 direct publication path."""
+    the patched MicroPython (micropython-cs). COMPROMISE(object-firewall):
+    the STOCK MicroPython fallback artifact has none, so there custom
+    Base*Objects keep the pre-0.12 direct publication path (objects created
+    inside a custom object's __init__ can reach the caller's builder)."""
     try:
         class _ProbeMeta(type):
             def __call__(cls, *args, **kwargs):
