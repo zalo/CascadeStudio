@@ -486,3 +486,17 @@ def pending_fork_binding(what):
     def _raise(*a, **k):
         raise NotImplementedError('PENDING_FORK_BINDING: ' + what)
     return _raise
+
+
+# ---- build123d 0.13 / OCP 8 glue classes (shared with ocp_core.py) ---- #
+from ocp_glue import CsShapeMap, CsShapeDataMap  # noqa: E402,F401
+
+
+def cs_brep_adaptor_curve2d(edge, face):
+    """BRepAdaptor_Curve2d(E, F) glue — see ocp_core.cs_brep_adaptor_curve2d
+    (EXACT: OCCT's Initialize is Load(CurveOnSurface(E, F), first, last))."""
+    try:
+        r = js._csBRepAdaptorCurve2d(_unwrap(edge), _unwrap(face))
+    except JsException as e:
+        _fail(str(e))
+    return wrap(r)

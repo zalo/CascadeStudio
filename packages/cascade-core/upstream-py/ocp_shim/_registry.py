@@ -33,8 +33,6 @@ class GeomAdaptor_TransformedSurface(Adaptor3d_Surface):
     _cs = 'GeomAdaptor_TransformedSurface'
 class BRepAdaptor_Surface(GeomAdaptor_TransformedSurface):
     _cs = 'BRepAdaptor_Surface'
-class BRepAlgo(_c.OcpProxy):
-    _cs = 'BRepAlgo'
 class BRepBuilderAPI_Command(_c.OcpProxy):
     _cs = 'BRepBuilderAPI_Command'
 class BRepBuilderAPI_MakeShape(BRepBuilderAPI_Command):
@@ -191,8 +189,6 @@ class CDF_Application(CDM_Application):
     _cs = 'CDF_Application'
 class CDM_Document(Standard_Transient):
     _cs = 'CDM_Document'
-class ChFi2d_FilletAlgo(_c.OcpProxy):
-    _cs = 'ChFi2d_FilletAlgo'
 class Extrema_ExtPC(_c.OcpProxy):
     _cs = 'Extrema_ExtPC'
 class Extrema_POnCurv(_c.OcpProxy):
@@ -431,6 +427,8 @@ class TColStd_Array1OfReal(_c.OcpProxy):
     _cs = 'TColStd_Array1OfReal'
 class TColStd_HArray1OfBoolean(_c.OcpProxy):
     _cs = 'TColStd_HArray1OfBoolean'
+class TColStd_HArray1OfReal(_c.OcpProxy):
+    _cs = 'TColStd_HArray1OfReal'
 class TColStd_HArray2OfReal(_c.OcpProxy):
     _cs = 'TColStd_HArray2OfReal'
 class TColgp_Array1OfPnt(_c.OcpProxy):
@@ -600,18 +598,6 @@ BRepAdaptor_Surface.get_type_name_s = _c.static('BRepAdaptor_Surface', 'get_type
 BRepAdaptor_Surface.get_type_name = BRepAdaptor_Surface.get_type_name_s
 BRepAdaptor_Surface.get_type_descriptor_s = _c.static('BRepAdaptor_Surface', 'get_type_descriptor')
 BRepAdaptor_Surface.get_type_descriptor = BRepAdaptor_Surface.get_type_descriptor_s
-BRepAlgo.ConcatenateWire_s = _c.static('BRepAlgo', 'ConcatenateWire')
-BRepAlgo.ConcatenateWire = BRepAlgo.ConcatenateWire_s
-BRepAlgo.ConcatenateWireC0_s = _c.static('BRepAlgo', 'ConcatenateWireC0')
-BRepAlgo.ConcatenateWireC0 = BRepAlgo.ConcatenateWireC0_s
-BRepAlgo.ConvertWire_s = _c.static('BRepAlgo', 'ConvertWire')
-BRepAlgo.ConvertWire = BRepAlgo.ConvertWire_s
-BRepAlgo.ConvertFace_s = _c.static('BRepAlgo', 'ConvertFace')
-BRepAlgo.ConvertFace = BRepAlgo.ConvertFace_s
-BRepAlgo.IsValid_s = _c.static('BRepAlgo', 'IsValid')
-BRepAlgo.IsValid = BRepAlgo.IsValid_s
-BRepAlgo.IsTopologicallyValid_s = _c.static('BRepAlgo', 'IsTopologicallyValid')
-BRepAlgo.IsTopologicallyValid = BRepAlgo.IsTopologicallyValid_s
 BRepBndLib.Add_s = _c.static('BRepBndLib', 'Add')
 BRepBndLib.Add = BRepBndLib.Add_s
 BRepBndLib.AddClose_s = _c.static('BRepBndLib', 'AddClose')

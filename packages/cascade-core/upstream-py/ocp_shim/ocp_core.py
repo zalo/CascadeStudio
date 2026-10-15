@@ -371,3 +371,24 @@ def pending_fork_binding(what):
     def _raise(*a, **k):
         raise NotImplementedError('PENDING_FORK_BINDING: ' + what)
     return _raise
+
+
+# ---- build123d 0.13 / OCP 8 glue classes ------------------------------ #
+# The shape Map/DataMap glue is runtime-neutral (hash + IsSame only) and
+# shared with ocp_core_pyodide.py: see ocp_glue.py.
+from ocp_glue import CsShapeMap, CsShapeDataMap  # noqa: E402,F401
+
+
+def cs_brep_adaptor_curve2d(edge, face):
+    """BRepAdaptor_Curve2d(E, F) — unbound in the fork. OCCT's
+    BRepAdaptor_Curve2d::Initialize IS `Load(BRep_Tool::CurveOnSurface(E, F,
+    first, last), first, last)` on its Geom2dAdaptor_Curve base, which is
+    exactly what the JS glue builds (bound Geom2dAdaptor_Curve over the
+    OCJS_Out pcurve helper) — so every Geom2dAdaptor_Curve query
+    (FirstParameter/LastParameter/Value/D0/D1/...) is EXACT. Construction-only
+    stand-in: build123d never isinstance-checks it."""
+    try:
+        r = w._csBRepAdaptorCurve2d(_unwrap(edge), _unwrap(face))
+    except _CsWorkerError as e:
+        _fail(str(e))
+    return wrap(r)

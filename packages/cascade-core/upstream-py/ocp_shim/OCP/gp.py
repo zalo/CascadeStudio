@@ -1,5 +1,5 @@
 # GENERATED OCP.gp — proxies over the embind binding (gen-ocp-shim.mjs)
-from ocp_registry import gp_Ax1, gp_Ax2, gp_Ax2d, gp_Ax3, gp_Circ, gp_Circ2d, gp_Dir, gp_Dir2d, gp_Elips, gp_EulerSequence, gp_GTrsf, gp_Hypr, gp_Lin, gp_Lin2d, gp_Parab, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Quaternion, gp_Trsf, gp_Vec, gp_XYZ  # noqa: F401
+from ocp_registry import gp_Ax1, gp_Ax2, gp_Ax2d, gp_Ax3, gp_Circ, gp_Circ2d, gp_Dir, gp_Dir2d, gp_Elips, gp_EulerSequence, gp_GTrsf, gp_Hypr, gp_Lin, gp_Lin2d, gp_Parab, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Quaternion, gp_Trsf, gp_Vec, gp_Vec2d, gp_XYZ  # noqa: F401
 gp_EulerAngles = gp_EulerSequence.gp_EulerAngles
 gp_YawPitchRoll = gp_EulerSequence.gp_YawPitchRoll
 gp_Extrinsic_XYZ = gp_EulerSequence.gp_Extrinsic_XYZ

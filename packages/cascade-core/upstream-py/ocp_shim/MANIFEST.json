@@ -3,7 +3,6 @@
   "BOPAlgo",
   "BRep",
   "BRepAdaptor",
-  "BRepAlgo",
   "BRepAlgoAPI",
   "BRepBndLib",
   "BRepBuilderAPI",
@@ -24,7 +23,6 @@
   "BRepProj",
   "BRepTools",
   "Bnd",
-  "ChFi2d",
   "Extrema",
   "Font",
   "GC",
@@ -63,8 +61,6 @@
   "ShapeFix",
   "ShapeUpgrade",
   "StdPrs",
-  "TColStd",
-  "TColgp",
   "TCollection",
   "TDF",
   "TDataStd",
@@ -77,9 +73,10 @@
   "XCAFApp",
   "XCAFDoc",
   "XSControl",
+  "collections",
   "gce",
   "gp"
  ],
- "classCount": 284,
+ "classCount": 283,
  "enumCount": 26
 }

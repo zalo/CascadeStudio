@@ -116,6 +116,7 @@ export async function bootstrapPyodideRealB123d(pyodide, registerModule, indexUR
   pyodide.runPython(OCP_STUBS_PY);
   const shimManifest = JSON.parse(await fetchText('ocp_shim/MANIFEST.json'));
   installOcpShim(self, JSON.parse(await fetchText('ocp_shim/table.json')));
+  registerModule('ocp_glue', await fetchText('ocp_shim/ocp_glue.py'));
   registerModule('ocp_core', await fetchText('ocp_shim/ocp_core_pyodide.py'));
   registerModule('ocp_registry', await fetchText('ocp_shim/_registry.py'));
   for (const mod of shimManifest.modules) {

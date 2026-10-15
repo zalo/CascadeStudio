@@ -819,6 +819,34 @@ export function installOcpShim(self, table) {
   };
   GLUE['Quantity_Color.ColorFromName'] = () => false; // webcolors shim covers CSS3
 
+  // pybind List.Assign(other) (0.13 topology/kernel.list_shapes copies a
+  // kernel list before draining it). The hand-bound TopTools_ListOfShape has
+  // no Assign and no index access, so copy JS-side: drain the source
+  // First/RemoveFirst, restore it by Append, and fill the target — EXACT
+  // (order kept), and one FFI hop instead of 3n Python calls.
+  GLUE['TopTools_ListOfShape.Assign'] = (args, ref) => {
+    const src = args[0];
+    const items = [];
+    while (!src.IsEmpty()) { items.push(src.First()); src.RemoveFirst(); }
+    for (const it of items) { src.Append(it); }
+    ref.Clear();
+    for (const it of items) { ref.Append(it); }
+    const tracked = listContents.get(src);
+    if (tracked) { listContents.set(ref, tracked.slice()); }
+    return ref;
+  };
+  // BRepAdaptor_Curve2d(E, F) — unbound in the fork; OCCT's Initialize is
+  // Geom2dAdaptor_Curve::Load(BRep_Tool::CurveOnSurface(E, F, f, l), f, l),
+  // so the bound Geom2dAdaptor_Curve over the OCJS_Out pcurve helper IS it
+  // (ocp_core.cs_brep_adaptor_curve2d; 0.13 Vertex.convexity).
+  self._csBRepAdaptorCurve2d = function (edge, face) {
+    const r = oc.OCJS_Out.BRepTool_CurveOnSurface(edge, face);
+    if (!r.curve2d || (typeof r.curve2d.IsNull === 'function' && r.curve2d.IsNull())) {
+      throw new Error('BRepAdaptor_Curve2d: the edge has no pcurve on the face');
+    }
+    return new oc.Geom2dAdaptor_Curve_3(r.curve2d, r.first, r.last);
+  };
+
   // the hand-bound IndexedDataMap has FindKey/FindFromIndex but no Extent —
   // count by probing (fork ask: bind Extent/Size)
   GLUE['TopTools_IndexedDataMapOfShapeListOfShape.Extent'] = (args, ref) => {
