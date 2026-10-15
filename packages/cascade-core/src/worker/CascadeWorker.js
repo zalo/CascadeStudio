@@ -680,10 +680,25 @@ class CascadeStudioWorker {
     const builder = new oc.BRep_Builder();
     builder.MakeCompound(self.currentShape);
     let count = 0;
+    let skipped = 0;
     for (const shape of self.sceneShapes) {
-      if (!shape || !shape.IsNull || shape.IsNull() || !shape.ShapeType) { continue; }
+      // A scene entry can be a PyProxy of a Python object (e.g. a ShapeList a
+      // script handed to show()); probing it for an embind method raises a
+      // Python AttributeError THROUGH the proxy trap. The browser's mesher
+      // path logs such entries and carries on — so must the headless one,
+      // instead of failing the whole run() after the script itself succeeded.
+      let isShape = false;
+      try {
+        isShape = !!shape && shape.$$ !== undefined && typeof shape.IsNull === 'function'
+          && !shape.IsNull() && !!shape.ShapeType;
+      } catch (e) { isShape = false; }
+      if (!isShape) { if (shape) { skipped++; } continue; }
       builder.Add(self.currentShape, shape);
       count++;
+    }
+    if (skipped) {
+      console.log('combineShapes: skipped ' + skipped + ' scene entr' + (skipped === 1 ? 'y' : 'ies')
+        + ' that are not OCCT shapes');
     }
     try { builder.delete(); } catch (e) { /* best effort */ }
     self.sceneShapes = [];

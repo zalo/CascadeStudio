@@ -260,6 +260,24 @@ export function installOcpShim(self, table) {
       }
     } catch (e) { /* lifetime must never break the caller */ }
   };
+  /** MicroPython's release path. MicroPython has no `__del__` on Python
+   *  classes, but its JsProxy objects ARE finalised by the GC (and the
+   *  micropython-cs interpreter collects DURING an evaluation —
+   *  MICROPY_GC_SCAN_SPILLED_STACK), and MicroPython keeps ONE JsProxy per JS
+   *  object: when that proxy is finalised, Python can no longer reach the
+   *  object by any path, so every retain it accumulated is released at once.
+   *  MicroPythonRuntime.js calls this from the interpreter's proxy-free hook,
+   *  i.e. from INSIDE a garbage collection — so it only queues; the queue is
+   *  flushed at the next dispatch entry (scoped(), below) or eval end. */
+  self._csOcpRelease = function (v) {
+    try {
+      if (!v || typeof v !== 'object' || v.$$ === undefined) { return; }
+      if (!(v._csPy > 0)) { return; }   // foreign, or already released
+      if (!isLive(v)) { return; }       // dangled by a kernel rewind
+      v._csPy = 0;
+      if (self._csOcpLifetime !== 'leak') { freeQueue.push(v); }
+    } catch (e) { /* lifetime must never break the GC */ }
+  };
   // per-dispatch scratch: internal temporaries (progress pads, default
   // fills, handle conversions) deleted as soon as the dispatch returns
   let scratch = null;
@@ -1447,6 +1465,10 @@ export function installOcpShim(self, table) {
   // as the dispatch returns. The variadic fast-path entries call through
   // these, so they are covered too.
   const scoped = (fn) => function (...a) {
+    // _csOcpRelease (MicroPython, called from inside a GC) only queues; a
+    // dispatch ENTRY is a safe point to delete: every argument of this call
+    // is still held by a live Python proxy, hence retained (_csPy > 0).
+    if (freeQueue.length >= 4096) { flushFrees(); }
     const prev = scratch;
     scratch = [];
     const mine = scratch;

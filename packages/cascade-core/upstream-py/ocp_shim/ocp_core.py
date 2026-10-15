@@ -208,13 +208,16 @@ class OcpProxy:
     _cs = None
 
     def __init__(self, *args, **kwargs):
-        # NOTE(heavy-model memory round): the MicroPython wasm port's GC
-        # arena ratchets to ~600 MB on heavy models (~1 MB live after
-        # collect). Explicit periodic gc.collect() here (verified running,
-        # 32x/run) does NOT bound it, and gc.threshold is compiled out
-        # (verified no-op) — the port grows the arena on allocation bursts
-        # between any collect cadence reachable from Python. Bounding it
-        # needs an interpreter patch (micropython-cs follow-up).
+        # NOTE(heavy-model memory round, RESOLVED 2026-10-15): the old
+        # ~600 MB GC-arena ratchet was the wasm port collecting ONLY at the
+        # top level (gc_collect() just set a pending flag, so explicit
+        # gc.collect()/gc.threshold were no-ops too). micropython-cs patch 11
+        # (MICROPY_GC_SCAN_SPILLED_STACK, vendor/micropython-cs/PROVENANCE.md)
+        # collects at any depth; the heap now tracks live data. MicroPython
+        # still has no __del__ on Python classes, so the embind lifetime rides
+        # on the JsProxy finaliser of self._ref instead: MicroPythonRuntime.js
+        # installProxyFreeHook -> OcpShim.js _csOcpRelease (one JsProxy per JS
+        # object, so its finalisation means Python reaches the object no more).
         if len(args) == 2 and args[0] is _REF:
             self._ref = args[1]
             return

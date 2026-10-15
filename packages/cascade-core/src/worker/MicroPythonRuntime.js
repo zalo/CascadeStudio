@@ -48,6 +48,31 @@ const MP_HEAP_BYTES = (typeof process !== 'undefined' && process.env &&
   process.env.CS_MP_HEAP) ? parseInt(process.env.CS_MP_HEAP, 10)
   : 16 * 1024 * 1024;
 
+/** Route MicroPython's JsProxy finalisation to the OCP shim's lifetime
+ *  ledger. The port frees a JsProxy (GC finaliser `jsproxy___del__` ->
+ *  `proxy_js_free_obj`) by deleting its JS object from the global
+ *  `proxy_js_ref_map` — the ONLY caller of that Map's delete — and keeps one
+ *  JsProxy per JS object, so a delete means Python can no longer reach the
+ *  object at all. `self._csOcpRelease` (OcpShim.js) queues the embind object
+ *  for deletion. This is what gives the MicroPython leg the deterministic-ish
+ *  embind lifetime the Pyodide leg gets from `OcpProxy.__del__`; on an
+ *  interpreter that only collects at the top level (stock artifacts) it still
+ *  frees everything, just after the run instead of during it. Runs inside a
+ *  garbage collection, so it must not call back into Python. */
+function installProxyFreeHook() {
+  const refMap = globalThis.proxy_js_ref_map;
+  if (!refMap || typeof refMap.delete !== 'function' || refMap._csFreeHook) { return; }
+  const del = Map.prototype.delete;
+  refMap.delete = function (obj) {
+    if (obj && typeof obj === 'object' && obj._csPy > 0) {
+      const release = self._csOcpRelease;
+      if (release) { release(obj); }
+    }
+    return del.call(this, obj);
+  };
+  refMap._csFreeHook = true;
+}
+
 /** The Python side of the bridge, installed as the importable module
  *  `browser` (so `from browser import self as w` works unchanged). Kept in
  *  String.raw so backslashes survive; must contain no backticks or ${. */
@@ -392,6 +417,7 @@ async function _bootstrap(srcKind) {
   }
   const mp = await load(loadOptions);
   const tInitialized = performance.now();
+  installProxyFreeHook();
 
   // JS side of the guarded call bridge. Everything lite invokes on `w` runs
   // inside this try/catch so no JS exception ever unwinds the wasm VM.
