@@ -5619,17 +5619,26 @@ def _property_getter(p):
     except AttributeError:
         pass
     state = [None]
-    def get(s):
-        name = state[0]
-        if name is None:
-            klass = type(s)
+
+    def find_name(klasses):
+        for klass in klasses:
             for cand in dir(klass):
                 try:
                     if getattr(klass, cand) is p:
-                        name = cand
-                        break
+                        return cand
                 except Exception:
                     pass
+        return None
+
+    def get(s):
+        name = state[0]
+        if name is None:
+            # the receiver's class first, then every topology class (a
+            # property of one class - Solid.volume - used on another whose
+            # class overrides it - a Part's Compound.volume)
+            name = find_name([type(s)]) or find_name(
+                [Shape, Solid, Shell, Face, Mixin1D, Edge, Wire, Vertex,
+                 Compound, Part, Sketch, Curve])
             if name is None:
                 raise TypeError('unsupported property key: ' + repr(p))
             state[0] = name
