@@ -219,7 +219,7 @@ topology_selection/b05,b12).
 | `Shape.faces(Select…)` / `vertices(Select…)` on algebra results | key_concepts_algebra/b14, topology_selection/b15 |
 | `Convexity` | topology_selection/b08 |
 | `Builder.label` | key_concepts_builder/b02 |
-| `BuildLine.line_local` / `BuildPart.part_local` | build_line/b01 (+ key_concepts_builder/b05 in the old snapshot) |
+| `BuildLine.line_local` | build_line/b01 |
 | `export_obj` | import_export/b02 |
 
 None of the removed APIs (tangent objects `ArcArcTangentArc/Line`,
@@ -289,8 +289,8 @@ upstream sum the children: 2 / 3 — the worker measurer, see above).
 **Upstream (7):** maker_coin, objects_1d (l1/l4 still 0.11.1-placed),
 ttt-ppp0102, key_concepts_builder/b16 + b17, tips/b04, assemblies/c06.
 
-Status transitions vs the 0.11.1 baselines: lite PASS → ERROR 17 (insert x14,
-Convexity, Builder.label, …), PASS → MISMATCH 3 (maker_coin, ttt-ppp0102,
+Status transitions vs the 0.11.1 baselines: lite PASS → ERROR 17 (insert x15,
+Convexity, Builder.label), PASS → MISMATCH 3 (maker_coin, ttt-ppp0102,
 key_concepts_builder/b17), MISMATCH → ERROR 2 (tutorial_joints and sm_hanger
 now die on `insert` before reaching their old mismatch); new scripts 15 PASS /
 10 ERROR / 2 MISMATCH. Upstream: PASS → ERROR 19, PASS → MISMATCH 3; tea_cup
