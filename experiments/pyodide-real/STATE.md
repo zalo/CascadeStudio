@@ -1,5 +1,12 @@
 # pysrc=real — REAL build123d 0.11.1 on Pyodide over the OCP shim
 
+> **2026-10-15 — now REAL build123d 0.13.0.** The leg loads the 0.13.0 wheel
+> + bd_materials 0.2.4 (REAL materials/mass) + typing_extensions 4.16.0;
+> threejs_materials is a stub (COMPROMISE(material-look)). Harness vs the
+> 0.13.0 reference: **232 / 3 / 3 / 1** of 239 (0.11.1 wheel: 201/7/30/1).
+> Ledger: `experiments/upstream-on-micropython/BUMP-LEDGER-0.13.md`. The text
+> below is the 0.11.1-era history.
+
 **State: COMPLETE.** `?pyruntime=pyodide&pysrc=real` (localStorage
 `cascade-py-src=real`, pyodide only) runs **REAL, UNMODIFIED build123d
 0.11.1** — the actual PyPI wheel, real CPython 3.14 semantics, real numpy,

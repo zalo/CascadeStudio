@@ -96,7 +96,7 @@ function engine(env, request) {
         runtime: 'micropython',
         // 'lite'     — build123d-lite, embedded in the bundle: ~5x faster to
         //              boot, 206/222 on the validation corpus.
-        // 'upstream' — build123d 0.11.1's own Python over the OCP shim:
+        // 'upstream' — build123d 0.13.0's own Python over the OCP shim:
         //              216/222, ~0.65 s more boot. See README.
         pySrc,
         occtWasm,

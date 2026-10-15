@@ -18,6 +18,7 @@
     { "name": "webcolors", "file": "shims/webcolors.py" },
     { "name": "ocp_gordon", "file": "shims/ocp_gordon.py" },
     { "name": "bd_materials", "file": "shims/bd_materials.py" },
+    { "name": "tempfile", "file": "shims/tempfile.py" },
     { "name": "numpy", "file": "shims/numpy.py" },
     { "name": "sympy", "file": "shims/sympy.py" }
   ]

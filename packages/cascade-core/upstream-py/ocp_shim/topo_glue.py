@@ -461,8 +461,10 @@ class Mesher:
         return True
 
     def read(self, file_name):
-        raise NotImplementedError('Mesher.read is not supported in '
-                                  'build123d-lite')
+        raise NotImplementedError(
+            'Mesher.read is not supported in the browser worker: build123d '
+            'reads STL/3MF meshes through lib3mf, which this wasm build '
+            'does not include (COMPROMISE(mesher))')
 
 
 # ------------------------------------------- kernel-gap method routing ---- #

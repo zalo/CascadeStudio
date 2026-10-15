@@ -270,7 +270,7 @@ let _bootedPySrc = null;
  *  - 'lite' (`?pysrc=lite` / localStorage cascade-py-src=lite): lite is the
  *    `build123d` package, like Brython/Pyodide.
  *  - 'upstream' (explicit `?pysrc=upstream`): lite registers as
- *    `build123d_lite` and UPSTREAM build123d 0.11.1 Level-A source layers on
+ *    `build123d_lite` and UPSTREAM build123d 0.13.0 source layers on
  *    top as `build123d` (see UpstreamB123d.js); a missing vendored payload
  *    is a hard error.
  *  - anything else ('auto', the no-flag default): upstream when the payload
@@ -493,7 +493,7 @@ async function _bootstrap(srcKind) {
   let effectiveSrc = srcKind === 'lite' ? 'lite' : 'upstream';
   if (effectiveSrc === 'upstream') {
     // UPSTREAM-source mode (the MicroPython default): lite becomes the seam
-    // library `build123d_lite`; the `build123d` package is upstream 0.11.1
+    // library `build123d_lite`; the `build123d` package is upstream 0.13.0
     // Level-A source layered on top by UpstreamB123d.js (fetched from
     // dist/upstream-b123d/).
     // Transient fetch failures (several parallel tabs booting at once can

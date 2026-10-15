@@ -10,7 +10,7 @@ Two deployments, one codebase — see [Source flavors](#source-flavors):
 | | build123d | corpus | live |
 |---|---|---|---|
 | default | **build123d-lite** (embedded) | 206/222 | `cascade-headless.makeshifted.workers.dev` |
-| `--env upstream` | **verbatim upstream 0.11.1** over the OCP shim | 216/222 | `cascade-headless-upstream.makeshifted.workers.dev` |
+| `--env upstream` | **verbatim upstream 0.13.0** over the OCP shim | 233/239 (0.13.0 reference; the live deployment predates the bump: 0.11.1, 216/222) | `cascade-headless-upstream.makeshifted.workers.dev` |
 
 ```bash
 cd examples/cloudflare-worker
@@ -363,7 +363,7 @@ boot — 0 KiB of script):
 | asset | raw | gzip | fetched by |
 |---|---|---:|---|
 | `fonts/FreeSans*.ttf` (4 faces) | 4.10 MB | 2.22 MB | both flavors, at boot |
-| `py/upstream-b123d.json` (158 modules) | 3.15 MB | 0.40 MB | `PY_SRC=upstream` only |
+| `py/upstream-b123d.json` (157 modules, build123d 0.13.0) | 3.25 MB | 0.42 MB | `PY_SRC=upstream` only |
 
 Before this split the script was **9909 KiB gz — 97% of the limit**, with the
 390 KiB gz upstream Python layer still to fit. Moving the fonts out bought
@@ -432,9 +432,10 @@ readers, the mesher, `Geom2dGcc`, …) is the only way under the free plan's
    un-poisoned kernel (see
    [Two ceilings that were real](#two-ceilings-that-were-real)).
 6. **`pySrc: 'lite'`.** The `upstream` source layer (verbatim upstream
-   build123d 0.11.1) also works headless, but needs 3.5 MB of extra Python
-   text bundled and boots ~5x slower (642 ms vs 122 ms of library load) for
-   identical memory. Lite is embedded in the JS bundle.
+   build123d 0.13.0) also works headless, but needs 3.25 MB of extra Python
+   text (one 0.42 MB-gz JSON asset) and boots ~7x slower (868 ms vs 122 ms
+   of library load in Node; 0.11.1 was 642 ms) for identical basic-model
+   memory (51.5 MB). Lite is embedded in the JS bundle.
 
 ## Files
 

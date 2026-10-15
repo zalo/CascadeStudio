@@ -123,14 +123,100 @@ dead Stage-2 constrained_bridge.py) and `_finalize`'s lite branches are
 gone. The runtime now probes the ocp_shim payload AND interpreter
 metaclasses before choosing pysrc=upstream (stock artifacts → pysrc=lite).
 
-## G. Harness (both legs, vs the 0.13.0 native reference)
+## G. Harness (both legs, vs the 0.13.0 native reference) — ~55 min wall, ~25 min of it attention
 
-(filled below)
+Corpus: `Reference: build123d 0.13.0` (f0fd695) — 247 scripts, 239 scored,
+8 native SKIPs. Baselines are the foundation agent's runs of the UNCHANGED
+code (0.11.1 vendor / 0.11.1 wheel) against the same reference.
 
-## H. Gates
+| Run | MicroPython + upstream | Pyodide + real |
+|---|---|---|
+| baseline (0.11.1 code) | 198 / 7 / 33 / 1 | 201 / 7 / 30 / 1 |
+| r1 (bring-up as committed at 08:21; the first launch stalled under 4 harnesses + an LTO link and was killed) | 221 / 8 / 9 / 1 | — |
+| r2 (+ round-1 fixes) | 231 / 3 / 4 / 1 | 227 / 5 / 4 / 3 (2 first-page TIMEOUT flaps) |
+| r3 (+ round-2 fixes) | — | 233 / 2 / 3 / 1 |
+| **final (09:03–09:15, headless, --pages 2)** | **233 / 2 / 3 / 1** (299 s) | **232 / 3 / 3 / 1** (284 s) |
 
-(filled below)
+(PASS / MISMATCH / ERROR / TIMEOUT.) Nothing that passed in a baseline
+regressed, except tips/b04 on the real leg (below). Results committed:
+`test/b123d-validation/results-013-{upstream,real}.json`; reports in
+`experiments/upstream-on-micropython/report-013-upstream.md` and
+`experiments/pyodide-real/report-013-real.md`.
+
+Clusters closed in the grind, with layer and cost:
+
+| Fix | Scripts | Layer | Effort |
+|---|---|---|---|
+| builder measurement = reference rule (`.part`/`.line` placed, `.sketch_local`), viewport shows placed products | tea_cup, sm_hanger, ppp0102, build_line/b01, key_concepts_builder/b17 (+ objects_1d's line examples) | glue | 10 min |
+| volume by upstream's own `Shape.volume` (0.12+ Compound.volume = direct children) | assemblies/c06 (mismatched on EVERY baseline leg) | glue | 5 min |
+| anytree `path`/`ancestors`/`root`/... | assemblies/c03 + call (0.13 `global_location`) | shim | 5 min |
+| `ShapeList.__radd__` (MicroPython refuses list + list-subclass) | objects_2d now RUNS (drafting) | glue | 5 min |
+| foreign-property sort key (`parts.sort_by(Solid.volume)`) | sort_distance_from | builtin | 5 min |
+| `export_obj` (MicroPython) + numpy_micro UV surface + `Poly_Triangulation.Triangles` glue + `Poly_MeshPurpose` numeric typedef (BRep_Tool.Triangulation was a dead variant → upstream `tessellate` broke on both legs) | import_export/b02 | glue + generator | 25 min |
+| 0.13 import result shape (single-part STEP → Solid; import_brep → cast class) | tutorial_joints, filter_inner_wire_count (exposed by the Shape.volume measurement on the real leg) | glue | 10 min |
+| TopoDS_Cast failures → Standard_TypeMismatch by SITE (undecodable after a heap-scribbling script) | twist_extrude (page-order flake) | shim | 10 min |
+| tempfile shim + an accurate Mesher.read message | b10 (still an honest gap) | shim | 5 min |
+
+Remaining non-PASS, all documented (identical on both legs except b04):
+
+- **docs/objects_1d** — `l3` is a DoubleTangentArc: upstream's solver runs
+  verbatim but over the scipy shim's Nelder-Mead (both legs — Pyodide does
+  not load real scipy), which converges to the other tangent root;
+  `scene` = COMPROMISE(triad-labels) (no single-line stroke font).
+- **docs/objects_2d** — runs (upstream drafting on BOTH legs now); `t2` is a
+  25 µm Text width difference, opentype.js vs FreeType metrics
+  (COMPROMISE(text)).
+- **docs-rst/tips/b04** — a COMPLETE `sort_by` tie; non-deterministic
+  natively in every version (foundation finding) — flaps PASS/MISMATCH.
+- **examples/dual_color_3mf**, **docs-rst/topology_selection/b10** — lib3mf
+  (3MF write / mesh read) is not in this wasm build.
+- **ttt/ttt-23-t-24-curved_support** — sympy.
+- **docs/spitfire_wing_gordon** — TIMEOUT (COMPROMISE(gordon-surface-
+  realization) at wing scale, ~390 s).
+
+Kernel-version mismatches DID shrink to zero: with the native reference on
+OCCT 8.0.1 too, no non-PASS is a kernel-version residual (the 0.11.1-era
+bicycle_tire/ex08/Buffer_Stand/toy_truck families all PASS). The one
+kernel-level difference observed is not measured by the harness: BRepMesh's
+triangle FAN order (node positions/UVs/counts identical) differs from
+native 8.0.1 — visible only in export_obj output.
+
+## H. Gates — all green (2026-10-15)
+
+| Gate | Result |
+|---|---|
+| `test/py-src-upstream.spec.js` + `py-src-real.spec.js` + `py-runtime.spec.js` | 11 / 11 passed (headless) |
+| full default Playwright suite | **103 passed** (headless, `env -u DISPLAY`) |
+| `CS_PY_SRC=upstream node test/headless-node.mjs` | ALL PASSED (66 checks; library boot 868 ms vs 642 ms on 0.11.1; basic model 51.5 MB, unchanged) |
+| `node test/headless-node.mjs` | ALL PASSED (67 checks) |
+| Cloudflare `node scripts/smoke.mjs` vs `wrangler dev --env upstream` (:8810) | ALL WORKER CHECKS PASSED; `/health` reports pySrc=upstream with the 0.13 tree (drafting stretch loaded, 77 OCP modules); `py/upstream-b123d.json` 157 modules, 0.42 MB gz. No deploy. |
+| node inner loop `topo-poc.mjs` | ALL OK (t5/t8 updated to OCP-8 names) |
 
 ## I. Verdict
 
-(filled below)
+**A verbatim-upstream bump across a kernel-binding generation costs ~2 hours,
+not days** — measured: 07:53 start → 08:09 first green node run on 0.13 →
+08:38 first full harness (221) → 09:15 final numbers (233 / 232) → gates and
+docs by ~09:25. Where the time went:
+
+- ~15 min vendoring (one-time tooling was ported from the dev-bump branch;
+  the next bump is `fetch --src --version` + one VENDOR_MODULES entry).
+- ~35 min OCP surface: the bill/dump/generator pipeline re-ran cleanly
+  against OCP 8.0.1 once it learned the `OCP.collections` aliasing; every
+  new MISSING item was glue-able (no fork rebuild).
+- ~30 min MicroPython friction — the expensive item of the dev bump
+  (BaseObjectMeta emulation, ~1.5 h) is now ZERO thanks to the
+  micropython-cs metaclass patches; the one surprise was the
+  `_GenericMeta`/ABCMeta metaclass conflict (10 min).
+- ~20 min deps (bd_materials REAL on Pyodide, honest stubs elsewhere).
+- ~85 min harness grind + classification, nine S-sized fixes; the two
+  biggest classes were the MEASUREMENT contract (0.12's local `_obj`) and
+  new 0.13 API surface (export_obj/tessellate, import result shape,
+  anytree.path).
+- ~15 min retiring pytopo=lite (it could not carry 0.13 at any reasonable
+  price; deleting ~1,170 seam lines was cheaper than porting them).
+
+Price the next bump at **~2 h + ~10 min per new kernel-facing feature**, more
+only if upstream adopts a CPython construct MicroPython cannot express (a
+new metaclass protocol, `__class_getitem__`-only generics, `__init_subclass__`)
+— those are interpreter patches, not shim work.
