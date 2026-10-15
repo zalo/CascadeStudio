@@ -5060,6 +5060,11 @@ class Shell(Shape):
             Shape.__init__(self, faces.topo)
             self._face_shapes = list(faces.faces())
             return
+        if not isinstance(faces, (list, tuple)) and hasattr(faces, 'ShapeType'):
+            # Shell(TopoDS_Shell): wrap the raw shell (shells() selector)
+            Shape.__init__(self, faces)
+            self._face_shapes = None
+            return
         fl = [f for f in _tolist(faces)]
         self._face_shapes = fl
         if len(fl) == 0:
