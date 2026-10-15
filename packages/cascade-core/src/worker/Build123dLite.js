@@ -1806,7 +1806,12 @@ class ShapeHistory:
 
     def merge(self, later):
         """Extend this record with the operation that came after it."""
-        if later is not None:
+        # (None never crosses into JS: Brython hands it over as an object)
+        if later is None or later.wrapped is None:
+            return self
+        if self.wrapped is None:
+            self.wrapped = w.HistMerge(later.wrapped)
+        else:
             self.wrapped = w.HistMerge(self.wrapped, later.wrapped)
         return self
 
@@ -1819,7 +1824,8 @@ class ShapeHistory:
     def _flags(self, topos):
         if not topos:
             return []
-        return list(w.HistClassify(self.wrapped, self.before, self.brought,
+        hist = self.wrapped if self.wrapped is not None else False
+        return list(w.HistClassify(hist, self.before, self.brought,
                                    list(topos)))
 
     def is_last(self, shape):
@@ -2017,7 +2023,7 @@ class Shape:
         if len(topos) == 1:
             return _wrap_like(self, topos[0])
         vols = [_solid_volume(t) for t in topos]
-        fused = w.Union(topos, False, None, False, True)
+        fused = w.Union(topos, False, 0, False, True)
         # COMPROMISE(kernel-guard): this OCCT 8.0.1 wasm build has a known
         # kernel fault where BooleanFuse SILENTLY DROPS an operand when
         # coplanar faces meet along BSpline edges. The JS Union now detects
@@ -2064,10 +2070,10 @@ class Shape:
         if len(tools) > 1:
             # fuse the tools first: ONE boolean cut, like build123d — the
             # sequential per-tool cuts are also less robust in this OCCT
-            fused_tools = w.Union(tools, False, None, False, True)
+            fused_tools = w.Union(tools, False, 0, False, True)
             tool_record = _record_of(fused_tools, tools[:1], tools[1:])
             tools = [fused_tools]
-        cut = w.Difference(self.topo, tools, False, None, False, True)
+        cut = w.Difference(self.topo, tools, False, 0, False, True)
         # upstream records ONE cut with every tool brought in; the tool
         # pre-fuse chains in front of it (BRepTools_History merge)
         record = _record_of(cut, [self.topo], tools)
@@ -2079,7 +2085,7 @@ class Shape:
     def __and__(self, other):
         others = _tolist(other)
         topos = [self.topo] + [_topo(o) for o in others]
-        common = w.Intersection(topos, False, None, False, True)
+        common = w.Intersection(topos, False, 0, False, True)
         return _wrap_like(self, common)._made_by(
             _record_of(common, topos[:1], topos[1:]))
 
@@ -2150,7 +2156,11 @@ class Shape:
         seen = set()   # a list made this O(n^2) on solid-heavy builders
         def _cb(vtx):
             p = w._vertexPoint(vtx)
-            key = (round(p[0], 9), round(p[1], 9), round(p[2], 9))
+            # INTEGER keys: Brython hashes an integral JS number (int) and the
+            # same value arriving as a float differently, so float-tuple keys
+            # let duplicates through there
+            key = (int(round(p[0] * 1e9)), int(round(p[1] * 1e9)),
+                   int(round(p[2] * 1e9)))
             if key not in seen:
                 seen.add(key)
                 out.append(Vertex(vtx, parent=self))
@@ -5549,6 +5559,13 @@ def _sub_shapes_of(shape, kind):
     return list(shape.solids())
 
 
+def _ik6(x):
+    """A micron-rounded INTEGER key component: float-tuple keys hash
+    inconsistently on Brython (an integral JS number arrives as int, the
+    same value computed in Python as float)."""
+    return int(round(float(x) * 1e6))
+
+
 def _shape_key(shape, kind):
     """Geometric identity of a sub-shape, for 'post - pre' set arithmetic.
 
@@ -5559,22 +5576,22 @@ def _shape_key(shape, kind):
     topo = shape.topo
     if kind == 'vertex':
         p = w._vertexPoint(topo)
-        return (round(p[0], 6), round(p[1], 6), round(p[2], 6))
+        return (_ik6(p[0]), _ik6(p[1]), _ik6(p[2]))
     if kind == 'edge':
         c = w._edgeMidpoint(topo)
-        return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-                round(w._edgeLength(topo), 6))
+        return (_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+                _ik6(w._edgeLength(topo)))
     if kind == 'face' or kind == 'shell':
         # CenterOfMass is a VOLUME integral in this build and degenerates to
         # the bounding-box corner on an open shape, so every face of a solid
         # got the same key — the face centroid is the honest identity
         c = tuple(w._faceCentroid(topo)) if kind == 'face' else \
             tuple(w.CenterOfMass(topo))
-        return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-                round(w.SurfaceArea(topo), 6))
+        return (_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+                _ik6(w.SurfaceArea(topo)))
     c = tuple(w.CenterOfMass(topo))
-    return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-            round(w.SolidsVolume(topo), 6))
+    return (_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+            _ik6(w.SolidsVolume(topo)))
 
 
 def new_edges(*objects, combined=None):
@@ -5602,13 +5619,13 @@ def new_edges(*objects, combined=None):
     keyed = {}
     for e in own:
         c = w._edgeMidpoint(e.topo)
-        keyed[(round(c[0], 6), round(c[1], 6), round(c[2], 6),
-               round(w._edgeLength(e.topo), 6))] = e
+        keyed[(_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+               _ik6(w._edgeLength(e.topo)))] = e
     out = ShapeList()
     for raw in w.NewEdges(combined.topo, topos):
         c = w._edgeMidpoint(raw)
-        key = (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-               round(w._edgeLength(raw), 6))
+        key = (_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+               _ik6(w._edgeLength(raw)))
         match = keyed.get(key)
         # COMPROMISE(new-edges-partial): an edge that is only PARTLY new comes
         # back as a trimmed piece with no counterpart in 'combined'; it is
@@ -10536,7 +10553,7 @@ def export_step(to_export, file_path, unit=None, write_pcurves=True,
     unit= is honoured via write.step.unit. Returns True like upstream."""
     text = w.ExportSTEP(_topo(to_export), str(file_path).replace('/', '_'),
                         _STEP_UNIT_NAMES.get(unit, str(unit))
-                        if unit is not None else None)
+                        if unit is not None else '')
     return bool(text)
 
 
