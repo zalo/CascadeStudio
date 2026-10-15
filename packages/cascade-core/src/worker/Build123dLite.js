@@ -11004,11 +11004,17 @@ class RevoluteJoint(Joint):
         if axis is None:
             axis = Axis.Z
         self.angular_range = angular_range
+        self._angle_reference_provided = angle_reference is not None
         if angle_reference is not None:
-            self.angle_reference = Vector(angle_reference)
+            ref = Vector(angle_reference)
+            if abs(ref.normalized().dot(Vector(axis.direction).normalized())) \
+                    > 1e-5:
+                raise ValueError('angle_reference must be normal to axis')
+            self.angle_reference = ref
         else:
             self.angle_reference = Plane(origin=(0, 0, 0),
                                          z_dir=axis.direction).x_dir
+        self._angle = None
         self.relative_axis = axis.located(part.location.inverse())
         part.joints[label] = self
         Joint.__init__(self, label, part)
@@ -11035,10 +11041,20 @@ class RevoluteJoint(Joint):
             raise ValueError('angle (' + str(angle_degrees) +
                              ') must be in range of ' +
                              str(self.angular_range))
+        self._angle = angle_degrees
         # build123d: "Avoid strange rotations when angle is zero" quirk
         if angle_degrees == 0.0:
             angle_degrees = 360.0
-        return (self.relative_axis.location * Rotation(0, 0, angle_degrees) *
+        if self._angle_reference_provided:
+            # 0.12 fix: the angle is measured from angle_reference
+            rotation = Location(Plane(
+                origin=(0, 0, 0),
+                x_dir=self.angle_reference.rotate(self.relative_axis,
+                                                  angle_degrees),
+                z_dir=self.relative_axis.direction))
+        else:
+            rotation = Rotation(0, 0, angle_degrees)
+        return (self.relative_axis.location * rotation *
                 other.relative_location.inverse())
 
 

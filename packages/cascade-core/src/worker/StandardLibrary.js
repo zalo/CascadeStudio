@@ -2633,7 +2633,10 @@ function _gccParamInTrim(arg, u) {
   let v = u;
   if (arg.adapt2d.IsPeriodic()) {
     let period = arg.adapt2d.Period();
-    v = ((u - arg.first) % period + period) % period + arg.first;
+    // build123d 0.12 _norm_on_period: a value within TOLERANCE of 'first'
+    // snaps to it instead of wrapping to first + period
+    v = Math.abs(u - arg.first) < 1e-6 ? arg.first
+      : ((u - arg.first) % period + period) % period + arg.first;
   }
   return v >= arg.first - _GCC_TOLERANCE && v <= arg.last + _GCC_TOLERANCE;
 }
