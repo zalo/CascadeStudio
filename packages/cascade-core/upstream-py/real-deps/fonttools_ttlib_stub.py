@@ -24,3 +24,14 @@ class _TTCollectionModule:
 
 
 ttCollection = _TTCollectionModule
+
+
+# build123d 0.13 text.py also imports the two exception types (it catches
+# them around font-file parsing); real Exception subclasses so the except
+# clauses stay valid — nothing here ever raises them.
+class TTLibError(Exception):
+    pass
+
+
+class TTLibFileIsCollectionError(TTLibError):
+    pass

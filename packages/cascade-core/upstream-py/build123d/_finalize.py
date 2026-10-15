@@ -27,6 +27,20 @@ _OPTIONAL = ('objects_part', 'objects_curve', 'objects_sketch', 'joints',
 _PYTOPO = getattr(_pkg, '_cs_pytopo', 'lite')
 
 
+def _cs_current_builder():
+    """The active upstream Builder, version-agnostic: 0.11.1 kept it in a
+    class ContextVar (Builder._current); 0.12+ deleted that for the unified
+    BuildScope stack (Builder._get_context reads it)."""
+    getctx = getattr(_common.Builder, '_get_context', None)
+    if getctx is not None:
+        try:
+            return getctx(log=False)
+        except TypeError:
+            return getctx()
+    cur = getattr(_common.Builder, '_current', None)
+    return cur.get(None) if cur is not None else None
+
+
 def _public_names(mod):
     all_names = getattr(mod, '__all__', None)
     if all_names:
@@ -94,7 +108,7 @@ if _PYTOPO == 'upstream':
         res = _lt.ArrowHead(size, head_type=ht, rotation=rotation,
                             mode=_lt.Mode.PRIVATE)
         head = _g._from_raw(_lt._topo(res), _topology.Sketch)
-        ctx = _common.Builder._current.get(None)
+        ctx = _cs_current_builder()
         if ctx is not None:
             ctx._add_to_context(
                 head, mode=mode if mode is not None else _enums.Mode.ADD)
@@ -118,7 +132,7 @@ else:
 def _cs_builder_op(fn, mode):
     def wrapped(*a, **k):
         res = fn(*a, **k)
-        ctx = _common.Builder._current.get(None)
+        ctx = _cs_current_builder()
         if ctx is not None and res is not None and \
                 getattr(res, 'topo', None) is not None:
             ctx._add_to_context(res, mode=mode)
@@ -145,7 +159,7 @@ def _cs_airfoil(airfoil_code, n_points=50, finite_te=False,
         # adopt the lite-built edges as UPSTREAM shapes
         import topo_glue as _g
         res = _g._from_raw(_lt._topo(res), _topology.Curve)
-    ctx = _common.Builder._current.get(None)
+    ctx = _cs_current_builder()
     if ctx is not None and res is not None:
         ctx._add_to_context(*res.edges(), mode=mode)
     return res
@@ -166,7 +180,7 @@ def _cs_double_tangent_arc(pnt, tangent, other, keep=None, mode=None):
     lk = getattr(_lt.Keep, getattr(keep, 'name', 'TOP'), _lt.Keep.TOP)
     arc = _lt.DoubleTangentArc(pnt, tangent, other, keep=lk,
                                mode=_lt.Mode.PRIVATE)
-    ctx = _common.Builder._current.get(None)
+    ctx = _cs_current_builder()
     if ctx is not None and getattr(ctx, '_tag', '') == 'BuildLine' and \
             ctx._obj is not None and getattr(ctx._obj, 'topo', None) is not None:
         try:

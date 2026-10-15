@@ -1,5 +1,5 @@
 # real_glue (pyodide, pysrc=real) — the worker glue under REAL, UNMODIFIED
-# build123d 0.11.1 running on Pyodide (CPython/wasm) with the OCP-over-embind
+# build123d 0.13.0 running on Pyodide (CPython/wasm) with the OCP-over-embind
 # shim as the ONLY substitution.
 #
 # The Pyodide port of ocp_shim/topo_glue.py (the MicroPython pytopo=upstream
@@ -464,6 +464,35 @@ def _cs_make_gordon_surface(cls, profiles, guides, tolerance=3e-4):
 Face.make_gordon_surface = classmethod(_cs_make_gordon_surface)
 
 
+# COMPROMISE(material-look): build123d 0.13's Shape.material setter stores
+# the FinishedMaterial and THEN derives the display color from the material's
+# three.js PBR look (FinishedMaterial.pbr -> threejs_materials). The look
+# stack (Pillow + pygltflib + ~86 MB of textures) is not bundled
+# (real-deps/threejs_materials_stub.py raises CsPbrUnavailable), so the
+# material — density, mass(), property ranges, all REAL bd_materials — is
+# kept and only the derived color is skipped. Reading `.pbr` still raises.
+def _cs_wrap_material_setter():
+    prop = Shape.__dict__.get('material')
+    if not isinstance(prop, property) or prop.fset is None:
+        return
+    try:
+        from threejs_materials import CsPbrUnavailable
+    except ImportError:
+        return
+    orig_set = prop.fset
+
+    def _set(self, value):
+        try:
+            orig_set(self, value)
+        except CsPbrUnavailable:
+            pass  # self._material is already assigned (setter order)
+
+    Shape.material = property(prop.fget, _set, prop.fdel, prop.__doc__)
+
+
+_cs_wrap_material_setter()
+
+
 # ------------------------------------------------- package-level hooks ---- #
 
 def _reset_state():
@@ -471,9 +500,14 @@ def _reset_state():
     builder stacks AND the upstream builder ContextVars (a JS-level abort can
     skip Python unwinding, leaking builder contexts)."""
     _lt._reset_state()
-    from build123d.build_common import Builder, LocationList, WorkplaneList
-    for _cls in (Builder, LocationList, WorkplaneList):
-        var = getattr(_cls, '_current', None)
+    import build123d.build_common as _bc
+    # 0.12+: ONE authoritative ContextVar (the BuildScope stack) replaced the
+    # per-class Builder/LocationList/WorkplaneList ContextVars of 0.11.1
+    scope_var = getattr(_bc, '_build_scope', None)
+    if scope_var is not None and scope_var.get(None) is not None:
+        scope_var.set(None)
+    for _cls_name in ('Builder', 'LocationList', 'WorkplaneList'):
+        var = getattr(getattr(_bc, _cls_name, None), '_current', None)
         if var is not None and var.get(None) is not None:
             var.set(None)
 

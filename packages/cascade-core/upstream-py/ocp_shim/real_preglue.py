@@ -6,14 +6,14 @@
 # kernel fonts — Compound.make_text is glue-routed to lite's opentype.js
 # path). But REAL build123d/text.py runs a FontManager at MODULE level
 # (`available_fonts = FontManager().available_fonts`), whose __init__ needs
-# Font_FontMgr.GetInstance_s() + TColStd_SequenceOfHAsciiString. Serve both
+# Font_FontMgr.GetInstance_s() + a HAsciiString sequence. Serve both
 # as pure-Python stand-ins at the OCP layer: the manager reports the
 # 'singleline' canary alias as already registered, which makes text.py skip
 # its bundled-font registration (fontTools) branch entirely; the font LIST is
 # honestly empty and FindFont raises loudly.
 
 import OCP.Font as _font_mod
-import OCP.TColStd as _tcolstd_mod
+import OCP.collections as _collections_mod  # OCP 8 / build123d 0.13 name
 
 
 class _CsHAsciiString:
@@ -79,4 +79,6 @@ class Font_FontMgr:
 
 
 _font_mod.Font_FontMgr = Font_FontMgr
-_tcolstd_mod.TColStd_SequenceOfHAsciiString = TColStd_SequenceOfHAsciiString
+# OCP 8: TColStd_SequenceOfHAsciiString is
+# OCP.collections.Sequence_TCollection_HAsciiString (build123d 0.13 text.py)
+_collections_mod.Sequence_TCollection_HAsciiString = TColStd_SequenceOfHAsciiString

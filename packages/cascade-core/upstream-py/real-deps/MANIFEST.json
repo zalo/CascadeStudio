@@ -20,6 +20,7 @@
     { "name": "IPython.lib",                  "file": null },
     { "name": "IPython.lib.pretty",           "file": "ocp_shim/ipython_pretty.py" },
     { "name": "sympy",                        "file": "shims/sympy.py" },
-    { "name": "ocp_gordon",                   "file": "shims/ocp_gordon.py" }
+    { "name": "ocp_gordon",                   "file": "shims/ocp_gordon.py" },
+    { "name": "threejs_materials",            "file": "real-deps/threejs_materials_stub.py" }
   ]
 }
