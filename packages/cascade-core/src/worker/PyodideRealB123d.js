@@ -157,7 +157,13 @@ export async function bootstrapPyodideRealB123d(pyodide, registerModule, indexUR
   //     level — see real_preglue.py)
   registerModule('real_preglue', await fetchText('ocp_shim/real_preglue.py'));
 
-  // 5. REAL build123d, verbatim from the wheel
+  // 5. REAL build123d, verbatim from the wheel. The wheels (site-packages)
+  //    and the shim (/lib/OCP) were just written to MEMFS, and Python's
+  //    FileFinder only rescans a directory whose mtime moved. MEMFS stamps
+  //    mtimes from Date.now(), which a DEPLOYED Cloudflare Worker freezes
+  //    during synchronous work: the stale listing hid build123d on the edge
+  //    while `wrangler dev` (whose clock runs) passed. Invalidate explicitly.
+  pyodide.runPython('import importlib; importlib.invalidate_caches()');
   pyodide.runPython('import build123d');
   const tImport = performance.now();
 
