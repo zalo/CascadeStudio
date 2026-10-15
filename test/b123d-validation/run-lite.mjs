@@ -43,6 +43,22 @@ export function readAssets(entry) {
   return Object.keys(files).length > 0 ? files : null;
 }
 
+/** The environment for the launched browser. HEADLESS Chromium must NOT see
+ *  a DISPLAY it cannot open: with the desktop's DISPLAY=:0 inherited (this
+ *  user cannot authenticate against it) the GPU process fails to start and
+ *  the page gets NO WebGL context at all - the "headless Chromium has no
+ *  WebGL here" symptom (every script: "no measurement produced") that the
+ *  CS_TEST_HEADFUL=1 DISPLAY=:99 recipe worked around. Without DISPLAY,
+ *  headless SwiftShader WebGL works, so headless is the default again (and
+ *  Xvfb is no longer installed on this machine). Headful keeps the env. */
+export function headlessBrowserEnv(headless) {
+  if (!headless) { return process.env; }
+  const env = { ...process.env };
+  delete env.DISPLAY;
+  delete env.WAYLAND_DISPLAY;
+  return env;
+}
+
 const args = process.argv.slice(2);
 const argVal = (name, dflt) => {
   const i = args.indexOf(name);
@@ -241,6 +257,7 @@ async function main() {
   const browser = await chromium.launch({
     headless,
     args: ['--use-gl=angle', '--use-angle=swiftshader'],
+    env: headlessBrowserEnv(headless),
   });
 
   const t0 = Date.now();

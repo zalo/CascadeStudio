@@ -31,8 +31,15 @@ from concurrent.futures import ThreadPoolExecutor
 HERE = os.path.dirname(os.path.abspath(__file__))
 VENV_PY = os.environ.get(
     "B123D_REF_PY",
-    os.path.expanduser("~/Desktop/ocjs-deps/b123d-ref-venv/bin/python"))
+    os.path.expanduser("~/Desktop/ocjs-deps/b123d-013-venv/bin/python"))
 TIMEOUT = int(os.environ.get("B123D_REF_TIMEOUT", "60"))
+# The pinned font set (see register_fonts in CHILD). Recreate it with:
+#   curl -LO http://archive.ubuntu.com/ubuntu/pool/main/f/fonts-freefont/\
+#        fonts-freefont-ttf_20211204+svn4273-2_all.deb
+#   ar x fonts-freefont-ttf_*.deb && tar xf data.tar.* && \
+#   cp usr/share/fonts/truetype/freefont/*.ttf ~/Desktop/ocjs-deps/fonts-ref/
+FONTS_DIR = os.environ.get(
+    "B123D_REF_FONTS", os.path.expanduser("~/Desktop/ocjs-deps/fonts-ref"))
 
 # The child harness: executed by the reference venv's python. Reads the
 # script source from argv[1], prints one JSON object on the last stdout line.
@@ -52,8 +59,68 @@ def measure_shape(obj):
         "edges": len(obj.edges()),
     }
 
+def builder_product(obj):
+    """The builder result a variable is measured by - 0.11.1's `_obj` meaning,
+    held fixed across versions: the PLACED product for BuildPart/BuildLine
+    (`.part`/`.line`) and the LOCAL one for BuildSketch (`.sketch_local`).
+    Up to 0.11.1 `_obj` IS `.part`/`.line`; since 0.12's unified BuildScope a
+    builder constructs on Plane.XY and publishes through the enclosing
+    placement, so `_obj` became the local construction product (`part_local`
+    / `line_local`) and only `.part`/`.line` still mean what the user sees."""
+    cls = type(obj)
+    if hasattr(cls, "sketch_local"):
+        return obj.sketch_local
+    for attr in ("part", "line"):
+        if hasattr(cls, attr):
+            return getattr(obj, attr)
+    return obj._obj
+
+def note_local(name, builder, result):
+    """Record the local product's bbox when it differs from the measured one
+    (0.12+ builders on a workplane / under Locations) - informational only,
+    run-lite.mjs compares volume + bbox."""
+    try:
+        local = builder._obj
+        if local is None or local is result or name not in shapes_ref[0] \
+                or "bbox" not in shapes_ref[0][name]:
+            return
+        lbb = local.bounding_box()
+        lb = [float(lbb.min.X), float(lbb.min.Y), float(lbb.min.Z),
+              float(lbb.max.X), float(lbb.max.Y), float(lbb.max.Z)]
+        if max(abs(a - b) for a, b in zip(lb, shapes_ref[0][name]["bbox"])) > 1e-6:
+            shapes_ref[0][name]["local_bbox"] = lb
+    except Exception:
+        pass
+
+shapes_ref = [None]
+
+def register_fonts():
+    """Pin the font environment (B123D_REF_FONTS, a directory of .ttf files).
+
+    Native Text() resolves its default font "Arial" through OCCT's
+    Font_FontMgr, i.e. through whatever the HOST has installed - on this
+    machine 'omarchy' (an icon font with no Latin glyphs) won, every Text()
+    came back EMPTY and a dozen text scripts "failed natively". The 0.11.1
+    reference was generated on Ubuntu 24.04 with fonts-freefont-ttf
+    (20211204+svn4273-2, byte-identical to the FreeSans files lite bundles), on
+    which OCCT falls back from "Arial" to FreeSans. Registering exactly those
+    files reproduces it (verified: the old reference's text scripts come back
+    identical). toOverride=False so the four FreeSans aspects MERGE into one
+    family record (True keeps only the last-registered aspect)."""
+    import glob, os
+    d = os.environ.get("B123D_REF_FONTS")
+    if not d:
+        return
+    from OCP.Font import Font_FontMgr
+    mgr = Font_FontMgr.GetInstance_s()
+    for path in sorted(glob.glob(os.path.join(d, "*.ttf"))):
+        font = mgr.CheckFont(path)
+        if font is not None:
+            mgr.RegisterFont(font, False)
+
 def main():
     src = open(sys.argv[1]).read()
+    register_fonts()
     from build123d import Shape
     from build123d.build_common import Builder
 
@@ -70,6 +137,7 @@ def main():
     exec(compile(src, "script.py", "exec"), ns)
 
     shapes = {}
+    shapes_ref[0] = shapes
     def add(name, obj):
         try:
             shapes[name] = measure_shape(obj)
@@ -83,11 +151,12 @@ def main():
             continue
         if isinstance(obj, Builder):
             try:
-                result = obj._obj
+                result = builder_product(obj)
             except Exception:
                 result = None
             if result is not None:
                 add(name, result)
+                note_local(name, obj, result)
         elif isinstance(obj, Shape):
             add(name, obj)
         elif isinstance(obj, (list, tuple)) and obj and \
@@ -153,9 +222,12 @@ def run_one(entry, scratch):
     with open(hpath, "w") as f:
         f.write(CHILD)
     try:
+        env = dict(os.environ)
+        if os.path.isdir(FONTS_DIR):
+            env["B123D_REF_FONTS"] = FONTS_DIR
         proc = subprocess.run(
             [VENV_PY, hpath, spath], capture_output=True, text=True,
-            timeout=TIMEOUT, cwd=sdir)
+            timeout=TIMEOUT, cwd=sdir, env=env)
     except subprocess.TimeoutExpired:
         return sid, {"status": "timeout"}
     if proc.returncode != 0:
@@ -182,6 +254,10 @@ def main():
                     help="only run scripts whose id contains this substring")
     args = ap.parse_args()
 
+    if not os.path.isdir(FONTS_DIR):
+        print("WARNING: no font dir at %s - native Text() falls back to whatever "
+              "the host has, and text scripts will not match the reference "
+              "environment (see FONTS_DIR)" % FONTS_DIR, file=sys.stderr)
     manifest = json.load(open(args.manifest))
     if args.only:
         manifest = [e for e in manifest if args.only in e["id"]]
