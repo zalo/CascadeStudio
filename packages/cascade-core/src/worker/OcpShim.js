@@ -153,7 +153,13 @@ export function installOcpShim(self, table) {
       return TRANSIENT_DELETABLE.test(cls);
     }
     if (/_H(Array|Sequence)/.test(cls)) { return false; }
-    if (/^(Geom|Poly_|Law_|Font_)/.test(cls)) { return false; }
+    // Name-based guess ONLY for classes the table has no inheritance chain
+    // for. A class the table knows is NOT transient is a value type that
+    // owns its members — GeomAPI_ProjectPointOnSurf, Geom2dGcc_*,
+    // GeomConvert_*, ... — and the old blanket /^Geom/ kept every one of
+    // them alive: upstream bicycle_tire leaked 8,685 projectors (each with
+    // its Extrema sampling grid), the bulk of a 2.3 GB OCCT heap.
+    if (!table.classes[cls] && /^(Geom|Poly_|Law_|Font_)/.test(cls)) { return false; }
     return true;
   };
   const markHandled = (a) => {

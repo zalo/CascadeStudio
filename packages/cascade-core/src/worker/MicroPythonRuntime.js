@@ -41,12 +41,25 @@ import { bootstrapUpstreamB123d, PYTOPO_DEFAULT,
   rewriteListConcatCoercion } from './UpstreamB123d.js';
 import { instantiateWasmSpec } from './WasmAssets.js';
 
-/** MicroPython GC heap. Fixed at boot (it does not grow); build123d-lite +
- *  a typical model's Python-side bookkeeping fit comfortably — shapes
- *  themselves live in the OCCT wasm heap. */
+/** MicroPython GC heap — the INITIAL size: the pyscript variant
+ *  (MICROPY_GC_SPLIT_HEAP_AUTO) adds heap areas when live data needs them.
+ *  Small on purpose. The micropython-cs interpreter collects DURING a run
+ *  (patch 11), and a collection is also what finalises the JsProxies that
+ *  keep OCP-shim embind objects alive (installProxyFreeHook) — so the heap
+ *  size sets how much dead OCCT data can pile up between collections.
+ *  Measured, upstream flavor, headless (OCCT high-water at 16 / 8 / 4 MB):
+ *  bicycle_tire 115.3 / 55.1 / 52.5 MB, projection 179.1 / 109.8 / 77.9 MB;
+ *  clock/heat_exchanger/toy_truck unchanged; eval times within noise. Shapes
+ *  themselves live in the OCCT heap. */
 const MP_HEAP_BYTES = (typeof process !== 'undefined' && process.env &&
   process.env.CS_MP_HEAP) ? parseInt(process.env.CS_MP_HEAP, 10)
-  : 16 * 1024 * 1024;
+  : 4 * 1024 * 1024;
+/** Collect at least every this many allocated bytes, however far the heap
+ *  has grown (gc.threshold — effective on micropython-cs, a no-op on the
+ *  stock artifacts): bounds the OCCT lag above when live data is large. */
+const MP_GC_THRESHOLD_BYTES = (typeof process !== 'undefined' && process.env &&
+  process.env.CS_MP_GC_THRESHOLD) ? parseInt(process.env.CS_MP_GC_THRESHOLD, 10)
+  : 4 * 1024 * 1024;
 
 /** Route MicroPython's JsProxy finalisation to the OCP shim's lifetime
  *  ledger. The port frees a JsProxy (GC finaliser `jsproxy___del__` ->
@@ -487,6 +500,9 @@ async function _bootstrap(srcKind) {
     return (v !== undefined || name in self) ? 'value' : 'missing';
   };
 
+  if (MP_GC_THRESHOLD_BYTES > 0) {
+    mp.runPython('import gc\ngc.threshold(' + MP_GC_THRESHOLD_BYTES + ')');
+  }
   mp.registerJsModule('jsworker', { self: self });
   mp.globals.set('_CS_BROWSER_SRC', BROWSER_PY);
   mp.runPython([

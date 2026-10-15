@@ -66,13 +66,18 @@ function assetFetcher(env, request) {
 
 function engine(env, request) {
   if (!enginePromise) {
-    const pySrc = (env && env.PY_SRC) === 'upstream' ? 'upstream' : 'lite';
+    const want = env && env.PY_SRC;
+    const pySrc = want === 'upstream' || want === 'real' ? want : 'lite';
+    if (pySrc === 'real' && !globalThis.__csPyodideHost) {
+      return Promise.reject(new Error('PY_SRC=real needs the src/real.js entry '
+        + '(wrangler --env real), which bundles Pyodide'));
+    }
     const get = assetFetcher(env, request);
     enginePromise = (async () => {
       assetMs = 0;
       assetBytes = 0;
       let upstreamPy;
-      if (pySrc === 'upstream') {
+      if (pySrc === 'upstream' || pySrc === 'real') {
         // ONE fetch for the whole layer. The loader asks for ~120 modules by
         // relative path; 120 subrequests would cost far more than a single
         // 3.15 MB / 0.40 MB gz map plus a parse.
@@ -93,11 +98,16 @@ function engine(env, request) {
         fonts[face] = () => get('/fonts/' + face + '.ttf');
       }
       return createHeadlessCascade({
-        runtime: 'micropython',
+        // 'real' runs REAL build123d on Pyodide (src/real.js supplies the
+        // host); the other two flavors run on MicroPython.
+        runtime: pySrc === 'real' ? 'pyodide' : 'micropython',
+        pyodide: pySrc === 'real' ? globalThis.__csPyodideHost : undefined,
         // 'lite'     — build123d-lite, embedded in the bundle: ~5x faster to
         //              boot, 206/222 on the validation corpus.
         // 'upstream' — build123d 0.11.1's own Python over the OCP shim:
         //              216/222, ~0.65 s more boot. See README.
+        // 'real'     — the actual build123d wheel + numpy on Pyodide, same
+        //              shim (FIDELITY-ON-WORKERS.md).
         pySrc,
         occtWasm,
         micropythonJs,

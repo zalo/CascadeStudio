@@ -1,0 +1,1812 @@
+{
+ "examples/python_logo": {
+  "status": "SKIP"
+ },
+ "examples/tea_cup": {
+  "status": "SKIP"
+ },
+ "general_examples_algebra/ex10": {
+  "status": "SKIP"
+ },
+ "docs/constraint_examples": {
+  "status": "SKIP"
+ },
+ "docs/line_types": {
+  "status": "SKIP"
+ },
+ "docs/rigid_joints_pipe": {
+  "status": "SKIP"
+ },
+ "docs/rod_end": {
+  "status": "SKIP"
+ },
+ "docs/technical_drawing": {
+  "status": "SKIP"
+ },
+ "docs-objects/text": {
+  "status": "SKIP"
+ },
+ "docs-selectors/sort_distance_from": {
+  "status": "SKIP"
+ },
+ "examples/boxes_on_faces_algebra": {
+  "status": "PASS",
+  "evalMs": 1318,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 71
+ },
+ "examples/boxes_on_faces": {
+  "status": "PASS",
+  "evalMs": 1467,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 116
+ },
+ "examples/build123d_customizable_logo_algebra": {
+  "status": "PASS",
+  "evalMs": 1780,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 122
+ },
+ "examples/build123d_customizable_logo": {
+  "status": "PASS",
+  "evalMs": 2443,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 237
+ },
+ "examples/build123d_logo": {
+  "status": "PASS",
+  "evalMs": 1846,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 175
+ },
+ "examples/build123d_logo_algebra": {
+  "status": "PASS",
+  "evalMs": 1437,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 219
+ },
+ "examples/canadian_flag": {
+  "status": "PASS",
+  "evalMs": 8202,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 186
+ },
+ "examples/canadian_flag_algebra": {
+  "status": "PASS",
+  "evalMs": 8316,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 123
+ },
+ "examples/circuit_board": {
+  "status": "PASS",
+  "evalMs": 3412,
+  "occtMB": 32,
+  "pyMB": 64.4,
+  "totalMB": 96.4,
+  "ocpAlive": 372
+ },
+ "examples/cast_bearing_unit": {
+  "status": "PASS",
+  "evalMs": 4509,
+  "occtMB": 32,
+  "pyMB": 64.6,
+  "totalMB": 96.6,
+  "ocpAlive": 346
+ },
+ "examples/circuit_board_algebra": {
+  "status": "PASS",
+  "evalMs": 1435,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 307
+ },
+ "examples/clock_algebra": {
+  "status": "PASS",
+  "evalMs": 3645,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 165
+ },
+ "examples/custom_sketch_objects": {
+  "status": "PASS",
+  "evalMs": 4156,
+  "occtMB": 32,
+  "pyMB": 32.4,
+  "totalMB": 64.4,
+  "ocpAlive": 372
+ },
+ "examples/custom_sketch_objects_algebra": {
+  "status": "PASS",
+  "evalMs": 2512,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 352
+ },
+ "examples/din_rail": {
+  "status": "PASS",
+  "evalMs": 3590,
+  "occtMB": 32,
+  "pyMB": 32.4,
+  "totalMB": 64.4,
+  "ocpAlive": 341
+ },
+ "examples/din_rail_algebra": {
+  "status": "PASS",
+  "evalMs": 3510,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 632
+ },
+ "examples/dual_color_3mf": {
+  "status": "ERROR",
+  "gap": "NotImplementedError: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf",
+  "evalMs": 1510,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 633
+ },
+ "examples/extrude": {
+  "status": "PASS",
+  "evalMs": 6419,
+  "occtMB": 32,
+  "pyMB": 32.3,
+  "totalMB": 64.3,
+  "ocpAlive": 263
+ },
+ "examples/extrude_algebra": {
+  "status": "PASS",
+  "evalMs": 7869,
+  "occtMB": 74.1,
+  "pyMB": 19.5,
+  "totalMB": 93.6,
+  "ocpAlive": 456
+ },
+ "examples/fast_grid_holes": {
+  "status": "PASS",
+  "evalMs": 5174,
+  "occtMB": 32,
+  "pyMB": 32.5,
+  "totalMB": 64.5,
+  "ocpAlive": 205
+ },
+ "examples/handle": {
+  "status": "PASS",
+  "evalMs": 3053,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 364
+ },
+ "examples/handle_algebra": {
+  "status": "PASS",
+  "evalMs": 3186,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 324
+ },
+ "examples/heat_exchanger": {
+  "status": "PASS",
+  "evalMs": 61954,
+  "occtMB": 121.1,
+  "pyMB": 612,
+  "totalMB": 733.1,
+  "ocpAlive": 1163
+ },
+ "examples/heat_exchanger_algebra": {
+  "status": "PASS",
+  "evalMs": 34435,
+  "occtMB": 94.8,
+  "pyMB": 65,
+  "totalMB": 159.8,
+  "ocpAlive": 985
+ },
+ "examples/holes": {
+  "status": "PASS",
+  "evalMs": 951,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 196
+ },
+ "examples/holes_algebra": {
+  "status": "PASS",
+  "evalMs": 955,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 51
+ },
+ "examples/intersecting_chamfers": {
+  "status": "PASS",
+  "evalMs": 1499,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 168
+ },
+ "examples/intersecting_chamfers_algebra": {
+  "status": "PASS",
+  "evalMs": 1043,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 106
+ },
+ "examples/intersecting_pipes": {
+  "status": "PASS",
+  "evalMs": 2466,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 238
+ },
+ "examples/joints": {
+  "status": "PASS",
+  "evalMs": 2743,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 425
+ },
+ "examples/joints_algebra": {
+  "status": "PASS",
+  "evalMs": 2107,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 388
+ },
+ "examples/key_cap": {
+  "status": "PASS",
+  "evalMs": 8167,
+  "occtMB": 63.9,
+  "pyMB": 32.4,
+  "totalMB": 96.3,
+  "ocpAlive": 327
+ },
+ "examples/key_cap_algebra": {
+  "status": "PASS",
+  "evalMs": 6880,
+  "occtMB": 63.9,
+  "pyMB": 19.5,
+  "totalMB": 83.4,
+  "ocpAlive": 92
+ },
+ "examples/lego": {
+  "status": "PASS",
+  "evalMs": 3462,
+  "occtMB": 32,
+  "pyMB": 77.4,
+  "totalMB": 109.4,
+  "ocpAlive": 544
+ },
+ "examples/lego_algebra": {
+  "status": "PASS",
+  "evalMs": 1423,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 336
+ },
+ "examples/loft": {
+  "status": "PASS",
+  "evalMs": 5319,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 167
+ },
+ "examples/loft_algebra": {
+  "status": "PASS",
+  "evalMs": 5442,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 104
+ },
+ "examples/maker_coin": {
+  "status": "PASS",
+  "evalMs": 10285,
+  "occtMB": 33.6,
+  "pyMB": 32.4,
+  "totalMB": 66,
+  "ocpAlive": 215
+ },
+ "examples/mixed_algebra_context": {
+  "status": "PASS",
+  "evalMs": 1318,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 126
+ },
+ "examples/multiple_workplanes": {
+  "status": "PASS",
+  "evalMs": 777,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 76
+ },
+ "examples/multiple_workplanes_algebra": {
+  "status": "PASS",
+  "evalMs": 741,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 70
+ },
+ "examples/packed_boxes": {
+  "status": "PASS",
+  "evalMs": 6633,
+  "occtMB": 55.1,
+  "pyMB": 19.5,
+  "totalMB": 74.6,
+  "ocpAlive": 353
+ },
+ "examples/pegboard_j_hook": {
+  "status": "PASS",
+  "evalMs": 1713,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 278
+ },
+ "examples/pegboard_j_hook_algebra": {
+  "status": "PASS",
+  "evalMs": 1699,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 47
+ },
+ "examples/pillow_block": {
+  "status": "PASS",
+  "evalMs": 1033,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 174
+ },
+ "examples/pillow_block_algebra": {
+  "status": "PASS",
+  "evalMs": 896,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 182
+ },
+ "examples/platonic_solids": {
+  "status": "PASS",
+  "evalMs": 935,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 362
+ },
+ "examples/playing_cards": {
+  "status": "PASS",
+  "evalMs": 5395,
+  "occtMB": 35.3,
+  "pyMB": 77.6,
+  "totalMB": 112.9,
+  "ocpAlive": 878
+ },
+ "examples/clock": {
+  "status": "PASS",
+  "evalMs": 31904,
+  "occtMB": 32,
+  "pyMB": 462.2,
+  "totalMB": 494.2,
+  "ocpAlive": 641
+ },
+ "examples/bicycle_tire": {
+  "status": "PASS",
+  "evalMs": 61881,
+  "occtMB": 2539.3,
+  "pyMB": 470.4,
+  "totalMB": 3009.7,
+  "ocpAlive": 20667
+ },
+ "examples/roller_coaster": {
+  "status": "PASS",
+  "evalMs": 981,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 52
+ },
+ "examples/roller_coaster_algebra": {
+  "status": "PASS",
+  "evalMs": 1105,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 52
+ },
+ "examples/shamrock": {
+  "status": "PASS",
+  "evalMs": 1378,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 149
+ },
+ "examples/stud_wall": {
+  "status": "PASS",
+  "evalMs": 1755,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 291
+ },
+ "examples/projection": {
+  "status": "PASS",
+  "evalMs": 25768,
+  "occtMB": 179.1,
+  "pyMB": 19.5,
+  "totalMB": 198.6,
+  "ocpAlive": 454
+ },
+ "examples/tea_cup_algebra": {
+  "status": "PASS",
+  "evalMs": 5304,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 203
+ },
+ "examples/twist_extrude": {
+  "status": "PASS",
+  "evalMs": 1275,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 46
+ },
+ "examples/projection_algebra": {
+  "status": "PASS",
+  "evalMs": 26451,
+  "occtMB": 179.1,
+  "pyMB": 19.5,
+  "totalMB": 198.6,
+  "ocpAlive": 504
+ },
+ "examples/vase": {
+  "status": "PASS",
+  "evalMs": 1949,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 175
+ },
+ "examples/bracelet": {
+  "status": "PASS",
+  "evalMs": 81416,
+  "occtMB": 182.4,
+  "pyMB": 19.5,
+  "totalMB": 201.9,
+  "ocpAlive": 64
+ },
+ "general_examples/ex01": {
+  "status": "PASS",
+  "evalMs": 932,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "examples/vase_algebra": {
+  "status": "PASS",
+  "evalMs": 1849,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 193
+ },
+ "general_examples/ex02": {
+  "status": "PASS",
+  "evalMs": 767,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 37
+ },
+ "general_examples/ex03": {
+  "status": "PASS",
+  "evalMs": 900,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 43
+ },
+ "general_examples/ex08": {
+  "status": "PASS",
+  "evalMs": 978,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 102
+ },
+ "general_examples/ex09": {
+  "status": "PASS",
+  "evalMs": 954,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 132
+ },
+ "general_examples/ex10": {
+  "status": "PASS",
+  "evalMs": 954,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 57
+ },
+ "examples/toy_truck": {
+  "status": "PASS",
+  "evalMs": 13067,
+  "occtMB": 39.6,
+  "pyMB": 129.1,
+  "totalMB": 168.7,
+  "ocpAlive": 778
+ },
+ "general_examples/ex11": {
+  "status": "PASS",
+  "evalMs": 1815,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 244
+ },
+ "general_examples/ex12": {
+  "status": "PASS",
+  "evalMs": 1121,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 56
+ },
+ "general_examples/ex14": {
+  "status": "PASS",
+  "evalMs": 1159,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 51
+ },
+ "general_examples/ex13": {
+  "status": "PASS",
+  "evalMs": 1545,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 105
+ },
+ "general_examples/ex15": {
+  "status": "PASS",
+  "evalMs": 1356,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 113
+ },
+ "general_examples/ex17": {
+  "status": "PASS",
+  "evalMs": 1166,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 131
+ },
+ "general_examples/ex18": {
+  "status": "PASS",
+  "evalMs": 1528,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 178
+ },
+ "general_examples/ex16": {
+  "status": "PASS",
+  "evalMs": 2767,
+  "occtMB": 32,
+  "pyMB": 32.3,
+  "totalMB": 64.3,
+  "ocpAlive": 225
+ },
+ "general_examples/ex19": {
+  "status": "PASS",
+  "evalMs": 1544,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 233
+ },
+ "general_examples/ex20": {
+  "status": "PASS",
+  "evalMs": 1337,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 119
+ },
+ "general_examples/ex21": {
+  "status": "PASS",
+  "evalMs": 1332,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 46
+ },
+ "general_examples/ex22": {
+  "status": "PASS",
+  "evalMs": 1411,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 206
+ },
+ "general_examples/ex23": {
+  "status": "PASS",
+  "evalMs": 1401,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 71
+ },
+ "general_examples/ex24": {
+  "status": "PASS",
+  "evalMs": 1597,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 138
+ },
+ "general_examples/ex25": {
+  "status": "PASS",
+  "evalMs": 1381,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 161
+ },
+ "general_examples/ex26": {
+  "status": "PASS",
+  "evalMs": 1109,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 56
+ },
+ "general_examples/ex27": {
+  "status": "PASS",
+  "evalMs": 1264,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 164
+ },
+ "general_examples/ex30": {
+  "status": "PASS",
+  "evalMs": 1042,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 126
+ },
+ "general_examples/ex28": {
+  "status": "PASS",
+  "evalMs": 2382,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 138
+ },
+ "general_examples/ex29": {
+  "status": "PASS",
+  "evalMs": 2335,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 279
+ },
+ "general_examples/ex31": {
+  "status": "PASS",
+  "evalMs": 2071,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 234
+ },
+ "general_examples/ex32": {
+  "status": "PASS",
+  "evalMs": 1867,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 163
+ },
+ "general_examples/ex33": {
+  "status": "PASS",
+  "evalMs": 1962,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 252
+ },
+ "general_examples/ex35": {
+  "status": "PASS",
+  "evalMs": 1109,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 161
+ },
+ "general_examples/ex34": {
+  "status": "PASS",
+  "evalMs": 2247,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 602
+ },
+ "general_examples/ex37": {
+  "status": "PASS",
+  "evalMs": 1029,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 49
+ },
+ "general_examples_algebra/ex01": {
+  "status": "PASS",
+  "evalMs": 876,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "general_examples_algebra/ex02": {
+  "status": "PASS",
+  "evalMs": 984,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "general_examples/ex36": {
+  "status": "PASS",
+  "evalMs": 2764,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 50
+ },
+ "general_examples_algebra/ex03": {
+  "status": "PASS",
+  "evalMs": 885,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 45
+ },
+ "general_examples_algebra/ex08": {
+  "status": "PASS",
+  "evalMs": 926,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 51
+ },
+ "general_examples_algebra/ex09": {
+  "status": "PASS",
+  "evalMs": 1045,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 38
+ },
+ "general_examples_algebra/ex12": {
+  "status": "PASS",
+  "evalMs": 945,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 55
+ },
+ "general_examples_algebra/ex13": {
+  "status": "PASS",
+  "evalMs": 1212,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 49
+ },
+ "general_examples_algebra/ex11": {
+  "status": "PASS",
+  "evalMs": 1508,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 225
+ },
+ "general_examples_algebra/ex14": {
+  "status": "PASS",
+  "evalMs": 1010,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 43
+ },
+ "general_examples_algebra/ex15": {
+  "status": "PASS",
+  "evalMs": 1049,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 54
+ },
+ "general_examples_algebra/ex17": {
+  "status": "PASS",
+  "evalMs": 979,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 64
+ },
+ "general_examples_algebra/ex18": {
+  "status": "PASS",
+  "evalMs": 998,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 79
+ },
+ "general_examples_algebra/ex16": {
+  "status": "PASS",
+  "evalMs": 1262,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 162
+ },
+ "general_examples_algebra/ex19": {
+  "status": "PASS",
+  "evalMs": 989,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 82
+ },
+ "general_examples_algebra/ex21": {
+  "status": "PASS",
+  "evalMs": 1022,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 52
+ },
+ "general_examples_algebra/ex20": {
+  "status": "PASS",
+  "evalMs": 1034,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 62
+ },
+ "general_examples_algebra/ex22": {
+  "status": "PASS",
+  "evalMs": 1184,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 99
+ },
+ "general_examples_algebra/ex23": {
+  "status": "PASS",
+  "evalMs": 942,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 54
+ },
+ "general_examples_algebra/ex25": {
+  "status": "PASS",
+  "evalMs": 976,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 77
+ },
+ "general_examples_algebra/ex24": {
+  "status": "PASS",
+  "evalMs": 1062,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 57
+ },
+ "general_examples_algebra/ex26": {
+  "status": "PASS",
+  "evalMs": 1215,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 52
+ },
+ "general_examples_algebra/ex27": {
+  "status": "PASS",
+  "evalMs": 853,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 82
+ },
+ "general_examples_algebra/ex30": {
+  "status": "PASS",
+  "evalMs": 1037,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 52
+ },
+ "general_examples_algebra/ex28": {
+  "status": "PASS",
+  "evalMs": 1856,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 83
+ },
+ "general_examples_algebra/ex29": {
+  "status": "PASS",
+  "evalMs": 1921,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 249
+ },
+ "general_examples_algebra/ex31": {
+  "status": "PASS",
+  "evalMs": 1455,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 285
+ },
+ "general_examples_algebra/ex32": {
+  "status": "PASS",
+  "evalMs": 975,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 81
+ },
+ "general_examples_algebra/ex33": {
+  "status": "PASS",
+  "evalMs": 1045,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 176
+ },
+ "general_examples_algebra/ex35": {
+  "status": "PASS",
+  "evalMs": 1174,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 87
+ },
+ "general_examples_algebra/ex34": {
+  "status": "PASS",
+  "evalMs": 1825,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 105
+ },
+ "docs/center": {
+  "status": "PASS",
+  "evalMs": 1023,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 58
+ },
+ "docs/objects_1d_airfoil": {
+  "status": "PASS",
+  "evalMs": 824,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 35
+ },
+ "general_examples_algebra/ex36": {
+  "status": "PASS",
+  "evalMs": 2798,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 48
+ },
+ "docs/objects_1d": {
+  "status": "MISMATCH",
+  "problems": [
+   "'scene' bbox[0] -0.1822 vs -0.1700"
+  ],
+  "evalMs": 1892,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 593
+ },
+ "docs/objects_1d_bspline": {
+  "status": "PASS",
+  "evalMs": 770,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 41
+ },
+ "docs/objects_1d_blend_curve": {
+  "status": "PASS",
+  "evalMs": 1164,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 44
+ },
+ "docs/heart_token": {
+  "status": "PASS",
+  "evalMs": 3815,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 151
+ },
+ "docs/objects_1d_constrained": {
+  "status": "PASS",
+  "evalMs": 1163,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 113
+ },
+ "docs/objects_1d_parabolic_hyperbolic": {
+  "status": "PASS",
+  "evalMs": 911,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 43
+ },
+ "docs/objects_1d_ellipticalstartarc": {
+  "status": "PASS",
+  "evalMs": 922,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 39
+ },
+ "docs/objects_3d": {
+  "status": "PASS",
+  "evalMs": 1984,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 339
+ },
+ "docs/pack_demo": {
+  "status": "PASS",
+  "evalMs": 1215,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 41
+ },
+ "docs/objects_2d": {
+  "status": "ERROR",
+  "gap": "NameError: name 'Draft' isn't defined",
+  "evalMs": 2411,
+  "occtMB": 32,
+  "pyMB": 32.4,
+  "totalMB": 64.4,
+  "ocpAlive": 570
+ },
+ "docs/selector_example": {
+  "status": "PASS",
+  "evalMs": 1388,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 133
+ },
+ "docs-selectors/filter_all_edges_circle": {
+  "status": "PASS",
+  "evalMs": 3226,
+  "occtMB": 32,
+  "pyMB": 32.4,
+  "totalMB": 64.4,
+  "ocpAlive": 220
+ },
+ "docs/slide_latch": {
+  "status": "PASS",
+  "evalMs": 5340,
+  "occtMB": 32,
+  "pyMB": 64.6,
+  "totalMB": 96.6,
+  "ocpAlive": 540
+ },
+ "docs/tutorial_joints": {
+  "status": "PASS",
+  "evalMs": 5393,
+  "occtMB": 32,
+  "pyMB": 32.4,
+  "totalMB": 64.4,
+  "ocpAlive": 385
+ },
+ "docs-selectors/filter_axisplane": {
+  "status": "PASS",
+  "evalMs": 1463,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 204
+ },
+ "docs-selectors/filter_geomtype": {
+  "status": "PASS",
+  "evalMs": 1065,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 127
+ },
+ "docs-selectors/filter_inner_wire_count": {
+  "status": "PASS",
+  "evalMs": 1222,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 184
+ },
+ "docs-selectors/filter_nested": {
+  "status": "PASS",
+  "evalMs": 1781,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 225
+ },
+ "docs-selectors/group_hole_area": {
+  "status": "PASS",
+  "evalMs": 1350,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 187
+ },
+ "docs-selectors/filter_shape_properties": {
+  "status": "PASS",
+  "evalMs": 3676,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 1169
+ },
+ "docs-selectors/selectors_operators": {
+  "status": "PASS",
+  "evalMs": 2186,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 294
+ },
+ "docs-selectors/group_properties_with_keys": {
+  "status": "PASS",
+  "evalMs": 4057,
+  "occtMB": 32,
+  "pyMB": 38.9,
+  "totalMB": 70.9,
+  "ocpAlive": 205
+ },
+ "docs-selectors/sort_along_wire": {
+  "status": "PASS",
+  "evalMs": 1653,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 228
+ },
+ "docs-selectors/sort_axis": {
+  "status": "PASS",
+  "evalMs": 1623,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 202
+ },
+ "docs-selectors/sort_sortby": {
+  "status": "PASS",
+  "evalMs": 1393,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 134
+ },
+ "docs-selectors/group_axis": {
+  "status": "PASS",
+  "evalMs": 11179,
+  "occtMB": 32,
+  "pyMB": 129.2,
+  "totalMB": 161.2,
+  "ocpAlive": 234
+ },
+ "ttt/ttt-23-t-24-curved_support": {
+  "status": "ERROR",
+  "gap": "AttributeError: module '_cs_shim_sympy' has no attribute 'symbols'",
+  "evalMs": 1168,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 35
+ },
+ "ttt/ttt-ppp0101": {
+  "status": "PASS",
+  "evalMs": 3073,
+  "occtMB": 32,
+  "pyMB": 32.4,
+  "totalMB": 64.4,
+  "ocpAlive": 269
+ },
+ "ttt/ttt-24-SPO-06-Buffer_Stand": {
+  "status": "PASS",
+  "evalMs": 3993,
+  "occtMB": 32,
+  "pyMB": 77.4,
+  "totalMB": 109.4,
+  "ocpAlive": 209
+ },
+ "ttt/ttt-23-02-02-sm_hanger": {
+  "status": "PASS",
+  "evalMs": 7650,
+  "occtMB": 32,
+  "pyMB": 64.6,
+  "totalMB": 96.6,
+  "ocpAlive": 1121
+ },
+ "ttt/ttt-ppp0102": {
+  "status": "PASS",
+  "evalMs": 2227,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 152
+ },
+ "ttt/ttt-ppp0103": {
+  "status": "PASS",
+  "evalMs": 2238,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 262
+ },
+ "ttt/ttt-ppp0104": {
+  "status": "PASS",
+  "evalMs": 2869,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 226
+ },
+ "ttt/ttt-ppp0105": {
+  "status": "PASS",
+  "evalMs": 2190,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 171
+ },
+ "ttt/ttt-ppp0106": {
+  "status": "PASS",
+  "evalMs": 2034,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 251
+ },
+ "ttt/ttt-ppp0108": {
+  "status": "PASS",
+  "evalMs": 1432,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 228
+ },
+ "ttt/ttt-ppp0109": {
+  "status": "PASS",
+  "evalMs": 1936,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 343
+ },
+ "ttt/ttt-ppp0107": {
+  "status": "PASS",
+  "evalMs": 3150,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 401
+ },
+ "docs-rst/OpenSCAD/b01": {
+  "status": "PASS",
+  "evalMs": 936,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 209
+ },
+ "ttt/ttt-ppp0110": {
+  "status": "PASS",
+  "evalMs": 1936,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 170
+ },
+ "docs-rst/OpenSCAD/b02": {
+  "status": "PASS",
+  "evalMs": 967,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 150
+ },
+ "docs-rst/OpenSCAD/all": {
+  "status": "PASS",
+  "evalMs": 1312,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 326
+ },
+ "docs-rst/algebra_performance/b03": {
+  "status": "PASS",
+  "evalMs": 1076,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 51
+ },
+ "docs-rst/build_sketch/b03": {
+  "status": "PASS",
+  "evalMs": 797,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 38
+ },
+ "docs-rst/import_export/b01": {
+  "status": "PASS",
+  "evalMs": 867,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_algebra/b01": {
+  "status": "PASS",
+  "evalMs": 782,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 37
+ },
+ "docs-rst/key_concepts_algebra/b02": {
+  "status": "PASS",
+  "evalMs": 795,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_algebra/b03": {
+  "status": "PASS",
+  "evalMs": 895,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_algebra/b04": {
+  "status": "PASS",
+  "evalMs": 783,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_algebra/b13": {
+  "status": "PASS",
+  "evalMs": 887,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_builder/b01": {
+  "status": "PASS",
+  "evalMs": 1006,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 108
+ },
+ "docs-rst/key_concepts_builder/b02": {
+  "status": "PASS",
+  "evalMs": 801,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_builder/b03": {
+  "status": "PASS",
+  "evalMs": 784,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_builder/b09": {
+  "status": "PASS",
+  "evalMs": 832,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 43
+ },
+ "docs-rst/key_concepts_builder/b10": {
+  "status": "PASS",
+  "evalMs": 762,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 41
+ },
+ "docs-rst/key_concepts_builder/b11": {
+  "status": "PASS",
+  "evalMs": 994,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 125
+ },
+ "docs-rst/key_concepts_builder/b13": {
+  "status": "PASS",
+  "evalMs": 828,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 41
+ },
+ "docs-rst/key_concepts_builder/b14": {
+  "status": "PASS",
+  "evalMs": 1418,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_builder/b17": {
+  "status": "PASS",
+  "evalMs": 945,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 142
+ },
+ "docs-rst/key_concepts_builder/b19": {
+  "status": "PASS",
+  "evalMs": 741,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/algebra_performance/b01": {
+  "status": "PASS",
+  "evalMs": 24300,
+  "occtMB": 147.3,
+  "pyMB": 309.6,
+  "totalMB": 456.9,
+  "ocpAlive": 354
+ },
+ "docs-rst/key_concepts_builder/b20": {
+  "status": "PASS",
+  "evalMs": 1037,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/key_concepts_builder/b21": {
+  "status": "PASS",
+  "evalMs": 1077,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 224
+ },
+ "docs-rst/location_arithmetic/all": {
+  "status": "PASS",
+  "evalMs": 1028,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 179
+ },
+ "docs-rst/selectors/b02": {
+  "status": "PASS",
+  "evalMs": 813,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/algebra_performance/all": {
+  "status": "PASS",
+  "evalMs": 25884,
+  "occtMB": 154.7,
+  "pyMB": 309.6,
+  "totalMB": 464.3,
+  "ocpAlive": 643
+ },
+ "docs-rst/selectors/all": {
+  "status": "PASS",
+  "evalMs": 913,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/tips/b01": {
+  "status": "PASS",
+  "evalMs": 1151,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 114
+ },
+ "docs-rst/tips/b04": {
+  "status": "MISMATCH",
+  "problems": [
+   "'vertical_sketch' bbox[1] -0.5000 vs -0.7000"
+  ],
+  "evalMs": 972,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 43
+ },
+ "docs-rst/tips/b05": {
+  "status": "PASS",
+  "evalMs": 964,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 47
+ },
+ "docs-rst/topology_selection/b01": {
+  "status": "PASS",
+  "evalMs": 892,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 37
+ },
+ "docs-rst/topology_selection/b03": {
+  "status": "PASS",
+  "evalMs": 955,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 83
+ },
+ "docs-rst/topology_selection/b04": {
+  "status": "PASS",
+  "evalMs": 921,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 39
+ },
+ "docs-rst/topology_selection/b05": {
+  "status": "PASS",
+  "evalMs": 1041,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 48
+ },
+ "docs-rst/topology_selection/b06": {
+  "status": "PASS",
+  "evalMs": 983,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 54
+ },
+ "docs-rst/topology_selection/b07": {
+  "status": "PASS",
+  "evalMs": 1083,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 94
+ },
+ "docs-rst/topology_selection/b08": {
+  "status": "PASS",
+  "evalMs": 952,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 38
+ },
+ "docs-rst/topology_selection/b09": {
+  "status": "PASS",
+  "evalMs": 934,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 39
+ },
+ "docs-rst/topology_selection/b12": {
+  "status": "PASS",
+  "evalMs": 715,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 49
+ },
+ "docs-rst/tutorial_constraints/b03": {
+  "status": "PASS",
+  "evalMs": 686,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 39
+ },
+ "docs-rst/tutorial_constraints/b06": {
+  "status": "PASS",
+  "evalMs": 692,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 38
+ },
+ "docs-rst/tutorial_constraints/b05": {
+  "status": "PASS",
+  "evalMs": 1107,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 198
+ },
+ "docs-rst/tutorial_constraints/b07": {
+  "status": "PASS",
+  "evalMs": 970,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 39
+ },
+ "docs-rst/tutorial_constraints/b08": {
+  "status": "PASS",
+  "evalMs": 846,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 39
+ },
+ "docs-rst/tutorial_constraints/b09": {
+  "status": "PASS",
+  "evalMs": 914,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 52
+ },
+ "docs-rst/tutorial_constraints/b10": {
+  "status": "PASS",
+  "evalMs": 905,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 55
+ },
+ "docs-rst/tutorial_constraints/b11": {
+  "status": "PASS",
+  "evalMs": 980,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 160
+ },
+ "docs-rst/tutorial_constraints/b13": {
+  "status": "PASS",
+  "evalMs": 869,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 87
+ },
+ "docs-rst/tutorial_stl_reconstruction/b03": {
+  "status": "PASS",
+  "evalMs": 1066,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/tutorial_stl_reconstruction/b04": {
+  "status": "PASS",
+  "evalMs": 1041,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 187
+ },
+ "docs-rst/tutorial_design/b07": {
+  "status": "PASS",
+  "evalMs": 1610,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 296
+ },
+ "docs-rst/objects-text/b10": {
+  "status": "PASS",
+  "evalMs": 869,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs-rst/topology_selection-filter_examples/b01": {
+  "status": "PASS",
+  "evalMs": 913,
+  "occtMB": 32,
+  "pyMB": 19.5,
+  "totalMB": 51.5,
+  "ocpAlive": 36
+ },
+ "docs/spitfire_wing_gordon": {
+  "status": "TIMEOUT"
+ }
+}

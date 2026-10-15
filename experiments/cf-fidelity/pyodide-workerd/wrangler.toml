@@ -1,0 +1,17 @@
+name = "cs-pyodide-workerd-proto"
+main = "src/worker.js"
+compatibility_date = "2025-08-01"
+# no nodejs_compat (Pyodide must take its workerd/browser branch, not Node's)
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = false
+
+[[rules]]
+type = "Data"
+globs = ["**/*.zip", "**/*.whl"]
+fallthrough = false
+
+[limits]
+cpu_ms = 300000

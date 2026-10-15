@@ -1,7 +1,7 @@
 // headless-corpus.mjs — the validation corpus through the HEADLESS engine in
 // plain Node (no browser), with the peak isolate memory of every model.
 //
-//   node experiments/cf-fidelity/headless-corpus.mjs [--pysrc upstream|lite]
+//   node experiments/cf-fidelity/headless-corpus.mjs [--pysrc upstream|lite|real]
 //        [--mpdir DIR] [--workers 6] [--only substr] [--timeout 60000]
 //        [--out results.json] [--baseline results.json] [--shared]
 //
@@ -33,18 +33,46 @@ if (!isMainThread) {
   // ------------------------------------------------------------------ worker
   const { dist, mpdir, pysrc } = workerData;
   const occtWasm = fs.readFileSync(join(dist, 'cascadestudio.wasm'));
-  const micropythonWasm = fs.readFileSync(join(mpdir, 'micropython-cs.wasm'));
-  const micropythonJs = await import(pathToFileURL(join(mpdir, 'micropython-cs.mjs')).href);
+  const micropythonWasm = pysrc === 'real' ? undefined : fs.readFileSync(join(mpdir, 'micropython-cs.wasm'));
+  const micropythonJs = pysrc === 'real' ? undefined : await import(pathToFileURL(join(mpdir, 'micropython-cs.mjs')).href);
+  // pysrc=real: REAL build123d on Pyodide through the same host seam the
+  // Worker's --env real uses (examples/cloudflare-worker/src/real.js), from
+  // the prepared assets/pyodide/ (patched glue, precompiled numpy modules).
+  let pyodideHost;
+  if (pysrc === 'real') {
+    const PB = join(ROOT, 'examples', 'cloudflare-worker', 'assets', 'pyodide') + '/';
+    const pman = JSON.parse(fs.readFileSync(PB + 'manifest.json', 'utf8'));
+    globalThis.__csDynlibModules = {};
+    for (const d of pman.dynlibs) {
+      globalThis.__csDynlibModules[d.name] = new WebAssembly.Module(fs.readFileSync(PB + 'dynlib/' + d.name + '.wasm'));
+    }
+    const { loadPyodide } = await import(pathToFileURL(PB + 'pyodide.mjs').href);
+    const createPyodideModule = (await import(pathToFileURL(PB + 'pyodide.asm.mjs').href)).default;
+    const WHEELS = { numpy: ['numpy-lite.zip', 'numpy-2.4.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl'],
+      'typing-extensions': ['typing_extensions-4.15.0-py3-none-any.whl'] };
+    pyodideHost = {
+      boot: ({ stdout, stderr }) => loadPyodide({ indexURL: join(ROOT, 'vendor', 'pyodide') + '/',
+        createPyodideModule, stdout, stderr }),
+      async installWheels(py, names) {
+        for (const n of names) {
+          const [file, asName] = WHEELS[n] || [n];
+          await py._api.install(new Uint8Array(fs.readFileSync(PB + 'wheels/' + file)), asName || file,
+            py._api.sitePackages, new Map([['INSTALLER', 'cascade-headless']]));
+        }
+      },
+    };
+  }
   const fonts = {};
   for (const f of fs.readdirSync(join(dist, 'fonts'))) {
     if (f.endsWith('.ttf')) { fonts[f.replace(/\.ttf$/, '')] = fs.readFileSync(join(dist, 'fonts', f)); }
   }
   const { createHeadlessCascade } = await import(pathToFileURL(join(dist, 'cascade-headless.mjs')).href);
-  const upstreamPy = pysrc === 'upstream'
+  const upstreamPy = pysrc === 'upstream' || pysrc === 'real'
     ? async (rel) => fs.readFileSync(join(dist, 'upstream-b123d', rel), 'utf8') : undefined;
   const t0 = Date.now();
   const engine = await createHeadlessCascade({
-    runtime: 'micropython', pySrc: pysrc, occtWasm, micropythonJs, micropythonWasm, fonts, upstreamPy,
+    runtime: pysrc === 'real' ? 'pyodide' : 'micropython', pyodide: pyodideHost,
+    pySrc: pysrc, occtWasm, micropythonJs, micropythonWasm, fonts, upstreamPy,
   });
   const bootMs = Date.now() - t0;
   parentPort.postMessage({ type: 'ready', bootMs });

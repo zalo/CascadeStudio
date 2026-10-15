@@ -75,6 +75,10 @@ for _mod, _names in json.loads(_CS_OCP_MAP).items():
  */
 export async function bootstrapPyodideRealB123d(pyodide, registerModule, indexURL) {
   const fetchOnce = async (rel) => {
+    // Headless hosts hand the payload over themselves (no fetchable URL in
+    // Node; a static-asset binding on Cloudflare) — same hook as the
+    // MicroPython upstream flavor.
+    if (self._csUpstreamFetchText) { return self._csUpstreamFetchText(rel); }
     const url = typeof ESBUILD !== 'undefined'
       ? new URL('./upstream-b123d/' + rel, self.location.href).href
       : new URL('../../upstream-py/' + rel, import.meta.url).href;
@@ -107,8 +111,15 @@ export async function bootstrapPyodideRealB123d(pyodide, registerModule, indexUR
   // 1. wheels (all vendored; loadPackage resolves lock names against
   //    indexURL, URL wheels are fetched directly)
   const quiet = { messageCallback: () => {} };
-  await pyodide.loadPackage(['numpy', 'typing-extensions'], quiet);
-  await pyodide.loadPackage(REAL_WHEELS.map((f) => indexURL + f), quiet);
+  const host = self._csPyodideHost;
+  if (host && typeof host.installWheels === 'function') {
+    // headless: the host installs the same wheels from its own bindings
+    // (numpy's side modules arrive PRECOMPILED — workerd cannot compile wasm)
+    await host.installWheels(pyodide, ['numpy', 'typing-extensions', ...REAL_WHEELS]);
+  } else {
+    await pyodide.loadPackage(['numpy', 'typing-extensions'], quiet);
+    await pyodide.loadPackage(REAL_WHEELS.map((f) => indexURL + f), quiet);
+  }
   const tWheels = performance.now();
 
   // 2. the OCP package: inert stubs, then the generated shim modules

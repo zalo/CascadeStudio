@@ -49,7 +49,7 @@ fallthrough = false
 
 [[rules]]
 type = "Data"
-globs = ["**/*.ttf"]
+globs = ["**/*.ttf", "**/*.zip", "**/*.whl"]
 fallthrough = false
 
 # --------------------------------------------------------------------------
@@ -106,4 +106,30 @@ run_worker_first = true
 cpu_ms = 300000
 
 [env.upstream.observability]
+enabled = true
+
+# --------------------------------------------------------------------------
+# The REAL flavor: the actual build123d 0.11.1 wheel + real numpy on Pyodide
+# 314, over the same OCP shim. A separate ENTRY (src/real.js) so the ~20 MB of
+# Pyodide module bindings ride only in this script (total ~48 MB of the
+# 64 MiB uncompressed limit). Needs `node scripts/prepare-pyodide.mjs`
+# (which needs vendor/pyodide: packages/cascade-core/scripts/fetch-pyodide.cjs).
+# See FIDELITY-ON-WORKERS.md. Not deployed; verified under `wrangler dev`.
+# --------------------------------------------------------------------------
+[env.real]
+name = "cascade-headless-real"
+main = "src/real.js"
+
+[env.real.vars]
+PY_SRC = "real"
+
+[env.real.assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[env.real.limits]
+cpu_ms = 300000
+
+[env.real.observability]
 enabled = true

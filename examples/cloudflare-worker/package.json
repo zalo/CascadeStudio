@@ -8,7 +8,9 @@
     "deploy": "npm run prepare-assets && wrangler deploy --env=\"\"",
     "smoke": "node scripts/smoke.mjs",
     "dev:upstream": "npm run prepare-assets && wrangler dev --env upstream",
-    "deploy:upstream": "npm run prepare-assets && wrangler deploy --env upstream"
+    "deploy:upstream": "npm run prepare-assets && wrangler deploy --env upstream",
+    "prepare-pyodide": "node scripts/prepare-pyodide.mjs",
+    "dev:real": "npm run prepare-assets && npm run prepare-pyodide && wrangler dev --env real"
   },
   "devDependencies": {
     "wrangler": "^4.125.0"

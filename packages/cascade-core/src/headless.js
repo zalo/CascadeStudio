@@ -67,6 +67,9 @@ const DEFAULT_STL_NAME = 'cascade-headless.stl';
  *
  *  Options:
  *    - `runtime`  'micropython' (default) | 'brython' | 'pyodide'
+ *    - `pyodide`  for runtime 'pyodide': {boot({stdout, stderr}) -> pyodide,
+ *                 installWheels(pyodide, names)} — the host brings Pyodide up
+ *                 from its own assets (examples/cloudflare-worker-real)
  *    - `pySrc`    'lite' (default) | 'upstream' — see CLAUDE.md. Headless
  *                 defaults to LITE: it is embedded in the bundle (no 3.5 MB
  *                 of extra Python assets to ship into a Worker) and boots in
@@ -182,6 +185,13 @@ export async function createHeadlessCascade(options = {}) {
   }
   if (typeof opts.upstreamPy === 'function') {
     globalThis.self._csUpstreamFetchText = opts.upstreamPy;
+  }
+  // runtime: 'pyodide' — the host boots Pyodide (and installs wheels) from
+  // its own assets: {boot({stdout, stderr}) -> pyodide, installWheels(py,
+  // names)}. pySrc: 'real' additionally needs upstreamPy(rel) for the OCP
+  // shim + real-deps payload.
+  if (opts.pyodide) {
+    globalThis.self._csPyodideHost = opts.pyodide;
   }
 
   // ---------------------------------------------------------------- //

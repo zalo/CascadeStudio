@@ -300,40 +300,55 @@ async function _bootstrap(srcKind) {
   const t0 = performance.now();
   // Dual-path like brython.js: the build copies the vendored core
   // distribution next to the worker bundle.
-  const indexURL = typeof ESBUILD !== 'undefined'
-    ? new URL('./pyodide/', self.location.href).href
-    : new URL('../../../../vendor/pyodide/', self.location.href).href;
-
-  // A non-analyzable specifier keeps esbuild from trying to bundle Pyodide
-  // (it must stay an external, lazily fetched asset).
-  const moduleURL = indexURL + 'pyodide.mjs';
-  let pyodideModule;
-  try {
-    pyodideModule = await import(/* @vite-ignore */ moduleURL);
-  } catch (e) {
-    // A plain checkout has no vendor/pyodide, so this is the expected way to
-    // arrive here: say so instead of leaking "failed to fetch module".
-    throw new Error('Pyodide is not available at ' + moduleURL +
-      ' — the experimental ?pyruntime=pyodide runtime needs the vendored core ' +
-      'distribution: run `node packages/cascade-core/scripts/fetch-pyodide.cjs` ' +
-      'and rebuild, or drop the flag to use Brython. (' + e.message + ')');
-  }
-  const tImported = performance.now();
+  const indexURL = (self._csPyodideHost || !self.location) ? null
+    : (typeof ESBUILD !== 'undefined'
+      ? new URL('./pyodide/', self.location.href).href
+      : new URL('../../../../vendor/pyodide/', self.location.href).href);
 
   const stderrBuffer = [];
-  const pyodide = await pyodideModule.loadPyodide({
-    indexURL,
-    // Python print() lands in the worker console exactly like Brython's.
-    stdout: (line) => { console.log(line); },
-    // The worker's console.error override RETHROWS, so lite buffers stderr
-    // and replays it only when the evaluation survived. pysrc=real streams
-    // it as prefixed console.log lines instead: REAL build123d emits benign
-    // stderr (warnings.warn, logging lastResort) that must never masquerade
-    // as an evaluation error.
-    stderr: isReal
-      ? (line) => { console.log('[py-stderr] ' + line); }
-      : (line) => { stderrBuffer.push(line); },
-  });
+  const stdout = (line) => { console.log(line); };
+  // The worker's console.error override RETHROWS, so lite buffers stderr
+  // and replays it only when the evaluation survived. pysrc=real streams
+  // it as prefixed console.log lines instead: REAL build123d emits benign
+  // stderr (warnings.warn, logging lastResort) that must never masquerade
+  // as an evaluation error.
+  const stderr = isReal
+    ? (line) => { console.log('[py-stderr] ' + line); }
+    : (line) => { stderrBuffer.push(line); };
+
+  // A HEADLESS host (createHeadlessCascade({pyodide})) boots Pyodide itself:
+  // on Cloudflare Workers there is no import() of a URL and no runtime wasm
+  // compilation, so it must come up from module bindings — see
+  // examples/cloudflare-worker-real/src/boot-pyodide.mjs.
+  const host = self._csPyodideHost;
+  let tImported;
+  let pyodide;
+  if (host && typeof host.boot === 'function') {
+    tImported = performance.now();
+    pyodide = await host.boot({ stdout, stderr });
+  } else {
+    // A non-analyzable specifier keeps esbuild from trying to bundle Pyodide
+    // (it must stay an external, lazily fetched asset).
+    const moduleURL = indexURL + 'pyodide.mjs';
+    let pyodideModule;
+    try {
+      pyodideModule = await import(/* @vite-ignore */ moduleURL);
+    } catch (e) {
+      // A plain checkout has no vendor/pyodide, so this is the expected way to
+      // arrive here: say so instead of leaking "failed to fetch module".
+      throw new Error('Pyodide is not available at ' + moduleURL +
+        ' — the experimental ?pyruntime=pyodide runtime needs the vendored core ' +
+        'distribution: run `node packages/cascade-core/scripts/fetch-pyodide.cjs` ' +
+        'and rebuild, or drop the flag to use Brython. (' + e.message + ')');
+    }
+    tImported = performance.now();
+    pyodide = await pyodideModule.loadPyodide({
+      indexURL,
+      // Python print() lands in the worker console exactly like Brython's.
+      stdout,
+      stderr,
+    });
+  }
 
   const tInitialized = performance.now();
   self._pyodideRuntime = pyodide; // memoryStats() reads its wasm heap
