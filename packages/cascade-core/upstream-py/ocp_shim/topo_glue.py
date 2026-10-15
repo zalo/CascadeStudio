@@ -431,6 +431,29 @@ def _cs_make_text(cls, txt, font_size, font='Arial', font_path=None,
 Compound.make_text = classmethod(_cs_make_text)
 
 
+# 0.12+ objects_sketch.Text resolves its font up front via
+# Compound.resolve_font(font, font_path, font_style) -> (name, path,
+# Font_SystemFont). No Font_FontMgr here (COMPROMISE(text)): resolve the way
+# the glue-routed make_text renders — lite's honest FontManager knows exactly
+# the bundled FreeSans family and unknown names fall back to FreeSans — and
+# return the bundled face NAME in the Font_SystemFont slot.
+def _cs_resolve_font(font='Arial', font_path=None, font_style=None):
+    fm = _lt.FontManager()
+    style = _lite_enum(font_style) if font_style is not None \
+        else _lt.FontStyle.REGULAR
+    try:
+        face = fm.find_font(font, style)
+    except Exception:
+        try:
+            face = fm.find_font('FreeSans', style)
+        except Exception:
+            face = 'FreeSans'
+    return (face, 'fonts/' + face + '.ttf', face)
+
+
+Compound.resolve_font = staticmethod(_cs_resolve_font)
+
+
 # Joint reparenting: upstream's `Compound(obj=part.wrapped, joints=
 # part.joints)` (BasePartObject / the tutorial's Hinge pattern) relies on
 # pybind's downcast() returning THE SAME C++ TopoDS object, so

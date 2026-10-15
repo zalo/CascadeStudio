@@ -1,10 +1,12 @@
 // @ts-check
 // The Python SOURCE-layer flag: `?pyruntime=micropython&pysrc=upstream` runs
-// UPSTREAM build123d 0.11.1 Level-A source (vendored, transformed — see
-// packages/cascade-core/src/worker/UpstreamB123d.js) over build123d-lite's
-// geometry/topology classes. Frozen here: the two proof-of-concept goals and
-// the guard rails around the flag. Skips when the upstream sources have not
-// been vendored (node packages/cascade-core/scripts/fetch-upstream-b123d.cjs).
+// UPSTREAM build123d 0.13.0 (vendored in vendor/build123d-0.13.0, transformed
+// at load — see packages/cascade-core/src/worker/UpstreamB123d.js): Level-A,
+// and under the default pytopo=upstream also geometry.py + the whole topology
+// package verbatim over the OCP shim. Frozen here: the two proof-of-concept
+// goals, the native-metaclass path, the 0.13 features that ride on new
+// interpreter/shim support, and the guard rails around the flag. Skips when
+// the upstream payload is absent from dist.
 const { test, expect } = require('@playwright/test');
 
 async function gotoAndReady(page, query = '') {
@@ -24,10 +26,10 @@ async function upstreamAvailable(page) {
   });
 }
 
-test('pysrc=upstream runs upstream BuildLine/BuildPart over lite\'s seam', async ({ page }) => {
+test('pysrc=upstream runs upstream BuildLine/BuildPart', async ({ page }) => {
   await gotoAndReady(page, '?pyruntime=micropython&pysrc=upstream');
   test.skip(!(await upstreamAvailable(page)),
-    'vendor/build123d-0.11.1 not fetched — pysrc=upstream disabled');
+    'upstream-b123d payload missing from dist — pysrc=upstream disabled');
 
   // Goal 1: a BuildLine through UPSTREAM build_common/build_line
   const r1 = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
@@ -38,9 +40,9 @@ test('pysrc=upstream runs upstream BuildLine/BuildPart over lite\'s seam', async
     '    Line((10, 0), (10, 10))',
     'res = l.line',
     'bb = res.bounding_box()',
-    // NOTE: not res.length — upstream 0.11.1's Curve(Compound) has NO
-    // .length (verified against the reference venv); that was a lite-only
-    // extension the pytopo=upstream default no longer papers over
+    // NOTE: not res.length — upstream's Curve(Compound) has NO .length
+    // (verified against the 0.11.1 and 0.13.0 reference venvs); that was a
+    // lite-only extension the pytopo=upstream default no longer papers over
     // float() per component: upstream geometry hands back the raw jsffi
     // numbers, and in-int32 integral doubles arrive as Python ints
     'print("POC1", round(sum(e.length for e in res.edges()), 6), tuple(float(c) for c in bb.min), tuple(float(c) for c in bb.max))',
@@ -84,7 +86,7 @@ test('custom artifacts run upstream source with NATIVE metaclasses (enum/Generic
   page.on('console', (m) => browserLogs.push(m.text()));
   await gotoAndReady(page, '?pyruntime=micropython&pysrc=upstream');
   test.skip(!(await upstreamAvailable(page)),
-    'vendor/build123d-0.11.1 not fetched — pysrc=upstream disabled');
+    'upstream-b123d payload missing from dist — pysrc=upstream disabled');
   const bootLine = browserLogs
     .find((l) => l.indexOf('[pyruntime] micropython boot') === 0) || '';
   test.skip(bootLine.indexOf('"artifact":"custom"') === -1,
@@ -118,6 +120,49 @@ test('custom artifacts run upstream source with NATIVE metaclasses (enum/Generic
     // NONE = None IS a member in CPython's Enum (Align(None) -> Align.NONE);
     // the shim skipped None-valued members until the Stage-3 round
     "METACHECK True True ['CENTER', 'MAX', 'MIN', 'NONE'] True True _GenericMeta True True");
+});
+
+test('build123d 0.13 on MicroPython: native BaseObjectMeta, kernel-record Select.LAST/NEW, StrEnum, materials gap', async ({ page }) => {
+  // 0.12+ wraps every builder-object construction in BaseObjectMeta.__call__
+  // (a metaclass construction firewall) — it runs NATIVELY on micropython-cs
+  // (no emulation, no metaclass= transform; the typing shim's _GenericMeta
+  // is ABCMeta's base so BasePartObject(Part, BaseObject) resolves the most-
+  // derived metaclass like CPython). 0.13 takes Select.LAST/NEW from the
+  // kernel's own BRepTools_History record (topology/history.py over the
+  // shim's OCP-8 collection aliases + the ShapeMap glue). All values below
+  // are the native build123d 0.13.0 results.
+  await gotoAndReady(page, '?pyruntime=micropython&pysrc=upstream');
+  test.skip(!(await upstreamAvailable(page)),
+    'upstream-b123d payload missing from dist — pysrc=upstream disabled');
+  const r = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
+    'import build123d',
+    'from build123d import *',
+    'import build123d.build_common as _bc',
+    'import build123d.objects_part as _op',
+    'with BuildPart() as p:',
+    '    Box(10, 10, 10)',
+    '    Cylinder(3, 20, mode=Mode.SUBTRACT)',
+    '    n_last = len(p.edges(Select.LAST))',
+    '    n_new = len(p.edges(Select.NEW))',
+    '    fillet(p.edges(Select.LAST).filter_by(GeomType.CIRCLE), 1)',
+    'try:',
+    '    p.part.mass()',
+    '    mass = "no-raise"',
+    'except ValueError as e:',
+    '    mass = str(e)',
+    'print("V013", build123d.__version__,',
+    '      type(_bc.BaseObject).__name__, type(_op.BasePartObject).__name__,',
+    '      n_last, n_new, round(p.part.volume, 3),',
+    '      Unit.MM == "mm", str(Unit.IN), "|" + mass)',
+    'show(p.part)',
+  ].join('\n'));
+  expect(r.errors).toEqual([]);
+  await page.waitForFunction(
+    () => window.CascadeAPI.getConsoleLog().some((l) => l.startsWith('V013 ')),
+    { timeout: 90000 });
+  const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
+  expect(logs.find((l) => l.startsWith('V013 '))).toBe(
+    "V013 0.13.0 BaseObjectMeta BaseObjectMeta 3 2 708.564 True in |Shape's density is missing");
 });
 
 test('micropython defaults to upstream source; pysrc=lite opts back into lite', async ({ page }) => {

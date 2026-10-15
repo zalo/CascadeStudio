@@ -35,6 +35,9 @@ const FILES = [
   // stretch modules (loaded best-effort at runtime)
   'objects_sketch.py', 'operations_generic.py', 'operations_part.py',
   'operations_sketch.py', 'joints.py', 'pack_utils.py', 'pack.py',
+  // drafting (Draft/DimensionLine/ExtensionLine/TechnicalDrawing/Arrow*):
+  // pure upstream objects over Text -> the glue's opentype.js make_text
+  'drafting.py',
   // geometry.py + the WHOLE topology package run VERBATIM under
   // pytopo=upstream (Stage 3); history.py/kernel.py are new in 0.13
   'geometry.py', 'topology/__init__.py', 'topology/kernel.py',

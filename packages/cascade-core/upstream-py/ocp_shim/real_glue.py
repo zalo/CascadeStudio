@@ -427,6 +427,28 @@ def _cs_make_text(cls, txt, font_size, font='Arial', font_path=None,
 Compound.make_text = classmethod(_cs_make_text)
 
 
+# 0.12+ objects_sketch.Text resolves its font up front via
+# Compound.resolve_font -> (name, path, Font_SystemFont); there is no
+# Font_FontMgr in this wasm build (COMPROMISE(kernel-fonts)). Resolve the way
+# the glue-routed make_text renders (lite's FontManager: the bundled FreeSans
+# family; unknown names fall back to FreeSans) — same as topo_glue.py.
+def _cs_resolve_font(font='Arial', font_path=None, font_style=None):
+    fm = _lt.FontManager()
+    style = _lite_enum(font_style) if font_style is not None \
+        else _lt.FontStyle.REGULAR
+    try:
+        face = fm.find_font(font, style)
+    except Exception:
+        try:
+            face = fm.find_font('FreeSans', style)
+        except Exception:
+            face = 'FreeSans'
+    return (face, 'fonts/' + face + '.ttf', face)
+
+
+Compound.resolve_font = staticmethod(_cs_resolve_font)
+
+
 # Joint reparenting: pybind's downcast() returns THE SAME C++ object, so
 # Joint.connect_to's in-place parent.locate() moves the new wrapper too;
 # embind casts return VALUE COPIES, so Compound(joints=) must REBIND the

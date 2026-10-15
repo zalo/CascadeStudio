@@ -19,7 +19,7 @@ from build123d import topology as _topology
 
 _OPTIONAL = ('objects_part', 'objects_curve', 'objects_sketch', 'joints',
              'pack', 'operations_sketch', 'operations_generic',
-             'operations_part')
+             'operations_part', 'drafting')
 
 # Which topology layer is beneath us: 'lite' (the seam re-exports) or
 # 'upstream' (Stage 3: upstream geometry+topology verbatim over the OCP
@@ -95,7 +95,7 @@ if _PYTOPO == 'upstream':
                   'export_gltf', 'export_brep', 'import_brep', 'import_step',
                   'Mesher', '_cs_after_run'):
         setattr(_pkg, _name, getattr(_glue, _name))
-    for _name in ('ExportSVG', 'polar', 'delta'):
+    for _name in ('ExportSVG', 'polar', 'delta', 'available_fonts'):
         if not hasattr(_pkg, _name) and hasattr(_lt, _name):
             setattr(_pkg, _name, getattr(_lt, _name))
 
@@ -114,7 +114,10 @@ if _PYTOPO == 'upstream':
                 head, mode=mode if mode is not None else _enums.Mode.ADD)
         return head
 
-    _pkg.ArrowHead = _cs_arrowhead
+    if 'build123d.drafting' not in sys.modules:
+        # only when upstream's own drafting module did not load (it carries
+        # the verbatim ArrowHead/Arrow next to Draft/DimensionLine/...)
+        _pkg.ArrowHead = _cs_arrowhead
 else:
     for _name in ('show', 'show_object', 'show_all', 'volume',
                   '_measure_globals_json', 'export_stl', 'export_step',

@@ -71,7 +71,7 @@ const VENDOR_MODULES = {
     levelA: ['build_common', 'build_line', 'build_part', 'build_sketch',
       'objects_part', 'objects_curve'],
     stretch: ['objects_sketch', 'operations_generic', 'operations_part',
-      'operations_sketch', 'joints', 'pack'],
+      'operations_sketch', 'joints', 'pack', 'drafting'],
   },
 };
 const ACTIVE_MODULES = VENDOR_MODULES[ACTIVE_UPSTREAM_VENDOR];
@@ -457,6 +457,15 @@ export function transformUpstreamSource(name, src, opts) {
     /isinstance\((\w+), ([A-Za-z_][\w.]*(?:\s*\|\s*[A-Za-z_][\w.]*)+)\)/g,
     (m2, v, union) => 'isinstance(' + v + ', (' +
       union.split('|').map((s) => s.trim()).join(', ') + '))');
+  // MicroPython classes have no __mro__ (0.13 Shape.as_shape walks
+  // type(obj).__mro__ to pick a geometry constructor): a C3 linearization
+  // builtin computes it from __bases__
+  out = out.replace(/\b(type\([\w.]+\)|[\w.]+)\.__mro__/g, '_cs_mro($1)');
+  // MicroPython numbers have no is_integer() (and integral JS doubles cross
+  // the FFI as ints, e.g. the math shim's log2(64)): drafting's
+  // Draft.__post_init__ validates fractional_precision with it
+  out = out.replace(/([\w.]+\([^()\n]*\)|[\w.]+)\.is_integer\(\)/g,
+    '_cs_is_integer($1)');
   // this MicroPython build has no sys.exc_info and sys is read-only; the
   // loader installs a builtins._cs_exc_info that reports "not handling an
   // exception" (build123d only uses it to soften errors during unwinding)
@@ -572,6 +581,33 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
   runPy(LOGGING_PATCH_PY);
   runPy('import builtins as _cs_bi\n'
     + '_cs_bi._cs_exc_info = lambda: (None, None, None)\n'
+    // cls.__mro__ stand-in: C3 linearization over __bases__ (CPython's own
+    // algorithm, so the order matches type.__mro__ exactly)
+    + 'def _cs_mro(cls):\n'
+    + "    m = getattr(cls, '__mro__', None)\n"
+    + '    if m is not None:\n'
+    + '        return m\n'
+    + "    bases = list(getattr(cls, '__bases__', ()) or ())\n"
+    + '    seqs = [list(_cs_mro(b)) for b in bases] + [bases]\n'
+    + '    res = [cls]\n'
+    + '    while True:\n'
+    + '        seqs = [q for q in seqs if q]\n'
+    + '        if not seqs:\n'
+    + '            break\n'
+    + '        for q in seqs:\n'
+    + '            head = q[0]\n'
+    + '            if not any(head in t[1:] for t in seqs):\n'
+    + '                break\n'
+    + '        else:\n'
+    + "            raise TypeError('cannot linearize ' + cls.__name__)\n"
+    + '        res.append(head)\n'
+    + '        seqs = [t[1:] if t[0] is head else t for t in seqs]\n'
+    + '    if object not in res:\n'
+    + '        res.append(object)\n'
+    + '    return tuple(res)\n'
+    + '_cs_bi._cs_mro = _cs_mro\n'
+    // x.is_integer() stand-in (see transformUpstreamSource)
+    + '_cs_bi._cs_is_integer = lambda x: isinstance(x, int) or float(x) == int(x)\n'
     // the match-statement rewrite's sequence-pattern helper (tuple-of-names
     // capture patterns in geometry.py's Color)
     + '_cs_bi._cs_match_seq = lambda v, n: isinstance(v, (tuple, list)) and len(v) == n');
@@ -872,6 +908,11 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
   //    the topology layer via build123d._cs_pytopo)
   mp.globals.set('_CS_PYTOPO', pytopo);
   runPy("import sys as _cs_sys\nsetattr(_cs_sys.modules['build123d'], '_cs_pytopo', _CS_PYTOPO)");
+  // build123d.__version__ (upstream reads it from setuptools-scm metadata,
+  // which a vendored tree does not carry): the active vendor's version
+  mp.globals.set('_CS_B123D_VERSION',
+    ACTIVE_UPSTREAM_VENDOR.replace(/^build123d-/, ''));
+  runPy("import sys as _cs_sys\nsetattr(_cs_sys.modules['build123d'], '__version__', _CS_B123D_VERSION)");
   br._cs_register_module('build123d._finalize', await fetchText('build123d/_finalize.py'), false);
 
   console.log('[pysrc=upstream] upstream build123d Level-A registered'
