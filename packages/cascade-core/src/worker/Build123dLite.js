@@ -315,6 +315,50 @@ class GeomType:
     OTHER = ('Other',)
 
 
+class _EnumMember:
+    """A minimal Enum member for the build123d 0.12 enums lite must tell
+    apart from plain strings in selectors (filter_by/group_by): identity
+    equality, a name and a value, ordered by value like GroupBy orders
+    Enum keys."""
+
+    def __init__(self, owner, name, value):
+        self._owner = owner
+        self.name = name
+        self.value = value
+
+    def __repr__(self):
+        return '<' + self._owner + '.' + self.name + ': ' + \
+            repr(self.value) + '>'
+
+    def __str__(self):
+        return self._owner + '.' + self.name
+
+    def __lt__(self, other):
+        return self.value < other.value
+
+    def __gt__(self, other):
+        return self.value > other.value
+
+    def __hash__(self):
+        return hash((self._owner, self.value))
+
+
+class Convexity:
+    """How the material of a shape sits around one of its elements
+    (build123d 0.12): a property of a Vertex/Edge/Face RELATIVE to the shape
+    it was selected from - CONVEX (closes around it by less than half a
+    turn), CONCAVE (more than half a turn), SMOOTH (no bend) or SADDLE (both
+    senses present)."""
+    CONVEX = _EnumMember('Convexity', 'CONVEX', 1)
+    CONCAVE = _EnumMember('Convexity', 'CONCAVE', 2)
+    SMOOTH = _EnumMember('Convexity', 'SMOOTH', 3)
+    SADDLE = _EnumMember('Convexity', 'SADDLE', 4)
+
+    @staticmethod
+    def _of(name):
+        return getattr(Convexity, str(name))
+
+
 try:
     FileNotFoundError
 except NameError:
@@ -403,6 +447,15 @@ def _warn(message, category='UserWarning'):
         return
     _WARNED.add(message)
     print(category + ': ' + message)
+
+
+def _js_error_text(exc):
+    """The message of an error raised across the JS boundary."""
+    text = str(exc)
+    for prefix in ('Error: ', 'JavascriptError: '):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    return text
 
 
 def _is_nested_seq(x):
@@ -1824,6 +1877,8 @@ class Shape:
         self.joints = {}
         # how this shape was made (build123d 0.12 _made_by): Select.LAST/NEW
         self._history = None
+        # the shapes this one was selected through, outermost first (0.12)
+        self.topo_path = ()
 
     def _made_by(self, history):
         """Note the record of how this shape was made (Select.LAST/NEW)."""
@@ -1887,18 +1942,44 @@ class Shape:
             # this) costs O(len(children)) per selector call for nothing
             value.children.append(self)
 
+    def _extracted_from(self, source):
+        """Record that this sub-shape was selected from 'source' (upstream
+        _extracted_from: topo_path grows by the source). The direct source is
+        also kept as lite's selection link (_parent) - deliberately NOT the
+        assembly parent, so selecting never adds children."""
+        self._parent = source
+        if isinstance(source, Shape):
+            self.topo_path = tuple(source.topo_path) + (source,)
+        return self
+
     @property
     def topo_parent(self):
-        """The shape this sub-shape was selected from (upstream
-        Shape.topo_parent; lite's selectors track the same link as .parent)."""
+        """The OUTERMOST shape this sub-shape was selected through
+        (build123d 0.12 topo_path[0])."""
+        path = self.topo_path
+        if path:
+            return path[0]
         return self._parent
 
     @topo_parent.setter
     def topo_parent(self, value):
-        # upstream topo_parent is a PLAIN attribute (objects assign it when
-        # re-homing selector results); it is not the assembly link, so no
-        # children bookkeeping happens here
+        # upstream: topo_path = () or (value,); it is not the assembly link,
+        # so no children bookkeeping happens here
+        self.topo_path = () if value is None else (value,)
         self._parent = value
+
+    @property
+    def topo_owner(self):
+        """The shape this one was DIRECTLY selected from (0.12
+        topo_path[-1])."""
+        path = self.topo_path
+        return path[-1] if path else None
+
+    @property
+    def convexity(self):
+        raise ValueError('a ' + type(self).__name__ + ' has no convexity - '
+                         'only a Vertex, Edge or Face selected from a larger '
+                         'shape does')
 
     # --- location bookkeeping (baked geometry + tracked frame) ---
     @property
@@ -2041,7 +2122,8 @@ class Shape:
         CascadeStudio escape hatch used by the GUI Fillet tool."""
         if self.topo is None:
             return ShapeList()
-        sel = w.Edges(self.topo)
+        # degenerated edges are never returned (upstream filters them)
+        sel = w.Edges(self.topo).nonDegenerate()
         idxs = list(sel.indices())
         raws = list(sel.edges())
         out = ShapeList()
@@ -2080,7 +2162,7 @@ class Shape:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
-            out.append(Solid(s))
+            out.append(Solid(s)._extracted_from(self))
         w.ForEachSolid(self.topo, _cb)
         return self._select(out, select)
 
@@ -2089,7 +2171,7 @@ class Shape:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
-            out.append(Shell(s))
+            out.append(Shell(s)._extracted_from(self))
         w.ForEachShell(self.topo, _cb)
         return self._select(out, select)
 
@@ -2098,7 +2180,7 @@ class Shape:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
-            out.append(Wire(s))
+            out.append(Wire(s)._extracted_from(self))
         w.ForEachWire(self.topo, _cb)
         return self._select(out, select)
 
@@ -3131,6 +3213,20 @@ class Mixin1D(Shape):
             out.append(Edge.make_line(pnt, pnt + kappa_dir * length))
         return out
 
+    @property
+    def convexity(self):
+        """How the shape this edge was selected from sits around it
+        (build123d 0.12 Mixin1D.convexity): the dihedral crease between its
+        two faces in topo_parent, sampled along the edge; a seam is SMOOTH."""
+        parent = self.topo_parent
+        if parent is None or getattr(parent, 'topo', None) is None:
+            raise ValueError('edge has no valid parent')
+        try:
+            name = w.EdgeConvexity(self.topo, _topo(parent))
+        except Exception as exc:
+            raise ValueError(_js_error_text(exc))
+        return Convexity._of(name)
+
     def reversed(self):
         """A copy of this Edge/Wire with the opposite orientation
         (build123d Edge.reversed - the OCCT orientation flag, not a rebuild)."""
@@ -3358,7 +3454,8 @@ def _single_edge_of(curve):
 class Edge(Mixin1D):
     def __init__(self, topo, parent=None, index=None):
         Mixin1D.__init__(self, topo)
-        self.parent = parent
+        if parent is not None:
+            self._extracted_from(parent)
         self.index = index
 
     @property
@@ -3469,12 +3566,9 @@ class Edge(Mixin1D):
 
     @property
     def is_interior(self):
-        """True when this edge lies between two faces of the SAME body rather
-        than on its outer boundary (build123d Edge.is_interior): offset both
-        adjoining faces outward by length/100 and see whether they still
-        intersect in an edge."""
-        return bool(w.EdgeIsInterior(self.topo, _topo(self.parent)
-                                    if self.parent is not None else None))
+        """Is this a CONCAVE edge of the shape it was selected from (build123d
+        0.12: convexity == Convexity.CONCAVE)."""
+        return self.convexity == Convexity.CONCAVE
 
     def find_tangent(self, angle):
         """The normalized parameters at which this edge's tangent is at 'angle'
@@ -3854,7 +3948,8 @@ class Face(Shape):
                 # build123d's Face(wire) is always PLANAR (OnlyPlane=True)
                 topo = w.MakeFace(outer, True, True)
         Shape.__init__(self, topo)
-        self.parent = parent
+        if parent is not None:
+            self._extracted_from(parent)
         self.index = index
 
     @classmethod
@@ -3982,15 +4077,27 @@ class Face(Shape):
 
     @property
     def is_circular_convex(self):
-        """Is this cylinder/sphere/torus face convex relative to its own
-        geometry (build123d Face.is_circular_convex)."""
-        return self._curvature_sign > _TOL_1E6
+        """Is this face CONVEX (build123d 0.12: convexity == CONVEX, for any
+        surface type)."""
+        return self.convexity == Convexity.CONVEX
 
     @property
     def is_circular_concave(self):
-        """Is this cylinder/sphere/torus face concave relative to its own
-        geometry (build123d Face.is_circular_concave)."""
-        return self._curvature_sign < -_TOL_1E6
+        """Is this face CONCAVE (build123d 0.12: convexity == CONCAVE)."""
+        return self.convexity == Convexity.CONCAVE
+
+    @property
+    def convexity(self):
+        """How the material sits around this face (build123d 0.12
+        Face.convexity): the signs of the principal curvatures relative to
+        the outward normal, sampled across the face."""
+        if self.topo is None:
+            raise ValueError('an empty face has no convexity')
+        try:
+            name = w.FaceConvexity(self.topo)
+        except Exception as exc:
+            raise ValueError(_js_error_text(exc))
+        return Convexity._of(name)
 
     def offset(self, amount):
         """The face's plane offset by amount (build123d Face.offset)."""
@@ -4430,7 +4537,8 @@ class Vertex(Shape):
                 pt = tuple(Vector(topo))
             topo = w.PointVertex(list(pt))
         Shape.__init__(self, topo)
-        self.parent = parent
+        if parent is not None:
+            self._extracted_from(parent)
 
     def _xyz(self):
         """The CURRENT point (build123d 0.12 reads BRep_Tool.Pnt, so a
@@ -4463,6 +4571,33 @@ class Vertex(Shape):
 
     def __iter__(self):
         return iter((self.X, self.Y, self.Z))
+
+    @property
+    def convexity(self):
+        """How the shape this vertex was selected from sits around it
+        (build123d 0.12 Vertex.convexity): selected through a face it is a
+        corner of that face (read in the face's own parameters); straight off
+        a solid or shell it is classified by the creases meeting there."""
+        face = None
+        for step in reversed(self.topo_path):
+            t = getattr(step, 'topo', None)
+            if t is not None and t.ShapeType().value == 4:
+                face = step
+                break
+        try:
+            if face is not None:
+                name = w.VertexConvexityOnFace(self.topo, face.topo)
+            else:
+                parent = self.topo_parent
+                if parent is None or getattr(parent, 'topo', None) is None:
+                    raise ValueError('this vertex was not selected from a '
+                                     'shape, so it has no convexity')
+                name = w.VertexConvexityCrease(self.topo, _topo(parent))
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError(_js_error_text(exc))
+        return Convexity._of(name)
 
     def _pos_key(self):
         # INTEGER key tuple: micron-rounded position. Ints, not floats —
@@ -4887,6 +5022,9 @@ def _canonical_center_key(shape):
 def _sort_key_fn(key):
     if isinstance(key, Axis):
         return lambda s: _axis_value(s, key)
+    if key is Convexity:
+        # 0.12: group_by(Convexity) keys every shape by its convexity
+        return lambda s: s.convexity
     if isinstance(key, Mixin1D) and getattr(key, 'topo', None) is not None:
         # sort_by(<edge or wire>): the parameter, along that 1-D shape, of the
         # point closest to each object's centre (build123d's
@@ -5091,6 +5229,9 @@ class ShapeList(list):
     def filter_by(self, f, reverse=False, tolerance=1e-5):
         if isinstance(f, Axis):
             pred = lambda s: _is_parallel(s, f, tolerance)
+        elif isinstance(f, _EnumMember) and f._owner == 'Convexity':
+            # 0.12: filter_by(Convexity.CONCAVE)
+            pred = lambda s: s.convexity == f
         elif isinstance(f, tuple):  # a GeomType member
             def pred(s):
                 try:
@@ -5221,6 +5362,18 @@ class ShapeList(list):
 
     def __lt__(self, key):
         return self.sort_by(key, reverse=True)
+
+    def __rshift__(self, key):
+        """shapes >> key: the LAST group of group_by(key)."""
+        return self.group_by(key)[-1]
+
+    def __lshift__(self, key):
+        """shapes << key: the FIRST group of group_by(key)."""
+        return self.group_by(key)[0]
+
+    def __or__(self, f):
+        """shapes | f: filter_by(f) (e.g. edges() | Convexity.CONCAVE)."""
+        return self.filter_by(f)
 
     def edges(self):
         out = ShapeList()

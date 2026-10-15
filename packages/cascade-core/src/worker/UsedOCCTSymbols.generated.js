@@ -191,10 +191,12 @@ export const USED_OCCT_SYMBOLS = [
   "gp_Lin_3",
   "gp_Parab_2",
   "gp_Pln_3",
+  "gp_Pnt2d_1",
   "gp_Pnt2d_3",
   "gp_Pnt_1",
   "gp_Pnt_3",
   "gp_Trsf_1",
+  "gp_Vec2d_1",
   "gp_Vec_1",
   "gp_Vec_4"
 ];

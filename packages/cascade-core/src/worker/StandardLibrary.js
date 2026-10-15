@@ -2296,6 +2296,204 @@ function _faceCurvatureSign(face) {
   return -Math.sign(k) / Math.abs(k);
 }
 
+// --- Convexity (build123d 0.12 Convexity / topo_path classifiers) -------
+//
+// Ports of topology/one_d.py _dihedral_convexity, two_d.py Face.convexity
+// and zero_d.py Vertex.convexity. Results are the Convexity member NAMES.
+// Substitutions for bindings this wasm build lacks: principal curvatures
+// come from the surface's D2 and the fundamental forms (BRepLProp_SLProps is
+// unbound), and the vertex probe's point-in-face test is a distance check of
+// the probe's surface point to the face (IntTools_FClass2d is unbound).
+
+function _convexityOfKinds(kinds) {
+  const turning = kinds.filter((k) => k !== 'SMOOTH');
+  if (turning.length === 0) { return 'SMOOTH'; }
+  const distinct = turning.filter((k, i) => turning.indexOf(k) === i);
+  return distinct.length === 1 ? distinct[0] : 'SADDLE';
+}
+
+/** The parent's faces bounded by `edge` (upstream
+ *  topo_explore_connected_faces, IsSame-keyed), each with how many times the
+ *  edge occurs in its boundary (twice = a seam of that face). */
+function _facesAroundEdge(edge, parent) {
+  const faces = [], counts = [];
+  ForEachFace(parent, (i, f) => {
+    let n = 0;
+    for (let ex = new self.oc.TopExp_Explorer_2(f, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+      if (ex.Current().IsSame(edge)) { n++; }
+    }
+    if (n === 0) { return; }
+    for (let j = 0; j < faces.length; j++) { if (faces[j].IsSame(f)) { return; } }
+    faces.push(f); counts.push(n);
+  });
+  return [faces, counts];
+}
+
+function _edgeAsBoundedBy(face, edge) {
+  for (let ex = new self.oc.TopExp_Explorer_2(face, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+    if (ex.Current().IsSame(edge)) { return ex.Current(); }
+  }
+  throw new Error("edge is not on the face");
+}
+
+function _dihedralConvexity(edge, face1, face2) {
+  const E = _asEdge(edge);
+  const curve = new self.oc.BRepAdaptor_Curve_2(E);
+  const first = curve.FirstParameter(), last = curve.LastParameter();
+  const pc1 = self.oc.OCJS_Out.BRepTool_CurveOnSurface(E, face1).curve2d.get();
+  const pc2 = self.oc.OCJS_Out.BRepTool_CurveOnSurface(E, face2).curve2d.get();
+  const reversed2 = _edgeAsBoundedBy(face2, E).Orientation_1() ===
+    self.oc.TopAbs_Orientation.TopAbs_REVERSED;
+  const props1 = new self.oc.BRepGProp_Face_2(face1, false);
+  const props2 = new self.oc.BRepGProp_Face_2(face2, false);
+  const kinds = [];
+  const samples = 7;
+  for (let i = 0; i < samples; i++) {
+    const t = first + (last - first) * (i + 0.5) / samples;
+    const P = new self.oc.gp_Pnt_1(), T = new self.oc.gp_Vec_1();
+    curve.D1(t, P, T);
+    const uv1 = pc1.Value(t), uv2 = pc2.Value(t);
+    const n1 = new self.oc.gp_Vec_1(), n2 = new self.oc.gp_Vec_1();
+    const q1 = new self.oc.gp_Pnt_1(), q2 = new self.oc.gp_Pnt_1();
+    props1.Normal(uv1.X(), uv1.Y(), q1, n1);
+    props2.Normal(uv2.X(), uv2.Y(), q2, n2);
+    if (Math.min(T.Magnitude(), n1.Magnitude(), n2.Magnitude()) < 1e-12) { continue; }
+    T.Normalize(); n1.Normalize(); n2.Normalize();
+    if (n1.Crossed(n2).Magnitude() < 1e-4) { kinds.push('SMOOTH'); continue; }
+    if (reversed2) { T.Reverse(); }
+    const into2 = n2.Crossed(T);
+    kinds.push(into2.Dot(n1) < 0 ? 'CONVEX' : 'CONCAVE');
+  }
+  if (kinds.length === 0) { throw new Error("the faces are degenerate along this edge"); }
+  return _convexityOfKinds(kinds);
+}
+
+/** build123d Mixin1D.convexity relative to the shape the edge was selected
+ *  from: the dihedral crease between its two faces, sampled along it. */
+function EdgeConvexity(edge, parent) {
+  const pair = _facesAroundEdge(_asEdge(edge), parent);
+  const faces = pair[0], counts = pair[1];
+  if (faces.length === 1) {
+    if (counts[0] > 1) { return 'SMOOTH'; }
+    throw new Error("this edge lies on one face only, so there is no crease to " +
+      "classify - convexity needs an edge shared by two faces");
+  }
+  if (faces.length !== 2) {
+    throw new Error(faces.length + " faces meet at this edge - convexity needs exactly two");
+  }
+  return _dihedralConvexity(edge, faces[0], faces[1]);
+}
+
+/** build123d Face.convexity: the signs of the principal curvatures relative
+ *  to the outward normal, sampled on a 3x3 grid of the UV bounds. */
+function FaceConvexity(face) {
+  const f = _asFace(face);
+  const surf = new self.oc.BRepAdaptor_Surface_2(f, false);
+  const outward = new self.oc.BRepGProp_Face_2(f, false);
+  const b = _faceUVBounds(f);
+  const TOL = 1e-6;
+  const kinds = [];
+  const fr = [0.15, 0.5, 0.85];
+  for (const uf of fr) {
+    for (const vf of fr) {
+      const u = b[0] + (b[1] - b[0]) * uf, v = b[2] + (b[3] - b[2]) * vf;
+      const P = new self.oc.gp_Pnt_1();
+      const du = new self.oc.gp_Vec_1(), dv = new self.oc.gp_Vec_1();
+      const duu = new self.oc.gp_Vec_1(), dvv = new self.oc.gp_Vec_1(), duv = new self.oc.gp_Vec_1();
+      surf.D2(u, v, P, du, dv, duu, dvv, duv);
+      const np = du.Crossed(dv);
+      const npm = np.Magnitude();
+      if (npm < 1e-12) { continue; }
+      np.Divide(npm);
+      const N = new self.oc.gp_Vec_1(), Q = new self.oc.gp_Pnt_1();
+      outward.Normal(u, v, Q, N);
+      if (N.Magnitude() < 1e-12) { continue; }
+      const E = du.Dot(du), F = du.Dot(dv), G = dv.Dot(dv);
+      const L = duu.Dot(np), M = duv.Dot(np), Nn = dvv.Dot(np);
+      const det = E * G - F * F;
+      if (Math.abs(det) < 1e-24) { continue; }
+      const K = (L * Nn - M * M) / det;
+      const H = (E * Nn - 2 * F * M + G * L) / (2 * det);
+      const disc = Math.sqrt(Math.max(0, H * H - K));
+      const sign = np.Dot(N) > 0 ? 1 : -1;
+      const k1 = sign * (H - disc), k2 = sign * (H + disc);
+      const low = Math.min(k1, k2), high = Math.max(k1, k2);
+      const away = low < -TOL, into = high > TOL;
+      if (away && into) { return 'SADDLE'; }
+      kinds.push(away ? 'CONVEX' : (into ? 'CONCAVE' : 'SMOOTH'));
+    }
+  }
+  if (kinds.length === 0) { throw new Error("the surface is degenerate everywhere it was sampled"); }
+  return _convexityOfKinds(kinds);
+}
+
+/** build123d Vertex.convexity through a FACE: the two boundary edges'
+ *  directions at the vertex in UV, and whether their bisector leads into
+ *  the face. */
+function VertexConvexityOnFace(vertex, face) {
+  const f = _asFace(face);
+  const V = vertex.ShapeType().value === 7 ? self.oc.TopoDS_Cast.Vertex_1(vertex) : vertex;
+  const seen = [], dirs = [];
+  let here = null;
+  for (let ex = new self.oc.TopExp_Explorer_2(f, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+    const e = self.oc.TopoDS_Cast.Edge_1(ex.Current());
+    if (seen.some((x) => x.IsSame(e))) { continue; }
+    seen.push(e);
+    const v0 = self.oc.TopExp.FirstVertex(e, false), v1 = self.oc.TopExp.LastVertex(e, false);
+    const atFirst = v0.IsSame(V), atLast = v1.IsSame(V);
+    if (!atFirst && !atLast) { continue; }
+    const pc = self.oc.OCJS_Out.BRepTool_CurveOnSurface(e, f);
+    const c2 = pc.curve2d.get();
+    const ends = [];
+    if (atFirst) { ends.push([pc.first, 1]); }
+    if (atLast) { ends.push([pc.last, -1]); }
+    for (const [t, sgn] of ends) {
+      const p2 = new self.oc.gp_Pnt2d_1(), d2 = new self.oc.gp_Vec2d_1();
+      c2.D1(t, p2, d2);
+      const m = Math.hypot(d2.X(), d2.Y());
+      if (m < 1e-12) { continue; }
+      if (!here) { here = [p2.X(), p2.Y()]; }
+      dirs.push([sgn * d2.X() / m, sgn * d2.Y() / m]);
+    }
+  }
+  if (dirs.length !== 2) {
+    throw new Error(dirs.length + " edge end(s) meet this vertex on the face, expected 2");
+  }
+  const bx = dirs[0][0] + dirs[1][0], by = dirs[0][1] + dirs[1][1];
+  const bm = Math.hypot(bx, by);
+  if (bm < 1e-6) { return 'SMOOTH'; }
+  const ub = _faceUVBounds(f);
+  const diag = Math.hypot(ub[1] - ub[0], ub[3] - ub[2]);
+  const step = 1e-4 * diag / bm;
+  const pu = here[0] + bx * step, pv = here[1] + by * step;
+  const probe = _faceD1(f, pu, pv)[0];
+  const corner = _faceD1(f, here[0], here[1])[0];
+  const offset = Math.hypot(probe[0] - corner[0], probe[1] - corner[1], probe[2] - corner[2]);
+  const pv3 = new self.oc.BRepBuilderAPI_MakeVertex(new self.oc.gp_Pnt_3(probe[0], probe[1], probe[2])).Vertex();
+  const dres = _distShapeShape(pv3, f);
+  const d = dres ? dres[0] : Infinity;
+  return d <= 1e-9 + 1e-3 * offset ? 'CONVEX' : 'CONCAVE';
+}
+
+/** build123d Vertex.convexity of a vertex taken off a solid or shell: the
+ *  convexities of its incident edges (relative to the same parent). */
+function VertexConvexityCrease(vertex, parent) {
+  const V = vertex.ShapeType().value === 7 ? self.oc.TopoDS_Cast.Vertex_1(vertex) : vertex;
+  const kinds = [];
+  const seen = [];
+  let found = false;
+  ForEachEdge(parent, (i, e) => {
+    const v0 = self.oc.TopExp.FirstVertex(e, false), v1 = self.oc.TopExp.LastVertex(e, false);
+    if (!(v0.IsSame(V) || v1.IsSame(V))) { return; }
+    found = true;
+    if (seen.some((x) => x.IsSame(e))) { return; }
+    seen.push(e);
+    kinds.push(EdgeConvexity(e, parent));
+  });
+  if (!found) { throw new Error("this vertex is not part of its topo_parent"); }
+  return _convexityOfKinds(kinds);
+}
+
 /** 2-D corner fillet between two connected edges of an OPEN planar wire
  *  (build123d's `_solve_wire_fillet_corner_chfi2d`, the primary solver behind
  *  Wire.fillet_2d). `vertexPoint` is the shared corner. Returns
@@ -3561,6 +3759,14 @@ class EdgeSelector {
 
   // --- Filtering ---
 
+  /** Drop degenerated edges (a sphere pole, a fillet's collapsed corner):
+   *  build123d's Shape.edges() never returns them. Indices are kept. */
+  nonDegenerate() {
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => !self.oc.BRep_Tool.Degenerated(_asEdge(e.edge)));
+    return sel;
+  }
+
   ofType(type) {
     let sel = this._clone();
     sel._entries = sel._entries.filter(e => _edgeCurveType(e.edge) === type);
@@ -4693,6 +4899,10 @@ class CascadeStudioStandardLibrary {
     self._obbIsOut = _obbIsOut;
     self._edgeIsForward = _edgeIsForward;
     self._shapeIsReversed = _shapeIsReversed;
+    self.EdgeConvexity = EdgeConvexity;
+    self.FaceConvexity = FaceConvexity;
+    self.VertexConvexityOnFace = VertexConvexityOnFace;
+    self.VertexConvexityCrease = VertexConvexityCrease;
     self._vertexPoint = _vertexPoint;
     self._edgePointAt = _edgePointAt;
     self._edgeTangentAt = _edgeTangentAt;
