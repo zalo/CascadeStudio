@@ -101,6 +101,31 @@ def _from_raw(topo, cls=None):
     return by_code.get(code, Compound)(p)
 
 
+def _as_imported_shape(topo):
+    """build123d 0.13's import_step/import_brep result shape: the file's
+    free shapes as a root Compound's CHILDREN, with the wrapper removed when
+    there is exactly ONE (so a single-part STEP imports as a Solid — 0.11.1
+    returned a Compound there). The worker's readers hand back the file's
+    whole TopoDS (no XCAF label tree — assembly names/colors/locations stay a
+    roadmap item), so a top-level compound's direct sub-shapes stand in for
+    the free shapes; a single one unwraps, recursively like upstream's
+    unwrap of a single free object."""
+    shp = _from_raw(topo)
+    if not isinstance(shp, Compound):
+        return shp
+    from OCP.TopoDS import TopoDS_Iterator
+    kids = []
+    it = TopoDS_Iterator(shp.wrapped)
+    while it.More():
+        kids.append(it.Value())
+        it.Next()
+    if len(kids) == 1:
+        return _as_imported_shape(_raw(kids[0]))
+    root = Compound()
+    root.children = [_from_raw(_raw(k)) for k in kids]
+    return root
+
+
 def _builder_shape(obj, measure=False):
     """The product of a BUILDER holding a shape with geometry (None for
     anything else). Since 0.12's unified BuildScope a builder constructs
@@ -307,7 +332,8 @@ def import_brep(file_name):
     topo = w.ImportBREP(name)
     if topo is None or not topo:
         raise ValueError('Could not import ' + str(file_name))
-    res = _from_raw(topo, Compound)
+    # upstream: Compound.cast(shape) — the class of the shape read
+    res = _from_raw(topo)
     res.label = str(file_name).split('/')[-1]
     return res
 
@@ -323,7 +349,7 @@ def import_step(file_name):
             'The CAD worker has no filesystem; pass the file content with '
             'CascadeAPI.loadExternalFiles({"' + name.split('/')[-1] +
             '": <step text>}) before running the script.')
-    res = _from_raw(topo, Compound)
+    res = _as_imported_shape(topo)
     res.label = name.split('/')[-1]
     return res
 

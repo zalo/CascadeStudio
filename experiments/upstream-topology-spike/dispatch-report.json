@@ -1,11 +1,11 @@
 {
  "note": "gen-ocp-shim.mjs self-check: per-(class,method,arity) dispatch. direct = build-time pinned; typed = runtime coarse-type match, statically guaranteed decisive; ambiguous = statically inseparable pair exists (or an unknown-sig hand-registered variant shadows) — the runtime REFUSES with the candidate list on a tie.",
  "totals": {
-  "directKeys": 5290,
+  "directKeys": 5292,
   "typedKeys": 190,
   "ambiguousKeys": 58,
-  "unknownSigOnlyMethods": 208,
-  "deadUnboundVariants": 191,
+  "unknownSigOnlyMethods": 206,
+  "deadUnboundVariants": 189,
   "pinnedPrimTypeKeys": 4,
   "billedAmbiguousKeys": 11
  },

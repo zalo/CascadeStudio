@@ -163,6 +163,36 @@ test('build123d 0.13 on MicroPython: native BaseObjectMeta, kernel-record Select
   const logs = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
   expect(logs.find((l) => l.startsWith('V013 '))).toBe(
     "V013 0.13.0 BaseObjectMeta BaseObjectMeta 3 2 708.564 True in |Shape's density is missing");
+
+  // 0.13 surfaces that ride on new glue: upstream drafting runs verbatim
+  // (DimensionLine over the opentype.js make_text + Compound.resolve_font),
+  // Face.convexity (BRepLProp_SLProps glue), export_obj with the UV atlas
+  // (tessellate_with_uvs on numpy_micro; Poly_Triangulation.Triangles glue).
+  // Counts are the native 0.13.0 results (BRepMesh's triangle FAN order can
+  // differ from native — node positions, UVs and counts do not).
+  const r2 = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
+    'from build123d import *',
+    'from build123d.drafting import Draft, DimensionLine',
+    'from browser import self as w',
+    'with BuildSketch() as s:',
+    '    Rectangle(40, 20)',
+    '    DimensionLine([(-20, -10), (20, -10)], draft=Draft(font_size=3))',
+    'kinds = sorted(set(str(f.convexity) for f in Cylinder(5, 5).faces()))',
+    'box = Box(20, 10, 5) - Cylinder(3, 10)',
+    'export_obj(box, "box.obj", atlas_gutter=0.002)',
+    "obj = str(w.oc.FS.readFile('/box.obj', {'encoding': 'utf8'})).split('\\n')",
+    'print("V013B", s.sketch.area > 800.5, kinds,',
+    "      sum(1 for l in obj if l.startswith('v ')),",
+    "      sum(1 for l in obj if l.startswith('vt ')),",
+    "      sum(1 for l in obj if l.startswith('f ')))",
+  ].join('\n'));
+  expect(r2.errors).toEqual([]);
+  await page.waitForFunction(
+    () => window.CascadeAPI.getConsoleLog().some((l) => l.startsWith('V013B ')),
+    { timeout: 90000 });
+  const logs2 = await page.evaluate(() => window.CascadeAPI.getConsoleLog());
+  expect(logs2.find((l) => l.startsWith('V013B '))).toBe(
+    "V013B True ['Convexity.CONVEX', 'Convexity.SMOOTH'] 530 530 520");
 });
 
 test('micropython defaults to upstream source; pysrc=lite opts back into lite', async ({ page }) => {

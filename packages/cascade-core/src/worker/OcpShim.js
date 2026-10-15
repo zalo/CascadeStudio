@@ -891,6 +891,17 @@ export function installOcpShim(self, table) {
     }
   };
 
+  // pybind Poly_Triangulation.Triangles() returns the Poly_Array1OfTriangle
+  // (iterated by upstream tessellate/tessellate_with_uvs); the embind
+  // return type is unbound. Serve the same triangles, in order, as an array
+  // (wrap() turns it into a Python tuple of Poly_Triangle proxies).
+  GLUE['Poly_Triangulation.Triangles'] = (args, ref) => {
+    const n = ref.NbTriangles();
+    const out = new Array(n);
+    for (let i = 1; i <= n; i++) { out[i - 1] = ref.Triangle(i); }
+    return out;
+  };
+
   // the hand-bound IndexedDataMap has FindKey/FindFromIndex but no Extent —
   // count by probing (fork ask: bind Extent/Size)
   GLUE['TopTools_IndexedDataMapOfShapeListOfShape.Extent'] = (args, ref) => {

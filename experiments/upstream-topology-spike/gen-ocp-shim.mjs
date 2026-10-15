@@ -286,6 +286,12 @@ const coarseOf = (t) => {
   if (!ts || ts === 'any' || ts === 'GLvoid') { return '?'; }
   if (/^(Standard_Boolean|bool|boolean)$/.test(ts)) { return 'b'; }
   if (/^(Standard_(Real|Integer|ShortReal|Size|Byte|ExtCharacter|Utf32Char)|int|double|float|number)$/.test(ts)) { return 'n'; }
+  // numeric TYPEDEFS the d.ts names but never declares (embind passes them
+  // as plain numbers): Poly_MeshPurpose is `typedef unsigned int` (OCCT 8
+  // BRep_Tool::Triangulation(F, L, purpose) — upstream tessellate). NOT
+  // size_t: its _1/_2 twins (ReSize/FindKey over size_t AND int) would turn
+  // into statically-inseparable pairs.
+  if (ts === 'Poly_MeshPurpose') { return 'n'; }
   if (/^(string|Standard_CString|Standard_Character|NCollection_String|XCAFDoc_PartId)$/.test(ts)) { return 's'; }
   if (dtsEnums[ts]) { return 'e:' + ts; }
   if (dts[ts] && !/_\d+$/.test(ts)) { return 'c:' + ts; }

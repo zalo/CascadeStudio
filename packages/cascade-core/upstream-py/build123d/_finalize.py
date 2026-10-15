@@ -90,7 +90,7 @@ for _name in dir(_lt):
 import topo_glue as _glue
 for _name in ('show', 'show_object', 'show_all', 'volume',
               '_measure_globals_json', 'export_stl', 'export_step',
-              'export_gltf', 'export_brep', 'import_brep', 'import_step',
+              'export_gltf', 'export_brep', 'import_brep', 'import_step', 'export_obj',
               'Mesher', '_cs_after_run'):
     setattr(_pkg, _name, getattr(_glue, _name))
 for _name in ('ExportSVG', 'polar', 'delta', 'available_fonts'):

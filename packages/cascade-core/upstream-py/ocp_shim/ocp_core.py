@@ -76,7 +76,12 @@ def _fail(msg, cls=None):
             raise Standard_ConstructionError(msg)
         except ImportError:
             pass
-    if 'TopoDS::' in msg:
+    if cls == 'TopoDS_Cast' or 'TopoDS::' in msg:
+        # TopoDS::Vertex/Edge/.../Solid raise ONLY Standard_TypeMismatch, so
+        # classify by SITE too: after OCCT has scribbled on its own heap
+        # (COMPROMISE(kernel-heap-reset): fillet/ThruSections faults) the
+        # failure message can be undecodable, and upstream excepts EXACTLY
+        # this type (extrude_linear_with_rotation's compound fallback)
         # a failed TopoDS_Cast downcast raises Standard_TypeMismatch with
         # the cast's name as message (upstream excepts EXACTLY that type:
         # extrude_linear_with_rotation's compound-unwrap fallback)
@@ -309,13 +314,13 @@ class _Static:
             if not deep:
                 r = _OCP_STATIC_V(self._cls, self._name, *conv)
                 if r is _ERRMARK:
-                    _fail(str(_rawjs._csLastErr))
+                    _fail(str(_rawjs._csLastErr), self._cls)
                 return wrap(r)
         try:
             r = w._csOcpStatic(self._cls, self._name,
                                [_unwrap(a) for a in args], _unwrap_kw(kwargs))
         except _CsWorkerError as e:
-            _fail(str(e))
+            _fail(str(e), self._cls)
         return wrap(r)
 
 

@@ -120,18 +120,29 @@ def _from_raw(topo, cls=None):
     return by_code.get(code, Compound)(p)
 
 
-def _as_imported_compound(topo):
-    """Upstream's importers return a COMPOUND, and upstream means a real
-    TopoDS_Compound: Compound.volume/get_type walk the compound's CHILDREN,
-    so a TopoDS_Solid merely WRAPPED in the Compound class measures 0 (lite's
-    Compound measured the whole shape, which is why the seam never saw this).
-    The worker's readers hand back whatever the file held — a single-solid
-    STEP arrives as a bare TopoDS_Solid — so build the compound for real."""
+def _as_imported_shape(topo):
+    """build123d 0.13's import_step/import_brep result shape: the file's
+    free shapes as a root Compound's CHILDREN, with the wrapper removed when
+    there is exactly ONE (so a single-part STEP imports as a Solid — 0.11.1
+    returned a Compound there). The worker's readers hand back the file's
+    whole TopoDS (no XCAF label tree — assembly names/colors/locations stay a
+    roadmap item), so a top-level compound's direct sub-shapes stand in for
+    the free shapes; a single one unwraps, recursively like upstream's
+    unwrap of a single free object."""
     shp = _from_raw(topo)
-    if isinstance(shp, Compound):
+    if not isinstance(shp, Compound):
         return shp
-    from build123d.topology.utils import _make_topods_compound_from_shapes
-    return Compound(_make_topods_compound_from_shapes([shp.wrapped]))
+    from OCP.TopoDS import TopoDS_Iterator
+    kids = []
+    it = TopoDS_Iterator(shp.wrapped)
+    while it.More():
+        kids.append(it.Value())
+        it.Next()
+    if len(kids) == 1:
+        return _as_imported_shape(_raw(kids[0]))
+    root = Compound()
+    root.children = [_from_raw(_raw(k)) for k in kids]
+    return root
 
 
 def _builder_shape(obj, measure=False):
@@ -318,6 +329,47 @@ def export_stl(to_export, file_path, tolerance=1e-3, angular_tolerance=0.1,
     return text is not None
 
 
+def export_obj(to_export, file_path, linear_deflection=0.001,
+               angular_deflection=0.1, include_uvs=True, atlas_packing=True,
+               atlas_gutter=0.0):
+    """build123d 0.13 exporters3d.export_obj (Wavefront OBJ, optional UV
+    atlas). exporters3d itself does not load on MicroPython (it imports
+    threejs_materials/pygltflib at module level), so this is upstream's
+    function body verbatim over upstream Shape.tessellate[_with_uvs] (the UV
+    path runs on numpy_micro), writing into the worker MEMFS like every other
+    exporter here (COMPROMISE(mesher): file names are flattened)."""
+    if include_uvs:
+        vertices, triangles, normals, uvs = to_export.tessellate_with_uvs(
+            linear_deflection, angular_deflection,
+            atlas_packing=atlas_packing, atlas_gutter=atlas_gutter)
+    else:
+        vertices, triangles = to_export.tessellate(linear_deflection,
+                                                   angular_deflection)
+        normals = []
+        uvs = []
+    lines = ['# Wavefront OBJ exported by build123d\n']
+    for v in vertices:
+        lines.append('v %.9g %.9g %.9g\n' % (v.X, v.Y, v.Z))
+    if include_uvs:
+        for u_tex, v_tex in uvs:
+            lines.append('vt %.9g %.9g\n' % (u_tex, v_tex))
+        for n in normals:
+            lines.append('vn %.9g %.9g %.9g\n' % (n.X, n.Y, n.Z))
+        for i0, i1, i2 in triangles:
+            a, b, c = i0 + 1, i1 + 1, i2 + 1
+            lines.append('f %d/%d/%d %d/%d/%d %d/%d/%d\n'
+                         % (a, a, a, b, b, b, c, c, c))
+    else:
+        for i0, i1, i2 in triangles:
+            lines.append('f %d %d %d\n' % (i0 + 1, i1 + 1, i2 + 1))
+    content = ''.join(lines)
+    if hasattr(file_path, 'write'):
+        file_path.write(content.encode('utf-8'))
+    else:
+        w.oc.FS.writeFile('/' + str(file_path).replace('/', '_'), content)
+    return True
+
+
 def export_brep(to_export, file_path):
     text = w.ExportBREP(_raw(to_export), str(file_path).replace('/', '_'))
     return bool(text)
@@ -328,7 +380,8 @@ def import_brep(file_name):
     topo = w.ImportBREP(name)
     if topo is None or not topo:
         raise ValueError('Could not import ' + str(file_name))
-    res = _as_imported_compound(topo)
+    # upstream: Compound.cast(shape) — the class of the shape read
+    res = _from_raw(topo)
     res.label = str(file_name).split('/')[-1]
     return res
 
@@ -344,7 +397,7 @@ def import_step(file_name):
             'The CAD worker has no filesystem; pass the file content with '
             'CascadeAPI.loadExternalFiles({"' + name.split('/')[-1] +
             '": <step text>}) before running the script.')
-    res = _as_imported_compound(topo)
+    res = _as_imported_shape(topo)
     res.label = name.split('/')[-1]
     return res
 
