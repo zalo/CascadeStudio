@@ -9,7 +9,10 @@ in `dist/` (see the build script's copy step and the runtime's probe).
 - MicroPython **v1.28.0**, tag commit `e0e9fbb` — the same source release the
   npm package `@micropython/micropython-webassembly-pyscript@1.28.0-6`
   (the stock artifacts CascadeStudio falls back to) was built from.
-- Local patched checkout: `~/Desktop/micropython-cs`.
+- Local patched checkout: `~/Desktop/micropython-cs` (patches 1-10, branch
+  `cs-patches-v1.28.0`); patch 11 lives on the local branch
+  `cs-gc-incremental` (worktree `~/Desktop/mp-cf-fidelity`) with patches 11-12,
+  stacked on it.
 
 ## Patches applied (in order, on top of e0e9fbb)
 
@@ -25,6 +28,8 @@ in `dist/` (see the build script's copy step and the runtime's probe).
 | `9e360ce` | py/modbuiltins: Support metaclass= and class keywords in __build_class__. |
 | `83f1550` | ports/webassembly: Convert out-of-int32 integral JS numbers as floats. |
 | `7f63764` | ports/webassembly: Append JSFLAGS_EXTRA to JSFLAGS. |
+| `8a616fb` | webassembly: Collect garbage during execution in the pyscript variant. |
+| `3647b6a` | webassembly/variants/pyscript: Start with 6 MiB of linear memory. |
 
 What they give this runtime (each feature-detected in browser.py /
 Build123dLite.js, so the stock artifacts keep working):
@@ -75,6 +80,45 @@ Build123dLite.js, so the stock artifacts keep working):
   pass --profiling-funcs without overriding the port's required link
   flags).
 
+- **GC during execution** (`8a616fb`, 2026-10-15 Cloudflare-fidelity
+  round): upstream's pyscript variant (SPLIT_HEAP_AUTO) NEVER collects inside
+  a top-level call — `gc_collect()` only sets a pending flag, because a
+  collection at depth cannot see the roots suspended C frames keep in wasm
+  locals — so the heap grows to hold EVERYTHING one `runPython` allocates and
+  never shrinks (examples/clock 19.5 -> 386-462 MB, heat_exchanger 556 MB:
+  the "arena ratchet"; `gc.collect()`/`gc.threshold` were no-ops for the same
+  reason). The variant now links with Binaryen
+  `--flatten,--coalesce-locals,--spill-pointers,-Os` (every pointer-sized
+  value live across a call is stored to the C stack before the call) and
+  `gc_collect()` scans the C stack conservatively
+  (`MICROPY_GC_SCAN_SPILLED_STACK`), like a bare-metal port: collections run
+  whenever the heap is full, at any depth, and the heap is bounded by LIVE
+  data — clock/heat_exchanger/toy_truck all stay at the 16 MB boot heap
+  (pythonWasm 19.6 MB). JsProxy finalisers now run mid-run too, which the
+  OCP shim uses to free embind objects (MicroPythonRuntime.js
+  `installProxyFreeHook` -> OcpShim.js `_csOcpRelease`). Cost: wasm
+  486 -> 617 KB (+27%; 207 -> 235 KB gz), ~5% on an allocation-heavy loop,
+  model evals unchanged-to-faster (no heap-growth churn). C stack 64 -> 128 KB
+  (CSTACK_SIZE 32 -> 64 KB) keeps the Python recursion limit where it was
+  (the pystack still binds first: 91 frames, as before). Rejected: Asyncify +
+  `emscripten_scan_registers` (the standard variant's way) — +164% wasm and
+  it broke deep recursion; `--spill-pointers` WITHOUT `--flatten` — values
+  LLVM leaves on the wasm operand stack across a call stay invisible
+  (unsound); `--flatten` without `--coalesce-locals` — one spill slot per
+  flattened local made frames so large that `import os` hit the recursion
+  limit. `GC_SPILL_POINTERS=0` restores upstream's deferred collection.
+  Tests: tests/ports/webassembly unchanged; proofs in
+  experiments/cf-fidelity/ (churn loop heap 64.3 -> 16.3 MB).
+
+- **6 MiB initial linear memory** (`3647b6a`): emscripten's default
+  INITIAL_MEMORY (16 MiB, `(memory 261 …)`) was mostly untouched reservation
+  — the worker passes a 4 MiB GC heap (MicroPythonRuntime.js MP_HEAP_BYTES)
+  and live Python after loading the library is 0.8 MB (lite) / 1.15 MB
+  (upstream). Now `(memory 96 …)`; ALLOW_MEMORY_GROWTH covers the rest.
+  pythonWasm for a basic model 16.3 -> 6.0 MiB; upstream clock /
+  bicycle_tire / heat_exchanger 8.4 MiB; lite clock (9.7 MB live) 16.7 MiB.
+  Boot/eval times unchanged.
+
 Measured and NOT adopted (2026-08-21 Stage-3 perf round):
 `-DMICROPY_OPT_COMPUTED_GOTO=1` (~4% on the b01 hot loop, br_table gains
 are small in wasm engines) and `-O3` over `-Os` (~3% more, +18% wasm
@@ -106,6 +150,8 @@ keeps the original `url`-based path byte-for-byte.
 source ~/Desktop/ocjs-deps/emsdk/emsdk_env.sh   # emsdk 4.0.23
 cd ~/Desktop/micropython-cs
 make -C ports/webassembly submodules
+# (in ~/Desktop/mp-cf-fidelity for patch 11; the pyscript variant's
+#  mpconfigvariant.mk now adds the Binaryen passes + STACK_SIZE itself)
 make -C ports/webassembly -j16 min VARIANT=pyscript BUILD=build-pyscript-settrace \
   CFLAGS_EXTRA="-DMICROPY_PY_SYS_SETTRACE=1" \
   EXPORTED_RUNTIME_METHODS_EXTRA=",PATH,PATH_FS,UTF8ToString,getValue,lengthBytesUTF8,setValue,stringToUTF8,HEAPU8"
@@ -129,7 +175,7 @@ Notes:
 | file | raw | gzip -9 |
 |---|---|---|
 | micropython.mjs | 108 KB | 30 KB |
-| micropython.wasm | 486 KB (483 KB before metaclasses: +3067 B, +0.63%) | 207 KB |
+| micropython.wasm | 617 KB (486 KB before in-execution GC, 483 KB before metaclasses) | 235 KB (207 KB before in-execution GC) |
 | (npm settrace pair for comparison) | 108 + 489 KB | ~228 KB combined |
 
 ## License

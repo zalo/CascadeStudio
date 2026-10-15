@@ -70,7 +70,13 @@ def _fail(msg, cls=None):
             raise Standard_ConstructionError(msg)
         except ImportError:
             pass
-    if 'TopoDS::' in msg:
+    if cls == 'TopoDS_Cast' or 'TopoDS::' in msg:
+        # TopoDS::Vertex/Edge/.../Solid raise ONLY Standard_TypeMismatch, so
+        # classify by SITE too: after a kernel fault (historically the 64 KB
+        # shadow stack overflowing into OCCT's statics on deep fillet/
+        # ThruSections recursions — COMPROMISE(kernel-heap-reset)) the
+        # failure message can be undecodable, and upstream excepts EXACTLY
+        # this type (extrude_linear_with_rotation's compound fallback)
         # a failed TopoDS_Cast downcast raises Standard_TypeMismatch with the
         # cast's name (upstream excepts EXACTLY that type)
         try:
@@ -81,13 +87,22 @@ def _fail(msg, cls=None):
     raise Standard_Failure(msg)
 
 
-# a raw OCCT C++ exception escapes embind as a thrown NUMBER; Pyodide wraps
-# it in JsException whose message is the stringified number
+# a raw OCCT C++ exception escapes embind as a thrown NUMBER (JS-emulated
+# exceptions, the cascadestudio-jseh debug kernel) or as a
+# WebAssembly.Exception (native wasm EH, the default kernel); Pyodide wraps
+# either in a JsException. The worker's isOCCTThrow/describeOCCTException
+# decode both; the stringified-number regex is the fallback.
 _RAW_NUM = re.compile(r'^(?:Error:\s*)?(\d{3,})$')
 
 
 def _errmsg(e):
     s = str(e).strip()
+    try:
+        jserr = getattr(e, 'js_error', e)
+        if js.isOCCTThrow(jserr):
+            return 'INTERNAL OPENCASCADE ERROR: ' + js.describeOCCTException(jserr)
+    except Exception:
+        pass
     m = _RAW_NUM.match(s)
     if m is not None:
         try:
@@ -419,13 +434,13 @@ class _Static:
             if conv is not None:
                 r = _STATIC_V(self._cls, self._name, *conv)
                 if _errmark(r):
-                    _fail(str(js._csLastErr))
+                    _fail(str(js._csLastErr), self._cls)
                 return wrap(r)
         try:
             r = js._csOcpStatic(self._cls, self._name, _js_args(args),
                                 _unwrap_kw(kwargs))
         except JsException as e:
-            _fail(_errmsg(e))
+            _fail(_errmsg(e), self._cls)
         return wrap(r)
 
 
@@ -486,3 +501,34 @@ def pending_fork_binding(what):
     def _raise(*a, **k):
         raise NotImplementedError('PENDING_FORK_BINDING: ' + what)
     return _raise
+
+
+# ---- build123d 0.13 / OCP 8 glue classes (shared with ocp_core.py) ---- #
+from ocp_glue import CsShapeMap, CsShapeDataMap, CsSLProps  # noqa: E402,F401
+
+
+def cs_brep_adaptor_curve2d(edge, face):
+    """BRepAdaptor_Curve2d(E, F) glue — see ocp_core.cs_brep_adaptor_curve2d
+    (EXACT: OCCT's Initialize is Load(CurveOnSurface(E, F), first, last))."""
+    try:
+        r = js._csBRepAdaptorCurve2d(_unwrap(edge), _unwrap(face))
+    except JsException as e:
+        _fail(str(e))
+    return wrap(r)
+
+
+def cs_brep_lprop_slprops(surface, u, v, order=2, resolution=1e-7):
+    """BRepLProp_SLProps glue — see ocp_glue.CsSLProps / OcpShim.js
+    _csSLProps (LProp_SLProps' computation on the bound Adaptor3d_Surface
+    D2)."""
+    try:
+        rec = js._csSLProps(_unwrap(surface), float(u), float(v),
+                              float(resolution))
+    except JsException as e:
+        _fail(str(e))
+    rec = wrap(rec)
+
+    def _make_dir(x, y, z):
+        from OCP.gp import gp_Dir
+        return gp_Dir(x, y, z)
+    return CsSLProps(rec, _make_dir)

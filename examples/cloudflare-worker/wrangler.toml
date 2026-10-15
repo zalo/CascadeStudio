@@ -1,6 +1,12 @@
 name = "cascade-headless"
 main = "src/index.js"
 compatibility_date = "2025-08-01"
+# Wrangler re-bundles src/ with esbuild, and its default keep_names wraps every
+# named function in a __name() defineProperty. The embind glue mints its
+# invoker closures PER BOUND METHOD at engine boot (~216k), so that one
+# default costs ~30 MB of V8 heap in the isolate (measured through the
+# inspector: see FIDELITY-ON-WORKERS.md) for names nothing reads.
+keep_names = false
 
 # --------------------------------------------------------------------------
 # Two deployments of the same code, one per build123d SOURCE FLAVOR. The
@@ -8,9 +14,11 @@ compatibility_date = "2025-08-01"
 # boots ONE library, so one isolate serves exactly one flavor — this is a
 # wrangler environment (with its own entry module), not a query parameter.
 #
-#   (default)      src/index.js           build123d-lite      cascade-headless
-#   --env upstream src/index-upstream.js  upstream 0.11.1     cascade-headless-upstream
-#   --env warm     src/index.js, BOOT=warm (see below)        cascade-headless-warm
+#   (default)      src/index.js           build123d-lite        cascade-headless
+#   --env upstream src/index-upstream.js  upstream 0.13.0       cascade-headless-upstream
+#   --env warm     src/index.js, BOOT=warm (see below)          cascade-headless-warm
+#   --env real     src/real.js            REAL build123d 0.13.0 cascade-headless-real
+#                                         wheel + numpy on Pyodide
 #
 # EVERY asset is a module of the Worker script — wasm, the MicroPython glue,
 # the four FreeSans faces and (upstream only) the Python layer. Cloudflare
@@ -44,7 +52,7 @@ fallthrough = false
 
 [[rules]]
 type = "Data"
-globs = ["**/*.ttf"]
+globs = ["**/*.ttf", "**/*.zip", "**/*.whl"]
 fallthrough = false
 
 # The upstream build123d Python layer: ONE relative-path -> source map, as a
@@ -105,6 +113,28 @@ BOOT = "request"
 cpu_ms = 300000
 
 [env.upstream.observability]
+enabled = true
+
+# --------------------------------------------------------------------------
+# The REAL flavor: the actual build123d 0.13.0 wheel + real numpy on Pyodide
+# 314, over the same OCP shim and OCCT kernel. Its own entry (src/real.js)
+# so the ~20 MB of Pyodide module bindings ride only in this script. Needs
+# `node scripts/prepare-pyodide.mjs` (which needs vendor/pyodide:
+# packages/cascade-core/scripts/fetch-pyodide.cjs). BOOT=warm is downgraded
+# to startup by the entry (Pyodide + numpy + build123d import is ~1.8 s).
+# See FIDELITY-ON-WORKERS.md. Not deployed; verified under `wrangler dev`.
+# --------------------------------------------------------------------------
+[env.real]
+name = "cascade-headless-real"
+main = "src/real.js"
+
+[env.real.vars]
+BOOT = "request"
+
+[env.real.limits]
+cpu_ms = 300000
+
+[env.real.observability]
 enabled = true
 
 # --------------------------------------------------------------------------

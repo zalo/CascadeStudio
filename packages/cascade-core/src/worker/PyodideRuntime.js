@@ -47,9 +47,10 @@ const PY_USER_MODULE = 'main';
  *  stdlib. Everything else in PY_SHIM_MODULES is a Brython gap filler and is
  *  replaced by the real CPython module. */
 const PYODIDE_SHIMS = ['logging', '_scipy_shim', 'scipy', 'scipy.optimize',
-  'scipy.spatial', 'pytest'];
+  'scipy.spatial', 'pytest', '_bd_materials_shim', 'bd_materials',
+  'bd_materials.core', 'bd_materials.finishes'];
 
-/** pysrc=real (REAL build123d 0.11.1 over the OCP shim) drops the logging
+/** pysrc=real (REAL build123d 0.13.0 over the OCP shim) drops the logging
  *  swallower: real CPython logging runs for real — build123d's module
  *  loggers write nothing without handlers, and stderr streams to the console
  *  as '[py-stderr]' lines instead of being replayed through console.error
@@ -63,7 +64,7 @@ let _runtimePromise = null;
 let _bootedPySrc = null;
 
 /** Lazily bootstrap Pyodide + build123d-lite (or, with pySrc === 'real',
- *  REAL build123d 0.11.1 over the OCP shim — see PyodideRealB123d.js).
+ *  REAL build123d 0.13.0 over the OCP shim — see PyodideRealB123d.js).
  *  Same contract as ensurePythonRuntime(): resolves to an object with
  *  `run(code)`. One worker session boots ONE source mode. */
 export function ensurePyodideRuntime(pySrc) {
@@ -300,40 +301,55 @@ async function _bootstrap(srcKind) {
   const t0 = performance.now();
   // Dual-path like brython.js: the build copies the vendored core
   // distribution next to the worker bundle.
-  const indexURL = typeof ESBUILD !== 'undefined'
-    ? new URL('./pyodide/', self.location.href).href
-    : new URL('../../../../vendor/pyodide/', self.location.href).href;
-
-  // A non-analyzable specifier keeps esbuild from trying to bundle Pyodide
-  // (it must stay an external, lazily fetched asset).
-  const moduleURL = indexURL + 'pyodide.mjs';
-  let pyodideModule;
-  try {
-    pyodideModule = await import(/* @vite-ignore */ moduleURL);
-  } catch (e) {
-    // A plain checkout has no vendor/pyodide, so this is the expected way to
-    // arrive here: say so instead of leaking "failed to fetch module".
-    throw new Error('Pyodide is not available at ' + moduleURL +
-      ' — the experimental ?pyruntime=pyodide runtime needs the vendored core ' +
-      'distribution: run `node packages/cascade-core/scripts/fetch-pyodide.cjs` ' +
-      'and rebuild, or drop the flag to use Brython. (' + e.message + ')');
-  }
-  const tImported = performance.now();
+  const indexURL = (self._csPyodideHost || !self.location) ? null
+    : (typeof ESBUILD !== 'undefined'
+      ? new URL('./pyodide/', self.location.href).href
+      : new URL('../../../../vendor/pyodide/', self.location.href).href);
 
   const stderrBuffer = [];
-  const pyodide = await pyodideModule.loadPyodide({
-    indexURL,
-    // Python print() lands in the worker console exactly like Brython's.
-    stdout: (line) => { console.log(line); },
-    // The worker's console.error override RETHROWS, so lite buffers stderr
-    // and replays it only when the evaluation survived. pysrc=real streams
-    // it as prefixed console.log lines instead: REAL build123d emits benign
-    // stderr (warnings.warn, logging lastResort) that must never masquerade
-    // as an evaluation error.
-    stderr: isReal
-      ? (line) => { console.log('[py-stderr] ' + line); }
-      : (line) => { stderrBuffer.push(line); },
-  });
+  const stdout = (line) => { console.log(line); };
+  // The worker's console.error override RETHROWS, so lite buffers stderr
+  // and replays it only when the evaluation survived. pysrc=real streams
+  // it as prefixed console.log lines instead: REAL build123d emits benign
+  // stderr (warnings.warn, logging lastResort) that must never masquerade
+  // as an evaluation error.
+  const stderr = isReal
+    ? (line) => { console.log('[py-stderr] ' + line); }
+    : (line) => { stderrBuffer.push(line); };
+
+  // A HEADLESS host (createHeadlessCascade({pyodide})) boots Pyodide itself:
+  // on Cloudflare Workers there is no import() of a URL and no runtime wasm
+  // compilation, so it must come up from module bindings — see
+  // examples/cloudflare-worker-real/src/boot-pyodide.mjs.
+  const host = self._csPyodideHost;
+  let tImported;
+  let pyodide;
+  if (host && typeof host.boot === 'function') {
+    tImported = performance.now();
+    pyodide = await host.boot({ stdout, stderr });
+  } else {
+    // A non-analyzable specifier keeps esbuild from trying to bundle Pyodide
+    // (it must stay an external, lazily fetched asset).
+    const moduleURL = indexURL + 'pyodide.mjs';
+    let pyodideModule;
+    try {
+      pyodideModule = await import(/* @vite-ignore */ moduleURL);
+    } catch (e) {
+      // A plain checkout has no vendor/pyodide, so this is the expected way to
+      // arrive here: say so instead of leaking "failed to fetch module".
+      throw new Error('Pyodide is not available at ' + moduleURL +
+        ' — the experimental ?pyruntime=pyodide runtime needs the vendored core ' +
+        'distribution: run `node packages/cascade-core/scripts/fetch-pyodide.cjs` ' +
+        'and rebuild, or drop the flag to use Brython. (' + e.message + ')');
+    }
+    tImported = performance.now();
+    pyodide = await pyodideModule.loadPyodide({
+      indexURL,
+      // Python print() lands in the worker console exactly like Brython's.
+      stdout,
+      stderr,
+    });
+  }
 
   const tInitialized = performance.now();
   self._pyodideRuntime = pyodide; // memoryStats() reads its wasm heap
@@ -348,7 +364,7 @@ async function _bootstrap(srcKind) {
     if (PY_SHIM_MODULES[name]) { registerModule(name, PY_SHIM_MODULES[name]); }
   }
   if (isReal) {
-    // REAL build123d 0.11.1 over the OCP shim (wheels + OCP proxies +
+    // REAL build123d 0.13.0 over the OCP shim (wheels + OCP proxies +
     // third-party stubs + worker glue) — see PyodideRealB123d.js.
     await bootstrapPyodideRealB123d(pyodide, registerModule, indexURL);
   } else {

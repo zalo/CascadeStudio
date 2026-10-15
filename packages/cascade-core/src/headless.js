@@ -75,6 +75,9 @@ const DEFAULT_STL_NAME = 'cascade-headless.stl';
  *
  *  Options:
  *    - `runtime`  'micropython' (default) | 'brython' | 'pyodide'
+ *    - `pyodide`  for runtime 'pyodide': {boot({stdout, stderr}) -> pyodide,
+ *                 installWheels(pyodide, names)} — the host brings Pyodide up
+ *                 from its own assets (examples/cloudflare-worker-real)
  *    - `pySrc`    'lite' (default) | 'upstream' — see CLAUDE.md. Headless
  *                 defaults to LITE: it is embedded in the bundle (no 3.5 MB
  *                 of extra Python assets to ship into a Worker) and boots in
@@ -191,6 +194,13 @@ export async function createHeadlessCascade(options = {}) {
   if (typeof opts.upstreamPy === 'function') {
     globalThis.self._csUpstreamFetchText = opts.upstreamPy;
   }
+  // runtime: 'pyodide' — the host boots Pyodide (and installs wheels) from
+  // its own assets: {boot({stdout, stderr}) -> pyodide, installWheels(py,
+  // names)}. pySrc: 'real' additionally needs upstreamPy(rel) for the OCP
+  // shim + real-deps payload.
+  if (opts.pyodide) {
+    globalThis.self._csPyodideHost = opts.pyodide;
+  }
 
   // ---------------------------------------------------------------- //
   // Boot the engine.                                                  //
@@ -198,10 +208,11 @@ export async function createHeadlessCascade(options = {}) {
   const tBoot = now();
   const worker = new CascadeStudioWorker({
     installRouter: false,
-    // Snapshot OCCT's pristine linear memory so a heap that a kernel
-    // algorithm corrupted can be rewound between jobs and around a failed
-    // export — see COMPROMISE(kernel-heap-reset) in CascadeWorker.js.
-    // `kernelImage: false` opts out (saves a few MB, gives up the repair).
+    // Snapshot OCCT's pristine linear memory so every job starts from it
+    // and a damaged kernel can be rewound around a failed export — see
+    // COMPROMISE(kernel-heap-reset) in CascadeWorker.js. `kernelImage:
+    // false` opts out (saves a few MB, gives up the clean allocator and the
+    // repair).
     kernelImage: opts.kernelImage !== false,
     assets: {
       occtWasm: opts.occtWasm,
@@ -244,7 +255,9 @@ export async function createHeadlessCascade(options = {}) {
     return ok;
   };
 
-  /** Run `write(shape)`; if the kernel's writer machinery has been poisoned,
+  /** Run `write(shape)`; if the kernel's writer machinery is damaged (the
+   *  historical cause: the 64 KB shadow stack overflowing into OCCT's
+   *  statics — see COMPROMISE(kernel-heap-reset)),
    *  carry the shape out as BREP, rewind the kernel and write from the
    *  re-imported copy. Returns {text, healed}. */
   const exportOrHeal = (what, shape, write) => {
@@ -256,9 +269,11 @@ export async function createHeadlessCascade(options = {}) {
       catch (e) { brep = null; }
       try { oc().FS.unlink('/__heal.brep'); } catch (e) { /* absent */ }
       if (!brep) {
-        throw new Error(what + ': the kernel heap was corrupted during this '
-          + 'evaluation and BRepTools::Write is down too, so the shape cannot '
-          + 'be carried out of the damaged heap. '
+        throw new Error(what + ': the kernel\'s writer machinery was damaged '
+          + 'during this evaluation and BRepTools::Write is down too, so the '
+          + 'shape cannot be carried out. (On OCCT builds with the 64 KB '
+          + 'default stack this is the shadow stack overflowing into OCCT\'s '
+          + 'statics; the fork links -sSTACK_SIZE=512KB.) '
           + 'COMPROMISE(kernel-heap-reset). ' + firstError.message);
       }
       resetKernel();
@@ -472,8 +487,9 @@ export async function createHeadlessCascade(options = {}) {
     },
 
     /** Is OCCT's file-writer machinery still usable? (See
-     *  COMPROMISE(kernel-heap-reset) — a few kernel algorithms corrupt the
-     *  heap, and the writers are the usual casualty.) Costs a few ms. */
+     *  COMPROMISE(kernel-heap-reset) — on 64 KB-stack builds a deep fillet
+     *  overflowed the shadow stack into OCCT's statics, and the writers were
+     *  the casualty.) Costs a few ms. */
     kernelHealthy() { return worker.kernelHealthy(); },
 
     /** Rewind OCCT to its boot image, dropping every shape. Returns false
@@ -498,10 +514,11 @@ export async function createHeadlessCascade(options = {}) {
     reset() {
       // Rewinding the kernel image is both cheaper and more thorough than
       // deleting the compound: it hands the next job a pristine allocator
-      // (so a heavy run no longer ratchets the heap) AND undoes any heap
-      // corruption the last job's geometry left behind, which is what made a
-      // Cloudflare isolate that had once run maker_coin fail every later
-      // STEP export. See COMPROMISE(kernel-heap-reset).
+      // (so a heavy run no longer ratchets the heap) AND undoes any damage
+      // the last job left in OCCT's memory — on 64 KB-stack builds, the
+      // shadow-stack overflow that made a Cloudflare isolate that had once
+      // run maker_coin fail every later STEP export. See
+      // COMPROMISE(kernel-heap-reset).
       if (worker.hasKernelImage()) {
         resetKernel();
       } else {

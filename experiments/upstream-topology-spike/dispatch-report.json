@@ -1,11 +1,11 @@
 {
  "note": "gen-ocp-shim.mjs self-check: per-(class,method,arity) dispatch. direct = build-time pinned; typed = runtime coarse-type match, statically guaranteed decisive; ambiguous = statically inseparable pair exists (or an unknown-sig hand-registered variant shadows) — the runtime REFUSES with the candidate list on a tie.",
  "totals": {
-  "directKeys": 5307,
+  "directKeys": 5292,
   "typedKeys": 190,
   "ambiguousKeys": 58,
-  "unknownSigOnlyMethods": 202,
-  "deadUnboundVariants": 191,
+  "unknownSigOnlyMethods": 206,
+  "deadUnboundVariants": 189,
   "pinnedPrimTypeKeys": 4,
   "billedAmbiguousKeys": 11
  },
@@ -54,18 +54,6 @@
    "billedSites": 2
   },
   {
-   "key": "BRepAlgoAPI_Section.__init__/3",
-   "kind": "ambiguous",
-   "cands": [
-    "BRepAlgoAPI_Section_3(c:TopoDS_Shape,c:TopoDS_Shape,b)",
-    "BRepAlgoAPI_Section_5(c:TopoDS_Shape,c:gp_Pln,b)",
-    "BRepAlgoAPI_Section_6(c:TopoDS_Shape,?,b)",
-    "BRepAlgoAPI_Section_7(?,c:TopoDS_Shape,b)",
-    "BRepAlgoAPI_Section_8(?,?,b)"
-   ],
-   "billedSites": 1
-  },
-  {
    "key": "BRepBuilderAPI_MakeEdge.__init__/3",
    "kind": "ambiguous",
    "cands": [
@@ -87,6 +75,15 @@
     "BRepBuilderAPI_MakeEdge_25(?,n,n)",
     "BRepBuilderAPI_MakeEdge_26(?,c:gp_Pnt,c:gp_Pnt)",
     "BRepBuilderAPI_MakeEdge_27(?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepTools_History.Merge/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Merge_1(?)",
+    "Merge_2(c:BRepTools_History)"
    ],
    "billedSites": 1
   },
@@ -179,18 +176,6 @@
    "billedSites": 2
   },
   {
-   "key": "BRepAlgoAPI_Section.__init__/3",
-   "kind": "ambiguous",
-   "cands": [
-    "BRepAlgoAPI_Section_3(c:TopoDS_Shape,c:TopoDS_Shape,b)",
-    "BRepAlgoAPI_Section_5(c:TopoDS_Shape,c:gp_Pln,b)",
-    "BRepAlgoAPI_Section_6(c:TopoDS_Shape,?,b)",
-    "BRepAlgoAPI_Section_7(?,c:TopoDS_Shape,b)",
-    "BRepAlgoAPI_Section_8(?,?,b)"
-   ],
-   "billedSites": 1
-  },
-  {
    "key": "BRepBuilderAPI_MakeEdge.__init__/3",
    "kind": "ambiguous",
    "cands": [
@@ -212,6 +197,15 @@
     "BRepBuilderAPI_MakeEdge_25(?,n,n)",
     "BRepBuilderAPI_MakeEdge_26(?,c:gp_Pnt,c:gp_Pnt)",
     "BRepBuilderAPI_MakeEdge_27(?,c:TopoDS_Vertex,c:TopoDS_Vertex)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepTools_History.Merge/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Merge_1(?)",
+    "Merge_2(c:BRepTools_History)"
    ],
    "billedSites": 1
   },
@@ -279,6 +273,18 @@
    "billedSites": 0
   },
   {
+   "key": "BRepAlgoAPI_Section.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepAlgoAPI_Section_3(c:TopoDS_Shape,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_5(c:TopoDS_Shape,c:gp_Pln,b)",
+    "BRepAlgoAPI_Section_6(c:TopoDS_Shape,?,b)",
+    "BRepAlgoAPI_Section_7(?,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_8(?,?,b)"
+   ],
+   "billedSites": 0
+  },
+  {
    "key": "BRepBuilderAPI_MakeFace.__init__/3",
    "kind": "ambiguous",
    "cands": [
@@ -299,15 +305,6 @@
     "SetRadius_4(c:TColgp_Array1OfPnt2d,n,n)",
     "SetRadius_5(n,n,c:TopoDS_Edge)",
     "SetRadius_6(n,n,c:TopoDS_Vertex)"
-   ],
-   "billedSites": 0
-  },
-  {
-   "key": "BRepTools_History.Merge/1",
-   "kind": "ambiguous",
-   "cands": [
-    "Merge_1(?)",
-    "Merge_2(c:BRepTools_History)"
    ],
    "billedSites": 0
   },
@@ -730,16 +727,14 @@
    "billedSites": 20
   },
   {
-   "key": "BRepBuilderAPI_MakeFace.__init__/1",
+   "key": "gp_Dir.__init__/1",
    "kind": "typed",
    "cands": [
-    "BRepBuilderAPI_MakeFace_2(c:TopoDS_Face)",
-    "BRepBuilderAPI_MakeFace_3(c:gp_Pln)",
-    "BRepBuilderAPI_MakeFace_4(c:gp_Cylinder)",
-    "BRepBuilderAPI_MakeFace_6(c:gp_Sphere)",
-    "BRepBuilderAPI_MakeFace_7(c:gp_Torus)"
+    "gp_Dir_3(c:gp_Vec)",
+    "gp_Dir_4(c:gp_XYZ)",
+    "gp_Dir_6(c:gp_Dir)"
    ],
-   "billedSites": 8
+   "billedSites": 9
   },
   {
    "key": "GCPnts_AbscissaPoint.Length/1",
@@ -751,16 +746,6 @@
    "billedSites": 8
   },
   {
-   "key": "gp_Dir.__init__/1",
-   "kind": "typed",
-   "cands": [
-    "gp_Dir_3(c:gp_Vec)",
-    "gp_Dir_4(c:gp_XYZ)",
-    "gp_Dir_6(c:gp_Dir)"
-   ],
-   "billedSites": 8
-  },
-  {
    "key": "gp_Vec.__init__/1",
    "kind": "typed",
    "cands": [
@@ -768,6 +753,18 @@
     "gp_Vec_3(c:gp_XYZ)"
    ],
    "billedSites": 8
+  },
+  {
+   "key": "BRepBuilderAPI_MakeFace.__init__/1",
+   "kind": "typed",
+   "cands": [
+    "BRepBuilderAPI_MakeFace_2(c:TopoDS_Face)",
+    "BRepBuilderAPI_MakeFace_3(c:gp_Pln)",
+    "BRepBuilderAPI_MakeFace_4(c:gp_Cylinder)",
+    "BRepBuilderAPI_MakeFace_6(c:gp_Sphere)",
+    "BRepBuilderAPI_MakeFace_7(c:gp_Torus)"
+   ],
+   "billedSites": 7
   },
   {
    "key": "TopLoc_Location.__init__/1",
@@ -933,6 +930,15 @@
    "billedSites": 2
   },
   {
+   "key": "GCPnts_AbscissaPoint.Length/4",
+   "kind": "typed",
+   "cands": [
+    "Length_7(c:Adaptor3d_Curve,n,n,n)",
+    "Length_8(c:Adaptor2d_Curve2d,n,n,n)"
+   ],
+   "billedSites": 2
+  },
+  {
    "key": "GC_MakeArcOfCircle.__init__/3",
    "kind": "typed",
    "cands": [
@@ -960,16 +966,13 @@
    "billedSites": 2
   },
   {
-   "key": "BRepAlgoAPI_Section.__init__/3",
-   "kind": "ambiguous",
+   "key": "gp_Vec2d.__init__/2",
+   "kind": "typed",
    "cands": [
-    "BRepAlgoAPI_Section_3(c:TopoDS_Shape,c:TopoDS_Shape,b)",
-    "BRepAlgoAPI_Section_5(c:TopoDS_Shape,c:gp_Pln,b)",
-    "BRepAlgoAPI_Section_6(c:TopoDS_Shape,?,b)",
-    "BRepAlgoAPI_Section_7(?,c:TopoDS_Shape,b)",
-    "BRepAlgoAPI_Section_8(?,?,b)"
+    "gp_Vec2d_4(n,n)",
+    "gp_Vec2d_5(c:gp_Pnt2d,c:gp_Pnt2d)"
    ],
-   "billedSites": 1
+   "billedSites": 2
   },
   {
    "key": "BRepBuilderAPI_MakeEdge.__init__/3",
@@ -1039,6 +1042,15 @@
    "cands": [
     "BRepPrimAPI_MakeSphere_8(c:gp_Pnt,n,n,n,n)",
     "BRepPrimAPI_MakeSphere_12(c:gp_Ax2,n,n,n,n)"
+   ],
+   "billedSites": 1
+  },
+  {
+   "key": "BRepTools_History.Merge/1",
+   "kind": "ambiguous",
+   "cands": [
+    "Merge_1(?)",
+    "Merge_2(c:BRepTools_History)"
    ],
    "billedSites": 1
   },
@@ -1235,6 +1247,18 @@
     "Init2_1(c:TopoDS_Shape)",
     "Init2_2(c:gp_Pln)",
     "Init2_3(?)"
+   ],
+   "billedSites": 0
+  },
+  {
+   "key": "BRepAlgoAPI_Section.__init__/3",
+   "kind": "ambiguous",
+   "cands": [
+    "BRepAlgoAPI_Section_3(c:TopoDS_Shape,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_5(c:TopoDS_Shape,c:gp_Pln,b)",
+    "BRepAlgoAPI_Section_6(c:TopoDS_Shape,?,b)",
+    "BRepAlgoAPI_Section_7(?,c:TopoDS_Shape,b)",
+    "BRepAlgoAPI_Section_8(?,?,b)"
    ],
    "billedSites": 0
   },
@@ -1557,15 +1581,6 @@
    "billedSites": 0
   },
   {
-   "key": "BRepTools_History.Merge/1",
-   "kind": "ambiguous",
-   "cands": [
-    "Merge_1(?)",
-    "Merge_2(c:BRepTools_History)"
-   ],
-   "billedSites": 0
-  },
-  {
    "key": "BRep_Builder.MakeEdge/3",
    "kind": "ambiguous",
    "cands": [
@@ -1726,15 +1741,6 @@
    "cands": [
     "Add_1(c:Bnd_OBB)",
     "Add_2(c:gp_Pnt)"
-   ],
-   "billedSites": 0
-  },
-  {
-   "key": "GCPnts_AbscissaPoint.Length/4",
-   "kind": "typed",
-   "cands": [
-    "Length_7(c:Adaptor3d_Curve,n,n,n)",
-    "Length_8(c:Adaptor2d_Curve2d,n,n,n)"
    ],
    "billedSites": 0
   },
@@ -3062,15 +3068,6 @@
    "cands": [
     "SetCoord_1(n,n)",
     "SetCoord_2(n,n)"
-   ],
-   "billedSites": 0
-  },
-  {
-   "key": "gp_Vec2d.__init__/2",
-   "kind": "typed",
-   "cands": [
-    "gp_Vec2d_4(n,n)",
-    "gp_Vec2d_5(c:gp_Pnt2d,c:gp_Pnt2d)"
    ],
    "billedSites": 0
   },

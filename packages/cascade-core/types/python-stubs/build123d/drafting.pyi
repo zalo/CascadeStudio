@@ -1,9 +1,9 @@
 from _typeshed import Incomplete
-from build123d.build_common import IN as IN, MM as MM
+from build123d.build_constants import IN as IN, MM as MM
 from build123d.build_enums import Align as Align, FontStyle as FontStyle, GeomType as GeomType, HeadType as HeadType, Mode as Mode, NumberDisplay as NumberDisplay, PageSize as PageSize, Side as Side, Unit as Unit
 from build123d.build_line import BuildLine as BuildLine
 from build123d.build_sketch import BuildSketch as BuildSketch
-from build123d.geometry import Axis as Axis, Location as Location, Plane as Plane, Pos as Pos, Vector as Vector, VectorLike as VectorLike
+from build123d.geometry import Axis as Axis, Location as Location, Plane as Plane, Pos as Pos, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike
 from build123d.objects_curve import Line as Line, TangentArc as TangentArc
 from build123d.objects_sketch import BaseSketchObject as BaseSketchObject, Polygon as Polygon, Text as Text
 from build123d.operations_generic import fillet as fillet, mirror as mirror, sweep as sweep
@@ -137,7 +137,15 @@ class ExtensionLine(BaseSketchObject):
         border (PathDescriptor): a very general type of input defining the object to
             be dimensioned. Typically this value would be extracted from the part but is
             not restricted to this use.
-        offset (float): a distance to displace the dimension line from the edge of the object
+        offset (float | VectorLike): displacement of the dimension line from the edge of
+            the object. A ``float`` is a signed perpendicular distance (the legacy
+            behaviour, where the sign selects the side). A ``VectorLike`` is an explicit
+            displacement in the drawing (XY) plane: its magnitude is the distance, its
+            direction selects the side, removing the sign-convention guesswork. The vector
+            must be perpendicular to the dimension line (a small tolerance is allowed); if
+            ``measurement_direction`` is also given the two must be perpendicular,
+            otherwise the dimension line direction is inferred perpendicular to the
+            offset.
         draft (Draft): instance of Draft dataclass
         label (str, optional): a text string which will replace the length (or arc length)
             that would otherwise be extracted from the provided path. Providing a label is
@@ -159,7 +167,7 @@ class ExtensionLine(BaseSketchObject):
 
     """
     dimension: Incomplete
-    def __init__(self, border: PathDescriptor, offset: float, draft: Draft, sketch: Sketch | None = None, label: str | None = None, arrows: tuple[bool, bool] = (True, True), tolerance: float | tuple[float, float] | None = None, label_angle: bool = False, measurement_direction: VectorLike | None = None, mode: Mode = ...) -> None: ...
+    def __init__(self, border: PathDescriptor, offset: float | VectorLike, draft: Draft, sketch: Sketch | None = None, label: str | None = None, arrows: tuple[bool, bool] = (True, True), tolerance: float | tuple[float, float] | None = None, label_angle: bool = False, measurement_direction: VectorLike | None = None, mode: Mode = ...) -> None: ...
 
 class TechnicalDrawing(BaseSketchObject):
     '''Sketch Object: TechnicalDrawing

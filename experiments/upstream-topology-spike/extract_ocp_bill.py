@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
-"""PHASE 1 static bill: every OCP usage in upstream build123d 0.11.1
+"""PHASE 1 static bill: every OCP usage in upstream build123d
 geometry.py + topology/*.py, at METHOD level, cross-referenced against the
 opencascade.js fork's embind surface (cascadestudio.d.ts).
 
-Run with the reference venv python (needs importable OCP 7.9.3 for pybind
-signature introspection):
+Run with the reference venv python of the VENDORED version (needs importable
+OCP for pybind signature introspection — OCP 8.0.1 for build123d 0.13.0):
 
-  ~/Desktop/ocjs-deps/b123d-ref-venv/bin/python3 extract_ocp_bill.py
+  ~/Desktop/ocjs-deps/b123d-013-venv/bin/python3 extract_ocp_bill.py
+
+Env overrides: B123D_SRC (default: the active vendor dir, vendor/
+build123d-0.13.0), CS_DTS (default: this worktree's node_modules d.ts).
+
+OCP 8 moved the NCollection instantiations into ``OCP.collections`` under
+template-derived names (``List_TopoDS_Shape`` ...); our embind binding keeps
+the OCCT typedef names (``TopTools_ListOfShape`` ...). COLLECTION_ALIASES
+maps one onto the other: usages are BILLED under the embind name (so the
+generator's closure/dispatch is unchanged) and INTROSPECTED under the OCP 8
+name (so the pybind signatures/defaults are the real ones).
 
 Outputs (next to this script):
   ocp-method-bill.json   - the full machine-readable bill
@@ -22,15 +32,56 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-B123D = Path(
-    "/home/agent-untrusted/Desktop/ocjs-deps/b123d-ref-venv/lib/python3.12/"
-    "site-packages/build123d"
-)
-DTS = Path(
-    "/home/agent-untrusted/Desktop/cs-ocp-spike/node_modules/opencascade.js/"
-    "dist/cascadestudio.d.ts"
-)
+import os  # noqa: E402
+
 OUT_DIR = Path(__file__).resolve().parent
+_REPO = OUT_DIR.parent.parent
+B123D = Path(os.environ.get("B123D_SRC") or (_REPO / "vendor" / "build123d-0.13.0"))
+DTS = Path(os.environ.get("CS_DTS") or (
+    _REPO / "node_modules" / "opencascade.js" / "dist" / "cascadestudio.d.ts"))
+
+# OCP 8 ``OCP.collections`` name -> our embind (OCCT typedef) name. Names
+# whose typedef is NOT bound in the fork (Map/DataMap of shapes) still map to
+# their typedef so the bill reports them as MISSING; the shim serves them
+# with exact-semantics Python glue (ocp_core.ShapeMap / ShapeDataMap).
+COLLECTION_ALIASES = {
+    "Array1_double": "TColStd_Array1OfReal",
+    "Array1_int": "TColStd_Array1OfInteger",
+    "Array1_gp_Pnt": "TColgp_Array1OfPnt",
+    "Array1_gp_Vec": "TColgp_Array1OfVec",
+    "Array1_gp_Dir": "TColgp_Array1OfDir",
+    "Array1_gp_Pnt2d": "TColgp_Array1OfPnt2d",
+    "Array2_gp_Pnt": "TColgp_Array2OfPnt",
+    "Array2_double": "TColStd_Array2OfReal",
+    "HArray1_bool": "TColStd_HArray1OfBoolean",
+    "HArray1_double": "TColStd_HArray1OfReal",
+    "HArray1_int": "TColStd_HArray1OfInteger",
+    "HArray1_gp_Pnt": "TColgp_HArray1OfPnt",
+    "HArray1_gp_Pnt2d": "TColgp_HArray1OfPnt2d",
+    "HArray2_double": "TColStd_HArray2OfReal",
+    "HArray2_gp_Pnt": "TColgp_HArray2OfPnt",
+    "HSequence_TopoDS_Shape": "TopTools_HSequenceOfShape",
+    "Sequence_TopoDS_Shape": "TopTools_SequenceOfShape",
+    "List_TopoDS_Shape": "TopTools_ListOfShape",
+    "IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher": "TopTools_IndexedMapOfShape",
+    "IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher":
+        "TopTools_IndexedDataMapOfShapeListOfShape",
+    "Map_TopoDS_Shape_TopTools_ShapeMapHasher": "TopTools_MapOfShape",
+    "DataMap_TopoDS_Shape_TopoDS_Shape_TopTools_ShapeMapHasher":
+        "TopTools_DataMapOfShapeShape",
+    "IndexedDataMap_TCollection_AsciiString_TCollection_AsciiString":
+        "TColStd_IndexedDataMapOfStringString",
+    "Sequence_TCollection_HAsciiString": "TColStd_SequenceOfHAsciiString",
+    "Sequence_TDF_Label": "TDF_LabelSequence",
+}
+EMBIND_TO_OCP8 = {v: k for k, v in COLLECTION_ALIASES.items()}
+
+
+def canon(mod: str, name: str) -> tuple[str, str]:
+    """(OCP module, OCP name) -> (module, embind name) for billing."""
+    if mod == "collections" and name in COLLECTION_ALIASES:
+        return mod, COLLECTION_ALIASES[name]
+    return mod, name
 
 TARGET_FILES = [B123D / "geometry.py"] + sorted((B123D / "topology").glob("*.py"))
 
@@ -69,6 +120,8 @@ B123D_WRAPPED = {
     "Sketch": "TopoDS_Compound",
     "Curve": "TopoDS_Compound",
     "ShapeList": "TopoDS_Shape",
+    # 0.13: the operation record (topology/history.py)
+    "ShapeHistory": "BRepTools_History",
     "GroupBy": "TopoDS_Shape",
 }
 
@@ -81,6 +134,8 @@ import OCP  # noqa: E402
 
 
 def ocp_class(module: str, name: str):
+    if name in EMBIND_TO_OCP8:
+        module, name = "collections", EMBIND_TO_OCP8[name]
     try:
         mod = __import__("OCP." + module, fromlist=[name])
     except Exception:
@@ -183,7 +238,7 @@ class ModuleScanner(ast.NodeVisitor):
         if node.module and node.module.startswith("OCP."):
             mod = node.module[4:]
             for a in node.names:
-                self.alias[a.asname or a.name] = (mod, a.name)
+                self.alias[a.asname or a.name] = canon(mod, a.name)
         elif node.module == "numpy":
             for a in node.names:
                 self.np_names.add(a.asname or a.name)
@@ -302,8 +357,9 @@ class ModuleScanner(ast.NodeVisitor):
                     ret = info["sigs"][0]["ret"]
                     m = re.match(r"(?:OCP\.)+(\w+)\.(\w+)", ret)
                     if m:
-                        OCP_CLASS_MODULE.setdefault(m.group(2), (m.group(1), m.group(2)))
-                        return m.group(2)
+                        cm, cn = canon(m.group(1), m.group(2))
+                        OCP_CLASS_MODULE.setdefault(cn, (cm, cn))
+                        return cn
         return None
 
     # -- the actual recording ----------------------------------------- #
@@ -483,7 +539,8 @@ def preseed_class_modules():
                     and node.module.startswith("OCP."):
                 mod = node.module[4:]
                 for a in node.names:
-                    OCP_CLASS_MODULE[a.name] = (mod, a.name)
+                    cm, cn = canon(mod, a.name)
+                    OCP_CLASS_MODULE[cn] = (cm, cn)
     # seed the wrapped types too
     for cls in set(B123D_WRAPPED.values()):
         if cls.startswith("TopoDS"):
@@ -648,7 +705,8 @@ EXTRA_SURFACE = {
         "SetRunParallel", "RunParallel", "SetUseOBB"],
         parent="BRepBuilderAPI_MakeShape"),
     "BRepAlgoAPI_BuilderAlgo": _mk(["SetArguments", "SetNonDestructive",
-        "NonDestructive"], parent="BRepAlgoAPI_Algo"),
+        "NonDestructive", "SetGlue", "SetToFillHistory", "HasHistory",
+        "History"], parent="BRepAlgoAPI_Algo"),
     "BRepMesh_IncrementalMesh": _mk([], ctors=[5],
                                     parent="BRepMesh_DiscretRoot"),
     # Geom2dGcc handle-y Handle types from HANDLE_BINDINGS
@@ -941,12 +999,16 @@ def main():
             per_file[f][key] += 1
 
     out = {
-        "generated": "extract_ocp_bill.py over build123d 0.11.1 "
-                     "geometry.py+topology/*.py vs cascadestudio.d.ts",
+        "generated": "extract_ocp_bill.py over " + str(B123D)
+                     + " geometry.py+topology/*.py vs cascadestudio.d.ts"
+                     + " (pybind introspection: OCP " + getattr(OCP, "__version__", "?") + ")",
         "summary": {"unique_items": dict(sorted(tally.items())),
                     "call_sites": dict(sorted(tally_sites.items()))},
         "per_file_call_sites": {k: dict(v) for k, v in sorted(per_file.items())},
         "missing_list": sorted(missing),
+        # OCP 8 ``OCP.collections`` name -> embind name (gen-ocp-shim.mjs
+        # emits OCP/collections.py as aliases from this table)
+        "collection_aliases": COLLECTION_ALIASES,
         "per_class": {k: v for k, v in sorted(bill.items())},
     }
     (OUT_DIR / "ocp-method-bill.json").write_text(json.dumps(out, indent=1))

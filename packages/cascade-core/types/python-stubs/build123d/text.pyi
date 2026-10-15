@@ -3,6 +3,7 @@ from _typeshed import Incomplete
 from build123d.build_enums import FontStyle as FontStyle
 from dataclasses import dataclass
 
+logger: Incomplete
 FONT_ASPECT: Incomplete
 
 @dataclass(frozen=True)
@@ -39,4 +40,5 @@ class FontManager:
         """Runner to (re)inititalize the OCCT FontMgr font list since user folder is
         missing on Windows and some fonts may not be imported correctly."""
 
-available_fonts: Incomplete
+def available_fonts() -> list[FontInfo]:
+    """Get available fonts without initializing the font manager on import."""

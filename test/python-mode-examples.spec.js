@@ -517,9 +517,11 @@ test.describe('Python mode: frozen build123d example scripts', () => {
   test("examples/maker_coin", async ({ page }) => {
     await gotoAndReady(page);
     const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\n# [Code]\n# Coin Parameters\ndiameter, thickness = 50 * MM, 10 * MM\n\nwith BuildPart() as maker_coin:\n    # On XZ plane draw the profile of half the coin\n    with BuildSketch(Plane.XZ) as profile:\n        with BuildLine() as outline:\n            l1 = Polyline((0, thickness * 0.6), (0, 0), ((diameter - thickness) / 2, 0))\n            l2 = JernArc(\n                start=l1 @ 1, tangent=l1 % 1, radius=thickness / 2, arc_size=300\n            )  # extend the arc beyond the intersection but not closed\n            l3 = DoubleTangentArc(l1 @ 0, tangent=(1, 0), other=l2)\n        make_face()  # make it a 2D shape\n    revolve()  # revolve 360\u00b0\n\n    # Pattern the detents around the coin\n    with BuildSketch() as detents:\n        with PolarLocations(radius=(diameter + 5) / 2, count=8):\n            Circle(thickness * 1.4 / 2)\n    extrude(amount=thickness, mode=Mode.SUBTRACT)  # cut away the detents\n\n    fillet(maker_coin.edges(Select.NEW), 2)  # fillet the cut edges\n\n    # Add an embossed label\n    with BuildSketch(Plane.XY.offset(thickness)) as label:  # above coin\n        Text(\"OS\", font_size=15)\n    project()  # label on top of coin\n    extrude(amount=-thickness / 5, mode=Mode.SUBTRACT)  # emboss label\n\nshow(maker_coin)\n# [End]\n");
-    // real build123d: maker_coin.volume == 13160.217918773385
-    expect(Math.abs(measured["maker_coin"].volume - 13160.217918773385))
-      .toBeLessThan(13160.217918773385 * 0.005);
+    // real build123d 0.13.0: maker_coin.volume == 13000.308878460077 (0.11.1:
+    // 13160.2 — since 0.12 project()'s far-side pieces keep their own plane,
+    // so the label is engraved into the underside too)
+    expect(Math.abs(measured["maker_coin"].volume - 13000.308878460077))
+      .toBeLessThan(13000.308878460077 * 0.005);
   });
 
   // examples/handle_algebra — exact tangent Splines + curve ^ u locations + MULTISECTION sweep (MakePipeShell)
@@ -706,9 +708,10 @@ test.describe('Python mode: frozen build123d example scripts', () => {
   test("ttt/ttt-ppp0102", async ({ page }) => {
     await gotoAndReady(page);
     const measured = await runAndMeasure(page, "from build123d import *\n# [removed by collect.py] from ocp_vscode import *\n\ndensa = 7800 / 1e6  # carbon steel density g/mm^3\ndensb = 2700 / 1e6  # aluminum alloy\ndensc = 1020 / 1e6  # ABS\n\n\n# TTT Party Pack 01: PPP0102, mass(abs) = 43.09g\nwith BuildPart() as p:\n    with BuildSketch(Plane.XZ) as sk1:\n        Rectangle(49, 48 - 8, align=(Align.CENTER, Align.MIN))\n        Rectangle(9, 48, align=(Align.CENTER, Align.MIN))\n        with Locations((9 / 2, 40)):\n            Ellipse(20, 8)\n        split(bisect_by=Plane.YZ)\n    revolve(axis=Axis.Z)\n\n    with BuildSketch(Plane.YZ.offset(-15)) as xc1:\n        with Locations((0, 40 / 2 - 17)):\n            Ellipse(10 / 2, 4 / 2)\n        with BuildLine(Plane.XZ) as l1:\n            CenterArc((-15, 40 / 2), 17, 90, 180)\n    sweep(path=l1)\n\n    fillet(p.edges().filter_by(GeomType.CIRCLE, reverse=True).group_by(Axis.X)[0], 1)\n\n    with BuildLine(mode=Mode.PRIVATE) as lc1:\n        PolarLine(\n            (42 / 2, 0), 37, 94, length_mode=LengthMode.VERTICAL\n        )  # construction line\n\n    pts = [\n        (0, 0),\n        (42 / 2, 0),\n        ((lc1.line @ 1).X, (lc1.line @ 1).Y),\n        (0, (lc1.line @ 1).Y),\n    ]\n    with BuildSketch(Plane.XZ) as sk2:\n        Polygon(*pts, align=None)\n        fillet(sk2.vertices().group_by(Axis.X)[1], 3)\n    revolve(axis=Axis.Z, mode=Mode.SUBTRACT)\n\nshow(p)\n\n\ngot_mass = p.part.volume*densc\nwant_mass = 43.09\ntolerance = 1\ndelta = abs(got_mass - want_mass)\nprint(f\"Mass: {got_mass:0.2f} g\")\nassert delta < tolerance, f'{got_mass=}, {want_mass=}, {delta=}, {tolerance=}'\n\n");
-    // real build123d: p.volume == 42248.61825268254
-    expect(Math.abs(measured["p"].volume - 42248.61825268254))
-      .toBeLessThan(42248.61825268254 * 0.005);
+    // real build123d 0.13.0: p.volume == 42847.43234363554 (0.11.1: 42248.6 —
+    // since 0.12 sweep(path=<BuildLine>) sweeps the builder's LOCAL line)
+    expect(Math.abs(measured["p"].volume - 42847.43234363554))
+      .toBeLessThan(42847.43234363554 * 0.005);
   });
 
   // ttt/ttt-ppp0103 — Too Tall Toby PPP01-03: revolve profile + PolarLocations bosses, mass assert
@@ -816,13 +819,14 @@ test.describe('Python mode: frozen build123d example scripts', () => {
       .toBeLessThan(6412.652585245836 * 0.005);
   });
 
-  // docs-rst/key_concepts_builder/b13 — Locations around a nested BuildSketch must NOT replicate (0.11.1 semantics)
+  // docs-rst/key_concepts_builder/b13 (0.13.0 id: b16) — Locations around a nested BuildSketch now PLACE it at
+  // both locations (build123d 0.12 BuildScope; 0.11.1 did not replicate: 141.37)
   test("docs-rst/key_concepts_builder/b13", async ({ page }) => {
     await gotoAndReady(page);
     const measured = await runAndMeasure(page, "from build123d import *\nfrom math import *\n\nwith BuildPart() as model:\n    with Locations((-20, 0), (20, 0)):\n        with BuildSketch() as holes:\n            Circle(3)\n        extrude(amount=5)\n");
-    // real build123d: model.volume == 141.3716694115407
-    expect(Math.abs(measured["model"].volume - 141.3716694115407))
-      .toBeLessThan(141.3716694115407 * 0.005);
+    // real build123d 0.13.0: model.volume == 282.74333882308144
+    expect(Math.abs(measured["model"].volume - 282.74333882308144))
+      .toBeLessThan(282.74333882308144 * 0.005);
   });
 
 

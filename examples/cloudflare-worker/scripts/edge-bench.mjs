@@ -16,7 +16,8 @@
 //     that killed an isolate usually lands on a fresh one.
 //
 // This is the regression ladder for the "edge limits" round: it is what
-// found the STEP-export heap corruption (COMPROMISE(kernel-heap-reset)), the
+// found the STEP-export failures after fillets (COMPROMISE(kernel-heap-reset);
+// root cause since found: the 64 KB shadow stack overflowing), the
 // missing FreeSansBold, and the 30 s default CPU limit.
 
 import { readFileSync, existsSync } from 'node:fs';

@@ -5,25 +5,31 @@ Worker — OpenCascade 8.0.1 (wasm) + MicroPython 1.28 (wasm) + build123d,
 all in one 128 MB isolate. No browser, no DOM, no Three.js, no mesher unless
 STL is asked for.
 
-Every asset — both wasm binaries, the MicroPython glue, the four FreeSans
-faces and (upstream only) the Python layer — is a **module of the Worker
-script**: 31.7 MiB (lite) / 34.9 MiB (upstream) of Cloudflare's 64 MiB,
-which since 2026-09-04 is the only size limit, uncompressed, on Free and
-Paid alike. [SIZE-INVESTIGATION.md](SIZE-INVESTIGATION.md) has the
-measurements behind every number in this section and the next.
+Every asset is a **module of the Worker script**: both wasm binaries, the
+MicroPython glue, the four FreeSans faces, the upstream/real Python layer
+and, for `--env real`, the Pyodide bindings. Since 2026-09-04 the only size
+limit is 64 MiB uncompressed, on Free and Paid alike, and every entry fits
+(see [Bundle size](#bundle-size)).
+[SIZE-INVESTIGATION.md](SIZE-INVESTIGATION.md) has the measurements behind
+the sizes, startup and CPU, plus one consolidated table against all four
+limits. [FIDELITY-ON-WORKERS.md](FIDELITY-ON-WORKERS.md) covers the two
+high-fidelity flavors against those limits.
 
-Two deployments, one codebase — see [Source flavors](#source-flavors):
+Four entries, one codebase — see [Source flavors](#source-flavors):
 
 | | build123d | corpus | live |
 |---|---|---|---|
-| default | **build123d-lite** (embedded) | 206/222 | `cascade-headless.makeshifted.workers.dev` |
-| `--env upstream` | **verbatim upstream 0.11.1** over the OCP shim | 216/222 | `cascade-headless-upstream.makeshifted.workers.dev` |
+| default | **build123d-lite** (embedded) | 223/239 (0.13.0 reference; the live deployment predates the bump: 206/222) | `cascade-headless.makeshifted.workers.dev` |
+| `--env warm` | lite, engine booted + warmed at global scope (`BOOT=warm`) | as lite | not deployed (`npm run dev:warm`) |
+| `--env upstream` | **verbatim upstream 0.13.0** over the OCP shim | 233/239 (0.13.0 reference; the live deployment predates the bump: 0.11.1, 216/222) | `cascade-headless-upstream.makeshifted.workers.dev` |
+| `--env real` | **the PyPI build123d 0.13.0 wheel + numpy** on Pyodide 314, same shim | 232/239 (0.13.0 reference) | not deployed (`npm run dev:real`) |
 
 ```bash
 cd examples/cloudflare-worker
 npm install                 # wrangler (a devDependency of THIS example only)
 npm run dev                 # prepare-assets + wrangler dev  -> :8787   (lite)
 npm run dev:upstream        # the same, verbatim upstream build123d
+npm run dev:real            # the real build123d wheel on Pyodide (needs vendor/pyodide: fetch-pyodide.cjs)
 npm run dev:warm            # lite, engine booted + warmed at global scope (BOOT=warm)
 node scripts/smoke.mjs      # drives the same scripts as test/headless-node.mjs
 ```
@@ -114,38 +120,36 @@ for a 503. `wrangler tail --env upstream` names the reason —
 ## Source flavors
 
 Same wasm, same fonts, same routes (`src/app.js`); the entry module picks
-which build123d boots — `src/index.js` (lite) or `src/index-upstream.js`,
+which build123d boots — `src/index.js` (lite), `src/index-upstream.js`,
 which adds the upstream Python layer as a Text module so that a lite
-isolate never holds it. One isolate serves one flavor: the engine keeps
+isolate never holds it, or `src/real.js`, which adds the same layer plus
+the Pyodide bindings (FIDELITY-ON-WORKERS.md §3). One isolate serves one flavor: the engine keeps
 its state on the worker global and a Python runtime registers ONE library,
 so this is a wrangler environment, not a query parameter.
 
 | | `lite` (default) | `upstream` |
 |---|---|---|
-| what runs | `Build123dLite.js` — a re-implementation, embedded in the bundle as a Python string | build123d 0.11.1's OWN `geometry.py` + `topology/*.py` + object/builder layers, **verbatim**, over an OCP-over-embind shim |
-| validation corpus | 206 PASS / 10 MISMATCH / 5 ERROR / 1 TIMEOUT | **216 PASS** / 2 / 3 / 1 |
+| what runs | `Build123dLite.js` — a re-implementation, embedded in the bundle as a Python string | build123d 0.13.0's OWN `geometry.py` + `topology/*.py` + object/builder layers, **verbatim**, over an OCP-over-embind shim |
+| validation corpus (build123d 0.13.0 reference) | 223 PASS / 9 MISMATCH / 6 ERROR / 1 TIMEOUT | **233 PASS** / 2 / 3 / 1 (real: 232 / 3 / 3 / 1) |
 | cold first request (edge, 2026-08, static-assets layout) | **3.0 s** | **5.6 s** |
 | warm trivial model | **44-57 ms** | **61-89 ms** |
-| extra modules in the script | 4.11 MB of fonts | 4.11 MB of fonts + 3.15 MB of Python (one JSON map) |
-| `Box`/starter isolate memory | **51.5 MB** | **51.5 MB** — identical, because the shapes live in OCCT's heap either way |
-| heavy models | clock 65.0 MB, heat_exchanger 86.6 MB | clock and heat_exchanger exceed 128 MB |
-| Total Upload (`wrangler deploy --dry-run`) | 32,492.57 KiB = 31.7 MiB | 35,720.74 KiB = 34.9 MiB |
-| library boot (Node, first Python run) | ~120-135 ms | ~0.86-1.0 s — over budget for `BOOT=warm` |
+| extra modules in the script | 4.11 MB of fonts | 4.11 MB of fonts + 3.25 MB of Python (one JSON map, build123d 0.13.0) |
+| `Box`/starter isolate wasm | **38.0 MB** (32 OCCT + 6 MicroPython; was 51.5) — **14.0 MB** with the 8 MB-OCCT fork artifacts | the same — the shapes live in OCCT's heap either way |
+| heavy models (wasm, Node) | clock 48.7, heat_exchanger 53.1, bicycle_tire 94.3 MB | clock 40.4, heat_exchanger 63.5, bicycle_tire 40.4 MB (were 418-3010 MB) |
+| Total Upload (`wrangler deploy --dry-run`) | see [Bundle size](#bundle-size) | see [Bundle size](#bundle-size) |
+| library boot (Node, first Python run) | ~120-135 ms | ~0.87-1.0 s — over budget for `BOOT=warm` |
 
-The **memory** row is the whole trade. Upstream topology runs every boolean,
-every selector and every glyph through the OCP shim, and each dispatch
-retains ~32-230 B in the interpreter for the duration of the run. That is
-run-scoped — the next run reports ~1.1 MB live — but MicroPython's GC arena
-grows by doubling and NEVER shrinks, so a model that makes millions of FFI
-calls ratchets the isolate past 128 MB and does not give it back.
-`examples/clock` alone takes MicroPython from 19.5 MB to 386 MB in Node.
-Bounding it needs an interpreter patch; see the
-`NOTE(heavy-model memory round)` in
-`packages/cascade-core/upstream-py/ocp_shim/ocp_core.py`.
-
-So: **lite for throughput and heavy models, upstream for fidelity.** If a
-script is in the 10-model delta (or uses an API lite does not have), deploy
-it against `--env upstream` and keep it under the memory line.
+The **memory** row USED to be the whole trade: the stock MicroPython
+interpreter never garbage-collects inside a run, so upstream's millions of
+FFI calls ratcheted it to hundreds of MB (`examples/clock` 19.5 -> 386 MB).
+Since 2026-10-15 (micropython-cs patches 11-12, the JsProxy-driven embind
+lifetime and a shim fix — FIDELITY-ON-WORKERS.md §1) the interpreter heap
+tracks live data and **upstream fits 237 of 238 scored corpus models under
+128 MB of wasm on build123d 0.13.0** (220/221 on 0.11.1; lite 221/221 on
+0.11.1). The trade is now boot time (~0.75 s more library load on 0.13.0) —
+lite for throughput, upstream for fidelity. Only `bracelet` (Gordon surfaces)
+remains over; `heat_exchanger` is borderline once the JS heap and
+ArrayBuffers are counted (126 MB in local workerd).
 
 ```bash
 npx wrangler deploy                  # lite   -> cascade-headless
@@ -160,27 +164,33 @@ BASE=https://cascade-headless-upstream.<subdomain>.workers.dev \
 Both were found by `scripts/edge-bench.mjs` against the live Worker, and both
 were something other than what the symptom suggested.
 
-**"export failed: memory access out of bounds" was not the 128 MB cap.** It
-reproduces in plain Node, at 32 MB, with the wasm memory free to grow, and
-the export itself costs ~0 MB. Two OCCT 8.0.1 kernel algorithms scribble over
-their own heap in this wasm build — `BRepFilletAPI_MakeFillet::Build` with
-`ChFi3d_Rational` (maker_coin's nine `Select.NEW` edges) and
-`BRepOffsetAPI_ThruSections::Build` (the ruled wall `thicken()` lofts,
-bicycle_tire). The geometry they return is correct; a live allocation
-elsewhere gets handed out twice, and the casualty is a lazily-built
-singleton, so `new STEPControl_Writer` traps for the rest of the isolate's
-life. That is what made the ladder alternate: once maker_coin had run,
+**"export failed: memory access out of bounds" was not the 128 MB cap — it
+was a stack overflow.** It reproduces in plain Node, at 32 MB, with the wasm
+memory free to grow, and the export itself costs ~0 MB. After maker_coin's
+fillet (`BRepFilletAPI_MakeFillet::Build`, `ChFi3d_Rational`, nine
+`Select.NEW` edges) or bicycle_tire's ruled `thicken()` walls
+(`BRepOffsetAPI_ThruSections::Build`), the geometry was correct but
+`new STEPControl_Writer` trapped for the rest of the isolate's life. That is
+what made the 2026-08 ladder alternate: once maker_coin had run,
 Buffer_Stand and build123d_logo failed too, though on a fresh isolate they
-export fine.
+exported fine. It was first diagnosed as those algorithms corrupting OCCT's
+heap. The real cause (found 2026-10, SIZE-INVESTIGATION.md §7): emscripten
+puts the linear-memory shadow stack directly above `.data`/`.bss` and lets
+it grow down into them, unchecked at `-O3`; those recursions peak at
+~82 KB, the 64 KB default stack overflowed into OCCT's statics, and the
+writer singletons were the nearest victims. The opencascade.js fork now
+links `-sSTACK_SIZE=512KB` (corpus-wide peak 83,552 B): tea_cup and
+bicycle_tire export STEP, and the kernel stays healthy across the corpus.
 
-cascade-core now snapshots OCCT's linear memory right after module init (3.7
-MB of the 32 MB initial heap; ~20 ms to take, ~2 ms to restore) and rewinds
-to it — `COMPROMISE(kernel-heap-reset)` in
-`packages/cascade-core/src/worker/CascadeWorker.js`. `engine.reset()` does it
-between requests, so an isolate is never left poisoned, and `exportSTEP()`
-does it on failure: carry the shape out as BREP, rewind, re-import, write.
-maker_coin's healed STEP round-trips through `import_step` to 7.7e-8 relative
-volume.
+What was built for it stays, as a per-request clean kernel and a safety
+net: cascade-core snapshots OCCT's linear memory right after module init
+(4.1 MiB on the 8 MB native-EH artifacts; ~20 ms to take, ~2 ms to restore)
+and rewinds to it — `COMPROMISE(kernel-heap-reset)` in
+`packages/cascade-core/src/worker/CascadeWorker.js`. `engine.reset()` does
+it between requests, so every request starts on a pristine allocator, and
+`exportSTEP()` heals a failed write: carry the shape out as BREP, rewind,
+re-import, write. maker_coin's healed STEP round-trips through
+`import_step` to 7.7e-8 relative volume.
 
 **`examples/clock`'s `Cannot set properties of undefined (setting 'hash')`
 was a missing font.** The Worker bundled `FreeSans` only;
@@ -347,24 +357,24 @@ family instead. To add a face: drop the TTF in `packages/cascade-core/fonts/`
 | | lite | upstream |
 |---|---|---|
 | isolate limit | **128 MB** (JS heap + wasm) | **128 MB** |
-| wasm after boot (OCCT only) | 32.0 MB — **8.0 MB** with the native-EH fork artifacts | same |
-| wasm after any Python run (OCCT + MicroPython) | **51.5 MB** — **27.5 MB** with them | same |
-| V8 heap, fresh isolate (workerd inspector) | 5.1 MB + 4.1 MB font backing stores | 11.4 MB (+ the 3 MB Python string) |
-| V8 heap after 6 Box renders | 18.4 MB used / 29.7 MB total | 39.3 MB / 65.6 MB |
+| wasm after boot (OCCT only) | 32.0 MB — **8.0 MB** with the fork's native-EH artifacts | same |
+| wasm after any Python run (OCCT + MicroPython) | **38.0 MB** (was 51.5) — **14.0 MB** with them | same |
+| V8 heap after a few renders (workerd inspector) | see SIZE-INVESTIGATION.md (consolidated table) | **18.9 MB** live after the starter (was 71 MB; FIDELITY-ON-WORKERS.md) |
 | engine boot (`/health`, `bootMs`, local workerd) | ~70-110 ms | ~65-180 ms |
-| Python library registration (first Python request, Node) | ~120-135 ms | **~0.86-1.0 s** |
+| Python library registration (first Python request, Node) | ~120-135 ms | **~0.87-1.0 s** |
 | global-scope CPU with `BOOT=warm` (Node, `scripts/startup-bench.mjs`) | **~0.29-0.35 s** of the 1 s budget | ~0.95-1.08 s — refused |
 | first `/render` into a fresh isolate (local workerd) | 228-252 ms (`BOOT=request`), **56 ms** (`BOOT=warm`) | ~0.8 s |
 | cold first `/render`, edge (2026-08, static-assets layout) | **3.0 s** | **5.6 s** |
 | warm `Box(1,1,1)` round trip, edge (2026-08) | 44-57 ms | 61-89 ms |
-| starter model (fillets, booleans, `GridLocations`) | ~250-300 ms eval | ~320-400 ms eval |
+| starter model (fillets, booleans, `GridLocations`) | ~250-300 ms eval (~170 on native EH) | ~320-400 ms eval (~230 on native EH) |
 
 `/health` reports `pySrc`, `bootMs`, `cold` and `boot` (the `BOOT` mode and
 whether the global scope booted/warmed the engine; its ms fields read 0 on
 the edge and in workerd, whose clocks are frozen at global scope).
 
-51.5 MB of wasm for a basic model on EITHER flavor, with the remaining
-headroom for the model itself. Where they part company is heavy models — see
+38.0 MB of wasm (14.0 MB on the native-EH artifacts) plus ~19 MB of JS
+heap for a basic model on EITHER flavor, with the remaining headroom for the
+model itself. Where they part company is heavy models — see
 [Source flavors](#source-flavors).
 
 ### When the engine boots — `BOOT`
@@ -484,17 +494,28 @@ copies `cascadestudio.wasm` and never the JS-exceptions debug pair
    un-poisoned kernel (see
    [Two ceilings that were real](#two-ceilings-that-were-real)).
 6. **`pySrc: 'lite'` by default.** The `upstream` source layer (verbatim
-   upstream build123d 0.11.1, `--env upstream`) adds 3.15 MB of Python to
-   the script and boots ~7x slower (~0.9 s vs ~0.13 s of library load) for
-   identical basic-model memory. Lite is embedded in the JS bundle.
+   upstream build123d 0.13.0, `--env upstream`) adds 3.25 MB of Python to
+   the script and boots ~7x slower (868 ms vs 122 ms of library load in
+   Node) for identical basic-model memory; `real` (`--env real`) adds ~20 MB
+   of Pyodide module bindings and ~1.8 s of cold boot. Lite is embedded in
+   the JS bundle.
+7. **`keep_names = false`.** Wrangler re-bundles `src/` with esbuild, whose
+   keepNames default gave each of the ~216k embind invoker closures the OCCT
+   glue mints at boot its own property store — ~25 MB of the isolate's JS
+   heap (inspector-measured, FIDELITY-ON-WORKERS.md).
 
 ## Files
 
 ```
-wrangler.toml                 module rules, BOOT, [env.upstream], [env.warm], why nodejs_compat is off
+wrangler.toml                 module rules, BOOT, keep_names, [env.upstream|real|warm], why nodejs_compat is off
 src/app.js                    the routes: POST /render (+ ?stream=1), GET /health; BOOT modes
 src/index.js                  lite entry: imports the modules, boots per BOOT
 src/index-upstream.js         upstream entry: the same + the upstream Python map
+src/real.js                   real entry: the same + the Pyodide bindings and the host seam
+src/boot-pyodide.mjs          boots Pyodide 314 from module bindings (no fetch/import()/wasm compile)
+scripts/prepare-pyodide.mjs   vendor/pyodide -> assets/pyodide (3 glue patches, precompiled numpy .so)
+scripts/pyodide-sigs.json     addFunction signatures to precompile (record-sigs.mjs in experiments/)
+FIDELITY-ON-WORKERS.md        the upstream + real flavors against the 64 MiB / 128 MB / 1 s limits
 src/node-module-stub.js       resolves the glues' dead node-only imports
 scripts/prepare-assets.cjs    cascade-core/dist -> assets/ (every module the entries import)
 scripts/smoke.mjs             curl-equivalent end-to-end checks, incl. the SSE stream

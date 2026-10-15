@@ -1,5 +1,5 @@
 from _typeshed import Incomplete
-from build123d.build_common import Builder as Builder, LocationList as LocationList, WorkplaneList as WorkplaneList, flatten_sequence as flatten_sequence, validate_inputs as validate_inputs
+from build123d.build_common import Builder as Builder, LocationList as LocationList, flatten_sequence as flatten_sequence, validate_inputs as validate_inputs
 from build123d.build_enums import GeomType as GeomType, Keep as Keep, Kind as Kind, Mode as Mode, Side as Side, Transition as Transition
 from build123d.build_line import BuildLine as BuildLine
 from build123d.build_part import BuildPart as BuildPart
@@ -8,17 +8,17 @@ from build123d.geometry import Axis as Axis, Plane as Plane, Rotation as Rotatio
 from build123d.objects_curve import BaseLineObject as BaseLineObject
 from build123d.objects_part import BasePartObject as BasePartObject
 from build123d.objects_sketch import BaseSketchObject as BaseSketchObject
-from build123d.topology import Compound as Compound, Curve as Curve, Edge as Edge, Face as Face, GroupBy as GroupBy, Part as Part, Shape as Shape, ShapeList as ShapeList, Shell as Shell, Sketch as Sketch, Solid as Solid, Vertex as Vertex, Wire as Wire, isclose_b as isclose_b
+from build123d.topology import Compound as Compound, Curve as Curve, Edge as Edge, Face as Face, GroupBy as GroupBy, Part as Part, Shape as Shape, ShapeHistory as ShapeHistory, ShapeList as ShapeList, Shell as Shell, Sketch as Sketch, Solid as Solid, Vertex as Vertex, Wire as Wire, isclose_b as isclose_b
 from collections.abc import Iterable
 from typing import TypeAlias
 
 logger: Incomplete
 AddType: TypeAlias = Edge | Wire | Face | Solid | Compound | Builder
 
-def add(objects: AddType | Iterable[AddType], rotation: float | RotationLike | None = None, clean: bool = True, mode: Mode = ...) -> Compound:
-    """Generic Object: Add Object to Part or Sketch
+def insert(objects: AddType | Iterable[AddType], rotation: float | RotationLike | None = None, clean: bool = True, mode: Mode = ...) -> Compound:
+    """Generic Object: Insert Object into Part, Sketch, or Line
 
-    Add an object to a builder.
+    Insert an object into a builder.
 
     BuildPart:
         Edges and Wires are added to pending_edges. Compounds of Face are added to
@@ -29,11 +29,18 @@ def add(objects: AddType | Iterable[AddType], rotation: float | RotationLike | N
         Edges and Wires are added to line.
 
     Args:
-        objects (Edge |  Wire |  Face |  Solid |  Compound  or Iterable of): objects to add
+        objects (Edge |  Wire |  Face |  Solid |  Compound  or Iterable of):
+            objects to insert
         rotation (float |  RotationLike, optional): rotation angle for sketch,
             rotation about each axis for part. Defaults to None.
         clean (bool, optional): Remove extraneous internal structure. Defaults to True.
        mode (Mode, optional): combine mode. Defaults to Mode.ADD.
+    """
+def add(objects: AddType | Iterable[AddType], rotation: float | RotationLike | None = None, clean: bool = True, mode: Mode = ...) -> Compound:
+    """Generic Object: Add Object to Part, Sketch, or Line
+
+    .. deprecated::
+        Use :func:`insert` instead.
     """
 def bounding_box(objects: Shape | Iterable[Shape] | None = None, mode: Mode = ...) -> Sketch | Part:
     """Generic Operation: Add Bounding Box

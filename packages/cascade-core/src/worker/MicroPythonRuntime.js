@@ -37,16 +37,54 @@
 //    and remapped via sys.modules; the rest import normally from /lib.
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
-import { bootstrapUpstreamB123d, PYTOPO_DEFAULT,
+import { bootstrapUpstreamB123d, ACTIVE_UPSTREAM_VENDOR,
   rewriteListConcatCoercion } from './UpstreamB123d.js';
 import { instantiateWasmSpec } from './WasmAssets.js';
 
-/** MicroPython GC heap. Fixed at boot (it does not grow); build123d-lite +
- *  a typical model's Python-side bookkeeping fit comfortably — shapes
- *  themselves live in the OCCT wasm heap. */
+/** MicroPython GC heap — the INITIAL size: the pyscript variant
+ *  (MICROPY_GC_SPLIT_HEAP_AUTO) adds heap areas when live data needs them.
+ *  Small on purpose. The micropython-cs interpreter collects DURING a run
+ *  (patch 11), and a collection is also what finalises the JsProxies that
+ *  keep OCP-shim embind objects alive (installProxyFreeHook) — so the heap
+ *  size sets how much dead OCCT data can pile up between collections.
+ *  Measured, upstream flavor, headless (OCCT high-water at 16 / 8 / 4 MB):
+ *  bicycle_tire 115.3 / 55.1 / 52.5 MB, projection 179.1 / 109.8 / 77.9 MB;
+ *  clock/heat_exchanger/toy_truck unchanged; eval times within noise. Shapes
+ *  themselves live in the OCCT heap. */
 const MP_HEAP_BYTES = (typeof process !== 'undefined' && process.env &&
   process.env.CS_MP_HEAP) ? parseInt(process.env.CS_MP_HEAP, 10)
-  : 16 * 1024 * 1024;
+  : 4 * 1024 * 1024;
+/** Collect at least every this many allocated bytes, however far the heap
+ *  has grown (gc.threshold — effective on micropython-cs, a no-op on the
+ *  stock artifacts): bounds the OCCT lag above when live data is large. */
+const MP_GC_THRESHOLD_BYTES = (typeof process !== 'undefined' && process.env &&
+  process.env.CS_MP_GC_THRESHOLD) ? parseInt(process.env.CS_MP_GC_THRESHOLD, 10)
+  : 4 * 1024 * 1024;
+
+/** Route MicroPython's JsProxy finalisation to the OCP shim's lifetime
+ *  ledger. The port frees a JsProxy (GC finaliser `jsproxy___del__` ->
+ *  `proxy_js_free_obj`) by deleting its JS object from the global
+ *  `proxy_js_ref_map` — the ONLY caller of that Map's delete — and keeps one
+ *  JsProxy per JS object, so a delete means Python can no longer reach the
+ *  object at all. `self._csOcpRelease` (OcpShim.js) queues the embind object
+ *  for deletion. This is what gives the MicroPython leg the deterministic-ish
+ *  embind lifetime the Pyodide leg gets from `OcpProxy.__del__`; on an
+ *  interpreter that only collects at the top level (stock artifacts) it still
+ *  frees everything, just after the run instead of during it. Runs inside a
+ *  garbage collection, so it must not call back into Python. */
+function installProxyFreeHook() {
+  const refMap = globalThis.proxy_js_ref_map;
+  if (!refMap || typeof refMap.delete !== 'function' || refMap._csFreeHook) { return; }
+  const del = Map.prototype.delete;
+  refMap.delete = function (obj) {
+    if (obj && typeof obj === 'object' && obj._csPy > 0) {
+      const release = self._csOcpRelease;
+      if (release) { release(obj); }
+    }
+    return del.call(this, obj);
+  };
+  refMap._csFreeHook = true;
+}
 
 /** The Python side of the bridge, installed as the importable module
  *  `browser` (so `from browser import self as w` works unchanged). Kept in
@@ -270,7 +308,7 @@ let _bootedPySrc = null;
  *  - 'lite' (`?pysrc=lite` / localStorage cascade-py-src=lite): lite is the
  *    `build123d` package, like Brython/Pyodide.
  *  - 'upstream' (explicit `?pysrc=upstream`): lite registers as
- *    `build123d_lite` and UPSTREAM build123d 0.11.1 Level-A source layers on
+ *    `build123d_lite` and UPSTREAM build123d 0.13.0 source layers on
  *    top as `build123d` (see UpstreamB123d.js); a missing vendored payload
  *    is a hard error.
  *  - anything else ('auto', the no-flag default): upstream when the payload
@@ -392,6 +430,7 @@ async function _bootstrap(srcKind) {
   }
   const mp = await load(loadOptions);
   const tInitialized = performance.now();
+  installProxyFreeHook();
 
   // JS side of the guarded call bridge. Everything lite invokes on `w` runs
   // inside this try/catch so no JS exception ever unwinds the wasm VM.
@@ -461,6 +500,9 @@ async function _bootstrap(srcKind) {
     return (v !== undefined || name in self) ? 'value' : 'missing';
   };
 
+  if (MP_GC_THRESHOLD_BYTES > 0) {
+    mp.runPython('import gc\ngc.threshold(' + MP_GC_THRESHOLD_BYTES + ')');
+  }
   mp.registerJsModule('jsworker', { self: self });
   mp.globals.set('_CS_BROWSER_SRC', BROWSER_PY);
   mp.runPython([
@@ -493,7 +535,7 @@ async function _bootstrap(srcKind) {
   let effectiveSrc = srcKind === 'lite' ? 'lite' : 'upstream';
   if (effectiveSrc === 'upstream') {
     // UPSTREAM-source mode (the MicroPython default): lite becomes the seam
-    // library `build123d_lite`; the `build123d` package is upstream 0.11.1
+    // library `build123d_lite`; the `build123d` package is upstream 0.13.0
     // Level-A source layered on top by UpstreamB123d.js (fetched from
     // dist/upstream-b123d/).
     // Transient fetch failures (several parallel tabs booting at once can
@@ -505,7 +547,7 @@ async function _bootstrap(srcKind) {
       if (isBuilt) {
         url = new URL('./upstream-b123d/' + rel, import.meta.url).href;
       } else if (rel.indexOf('upstream/') === 0) {
-        url = new URL('../../vendor/build123d-0.11.1/' + rel.slice(9),
+        url = new URL('../../../../vendor/' + ACTIVE_UPSTREAM_VENDOR + '/' + rel.slice(9),
           import.meta.url).href;
       } else {
         url = new URL('../../upstream-py/' + rel, import.meta.url).href;
@@ -542,6 +584,20 @@ async function _bootstrap(srcKind) {
     let available = true;
     try {
       await fetchText('manifest.json');
+      await fetchText('ocp_shim/MANIFEST.json');
+      // upstream build123d needs interpreter metaclasses (AxisMeta,
+      // BaseObjectMeta): only the custom micropython-cs artifacts have them
+      try {
+        mp.runPython('class _CsMetaProbe(type):\n    pass\n'
+          + 'class _CsMetaProbed(metaclass=_CsMetaProbe):\n    pass\n'
+          + 'del _CsMetaProbe, _CsMetaProbed');
+      } catch (metaErr) {
+        const e = new Error('pysrc=upstream needs the custom micropython-cs '
+          + 'interpreter (custom metaclasses); the ' + artifactKind
+          + ' artifacts booted');
+        e._csPermanent = true;
+        throw e;
+      }
     } catch (probeErr) {
       if (srcKind === 'upstream') { throw probeErr; }
       available = false;
@@ -603,8 +659,7 @@ async function _bootstrap(srcKind) {
       self._pythonRuntimeKind = 'micropython';
       self._pythonSrcKind = effectiveSrc;
       self._b123dSceneDefined = false;
-      if (effectiveSrc === 'upstream' &&
-          (self._csPyTopo || PYTOPO_DEFAULT) === 'upstream') {
+      if (effectiveSrc === 'upstream') {
         // USER code runs verbatim over upstream ShapeLists; MicroPython's
         // list.__add__ refuses list subclasses on the right, so the same
         // line-preserving coercion the library sources get applies here

@@ -211,6 +211,21 @@ is natively nondeterministic. The previous corpus and reference are kept as
 `manifest-0.11.1[-all].json` / `reference-0.11.1[-all].json`; the
 same-code cross-version native runs are in `native-runs/`.
 
+**After the build123d-lite 0.13 port** (`feat/b123d-013-lite`;
+`results-013-lite.json`, `results-013-lite-micropython.json`, solo re-runs of
+TIMEOUT/heap flaps merged):
+
+| leg | PASS | MISMATCH | ERROR | TIMEOUT | SKIP |
+|---|---|---|---|---|---|
+| Brython + lite (default) | **223** | 9 | 6 | 1 | 8 |
+| MicroPython + pysrc=lite | **223** | 9 | 6 | 1 | 8 |
+
+Both lite legs started from the same unmodified baseline, 191/13/34/1/8
+(`baseline-013-lite.json`, `baseline-013-lite-micropython.json`): 33
+improvements each, no per-script regression, identical classification on
+every script. The 16 remaining non-PASS are root-caused in report.md's
+defaults audit (`defaults-audit.md`).
+
 **Previously, against the build123d 0.11.1 reference:**
 382 candidates → **232 scripts** in the scored corpus, 222 scored (10 excluded —
 real build123d fails on them natively). On the OCCT 8.0.1 wasm build:

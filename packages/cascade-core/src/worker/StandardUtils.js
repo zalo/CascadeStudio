@@ -181,7 +181,22 @@ class CascadeStudioUtils {
    * If `raw` is true, the raw set of sanitized arguments will be returned instead.
    * @param {string} fnName - The calling function's name */
   ComputeHash(args, raw, fnName) {
-    let argsString = JSON.stringify(args);
+    // A TopoDS argument that no CacheOp produced (an explorer sub-shape, a
+    // JS helper's fresh result) carries no `.hash`; stripped of its "ptr" it
+    // would stringify like EVERY other such shape and collide in the cache
+    // (two different splines mirrored through one cached result). Key such
+    // shapes by their live TShape+Location identity instead.
+    let argsString = JSON.stringify(args, (key, value) => {
+      if (value && typeof value === 'object' && value.$$ !== undefined &&
+          value.hash === undefined && typeof value.ShapeType === 'function' &&
+          self.oc && self.oc.OCJS) {
+        try {
+          return { tshape: self.oc.OCJS.HashCode(value, 2147483647),
+                   type: value.ShapeType().value };
+        } catch (e) { return value; }
+      }
+      return value;
+    });
     argsString = argsString.replace(/(\"ptr\"\:(-?[0-9]*?)\,)/g, '');
     argsString = argsString.replace(/(\"ptr\"\:(-?[0-9]*))/g, '');
     if (argsString.includes("ptr")) { console.error("YOU DONE MESSED UP YOUR REGEX."); }

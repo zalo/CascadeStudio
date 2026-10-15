@@ -2,6 +2,7 @@ from build123d.build_common import Builder as Builder, logger as logger
 from build123d.build_enums import Mode as Mode
 from build123d.geometry import Location as Location, Plane as Plane
 from build123d.topology import Edge as Edge, Face as Face, Joint as Joint, Part as Part, Solid as Solid, Wire as Wire
+from typing import ClassVar
 
 class BuildPart(Builder[Part]):
     """BuildPart
@@ -14,24 +15,28 @@ class BuildPart(Builder[Part]):
     method of Builder.
 
     Args:
-        workplanes (Plane, optional): initial plane to work on. Defaults to Plane.XY.
+        placements (Plane, optional): output placement(s). Defaults to Plane.XY.
         mode (Mode, optional): combination mode. Defaults to Mode.ADD.
     """
+    build123d_type: ClassVar[str]
     joints: dict[str, Joint]
     pending_faces: list[Face]
     pending_face_planes: list[Plane]
     pending_planes: list[Plane]
     pending_edges: list[Edge]
-    def __init__(self, *workplanes: Face | Plane | Location, mode: Mode = ...) -> None: ...
+    def __init__(self, *placements: Face | Plane | Location, mode: Mode = ...) -> None: ...
     @property
     def part(self) -> Part | None:
-        """Get the current part"""
+        """Get the placed part."""
     @part.setter
     def part(self, value: Part) -> None:
         """Set the current part"""
     @property
+    def part_local(self) -> Part | None:
+        """Get the part in the Builder's local construction coordinates."""
+    @property
     def pending_edges_as_wire(self) -> Wire:
         """Return a wire representation of the pending edges"""
     @property
-    def location(self) -> Location | None:
+    def location(self) -> Location:
         """Builder's location"""

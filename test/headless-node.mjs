@@ -453,7 +453,7 @@ section('(g) kernel-heap reset: STEP survives a damaged kernel');
 // cause (2026-10): the fillet recursion overflowed emscripten's 64 KB
 // default SHADOW STACK, which grows down into .bss unchecked, and the
 // overwritten statics were the writer machinery. Builds linked with
-// -sSTACK_SIZE=512KB (measured peak 81,632 B) no longer overflow, so on them
+// -sSTACK_SIZE=512KB (corpus-wide peak 83,552 B) no longer overflow, so on them
 // the kernel stays healthy; the heal path is exercised below either way.
 const COIN = `from build123d import *
 diameter, thickness = 50 * MM, 10 * MM
@@ -527,35 +527,26 @@ console.log('  pythonWasm ' + mb(finalMem.pythonWasm));
 console.log('  total      ' + mb(finalMem.totalWasm)
   + '   (Cloudflare Worker limit: ' + mb(WORKER_MEMORY_LIMIT) + ')');
 console.log('  node RSS   ' + mb(process.memoryUsage().rss));
-// The ceiling is a property of the SOURCE FLAVOR, not of the engine.
+// One ceiling for BOTH source flavors now.
 //
-//   lite      65 MB after the whole corpus — half a Cloudflare isolate.
-//   upstream  the same 51.5 MB for the Box and the starter (measured above:
-//             byte-identical to lite, because the shapes live in OCCT's
-//             heap either way), but the MicroPython GC ARENA RATCHETS on a
-//             model that makes millions of FFI calls. examples/clock alone
-//             takes it from 19.5 MB to 386 MB: upstream topology runs every
-//             boolean, every selector and every Text glyph through the OCP
-//             shim, each dispatch retains ~32-230 B in the interpreter for
-//             the duration of the run, and MicroPython's arena grows by
-//             doubling and NEVER shrinks (the retention itself is
-//             run-scoped — the next run reports ~1.1 MB live — so this is
-//             an arena high-water, not a leak). Bounding it needs an
-//             interpreter patch; see the NOTE(heavy-model memory round) in
-//             upstream-py/ocp_shim/ocp_core.py and README "Source flavors".
+//   lite      65 MB after the whole sequence — half a Cloudflare isolate.
+//   upstream  used to be 386-509 MB: the MicroPython GC ARENA RATCHETED on a
+//             model that makes millions of FFI calls (examples/clock took it
+//             from 19.5 MB to 386 MB), because the stock pyscript variant
+//             never collects inside a top-level call. micropython-cs patch 11
+//             (MICROPY_GC_SCAN_SPILLED_STACK — see
+//             vendor/micropython-cs/PROVENANCE.md) collects at any depth, so
+//             the interpreter heap now tracks live data: 51.6 MB after clock.
 //
-// So: the strict Worker budget is asserted on the BASIC models for both
-// flavors (above), and the corpus high-water is asserted against the
-// flavor's measured ceiling here — a regression still trips it.
-// Measured corpus high-water: lite 65 MB, upstream 509 MB (examples/clock
-// dominates). The upstream ceiling is that plus headroom.
-const MEM_CEILING = PY_SRC === 'upstream' ? 640 * MB : WORKER_MEMORY_LIMIT * 0.75;
+// The interpreter heap bound is asserted separately: after examples/clock the
+// MicroPython wasm memory must still be the boot heap (+pystack), not a
+// ratchet. A revert to the stock artifacts (or GC_SPILL_POINTERS=0) trips it.
+const MEM_CEILING = WORKER_MEMORY_LIMIT * 0.75;
 check('final total wasm is within the ' + PY_SRC + ' ceiling (' + mb(MEM_CEILING) + ')',
-  finalMem.totalWasm < MEM_CEILING, mb(finalMem.totalWasm)
-  + (PY_SRC === 'upstream'
-    ? ' — upstream arena high-water; the 128 MB Worker budget holds for the '
-      + 'basic models only (see README "Source flavors")'
-    : ''));
+  finalMem.totalWasm < MEM_CEILING, mb(finalMem.totalWasm));
+check('MicroPython heap stayed bounded by live data (no arena ratchet)',
+  finalMem.pythonWasm < 32 * MB, mb(finalMem.pythonWasm)
+  + ' (the stock pyscript interpreter reached 386 MB on upstream examples/clock)');
 
 console.log('\n' + (failures === 0 ? 'ALL HEADLESS CHECKS PASSED' : failures + ' CHECK(S) FAILED'));
 process.exit(failures === 0 ? 0 : 1);

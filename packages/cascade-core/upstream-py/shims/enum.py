@@ -41,7 +41,12 @@ def _cs_set_lite_lookup(fn):
 class _Member:
     _auto_counter = [0]
 
-    def __init__(self):
+    def __init__(self, *args):
+        if args:
+            # a MIXIN member (StrEnum: `class Unit(str, Enum)`) constructed
+            # by EnumMeta through the mixin's own constructor — the value is
+            # set right after; no auto() number is consumed
+            return
         _Member._auto_counter[0] += 1
         self._value_ = _Member._auto_counter[0]
         self._name_ = '?'
@@ -52,6 +57,10 @@ class _Member:
             return True
         if isinstance(other, _Member):
             return False  # members are singletons
+        if isinstance(self, str):
+            # StrEnum member: CPython compares the str itself
+            # (Unit.MM == "mm"); defer to the native str equality
+            return NotImplemented
         look = _LITE_LOOKUP[0]
         if look is not None:
             lite_value = look(self._cls_name_, self._name_)
@@ -60,6 +69,8 @@ class _Member:
         return NotImplemented
 
     def __hash__(self):
+        if isinstance(self, str):
+            return hash(self._value_)  # StrEnum: hashes as its string
         return hash(self._cls_name_ + '.' + self._name_)
 
     # IntEnum-style ordering/arithmetic on the member VALUE (upstream
@@ -124,6 +135,11 @@ _HAS_METACLASSES = _cs_probe_metaclasses()
 
 if _HAS_METACLASSES:
     class EnumMeta(type):
+        def _cs_make(cls, *args):
+            # the REAL class call (EnumMeta.__call__ is value lookup):
+            # constructs a mixin member, e.g. a str-valued StrEnum member
+            return super().__call__(*args)
+
         def __new__(mcs, name, bases, ns):
             cls = super().__new__(mcs, name, bases, ns)
             members = {}
@@ -143,7 +159,10 @@ if _HAS_METACLASSES:
                     value = v
                 else:
                     continue                   # methods, properties, ...
-                m = object.__new__(cls)
+                if isinstance(value, str) and issubclass(cls, str):
+                    m = cls._cs_make(value)  # StrEnum: the member IS the str
+                else:
+                    m = object.__new__(cls)
                 m._name_ = k
                 m._value_ = value
                 m._cls_name_ = name
@@ -183,6 +202,10 @@ if _HAS_METACLASSES:
     class IntEnum(Enum):
         pass
 
+    class StrEnum(str, Enum):
+        def __str__(self):
+            return self._value_
+
     class Flag(Enum):
         pass
 
@@ -199,6 +222,10 @@ else:
 
     class IntEnum(Enum):
         pass
+
+    class StrEnum(str, Enum):
+        def __str__(self):
+            return self._value_
 
     class Flag(Enum):
         pass

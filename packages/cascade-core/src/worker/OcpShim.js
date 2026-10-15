@@ -153,7 +153,13 @@ export function installOcpShim(self, table) {
       return TRANSIENT_DELETABLE.test(cls);
     }
     if (/_H(Array|Sequence)/.test(cls)) { return false; }
-    if (/^(Geom|Poly_|Law_|Font_)/.test(cls)) { return false; }
+    // Name-based guess ONLY for classes the table has no inheritance chain
+    // for. A class the table knows is NOT transient is a value type that
+    // owns its members — GeomAPI_ProjectPointOnSurf, Geom2dGcc_*,
+    // GeomConvert_*, ... — and the old blanket /^Geom/ kept every one of
+    // them alive: upstream bicycle_tire leaked 8,685 projectors (each with
+    // its Extrema sampling grid), the bulk of a 2.3 GB OCCT heap.
+    if (!table.classes[cls] && /^(Geom|Poly_|Law_|Font_)/.test(cls)) { return false; }
     return true;
   };
   const markHandled = (a) => {
@@ -259,6 +265,24 @@ export function installOcpShim(self, table) {
         if (freeQueue.length >= 4096) { flushFrees(); }
       }
     } catch (e) { /* lifetime must never break the caller */ }
+  };
+  /** MicroPython's release path. MicroPython has no `__del__` on Python
+   *  classes, but its JsProxy objects ARE finalised by the GC (and the
+   *  micropython-cs interpreter collects DURING an evaluation —
+   *  MICROPY_GC_SCAN_SPILLED_STACK), and MicroPython keeps ONE JsProxy per JS
+   *  object: when that proxy is finalised, Python can no longer reach the
+   *  object by any path, so every retain it accumulated is released at once.
+   *  MicroPythonRuntime.js calls this from the interpreter's proxy-free hook,
+   *  i.e. from INSIDE a garbage collection — so it only queues; the queue is
+   *  flushed at the next dispatch entry (scoped(), below) or eval end. */
+  self._csOcpRelease = function (v) {
+    try {
+      if (!v || typeof v !== 'object' || v.$$ === undefined) { return; }
+      if (!(v._csPy > 0)) { return; }   // foreign, or already released
+      if (!isLive(v)) { return; }       // dangled by a kernel rewind
+      v._csPy = 0;
+      if (self._csOcpLifetime !== 'leak') { freeQueue.push(v); }
+    } catch (e) { /* lifetime must never break the GC */ }
   };
   // per-dispatch scratch: internal temporaries (progress pads, default
   // fills, handle conversions) deleted as soon as the dispatch returns
@@ -818,6 +842,89 @@ export function installOcpShim(self, table) {
     return c ? mkFakeQC(c[0], c[1], c[2]) : mkFakeQC(0, 0, 0);
   };
   GLUE['Quantity_Color.ColorFromName'] = () => false; // webcolors shim covers CSS3
+
+  // pybind List.Assign(other) (0.13 topology/kernel.list_shapes copies a
+  // kernel list before draining it). The hand-bound TopTools_ListOfShape has
+  // no Assign and no index access, so copy JS-side: drain the source
+  // First/RemoveFirst, restore it by Append, and fill the target — EXACT
+  // (order kept), and one FFI hop instead of 3n Python calls.
+  GLUE['TopTools_ListOfShape.Assign'] = (args, ref) => {
+    const src = args[0];
+    const items = [];
+    while (!src.IsEmpty()) { items.push(src.First()); src.RemoveFirst(); }
+    for (const it of items) { src.Append(it); }
+    ref.Clear();
+    for (const it of items) { ref.Append(it); }
+    const tracked = listContents.get(src);
+    if (tracked) { listContents.set(ref, tracked.slice()); }
+    return ref;
+  };
+  // BRepAdaptor_Curve2d(E, F) — unbound in the fork; OCCT's Initialize is
+  // Geom2dAdaptor_Curve::Load(BRep_Tool::CurveOnSurface(E, F, f, l), f, l),
+  // so the bound Geom2dAdaptor_Curve over the OCJS_Out pcurve helper IS it
+  // (ocp_core.cs_brep_adaptor_curve2d; 0.13 Vertex.convexity).
+  self._csBRepAdaptorCurve2d = function (edge, face) {
+    const r = oc.OCJS_Out.BRepTool_CurveOnSurface(edge, face);
+    if (!r.curve2d || (typeof r.curve2d.IsNull === 'function' && r.curve2d.IsNull())) {
+      throw new Error('BRepAdaptor_Curve2d: the edge has no pcurve on the face');
+    }
+    return new oc.Geom2dAdaptor_Curve_3(r.curve2d, r.first, r.last);
+  };
+
+  // BRepLProp_SLProps(S, U, V, N, Resolution) — unbound in the fork (0.13
+  // Face.convexity reads its principal curvatures). The SAME computation
+  // LProp_SLProps performs, on the bound Adaptor3d_Surface::D2: the normal
+  // is D1U ^ D1V (CSLib::Normal; a singular point — |D1U ^ D1V| below
+  // Resolution * |D1U| * |D1V| — reports "curvature undefined" instead of
+  // OCCT's higher-order normal search: build123d samples interior UV
+  // fractions, never a pole), the fundamental forms E F G / L M N against
+  // that normal, and the principal curvatures as the eigenvalues of the
+  // shape operator (k = H -/+ sqrt(H^2 - K), H/K the mean/gaussian
+  // curvatures — identical values to LProp's root-of-quadratic form).
+  // Returns [defined, nx, ny, nz, kmin, kmax, kmean, kgauss].
+  self._csSLProps = function (surf, u, v, resolution) {
+    const P = new oc.gp_Pnt_1();
+    const d1u = new oc.gp_Vec_1(), d1v = new oc.gp_Vec_1();
+    const d2u = new oc.gp_Vec_1(), d2v = new oc.gp_Vec_1(), duv = new oc.gp_Vec_1();
+    try {
+      surf.D2(u, v, P, d1u, d1v, d2u, d2v, duv);
+      const ax = d1u.X(), ay = d1u.Y(), az = d1u.Z();
+      const bx = d1v.X(), by = d1v.Y(), bz = d1v.Z();
+      let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+      const nmag = Math.hypot(nx, ny, nz);
+      const tol = (resolution > 0 ? resolution : 1e-7)
+        * Math.hypot(ax, ay, az) * Math.hypot(bx, by, bz);
+      if (!(nmag > tol)) { return [false, 0, 0, 0, 0, 0, 0, 0]; }
+      nx /= nmag; ny /= nmag; nz /= nmag;
+      const E = ax * ax + ay * ay + az * az;
+      const F = ax * bx + ay * by + az * bz;
+      const G = bx * bx + by * by + bz * bz;
+      const L = nx * d2u.X() + ny * d2u.Y() + nz * d2u.Z();
+      const M = nx * duv.X() + ny * duv.Y() + nz * duv.Z();
+      const N = nx * d2v.X() + ny * d2v.Y() + nz * d2v.Z();
+      const den = E * G - F * F;
+      if (!(Math.abs(den) > 0)) { return [false, nx, ny, nz, 0, 0, 0, 0]; }
+      const H = (N * E - 2 * M * F + L * G) / (2 * den);
+      const K = (L * N - M * M) / den;
+      const disc = Math.sqrt(Math.max(H * H - K, 0));
+      return [true, nx, ny, nz, H - disc, H + disc, H, K];
+    } finally {
+      for (const o of [P, d1u, d1v, d2u, d2v, duv]) {
+        try { o.delete(); } catch (e) { /* skip */ }
+      }
+    }
+  };
+
+  // pybind Poly_Triangulation.Triangles() returns the Poly_Array1OfTriangle
+  // (iterated by upstream tessellate/tessellate_with_uvs); the embind
+  // return type is unbound. Serve the same triangles, in order, as an array
+  // (wrap() turns it into a Python tuple of Poly_Triangle proxies).
+  GLUE['Poly_Triangulation.Triangles'] = (args, ref) => {
+    const n = ref.NbTriangles();
+    const out = new Array(n);
+    for (let i = 1; i <= n; i++) { out[i - 1] = ref.Triangle(i); }
+    return out;
+  };
 
   // the hand-bound IndexedDataMap has FindKey/FindFromIndex but no Extent —
   // count by probing (fork ask: bind Extent/Size)
@@ -1447,6 +1554,10 @@ export function installOcpShim(self, table) {
   // as the dispatch returns. The variadic fast-path entries call through
   // these, so they are covered too.
   const scoped = (fn) => function (...a) {
+    // _csOcpRelease (MicroPython, called from inside a GC) only queues; a
+    // dispatch ENTRY is a safe point to delete: every argument of this call
+    // is still held by a live Python proxy, hence retained (_csPy > 0).
+    if (freeQueue.length >= 4096) { flushFrees(); }
     const prev = scratch;
     scratch = [];
     const mine = scratch;

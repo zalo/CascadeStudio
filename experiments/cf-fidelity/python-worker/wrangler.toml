@@ -1,0 +1,12 @@
+name = "cs-python-worker-probe"
+main = "src/entry.py"
+compatibility_date = "2026-08-27"
+compatibility_flags = ["python_workers", "disable_python_external_sdk"]
+
+[[rules]]
+type = "ESModule"
+globs = ["**/*.mjs"]
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]

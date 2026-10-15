@@ -5,7 +5,7 @@ from build123d.geometry import Plane as Plane, Vector as Vector
 from build123d.topology import Compound as Compound, Curve as Curve, Edge as Edge, Face as Face, ShapeList as ShapeList, Shell as Shell, Sketch as Sketch, Wire as Wire, topo_explore_connected_edges as topo_explore_connected_edges
 from collections.abc import Iterable
 
-def full_round(edge: Edge, invert: bool = False, voronoi_point_count: int = 100, mode: Mode = ...) -> tuple[Sketch, Vector, float]:
+def full_round(edge: Edge, invert: bool = False, voronoi_point_count: int = 100, mode: Mode = ...) -> Sketch:
     '''Sketch Operation: full_round
 
     Given an edge from a Face/Sketch, modify the face by replacing the given edge with the

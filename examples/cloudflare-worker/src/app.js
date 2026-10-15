@@ -51,13 +51,17 @@ export const BOOT_MODES = ['request', 'startup', 'warm'];
 const WARMUP_CODE = 'from build123d import *\nshow(Box(10, 10, 10))\n';
 
 /** @param {object} o
- *  @param {'lite'|'upstream'} o.pySrc
+ *  @param {'lite'|'upstream'|'real'} o.pySrc
  *  @param {WebAssembly.Module} o.occtWasm
  *  @param {object} o.micropythonJs   the imported micropython-cs.mjs namespace
  *  @param {WebAssembly.Module} o.micropythonWasm
  *  @param {Record<string, ArrayBuffer>} o.fonts
- *  @param {string} [o.upstreamTreeText]  upstream flavor: the JSON
- *         relative-path -> source map, as text (parsed at boot) */
+ *  @param {string} [o.upstreamTreeText]  upstream/real flavors: the JSON
+ *         relative-path -> source map (vendored build123d + the OCP shim and
+ *         glue), as text — parsed at engine boot, the parse dropped once the
+ *         library has registered
+ *  @param {object} [o.pyodide]  real flavor: the host that boots Pyodide from
+ *         module bindings ({boot, installWheels}; src/real.js) */
 export function createWorker(o) {
   /** One engine per isolate, reused across requests (all of the engine's
    *  state lives on the worker global). */
@@ -69,11 +73,17 @@ export function createWorker(o) {
     if (!enginePromise) {
       enginePromise = (async () => {
         let upstreamPy;
-        if (o.pySrc === 'upstream') {
+        let releaseTree = null;
+        if (o.pySrc === 'upstream' || o.pySrc === 'real') {
           // The loader asks for ~120 modules by relative path; the whole
-          // layer is one Text module, parsed once.
-          const tree = JSON.parse(o.upstreamTreeText);
+          // layer is one Text module, parsed once. The library reads it only
+          // while it registers (first Python request), so the PARSED map is
+          // dropped afterwards; the Text module's own string stays (a module
+          // export cannot be released) — 3.15 MB of the isolate.
+          let tree = JSON.parse(o.upstreamTreeText);
+          releaseTree = () => { tree = null; };
           upstreamPy = async (rel) => {
+            if (!tree) { throw new Error('upstream-b123d: the module map was released after boot: ' + rel); }
             const text = tree[String(rel).replace(/^\.?\//, '')];
             if (text === undefined) {
               throw new Error('upstream-b123d: no such module in the bundled map: ' + rel);
@@ -81,12 +91,17 @@ export function createWorker(o) {
             return text;
           };
         }
-        return createHeadlessCascade({
-          runtime: 'micropython',
+        const e = await createHeadlessCascade({
+          // 'real' runs the REAL build123d wheel on Pyodide (src/real.js
+          // supplies the host); lite and upstream run on MicroPython.
+          runtime: o.pySrc === 'real' ? 'pyodide' : 'micropython',
+          pyodide: o.pySrc === 'real' ? o.pyodide : undefined,
           // 'lite'     — build123d-lite, embedded in the bundle: ~5x faster
-          //              to boot, 206/222 on the validation corpus.
-          // 'upstream' — build123d 0.11.1's own Python over the OCP shim:
-          //              216/222, ~1 s more boot. See README.
+          //              to boot, 223/239 on the 0.13.0 validation corpus.
+          // 'upstream' — build123d 0.13.0's own Python over the OCP shim:
+          //              233/239, ~1 s more boot. See README.
+          // 'real'     — the build123d 0.13.0 wheel + numpy on Pyodide, same
+          //              shim (FIDELITY-ON-WORKERS.md): 232/239.
           pySrc: o.pySrc,
           occtWasm: o.occtWasm,
           micropythonJs: o.micropythonJs,
@@ -95,6 +110,16 @@ export function createWorker(o) {
           fonts: o.fonts,
           upstreamPy,
         });
+        if (releaseTree) {
+          // Chain onto the hook the kernel-image recapture also rides
+          // (fired once the Python library has registered).
+          const booted = globalThis.self._csPyLibBooted;
+          globalThis.self._csPyLibBooted = () => {
+            if (booted) { booted(); }
+            releaseTree();
+          };
+        }
+        return e;
       })().catch((e) => { enginePromise = null; throw e; });
     }
     return enginePromise;

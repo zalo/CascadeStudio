@@ -1,5 +1,5 @@
 from OCP.GccEnt import GccEnt_enclosed, GccEnt_enclosing, GccEnt_outside, GccEnt_unqualified
-from enum import Enum, IntEnum
+from enum import Enum, IntEnum, StrEnum
 from typing import TypeAlias
 
 class Align(Enum):
@@ -46,6 +46,28 @@ class ContinuityLevel(IntEnum):
     C0 = 0
     C1 = 1
     C2 = 2
+
+class Convexity(Enum):
+    """How the material of a shape sits around one of its elements.
+
+    Classifies a vertex, edge or face relative to the shape it was selected
+    from - it is a property of that relationship, not of the element alone.
+    A straight edge is convex on a box, concave at the inner corner of an L,
+    and smooth where a fillet meets the face it blends into.
+
+    - CONVEX: the material closes around the element by less than half a
+      turn - the outer edge of a box, the corner of a plate, a boss
+    - CONCAVE: by more than half a turn - the inner corner of a pocket, a hole
+    - SMOOTH: the boundary passes through without bending - a fillet seam, a
+      planar face, a vertex where two edges meet in line
+    - SADDLE: both senses are present - an edge whose dihedral angle crosses
+      half a turn along its length, a vertex where convex and concave edges
+      meet, a face with principal curvatures of opposite sign
+    """
+    CONVEX = ...
+    CONCAVE = ...
+    SMOOTH = ...
+    SADDLE = ...
 
 class Extrinsic(Enum):
     """Order to apply extrinsic rotations by axis"""
@@ -205,7 +227,16 @@ class PrecisionMode(Enum):
     LEAST = -1
 
 class Select(Enum):
-    """Selector scope - all, last operation or new objects"""
+    """How much of a shape a selector returns.
+
+    - ALL: every feature of the kind
+    - LAST: the features the last operation brought in or created; a feature it
+      merely rebuilt is not included
+    - NEW: only the features that existed in no input of the last operation
+
+    LAST and NEW read the record an operation leaves on its result, so they work
+    on builders and on the shapes Algebra mode operations return alike.
+    """
     ALL = ...
     LAST = ...
     NEW = ...
@@ -239,14 +270,17 @@ class Transition(Enum):
     ROUND = ...
     TRANSFORMED = ...
 
-class Unit(Enum):
+class Unit(StrEnum):
     """Standard Units"""
-    MC = ...
-    MM = ...
-    CM = ...
-    M = ...
-    IN = ...
-    FT = ...
+    MC = 'µm'
+    MM = 'mm'
+    CM = 'cm'
+    M = 'm'
+    IN = 'in'
+    FT = 'ft'
+    G = 'g'
+    KG = 'kg'
+    LB = 'lb'
 
 class Until(Enum):
     """Extrude limit"""

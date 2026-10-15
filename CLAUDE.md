@@ -11,9 +11,9 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 102 tests (incl. 50 frozen build123d example scripts)
+npx playwright test    # 110 tests (incl. 50 frozen build123d example scripts)
 node test/headless-node.mjs   # browser-free engine (Node, no Chromium)
-CS_PY_SRC=upstream node test/headless-node.mjs   # …on verbatim build123d 0.11.1
+CS_PY_SRC=upstream node test/headless-node.mjs   # …on verbatim build123d 0.13.0
 ```
 
 ## Architecture (Monorepo)
@@ -186,7 +186,7 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   `browser/newWorker` protocol) around `browser-basedpyright`'s self-contained
   `pyright.worker.js` (copied to `dist/pyright/`, ~3.2 MB gz, lazy-booted
   ~1.5 s after a Python-mode load — JS/OpenSCAD loads pay zero). It
-  typechecks against stubs generated from REAL build123d 0.11.1 and modified
+  typechecks against stubs generated from REAL build123d 0.13.0 and modified
   to lite's surface (pruned `__all__`, removed unsupported params, lite-only
   APIs added, compromise notes in hover docstrings) — see
   `packages/cascade-core/types/python-stubs/README.md` for regeneration.
@@ -214,11 +214,12 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   see the next bullet) swaps the interpreter for MicroPython 1.28 wasm
   (`packages/cascade-core/src/worker/MicroPythonRuntime.js`, ~237 KB gz,
   copied to dist by the cascade-core build) — the smallest and lowest-memory
-  runtime: ~150 ms boot, ~20 MB interpreter wasm heap after the starter (vs
-  Pyodide's ~45 MB), aimed at memory-budgeted headless execution.
+  runtime: ~150 ms boot, **6 MiB** interpreter wasm memory after the starter
+  (vs Pyodide's ~52 MB; was ~20 MB before micropython-cs patches 11-12),
+  aimed at memory-budgeted headless execution.
   **The interpreter is a CUSTOM-PATCHED build (micropython-cs)**: vendored +
   committed in `packages/cascade-core/vendor/micropython-cs/` (PROVENANCE.md:
-  base v1.28.0 tag e0e9fbb, eight patch SHAs, build command), copied to dist
+  base v1.28.0 tag e0e9fbb, twelve patch SHAs, build command), copied to dist
   as `micropython-cs.mjs/.wasm` and PREFERRED at boot; the stock npm settrace
   pair remains the feature-detected fallback (everything works on both —
   `_pythonBootTiming.artifact/getframe` says which booted, frozen in
@@ -285,69 +286,83 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   when missing (MicroPython needs its native STRING `__path__`).
 - **On MicroPython the DEFAULT SOURCE LAYER is upstream** (`pysrc` resolution,
   localStorage `cascade-py-src`): `?pyruntime=micropython` runs UPSTREAM
-  build123d 0.11.1 Level-A source (builders, build_common, objects_*,
-  operations_*, joints, pack — VENDORED and COMMITTED in
-  `vendor/build123d-0.11.1/` with upstream's Apache-2.0 LICENSE;
-  `node packages/cascade-core/scripts/fetch-upstream-b123d.cjs` is the
-  version-bump tool; transformed at load by
-  `packages/cascade-core/src/worker/UpstreamB123d.js`) as the `build123d`
-  package, over lite's classes re-exported as
-  `build123d.geometry`/`build123d.topology[.*]` (seam in
-  `packages/cascade-core/upstream-py/` — since the class-DAG unification it
-  is genuine re-exports + S-sized method fills + the enum bridge); lite
-  registers as `build123d_lite`. `&pysrc=lite` opts back into lite; if the
-  upstream payload is missing at runtime the no-flag default falls back to
-  lite with a console warning (explicit `pysrc=upstream` stays a hard
-  error, and non-MicroPython runtimes reject it loudly). Frozen by
-  `test/py-src-upstream.spec.js`; `CS_PY_SRC=lite|upstream` switches
-  run-lite.mjs/probe.mjs (and when harness results look implausibly clean,
-  run with `CS_DEBUG_PYSRC=1` and check the '[debug] page booted pySrc='
-  lines — a stale http-server on the harness port once masked the whole
-  upstream leg). Harness (2026-08-20, 32MB kernel, post grind round):
-  micropython+upstream classifies **205 PASS / 10 MISMATCH / 5 ERROR /
-  2 TIMEOUT** of the 222 scored scripts — effectively LITE PARITY (lite:
-  206/10/5/1; the failure sets overlap but differ: upstream additionally
-  PASSES sort_axis, toy_truck and ttt-ppp0110, and additionally fails
-  bicycle_tire (+0.84%, thicken band), ex08_algebra (face-winding
-  orientation family), Buffer_Stand (fuse-drop kernel fault on ITS
-  construction), sm_hanger as ERROR instead of MISMATCH, and
-  heat_exchanger flaps TIMEOUT under 4-page contention; both LITE
-  baselines stay per-script IDENTICAL to the committed 206/10/5/1). The
-  honest shortfall list (per-script, with causes) lives in
-  `experiments/upstream-on-micropython/INVENTORY.md` §H; the A-section
-  (class-DAG) is CLOSED by the unification and the 2026-08-20 grind round
-  closed the seam-method and semantics gaps. Compare against lite with
-  `experiments/upstream-on-micropython/compare-examples.mjs`.
-- **The TOPOLOGY layer under pysrc=upstream is UPSTREAM'S OWN (Stage 3,
-  the DEFAULT — `PYTOPO_DEFAULT='upstream'`; `?pytopo=lite` / localStorage
-  `cascade-py-topo` opt back into the seam; `CS_PY_TOPO=lite|upstream` for
-  run-lite.mjs; a missing ocp_shim payload warns-and-falls-back to lite)**:
-  upstream 0.11.1's **geometry.py + the WHOLE topology package run
-  VERBATIM** over the hardened OCP-over-embind shim
-  (`upstream-py/ocp_shim/`, OcpShim.js) — the seam adapter modules load
-  only under pytopo=lite, and lite reduces to the JS op layer + the worker
-  glue `ocp_shim/topo_glue.py` (show()/sceneShapes raw-TopoDS unwrap,
-  implicit post-run scene, `_measure_globals_json`, export/import, text ->
-  lite opentype (COMPROMISE(text)), gordon -> GordonSurface.js,
-  Compound(joints=) reparenting — embind casts COPY where pybind shares).
-  History rides the SHIM (recordExternalOp at BRepPrimAPI/BRepAlgoAPI/...-
-  family granularity + TopoDS `producingLine` tagging, so pick->line
-  resolves); the kernel-guard fuse-drop recovery is ported to the shim's
-  SetArguments/SetTools/Build/Shape path. Post-flip default-leg harness
-  (2026-08-21): **216 PASS / 2 MISMATCH / 3 ERROR / 1 TIMEOUT** of 222 —
-  beyond every previous configuration: upstream traversal RESOLVES lite's
-  residual COMPROMISE(edge-orientation)/(traversal-order) set (joints x2,
-  projection x2, sort_axis, filter_all_edges_circle, sm_hanger, toy_truck,
-  ttt-ppp0110), and the whole non-PASS set is the documented honest gaps
-  (objects_1d, tips/b04 flap; dual_color_3mf lib3mf, objects_2d drafting,
-  curved_support sympy; spitfire gordon TIMEOUT). Perf: the bridge's
-  variadic no-proxy fast path (see runtime-comparison.md §10) cleared the
-  hot-loop TIMEOUTs (b01 148->18 s, bicycle_tire 250->29 s); full harness
-  wall 158 s. State/history:
-  `experiments/upstream-topology-spike/STAGE3-STATE.md`; fork asks:
-  FORK-ASKS.md Stage-3 addendum; interpreter patches 9-10 (jsffi
-  out-of-int32 integral doubles — 1e100 crossed as 0 — and JSFLAGS_EXTRA)
-  live as real micropython-cs commits, artifacts re-vendored.
+  **build123d 0.13.0** (PyPI 2026-09-21 — 0.12's BuildScope/BaseObjectMeta
+  builders plus the OCP/OCCT 8.0.1 port) — Level-A builders/objects/
+  operations, drafting, geometry.py and the WHOLE topology package —
+  VENDORED and COMMITTED in `vendor/build123d-0.13.0/` (Apache-2.0
+  LICENSE/NOTICE; wheel-identical). The single version switch is
+  `ACTIVE_UPSTREAM_VENDOR` in `packages/cascade-core/src/worker/UpstreamB123d.js`
+  (per-vendor module lists next to it); `node
+  packages/cascade-core/scripts/fetch-upstream-b123d.cjs --src <tree>
+  --version X` is the bump tool, and the bump is PRICED in
+  `experiments/upstream-on-micropython/BUMP-LEDGER-0.13.md` (0.11.1 -> 0.13.0
+  took ~2 h of active work; 0.11.1 was retired, not kept selectable).
+  Sources are transformed at load by UpstreamB123d.js (line-preserving:
+  TypeAlias, runtime generics, match, PEP 570/604/448, dataclass fields,
+  and builtins for `__mro__` (C3), `is_integer`, property `__get__`,
+  ordered dedup, `__format__`) and registered as the `build123d` package;
+  lite registers as `build123d_lite` (the glue's kernel-op library). It
+  NEEDS the custom interpreter's metaclasses (upstream AxisMeta/PlaneMeta
+  and 0.12+'s `BaseObjectMeta` construction firewall run NATIVELY — no
+  emulation; the abc shim's ABCMeta derives from the typing shim's
+  `_GenericMeta` so `BasePartObject(Part, BaseObject)` resolves its
+  metaclass like CPython). The runtime probes the payload AND metaclasses
+  first: the no-flag default falls back to lite with a console warning when
+  either is missing (stock artifacts), explicit `pysrc=upstream` stays a
+  hard error, and non-MicroPython runtimes reject it loudly. `&pysrc=lite`
+  opts back into lite. Shims new for 0.13: contextlib, itertools,
+  dataclasses default_factory/`__post_init__`, StrEnum members that ARE
+  their str (`Unit.MM == "mm"`), tempfile, and an honest `bd_materials` stub
+  (materials are a pysrc=real feature; `.material` stays None and `mass()`
+  raises upstream's own "density is missing"). Frozen by
+  `test/py-src-upstream.spec.js` (incl. a 0.13 test: native BaseObjectMeta,
+  kernel-record Select.LAST/NEW, StrEnum, drafting, Face.convexity,
+  export_obj); `CS_PY_SRC=lite|upstream` switches run-lite.mjs/probe.mjs
+  (when results look implausibly clean, run with `CS_DEBUG_PYSRC=1` and
+  check the '[debug] page booted pySrc=' lines — a stale http-server on the
+  harness port once masked the whole upstream leg).
+- **The TOPOLOGY layer is UPSTREAM'S OWN (Stage 3)**: upstream 0.13.0's
+  **geometry.py + the WHOLE topology package run VERBATIM** — incl. 0.13's
+  `topology/history.py` (the kernel's own `BRepTools_History` record behind
+  `Select.LAST/NEW`) and `kernel.py` — over the OCP-over-embind shim
+  (`upstream-py/ocp_shim/`, OcpShim.js). The shim is GENERATED
+  (`experiments/upstream-topology-spike/gen-ocp-shim.mjs`) from the OCP bill
+  (`extract_ocp_bill.py`: 878 unique items / 2,448 call sites for 0.13.0)
+  with pybind signatures/defaults dumped from the **OCP 8.0.1** reference
+  venv; OCP 8's `OCP.collections` names (`List_TopoDS_Shape`, ...) alias
+  onto the embind typedef classes (`OCP/collections.py`). Glue for the
+  unbound OCP-8 surface: shape Map/DataMap (exact, `ocp_glue.py`),
+  `ListOfShape.Assign`, `BRepAdaptor_Curve2d` (exact), `BRepLProp_SLProps`
+  (LProp's own computation on the bound D2), `Poly_Triangulation.Triangles`;
+  `IntTools_FClass2d` (Vertex.convexity on a face corner) is
+  PENDING_FORK_BINDING — **no fork rebuild was needed** (FORK-ASKS.md 0.13
+  addendum). `?pytopo=lite` (Level-A over a seam of lite's classes) was
+  RETIRED with 0.13 — its builders need ShapeHistory records and BuildScope
+  publication; the flag warns and runs upstream. lite reduces to the JS op
+  layer + the worker glue `ocp_shim/topo_glue.py` (show()/sceneShapes
+  raw-TopoDS unwrap, implicit post-run scene, `_measure_globals_json`,
+  export/import incl. export_obj and 0.13's import result shape, text ->
+  lite opentype (COMPROMISE(text)) + `Compound.resolve_font`, gordon ->
+  GordonSurface.js, Compound(joints=) reparenting — embind casts COPY where
+  pybind shares). History rides the SHIM (recordExternalOp + TopoDS
+  `producingLine` tagging, so pick->line resolves); the kernel-guard
+  fuse-drop recovery lives on the shim's Fuse path. MEASUREMENT contract
+  (matches test/b123d-validation/reference.py): builders by their PLACED
+  `.part`/`.line` and LOCAL `.sketch_local` (since 0.12 `_obj` is the local
+  product), volume by upstream's own `Shape.volume` (0.12+ Compound.volume
+  sums DIRECT children). Harness vs the **0.13.0 native reference**
+  (2026-10-15, 239 scored + 8 native SKIP, headless, `--pages 2`, 299 s):
+  **233 PASS / 2 MISMATCH / 3 ERROR / 1 TIMEOUT** (the unchanged 0.11.1
+  vendor scored 198/7/33/1; +35, nothing regressed;
+  `test/b123d-validation/results-013-upstream.json`). Every non-PASS is
+  documented: objects_1d (DoubleTangentArc picks the other root on the
+  scipy Nelder-Mead shim + COMPROMISE(triad-labels)), objects_2d (a 25 µm
+  opentype.js-vs-FreeType text metric — upstream DRAFTING now RUNS on
+  MicroPython), dual_color_3mf (no lib3mf), curved_support (sympy),
+  topology_selection/b10 (Mesher.read needs lib3mf), spitfire (gordon
+  TIMEOUT); tips/b04 is a complete sort tie that is non-deterministic
+  natively in every version and flaps. State/history:
+  `experiments/upstream-topology-spike/STAGE3-STATE.md`.
   2026-08-19): `Wire` is a real class (distinct from `Edge` and `Curve`;
   all three subclass `Mixin1D`, lite's "any 1-D shape" isinstance target,
   which carries the shared behaviors + `_specs` bookkeeping);
@@ -362,34 +377,35 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   TShape identity across selector calls; hash = rounded-bbox key).
   Bookkeeping that MEANS identity (parent/children links, sceneShapes)
   uses explicit `is` scans — keep it that way when touching those paths.
-- **`?pyruntime=pyodide&pysrc=real` — REAL, UNMODIFIED build123d 0.11.1 on
+- **`?pyruntime=pyodide&pysrc=real` — REAL, UNMODIFIED build123d 0.13.0 on
   Pyodide (the reference/crossover leg, default-OFF)**: the actual PyPI
-  wheel (real CPython 3.14 semantics, real numpy 2.4.3, native
-  metaclasses/typing — ZERO source transforms, ZERO stdlib shims) runs with
+  wheel (real CPython 3.14 semantics, real numpy 2.4.3 — satisfies 0.13's
+  numpy>=2,<3 — native metaclasses/typing, ZERO source transforms) runs with
   the OCP-over-embind shim as the ONLY substitution.
   `packages/cascade-core/src/worker/PyodideRealB123d.js` boots it (vendored
-  wheels — `fetch-pyodide.cjs` now fetches numpy/typing_extensions from the
-  Pyodide CDN and build123d/anytree/webcolors/trianglesolver from PyPI —
-  inert OCP stubs + the SHARED generated proxies over
+  wheels via `fetch-pyodide.cjs`: numpy from the Pyodide CDN; build123d
+  0.13.0, **bd_materials 0.2.4 (REAL — `Shape.material`/`mass()` match
+  native exactly)**, typing_extensions 4.16.0 (0.13 pins >=4.16; the lock
+  ships 4.15), anytree/webcolors/trianglesolver from PyPI — inert OCP stubs
+  + the SHARED generated proxies over
   `upstream-py/ocp_shim/ocp_core_pyodide.py`, import stubs in
   `upstream-py/real-deps/` for ezdxf/svgpathtools/ocpsvg/fontTools/lib3mf/
-  sklearn/requests, lite as `build123d_lite`, then `import build123d` +
-  `real_glue.py`/`real_preglue.py` worker glue). Pyodide FFI landmine: its
-  JsProxy is UNHASHABLE and freshly minted per conversion — embind enum
-  members are interned `OcpEnumMember` wrappers (hash/eq by js_id), show()
-  membership compares js_id. Harness **216 PASS / 3 MISMATCH / 2 ERROR /
-  1 TIMEOUT** (148 s wall) — PASS-parity with the Stage-3 default and
-  **REAL drafting (Draft/DimensionLine) RUNS on this leg** (objects_2d is a
-  25 µm font-metric MISMATCH here instead of an ERROR); interpreter
-  semantics finding: a clean NULL (no divergence vs the transformed
-  MicroPython stack anywhere in the corpus). Costs vs pyodide+lite:
-  +3.4 MB wheels (18.6 MB assets total), boot 2.1 s vs 1.3 s
-  (`import build123d` is 0.52 s of it), interpreter heap 51.9 vs 43.2 MB;
-  warm evals identical, 54-hole grid 461 ms (faster than
-  micropython+upstream's 792 ms). Frozen by `test/py-src-real.spec.js`;
-  `CS_PY_SRC=real` switches run-lite.mjs/probe.mjs/bench-runtime.mjs
-  (`--pysrc real`); ledger/benchmarks/state in
-  `experiments/pyodide-real/STATE.md` + runtime-comparison.md §11.
+  sklearn/requests/threejs_materials, lite as `build123d_lite`, then
+  `import build123d` + `real_glue.py`/`real_preglue.py`).
+  COMPROMISE(material-look): threejs_materials (Pillow + pygltflib + ~86 MB
+  of textures) is a stub, so the material setter keeps the material and
+  skips only the color derived from its PBR look; `.pbr` raises. Pyodide
+  FFI landmine: its JsProxy is UNHASHABLE and freshly minted per conversion
+  — embind enum members are interned `OcpEnumMember` wrappers (hash/eq by
+  js_id), show() membership compares js_id. Harness vs the 0.13.0
+  reference (2026-10-15, 284 s): **232 PASS / 3 MISMATCH / 3 ERROR /
+  1 TIMEOUT** (unchanged 0.11.1 wheel: 201/7/30/1;
+  `test/b123d-validation/results-013-real.json`) — the same documented set
+  as MicroPython (tips/b04 flapped to MISMATCH here); objects_1d shares the
+  scipy shim. Frozen by `test/py-src-real.spec.js` (incl. REAL bd_materials
+  mass); `CS_PY_SRC=real` switches run-lite.mjs/probe.mjs/bench-runtime.mjs
+  (`--pysrc real`); history in `experiments/pyodide-real/STATE.md` +
+  runtime-comparison.md §11.
 - **Heavy-model memory (2026-08-21, runtime-comparison.md §12)**: the OCP
   shim now frees kernel objects DETERMINISTICALLY on the Pyodide legs —
   every embind object returned to Python is retained (`_csPy`);
@@ -403,27 +419,50 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   cached shapes therefore remesh on re-evaluation). heat_exchanger OCCT
   high-water: lite legs 165.6 → **138 MB**, pysrc=real 286.3 → **238.5 MB**
   (alive embind objects 265,598 → ~5.6k, eval time unchanged);
-  mp+upstream stays 286.3 (MicroPython has no `__del__`; its 556-612 MB GC
-  arena is a port-level grow-on-burst ratchet — gc.threshold is compiled
-  out, explicit collects verified ineffective; needs a micropython-cs
-  patch). **`?lowmem=1`** (or localStorage `cascade-low-memory`='1'): the
+  mp+upstream stayed 286.3 then — RESOLVED 2026-10-15 (see
+  `examples/cloudflare-worker/FIDELITY-ON-WORKERS.md` §1): the "556-612 MB
+  GC arena ratchet" was the stock pyscript port NEVER collecting inside a
+  top-level call (`gc_collect()` only set a pending flag — which is also why
+  gc.collect()/gc.threshold looked ineffective). micropython-cs patch 11
+  (`MICROPY_GC_SCAN_SPILLED_STACK`: Binaryen
+  `--flatten,--coalesce-locals,--spill-pointers` + a conservative C-stack
+  scan) collects at any depth, and MicroPython's JsProxy finalisers now
+  free embind objects (`installProxyFreeHook` -> OcpShim `_csOcpRelease`;
+  one JsProxy per JS object, so its death means Python reaches the object
+  no more). Also fixed then: `canDelete()`'s name guard `/^Geom/` had
+  kept every `GeomAPI_*` value object alive on ALL shim legs (upstream
+  bicycle_tire 2.3 GB of OCCT); the guard now only applies to classes the
+  binding table has no chain for. MicroPython's initial GC heap is 4 MB
+  with gc.threshold(4 MB) (a collection is what frees the OCCT objects, so
+  heap size = OCCT lag), and patch 12 starts its linear memory at 6 MiB. **`?lowmem=1`** (or localStorage `cascade-low-memory`='1'): the
   worker keeps history step METADATA but drops the per-step shape refs
   (timeline scrubbing logs a console note instead) and deletes pruned
   argCache entries' kernel objects at end-of-evaluation — bounds retention
   for iterative editing; single-run numbers are unchanged.
 
-**build123d-lite coverage** (vs real build123d 0.11.1 — validated by running
-EVERY runnable script in the upstream `examples/` and `docs/` trees through both,
-see `test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
+**build123d-lite coverage** (vs real build123d **0.13.0** on OCP/OCCT 8.0.1 —
+the same OCCT version as the wasm kernel — validated by running EVERY runnable
+script in the upstream `examples/` and `docs/` trees through both, see
+`test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
 Too Tall Toby challenge parts (mass asserts kept) and every docs `.rst`
-code-block; currently **205/222 scripts PASS** (volume within 0.5%, bbox within
-1e-3/axis), 10 MISMATCH, 5 ERROR, 2 TIMEOUT, 10 SKIP (real build123d fails
-natively) — full breakdown with per-script reasons AND a hand-maintained
+code-block; currently **223/239 scripts PASS** (volume within 0.5%, bbox within
+1e-3/axis), 9 MISMATCH, 6 ERROR, 1 TIMEOUT, 8 SKIP (real build123d fails
+natively), **identically on the Brython and the MicroPython lite legs**
+(`results-013-lite.json`, `results-013-lite-micropython.json`; the unmodified
+pre-0.13 lite scored 191/13/34/1/8 on both — `baseline-013-lite*.json`) —
+full breakdown with per-script reasons AND a hand-maintained
 root-cause/defaults audit of every non-PASS in the committed
-`test/b123d-validation/report.md`. A full 232-script harness pass takes ~150 s
-with `--pages 4` (~5 min single-page); the harness MUST run with
-`CS_TEST_HEADFUL=1 DISPLAY=:99` on this machine (headless Chromium has no WebGL,
-which manifests as every script reporting "no measurement produced"). Debug a
+`test/b123d-validation/report.md` (`defaults-audit.md`; rewrite the report from
+saved, solo-rerun-merged results with `run-lite.mjs --report-from <json>`).
+What changed natively between 0.11.1 and 0.13.0 is in
+`test/b123d-validation/native-0.11.1-vs-0.13.0.md`. A full 247-script harness
+pass takes ~5 min with `--pages 2` (the RAM budget on this machine; with both
+legs running at once 2-4 heavy scripts flap to TIMEOUT and must be re-run solo
+with `--only <id>` before merging into the committed results); Xvfb is
+no longer installed here, so run it HEADLESS with DISPLAY unset
+(`env -u DISPLAY node test/b123d-validation/run-lite.mjs --pages 2`;
+`CS_PY_RUNTIME=micropython CS_PY_SRC=lite` for the MicroPython leg). If every
+script reports "no measurement produced", the page has no WebGL. Debug a
 single script with `test/b123d-validation/probe.mjs` (prints raw measurements +
 errors). Since the GeomAPI-array binding round: Spline/Helix interpolate EXACTLY
 (GeomAPI_Interpolate, incl. tangents=/tangent_scalars=/per-point tangents/periodic),
@@ -496,29 +535,50 @@ newly: `MC`/`UNITS_PER_METER`, the seven remaining enums, `polar`/`delta`/
 `topo_explore_common_vertex`/`topo_explore_connected_edges`, singular
 `Builder.vertex/edge/wire/face/solid` + module-level getters, `Matrix`
 (pure-Python affine), `OrientedBoundBox` (real `Bnd_OBB`),
-`GeomEncoder`/`LocationEncoder` (on a pure-Python `json` shim — Brython's
-json can't load in a module worker), `DraftAngleError`, `BaseLineObject`,
-the four deprecated tangent objects (`PointArcTangentLine`/`Arc`,
-`ArcArcTangentLine`/`Arc` — native-parity to 6 decimals),
-`project_workplane`, `import_brep`/`export_brep` (BRepTools via MEMFS), and
-an honest `FontManager`/`available_fonts` (bundled FreeSans family only);
-frozen in `test/python-mode-upstream-exports.spec.js`:
+`GeomEncoder` (on a pure-Python `json` shim — Brython's json can't load in
+a module worker), `DraftAngleError`, `BaseLineObject`, `project_workplane`,
+`import_brep`/`export_brep` (BRepTools via MEMFS), and an honest
+`FontManager`/`available_fonts` (bundled FreeSans family only). **Since the
+0.13.0 round** (build123d 0.12's API + 0.13's OCCT 8.0.1 port): lite exposes
+191 of upstream 0.13.0's 203-name `__all__` (absent: the 12 deliberate skips —
+`Arrow`/`Draft`/`DimensionLine`/`ExtensionLine`/`TechnicalDrawing`,
+`Export2D`/`DotLength`, `import_dxf`, `import_svg_as_buildline_code`,
+`detect_primitives`, `export_to_pcbway`, `trace`), and 0.12's removals are
+gone exactly like upstream (the four tangent objects, `LocationEncoder`,
+`Workplanes`, `to_tuple()` — `Location`/`Vector` iterate instead —
+`end_angle`/`angular_direction`). New: the unified **BuildScope** (local
+construction + publication, `part_local`/`sketch_local`/`line_local`,
+`insert()` with `add()` as its deprecated wrapper, the BaseObject firewall),
+**`Select.LAST`/`NEW` from the kernel's `BRepTools_History`** (StandardLibrary
+`HistRecord`/`HistMerge`/`HistClassify`; `Shape.edges(Select.NEW)` works on
+algebra results too), `Convexity` on edges/faces/vertices, `topo_path`/
+`topo_owner`, `material=`/`mass`/`compute_mass` over an embedded bd_materials
+catalogue (`import bd_materials` works), the `Unit` StrEnum, `BoundBox`
+predicates, `Rotation(Axis, angle)` and the other 0.12 overloads,
+`Location * <iterable>`, `Superellipse`, `Edge.make_ellipse`, keyword-only
+conic `arc_size`, multi-hole `loft`/ruled `Solid.make_loft`,
+`RevoluteJoint(angle_reference=)`, `Compound(label, color, material, joints,
+parent, children)` assemblies with `global_location` and upstream's assembly
+`volume`, `project()`'s per-face pending-plane orientation, `export_obj`/
+`tessellate_with_uvs`, and real `export_step` unit names. Frozen in
+`test/python-mode-upstream-exports.spec.js` and
+`test/python-mode-b123d-013.spec.js` (native 0.13.0 values):
 
 | Area | Supported | Not supported |
 |---|---|---|
-| Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple workplanes, pending faces/edges/path), `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `add()` (incl. Locations-context replication into BuildLine), `Select.LAST`/`Select.NEW` for vertices/edges/faces/solids (upstream's `post - pre` bookkeeping; a builder gets a FRESH location context on entry, so an enclosing `Locations` never replicates its result), `Workplanes()` (shares the Locations fanout path — a plane basis IS its Location) | — |
+| Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple placements, pending faces/edges/path) with 0.12's unified **BuildScope**: a builder constructs LOCALLY on Plane.XY (selectors, `_obj`, `part_local`/`sketch_local`/`line_local` are local) and on exit PUBLISHES through its placement(s) and the locations of an ENCLOSING `Locations` (so `Locations` now positions/replicates a builder; `.part`/`.sketch`/`.line` are the placed results), `Builder.label`, `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `insert()` (`add()` = deprecated wrapper; Locations replicate into BuildLine too), custom `Base*Object`s built behind a metaclass firewall (nothing their `__init__` makes leaks into the caller's builder), **`Select.LAST`/`Select.NEW` from the kernel's own record** for vertices/edges/faces/solids on builders AND algebra results (BRepTools_History from BRepAlgoAPI + UnifySameDomain + BRepFilletAPI, upstream's Trace/`is_last`/`is_new`; `Builder.new_edges` deprecated) | `Workplanes` (removed upstream in 0.12) |
 | 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Wedge`, `ConvexPolyhedron`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=`; partial `Sphere(r, a1, a2, a3)`; `Solid.extrude_linear_with_rotation` | partial cones |
-| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Triangle` (ported trianglesolver), `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotCenterPoint`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning, incl. `path=`/`position_on_path=`), `ArrowHead`/`HeadType`, `BaseSketchObject`/`BasePartObject` subclassing, `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points`, `Face.radius`/`Face.axis_of_rotation` | `Text(font_path=)`, the rest of `drafting` (`Draft`, `ExtensionLine`, `DimensionLine`, `TechnicalDrawing`) |
-| 1D objects | `Line`, `Polyline`, `PolarLine` (incl. `length_mode=` and a limit shape as `length=`), `FilletPolyline`, `IntersectingLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc` (a full one is ONE closed edge, like upstream), `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `BSpline` (EXACT poles/knots/multiplicities/weights), `DoubleTangentArc`, `BlendCurve` (C0/C1/C2), `Helix`, `EllipticalCenterArc`, `EllipticalStartArc`, `ParabolicCenterArc`/`HyperbolicCenterArc` (incl. the LIMIT form of `arc_size`), `Airfoil` (NACA 4-digit), `ConstrainedArcs`/`ConstrainedLines` (ALL upstream overloads on OCCT's real Geom2dGcc solvers: `radius=`, `center_on=`, three-tangency, `center=`, `radius=`+`center_on=`, two-tangent lines, tangent+point, oriented lines — Tangency qualifiers, trim-range rejection and Sagitta selection), `curve @ u / % u / ^ u` (incl. multi-edge curves and EXTRAPOLATION outside [0, 1]), `Edge.make_line/make_circle/make_mid_way/make_spline/make_bspline/param_at/param_at_point/trim (by point)/trim_to_other`, `derivative_at`, `curvature_comb`, `Mixin1D.normal`, `Wire(edges)`, `Wire.order_edges`/`is_closed`/`param_at_point`, `Edge.arc_center`/`radius`/`is_interior`/`find_tangent`/`find_intersection_points` | conical `Helix` |
-| Ops | `extrude` (dir/both/`taper=` — both of upstream's algorithms: LocOpe_DPrism for a positive taper along the normal, otherwise the offset loft — /`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft`, `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset` (2-D FACE offsets follow upstream's outer/inner-wire branch), `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `Wire.fillet_2d` (1-D corner fillets, ChFi2d_FilletAlgo), `make_brake_formed`, `full_round`, `edges_to_wires` | `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
-| Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle), `.position/.orientation/.x_axis/.y_axis/.z_axis`, `Axis(Location)`/`Axis(Plane)`, `Pos`, `Rot`/`Rotation`, `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations`, `GridLocations`, `PolarLocations`, `HexLocations`, `Workplanes` (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`; shapes track a composed `.location` (`locate()/located()` are absolute; `.position` settable) | `Location.orientation` edge cases |
+| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Superellipse` (0.12: line/ellipse/spline quadrant mirrored), `Triangle` (ported trianglesolver), `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotCenterPoint`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning, incl. `path=`/`position_on_path=`), `ArrowHead`/`HeadType`, `BaseSketchObject`/`BasePartObject` subclassing (joints of the input part follow it), `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points`, `Face.radius`/`Face.axis_of_rotation` | `Text(font_path=)`, the rest of `drafting` (`Draft`, `ExtensionLine`, `DimensionLine`, `TechnicalDrawing`) |
+| 1D objects | `Line`, `Polyline`, `PolarLine` (incl. `length_mode=` and a limit shape as `length=`), `FilletPolyline`, `IntersectingLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc` (a full one is ONE closed edge, like upstream), `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `BSpline` (EXACT poles/knots/multiplicities/weights), `BlendCurve` (C0/C1/C2), `Helix`, `EllipticalCenterArc`/`ParabolicCenterArc`/`HyperbolicCenterArc` (0.12: keyword-only `arc_size` — signed, or a LIMIT shape; `end_angle`/`angular_direction` are gone), `EllipticalStartArc`, `BaseCurveObject`/`BaseLineObject`/`BaseEdgeObject` subclassing, `DoubleTangentArc` picks TOP/BOTTOM off upstream's exact `common_plane` (incl. CPython's set iteration order), `Airfoil` (NACA 4-digit), `ConstrainedArcs`/`ConstrainedLines` (ALL upstream overloads on OCCT's real Geom2dGcc solvers: `radius=`, `center_on=`, three-tangency, `center=`, `radius=`+`center_on=`, two-tangent lines, tangent+point, oriented lines — Tangency qualifiers, trim-range rejection and Sagitta selection), `curve @ u / % u / ^ u` (incl. multi-edge curves and EXTRAPOLATION outside [0, 1]), `Edge.make_line/make_circle/make_mid_way/make_spline/make_bspline/param_at/param_at_point/trim (by point)/trim_to_other`, `derivative_at`, `curvature_comb`, `Mixin1D.normal`, `Wire(edges)`, `Wire.order_edges`/`is_closed`/`param_at_point`, `Edge.arc_center`/`radius`/`is_interior`/`find_tangent`/`find_intersection_points` | conical `Helix` |
+| Ops | `extrude` (dir/both/`taper=` — both of upstream's algorithms: LocOpe_DPrism for a positive taper along the normal, otherwise the offset loft — /`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft` (0.12: sections with ANY number of matched inner wires; `ruled=`), `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form; each projected piece keeps its own plane, 0.12), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset` (2-D FACE offsets follow upstream's outer/inner-wire branch), `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `Wire.fillet_2d` (1-D corner fillets, ChFi2d_FilletAlgo), `make_brake_formed`, `full_round`, `edges_to_wires`, `tessellate`/`tessellate_with_uvs` (0.12) | `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
+| Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle; `tuple(loc)`; settable `.position`/`.orientation`), `.x_axis/.y_axis/.z_axis`, `Axis(Location)`/`Axis(Plane)`, `Pos`, `Rot`/`Rotation` (0.12: `Rotation(Axis, angle)` about the axis LINE, RotationLike + `ordering=`), `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations` (flattens lists/generators/map), `GridLocations`, `PolarLocations` (`endpoint=`), `HexLocations` (`major_radius=`, upstream's exact layout) (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`, `loc * [shapes]`/`loc * <generator>` (0.12); shapes track a composed `.location` (a copy; `locate()/located()` are absolute; `.position` settable), `global_location` | `Location.orientation` edge cases |
 | Joints | `RigidJoint`, `RevoluteJoint`, `LinearJoint`, `CylindricalJoint`, `BallJoint` — upstream's exact relative-location algebra; `connect_to` repositions the other part; `copy.copy` AND `Shape.moved` rebind joints; `Compound(joints=)` reparents them; builder-scoped joints transfer to the part on exit; `Joint.symbol`, `Shape.show_topology`, `Compound.do_children_intersect`, `shape.parent = <compound>` | assembly structure / XCAF (roadmap) |
-| Selectors | `.edges()/.faces()/.vertices()/.solids()/.wires()` as ShapeLists (a Builder's selectors read the shape built SO FAR, which matters inside a BuildLine) (plus the module-level `edges()`/`vertices()`/… context getters and `Select.ALL/LAST/NEW` on every builder, `new_edges(*objects, combined=)`) with `filter_by` (Axis with DEGREES tolerance/GeomType/Plane/callable/class property), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy/class property incl. RADIUS, opt-in geometric `tie_break=`), `sort_by(<Edge|Wire>)` (parameter along that shape), `sort_by_distance` (MINIMAL distance), `topo_distance_to`, `GroupBy.group(key)`/`group_for`, slicing, `+` keeps ShapeList; `Face.center_location`/`position_at`/`is_circular_convex`/`is_circular_concave`, `Shape.distance`/`distance_to`/`closest_points` (BRepExtrema); Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
+| Selectors | `.edges()/.faces()/.vertices()/.solids()/.shells()/.wires()` as ShapeLists, every one taking `select=Select.ALL/LAST/NEW` (0.12; degenerated edges never returned) (a Builder's selectors read the shape built SO FAR, which matters inside a BuildLine) (plus the module-level `edges()`/`vertices()`/… context getters and `Select.ALL/LAST/NEW` on every builder, `new_edges(*objects, combined=)`) with `filter_by` (Axis with DEGREES tolerance/GeomType/Plane/callable/class property), `filter_by_position`, `group_by`, `sort_by` (Axis/SortBy/class property incl. RADIUS, opt-in geometric `tie_break=`), `sort_by(<Edge|Wire>)` (parameter along that shape), `sort_by_distance` (MINIMAL distance), `topo_distance_to`, `GroupBy.group(key)`/`group_for`, slicing, `+` keeps ShapeList; **`Convexity`** (CONVEX/CONCAVE/SMOOTH/SADDLE on Vertex/Edge/Face relative to the shape it was selected from: dihedral sampling, principal curvatures, corner probe — `filter_by(Convexity.X)`, `group_by(Convexity)`, `shapes | f`, `>>`/`<<`), `topo_path`/`topo_parent` (outermost)/`topo_owner`, `is_interior`/`is_circular_convex`/`is_circular_concave` via convexity, `Face.center_location`/`position_at`, `Shape.distance`/`distance_to`/`closest_points` (BRepExtrema); Edge `position_at/tangent_at/@/%` are orientation-aware, `Axis(edge)` raw-curve like upstream | — |
 | Canonical edges | `canonical()`/`canonical_form()` on Edge/Wire, `canonical_form(sampler, length, closed)`, `lexicographic_key`, `loop_area_vector`, `CanonicalForm`, `CANONICAL_SAMPLES`/`CANONICAL_BAND`, `Axis(edge, canonical=True)`, `Edge.reversed()`; `Edge.make_mid_way` canonicalizes its references (default-on) and `sort_by(..., tie_break=True)` breaks ties geometrically (opt-in) — defaults exactly as in the patch | automatic merging of C0-continuous free edges (out of scope upstream too — reassemble with `edges_to_wires` first) |
-| Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault), `Part()/Sketch()/Curve()` empty starters, `Compound(children=)`, `copy.copy`, `Shape.__iter__` | — |
-| Measure | `volume/area/length` (volume = per-solid sum), `center()`, `bounding_box()` (exact Bnd_Box), `.wrapped`, `.is_forward` | mass properties |
+| Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault; every result carries its operation record for `Select.LAST/NEW`), `Part()/Sketch()/Curve()` empty starters, `Compound(obj, ..., children=)` (children = an assembly, `child.parent` set), `copy.copy`, `Shape.__iter__` | — |
+| Measure | `volume/area/length` (volume = per-solid sum; an ASSEMBLY counts its plain children like upstream's Compound.volume), `center()`, `bounding_box()`/`BoundBox(shape)` with 0.12's predicates (`covers`, `contains`/`within`, `contains_properly`, `intersects`/`disjoint`, `touches`, `overlaps`, degenerate axes), **materials** (`Shape.material` = bd_materials name/FinishedMaterial, `mass()`/`compute_mass()`/`compute_volume()`, `Compound.mass` over children, `Unit` G/KG/LB, `UNITS_PER_KILOGRAM`; `bd_materials` shim — COMPROMISE(materials)), `.wrapped`, `.is_forward` | mass properties beyond density × volume |
 | Stdlib | `math`, `copy` (incl. `copy.copy(<Builder>)` snapshots), `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `os` (PATH ARITHMETIC ONLY — `os.path.join/dirname/abspath/...`, `getcwd`; no filesystem is faked, `os.path.exists` is always False), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d), `scipy.spatial.Voronoi` (2-D, Bowyer-Watson Delaunay circumcentres — `.vertices` only, verified vertex-set-identical to scipy on full_round's inputs), `pytest.approx` (real, documented tolerances) | `numpy`, `sympy`, the rest of `pytest`, 2-D `ConvexHull`, Voronoi ridges/regions (raise loudly), everything else |
-| Export/import | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS), `export_step` (REAL — STEPControl_Writer into MEMFS, incl. `unit=`; `write_pcurves`/`precision_mode` accepted and ignored), `export_brep`/`import_brep`, `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | 3MF (no lib3mf — raises), `export_gltf` (no-op), `ExportDXF`, `import_stl`/`import_svg` |
+| Export/import | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS), `export_obj` (0.12, MEMFS, UVs — COMPROMISE(obj-atlas)), `export_step` (REAL — STEPControl_Writer into MEMFS, incl. `unit=`; `write_pcurves`/`precision_mode` accepted and ignored), `export_brep`/`import_brep`, `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | 3MF (no lib3mf — raises), `export_gltf` (no-op), `ExportDXF`, `import_stl`/`import_svg` |
 
 **Known honest gaps** (kept as ERRORs rather than fake geometry — see the
 defaults-audit table in report.md for per-script root causes and
@@ -530,33 +590,39 @@ lines whose accuracy rides entirely on `Compound.make_text` glyph metrics,
 since `Text(...).bounding_box().size.X` feeds every arrow position and
 `DimensionLine`'s 3-candidate label placement), `sympy`, 3MF export (no lib3mf
 in this wasm build — dual_color_3mf builds all six of its shapes correctly and
-then fails on `Mesher.write`), `fix_degenerate_edges`/`offset(min_edge_length=)`
-and `split(Keep.BOTH)`.
+then fails on `Mesher.write`), `Mesher.read` (the STL round trip through
+`pathlib`/`tempfile` in docs-rst/topology_selection/b10 — no mesh reader, and
+its measured faces are individual BRepMesh triangles),
+`fix_degenerate_edges`/`offset(min_edge_length=)` and `split(Keep.BOTH)`.
 `docs/spitfire_wing_gordon` is a TIMEOUT, not a gap: it runs (real
 `pytest.approx` shim) and spends ~390 s building the wing's Gordon surface
 before returning a null surface — the cost/robustness of
 COMPROMISE(gordon-surface-realization) at that scale. `examples/heat_exchanger`
 sits right at the 60 s harness budget (~55 s on an idle machine) and times out
-when the four harness pages contend; it passes on its own.
-Two scripts die on KNOWN OCCT 8.0.1 wasm kernel faults with byte-identical
-defaults to upstream: the truck-body `FilletEdges` (toy_truck) and the
-coplanar-BSpline fuse operand drop that even the General-Fuse rebuild cannot
-recover (ttt-ppp0110). NOTE for the record: the OTHER "kernel fillet fault",
+when harness pages contend; it passes on its own.
+Two scripts die in the kernel with byte-identical defaults to upstream: the
+truck-body `FilletEdges` (toy_truck) and the coplanar-BSpline fuse operand
+drop that even the General-Fuse rebuild cannot recover (ttt-ppp0110). Native
+build123d 0.13.0 runs both on OCCT 8.0.1 itself, so these are faults of THIS
+wasm build (or, for toy_truck, possibly lite's bumper topology), not of OCCT
+8.0.1. NOTE for the record: the OTHER "kernel fillet fault",
 cast_bearing_unit, turned out to be a LITE bug — a simplified convex hull
 handing hundreds of micro-edges to BRepFilletAPI — and now passes, together
 with docs-rst/tips/b01.
 The remaining MISMATCHes are traversal/orientation history plus two
 single-shape residuals: COMPROMISE(edge-orientation) for joints x2, projection
 x2 and docs-selectors/sort_axis (sub-edge FORWARD/REVERSED flags and hence
-`Axis(edge)` differ from OCP 7.x over identical curve geometry),
-COMPROMISE(traversal-order) for docs-selectors/filter_all_edges_circle (the
-script keeps the LAST of a mirror-symmetric face pair) and docs-rst/tips/b04 (a
-`sort_by(Axis.Z)` over local sketch vertices that is a COMPLETE tie, so the
-kernel's enumeration decides), COMPROMISE(triad-labels) for docs/objects_1d,
-`m6_screw` alone in docs/tutorial_joints (a `CylindricalJoint` hole frame), and
-`l1`/`l2` alone in ttt-23-02-02-sm_hanger (a BuildLine on a non-XY workplane
-leaves its module-level line variables in LOCAL coordinates in lite, and the
-harness compares the last binding of a reused name). Canonical free edges
+`Axis(edge)` differ from upstream's over identical curve geometry — native
+OCP 7.9.3 and 8.0.1 give byte-identical answers, so this is lite's
+construction history, not the kernel version), COMPROMISE(traversal-order)
+for docs-selectors/filter_all_edges_circle (the script keeps the LAST of a
+mirror-symmetric face pair), docs-rst/tips/b04 (a `sort_by(Axis.Z)` over
+local sketch vertices that is a COMPLETE tie — NATIVELY nondeterministic, the
+same 0.13.0 install flips between runs, so it counts for no one),
+COMPROMISE(triad-labels) for docs/objects_1d (`scene` only — 0.12's
+BuildLine-local variables retired its `l1`/`l3`/`l4` residuals, and
+sm_hanger's), and `m6_screw` alone in docs/tutorial_joints (a
+`CylindricalJoint` hole frame). Canonical free edges
 (below) shrank two of joints' three residuals (pin_arm 8.16 -> 2.69 mm,
 slider_arm 11.80 -> 9.11 mm) without changing any classification; closing the
 rest needs the examples to opt into `sort_by(..., tie_break=True)` /
@@ -566,25 +632,28 @@ rest needs the examples to opt into `sort_by(..., tie_break=True)` /
 `COMPROMISE(<topic>)` comment — `grep -rn "COMPROMISE(" packages/` is the
 authoritative list):
 - `scipy-shim` — pure-Python Nelder-Mead/golden-section instead of scipy; all other scipy APIs raise.
-- `joints` — location algebra on lite shapes; no assembly tree/XCAF (roadmap), no joint symbols.
+- `joints` — location algebra on lite shapes; no assembly tree/XCAF (roadmap).
 - `mesher` — STL only, written into the worker's in-memory Emscripten FS (no lib3mf, no disk).
 - `double-tangent-arc` — scan+bisection root solve over a sampled/refined curve distance; trims the over-extended target segment where upstream relies on wire fixing.
 - `kernel-guard` — fuse results smaller than the largest input are rebuilt from the (correct) General-Fuse partition; the partition keeps internal contact faces, so selectors see the contact topology.
-- `sweep` — trihedron/transition calls match upstream exactly; residual MakePipeShell numeric differences are kernel-version.
 - `helix` — exact interpolation through dense samples with analytic tangents (no surface-curve segment type).
-- `edge-orientation` — sub-edge FORWARD/REVERSED can differ from OCP 7.x over identical curve geometry; Axis(edge)-based measuring lands at the other end (joints x2, sort_axis) and closed intersection-curve paths traverse the opposite way (projection x2).
-- `traversal-order` — where a script keeps whichever of two SYMMETRIC results the kernel enumerated last (filter_all_edges_circle) or resolves a completely TIED `sort_by` (tips/b04), the answer follows OCCT's traversal of lite's construction, not OCP 7.x's of upstream's. `sort_by(..., tie_break=True)` makes it deterministic, and is opt-in upstream too.
+- `edge-orientation` — sub-edge FORWARD/REVERSED can differ from upstream's over identical curve geometry; Axis(edge)-based measuring lands at the other end (joints x2, sort_axis) and closed intersection-curve paths traverse the opposite way (projection x2). The cause is lite's OWN construction history, not the kernel version: native build123d gives byte-identical answers on OCP 7.9.3 (0.11.1/0.12.0) and OCP 8.0.1 (0.13.0), and upstream's topology on this same wasm kernel matches them (test/b123d-validation/native-0.11.1-vs-0.13.0.md §4).
+- `traversal-order` — where a script keeps whichever of two SYMMETRIC results the kernel enumerated last (filter_all_edges_circle), the answer follows OCCT's traversal of lite's construction, not of upstream's (again not a kernel-version effect). `docs-rst/tips/b04` (a completely TIED `sort_by`) is natively nondeterministic in every build123d version and does not count either way. `sort_by(..., tie_break=True)` makes ties deterministic, and is opt-in upstream too.
 - `thicken` — upstream's BRepOffset_MakeOffset Thickening mode is unbound; the same offset shell is built via MakeThickSolidByJoin and the missing side walls are reconstructed as ruled lofts + sewing.
 - `project` — only the BuildPart pending-faces form; projected pending planes use the reversed projection direction (validated on maker_coin).
 - `text` — bundled FreeSans only; non-Latin glyph metrics may differ from other Arial substitutes.
 - `raw-segments` — non-line/circle edges ride through wires as opaque TopoDS edges (exact, but not transformable at spec level).
-- `volume-measure` — volume is summed per solid (8.0.1's VolumeProperties picks up stray-face contributions on mixed compounds).
+- `volume-measure` — volume is summed per solid (8.0.1's VolumeProperties picks up stray-face contributions on mixed compounds); an ASSEMBLY (`Compound(children=...)`) counts its plain children only, like upstream's `Compound.volume` (assemblies.rst: `assembly3.volume == 1`), and the harness measurer reports that.
 - `gordon-*` (GordonSurface.js) — the ocp_gordon port: curve/curve intersections via GeomAPI_ExtremaCurveCurve, a JS Geom2dAPI_Interpolate reimplementation, conic→non-rational approximation, and `gordon-surface-realization` (the exact tensor-product surface cannot be built as a Geom_BSplineSurface in this wasm build, so it is refit from a dense sample grid with a C2 least-squares approximation scored against the exact surface's area — bracelet's tip lands within 0.02%).
 - `projection-sort` / `projected-edge-split` — projected wires are ordered by centre of mass (upstream uses the half-arc-length point), and a projected curve that this kernel splits where it grazes the surface boundary is re-concatenated (build123d's clean() leaves the B-spline-concat flag off).
 - `edges-to-wires` — ShapeAnalysis_FreeBounds::ConnectEdgesToWires needs the unbound TopTools_HSequenceOfShape, so edges are chained on their endpoints and each group is ordered by ShapeFix_Wire.
 - `failure-decode` — OCCT's C++ exceptions arrive in JS as raw pointer numbers. The fork binds `OCJS::getStandard_FailureData` for exactly this, but it is UNCALLABLE here ("unbound types: St9exception" — `Standard_Failure` derives from `std::exception`, which the build never registers) and no runtime helpers (`HEAPU8`/`getValue`/`UTF8ToString`) are exported, so CascadeWorker keeps the wasm `Memory` via Emscripten's `instantiateWasm` hook and StandardUtils reads `Standard_Failure`'s `StringRef` message out of it directly. Users see e.g. "the OCCT kernel raised 'BRep_API: command not done'" instead of "threw '6454200'".
 - `new-edges-partial` — `new_edges()` maps its result back to the corresponding edges OF the combined shape (so it can be filleted like upstream's maker_coin does); an edge that is only PARTLY new has no counterpart and is returned as bare geometry.
 - `triad-labels` — `Compound.make_triad` draws the axes and arrow heads exactly, but not upstream's X/Y/Z labels: those need the `singleline` STROKE font, and this build ships only the outline font FreeSans.
+- `materials` — `Shape.material`/`mass()` resolve names through an embedded copy of bd_materials 0.2.4's 156-key name table (grade, family, category, density, PBR colour); a grade's other property ranges, finishes, processes and PBR models are inert stand-ins, and the `bd_materials` module is a shim over that table.
+- `obj-atlas` — `tessellate_with_uvs(atlas_packing=True)`/`export_obj` pack the same per-face UV islands (iso-curve arc lengths, gutter inset) with CascadeStudio's potpack instead of upstream's `_pack2d` shelf packer: same islands, other positions.
+- `buildline-select` — `Select.LAST/NEW` inside a BuildLine compare geometry (`post - pre` keys): BuildLine re-chains its segment specs into a fresh wire, so no TopoDS identity survives between operations for a kernel record to describe. Builders of parts/sketches and algebra results use the real BRepTools_History record.
+- `object-firewall` — custom `Base*Object`s are built behind a metaclass firewall (0.12's BaseObjectMeta); the STOCK MicroPython fallback artifact has no metaclasses, so there they keep the pre-0.12 direct path (micropython-cs, Brython and Pyodide are faithful).
 - `stl-ascii` — `StlAPI_Writer::ASCIIMode` is bound as a getter only, so `engine.exportSTL({binary: true})` is rejected rather than silently writing ASCII.
 
 **Roadmap (deliberately deferred)**:
@@ -637,11 +706,14 @@ CascadeStudio JS mode)"; `ToolManager.activate('sketch')` refuses with a console
 See `test/python-mode.spec.js`.
 
 **Validation against real build123d**: `test/b123d-validation/` (see its README)
-runs the upstream build123d examples through BOTH real build123d 0.11.1 (native
-venv) and Python mode, comparing per-variable volume/bbox. Re-run it whenever
-Build123dLite.js changes. FIFTY representative passing scripts are frozen
-as regression tests in `test/python-mode-examples.spec.js` (part of the default
-suite) with volumes/bboxes hardcoded from the native run — the newest five cover
+runs the upstream build123d examples through BOTH real build123d 0.13.0 (native
+venv `~/Desktop/ocjs-deps/b123d-013-venv`) and Python mode, comparing
+per-variable volume/bbox. Re-run it (Brython AND MicroPython lite legs)
+whenever Build123dLite.js changes. FIFTY representative passing scripts are
+frozen as regression tests in `test/python-mode-examples.spec.js` (part of the
+default suite) with volumes/bboxes hardcoded from the native run (refreshed to
+0.13.0: key_concepts_builder/b13, maker_coin and ttt-ppp0102 changed natively
+with 0.12's BuildScope/`project()` semantics) — the newest five cover
 `Wedge`/`ConvexPolyhedron`, `Triangle`, the parabolic/hyperbolic arcs,
 slide_latch (sketch-face alignment + `Select.LAST` vertices) and
 group_properties_with_keys (builder copy snapshots + the exact convex hull +
@@ -697,44 +769,38 @@ engine.reset();           // between requests: resetKernel() + drop logs
   (`_csMicroPythonLocate = {mod, wasm}`); the vendored `micropython.mjs` has a
   one-statement patch forwarding `instantiateWasm` (see its PROVENANCE.md).
 
-**ROOT CAUSE FOUND (2026-10): it was never the heap — it was the shadow
-stack.** Emscripten puts the linear-memory stack directly above
-`.data`/`.bss` and lets it grow DOWN into them, unchecked at `-O3`; the
-fillet / ThruSections recursion peaks at ~82 KB, the 64 KB default stack
-overflowed (canary probe: maker_coin, tea_cup, toy_truck, ttt-ppp0110 ran it
-to the bottom) and the overwritten statics were the STEP/BREP writer
-machinery. The fork's `-sSTACK_SIZE=512KB` (branch
-`cascadestudio-v3-occt801-wasmeh`; corpus-wide high-water 83,552 B) ends it:
-tea_cup and bicycle_tire export STEP and `kernelHealthy()` stays true over
-the whole corpus. The rewind machinery below STAYS — it is the per-job
-pristine allocator and the safety net — and test `(g)` now forces the heal
-path instead of relying on the overflow. The text below is the original
-diagnosis, kept for the record.
-
-**COMPROMISE(kernel-heap-reset) — OCCT corrupts its own heap, and STEP export
-is the casualty.** Two 8.0.1 kernel algorithms scribble over the wasm heap in
-this build: `BRepFilletAPI_MakeFillet::Build` with `ChFi3d_Rational`
-(reproduced by maker_coin's nine `Select.NEW` edges; `ChFi3d_Polynomial` on
-the same input does not) and `BRepOffsetAPI_ThruSections::Build` (the ruled
-wall `ThickenSolid` lofts, bicycle_tire). The GEOMETRY is correct — volume,
-bbox, `BRepBuilderAPI_Copy` and meshing all agree with upstream — but a live
-allocation elsewhere gets handed out twice, and the victim is a lazily-built
-singleton, so afterwards `new STEPControl_Writer`/`_Reader` traps with
-"memory access out of bounds" (fillet case) or the STEP transfer AND
-`BRepTools::Write` trap even for a fresh 1 mm box (ThruSections case). It is
-NOT memory pressure: it reproduces in Node at 32 MB with the wasm free to
-grow. The damage is permanent for the realm, which is why one poisoned
-Cloudflare isolate used to fail every later export.
-`CascadeWorker.captureKernelImage()` snapshots OCCT's linear memory right
-after module init (3.7 MB of the 32 MB initial heap; ~20 ms to take, ~2 ms to
+**COMPROMISE(kernel-heap-reset) — a per-job clean kernel, and the safety net
+for a kernel fault.** `CascadeWorker.captureKernelImage()` snapshots OCCT's
+linear memory right after module init (4.1 MiB on the 8 MB native-EH
+artifacts, 3.7 MiB on the old 32 MB build; ~20 ms to take, ~2 ms to
 restore) and `restoreKernelImage()` rewinds to it — every OCCT singleton then
-re-initialises from its `.bss` guard. It is a nuclear reset (every embind
-wrapper the host holds dangles afterwards), so it is opt-in
-(`kernelImage: true`): headless turns it on, the browser worker does not.
-`engine.reset()` rewinds between jobs; `exportSTEP`/`exportSTL` heal on
-failure by carrying the shape out as BREP, rewinding and re-importing.
-Only a fork rebuild can actually fix the kernel; until then the writers
-translate the raw trap into a message saying so.
+re-initialises from its `.bss` guard. Headless turns it on
+(`kernelImage: true`; the browser worker does not): `engine.reset()` rewinds
+between jobs, so every request starts on a pristine allocator (no heap
+ratcheting across requests, no state leaking between jobs), and
+`exportSTEP`/`exportSTL` heal a failed write by carrying the shape out as
+BREP, rewinding and re-importing. It is a nuclear reset — every embind
+wrapper the host holds dangles afterwards — which is why it is opt-in.
+
+**Why it was built — and what the fault turned out to be.** In 2026-08,
+after maker_coin's fillet (`BRepFilletAPI_MakeFillet`, `ChFi3d_Rational`) or
+bicycle_tire's ruled walls (`BRepOffsetAPI_ThruSections`), every later
+`new STEPControl_Writer` (and, after ThruSections, `BRepTools::Write`)
+trapped "memory access out of bounds" for the rest of the realm, while the
+geometry itself was correct. It was diagnosed as those algorithms corrupting
+OCCT's heap. **It was a stack overflow** (found 2026-10): emscripten places
+the linear-memory shadow stack directly above `.data`/`.bss` and lets it
+grow DOWN into them, unchecked at `-O3`; the fillet / ThruSections recursion
+peaks at ~82 KB and emscripten's 64 KB default stack overflowed into OCCT's
+statics — the writer singletons were the nearest victims. A canary probe
+showed maker_coin, tea_cup, toy_truck and ttt-ppp0110 running the stack to
+its bottom. The fork's `-sSTACK_SIZE=512KB` (branch
+`cascadestudio-v3-occt801-wasmeh`; corpus-wide high-water 83,552 B, key_cap)
+ends it: tea_cup and bicycle_tire export STEP and `kernelHealthy()` stays
+true across the corpus. The rewind is therefore no longer a workaround for
+a broken kernel; it stays for the clean-allocator property and as the net
+under any future fault (test `(g)` forces the heal path deterministically
+instead of relying on a fault).
 
 Two consequences of "nuclear" that the upstream source flavor forced out:
 
@@ -759,20 +825,27 @@ Two consequences of "nuclear" that the upstream source flavor forced out:
   `test/headless-node.mjs`.
 
 **`pySrc` default is `lite`** headless (switchable). `upstream` — build123d
-0.11.1's OWN Python over the OCP shim, 216/222 on the validation corpus
-against lite's 206 — is deployed alongside it (see the Cloudflare section)
-and needs `upstreamPy(rel)`, a loader for the 3.5 MB vendored tree. It costs
-~5x the library boot (642 ms vs 122 ms in Node) and the SAME memory for a
-basic model (51.5 MB, byte-identical), but heavy models are a different
-story: upstream topology puts every boolean, selector and glyph through the
-OCP shim, each dispatch retains ~32-230 B in the interpreter for the run, and
-MicroPython's GC arena grows by doubling and never shrinks — `examples/clock`
-alone takes it from 19.5 MB to 386 MB. The retention is run-scoped (~1.1 MB
-live afterwards); the ARENA is not. Bounding it needs an interpreter patch —
-`NOTE(heavy-model memory round)` in
-`packages/cascade-core/upstream-py/ocp_shim/ocp_core.py`. Both flavors are
-gated: `node test/headless-node.mjs` and `CS_PY_SRC=upstream node
-test/headless-node.mjs`.
+0.13.0's OWN Python over the OCP shim, 233/239 on the 0.13.0 validation
+corpus — is deployed alongside it (see the Cloudflare section; the LIVE
+deployment predates the 0.13 bump) and needs `upstreamPy(rel)`, a loader
+for the vendored tree. It costs ~7x the library boot (868 ms vs 122 ms in
+Node; 642 ms for 0.11.1 — precompiled .mpy would halve it, measured on 0.11.1,
+not shipped, FIDELITY-ON-WORKERS.md §5) and the SAME memory for a basic model
+(38.0 MB: 32.0 occt + 6.0 python). Heavy models used to ratchet the
+MicroPython heap to hundreds of MB (clock 386-462 MB); since micropython-cs
+patches 11-12 + the shim lifetime fixes (see the heavy-model memory bullet
+above) the interpreter heap tracks live data — corpus fits under 128 MB of
+wasm and per-script classification are in
+`examples/cloudflare-worker/FIDELITY-ON-WORKERS.md` (on 0.13.0: upstream 237/238 corpus models
+under 128 MB of wasm, real 237/238 — only `bracelet` is over on both).
+A THIRD flavor, `pySrc: 'real'` (`runtime: 'pyodide'`, the PyPI wheel +
+numpy), runs headless through a host seam: `createHeadlessCascade({runtime:
+'pyodide', pyodide: {boot, installWheels}, upstreamPy})` — the host brings
+Pyodide up from its own assets (the Worker's `--env real` does it from module
+bindings only). Both MicroPython flavors are gated: `node
+test/headless-node.mjs` and `CS_PY_SRC=upstream node test/headless-node.mjs`
+(one 96 MB ceiling for both, plus a bounded-interpreter-heap check after
+examples/clock).
 
 **Build**: `packages/cascade-core/scripts/build-headless.cjs` emits
 `packages/cascade-core/dist/cascade-headless.mjs` (esbuild, wasm external) next
@@ -786,10 +859,10 @@ memory budget. Measured on this machine:
 
 | | |
 |---|---|
-| engine boot (OCCT) | ~70-110 ms, 32.0 MB (279 ms before fonts became lazy) |
+| engine boot (OCCT) | ~70-110 ms (279 ms before fonts became lazy); 32.0 MB, **8.0 MB** on the fork's native-EH artifacts |
 | MicroPython + build123d-lite boot | ~120-135 ms |
-| after any Python run | **51.5 MB** (32.0 occt + 19.5 python) |
-| starter model eval | ~230-300 ms (loaded machine: up to ~430) |
+| after any Python run | **38.0 MB** (32.0 occt + 6.0 python; was 51.5) — **14.0 MB** on the native-EH artifacts |
+| starter model eval | ~230-300 ms on JS-emulated exceptions, ~170 ms on native EH |
 
 **Headless fonts are parsed on first use.** `_loadFonts` (headless asset
 path only — the browser's `opentype.load` path is unchanged) resolves each
@@ -816,9 +889,17 @@ generate-occt-symbols does not demand it). Never test `typeof e ===
   Free and Paid**, no compressed limit since 2026-09-04 (`Total Upload` in
   `wrangler deploy --dry-run --outdir` is what counts); 128 MB per isolate
   (JS heap + wasm); 1 s of startup CPU (global scope); CPU per request 10 ms
-  Free, 30 s default / 5 min max Paid.
-- 128 MB isolate; the engine sits at 51.5 MB of wasm for the starter model
-  (+ ~18 MB of V8 heap for lite after a few renders, workerd inspector).
+  Free, 30 s default / 5 min max Paid. Where every entry stands against all
+  four: the consolidated table at the top of SIZE-INVESTIGATION.md.
+- 128 MB isolate, counting the JS heap too. Wasm for the starter: 38.0 MB
+  (lite/upstream), 83.9 MB (real) — 24 MB less each on the native-EH
+  artifacts (8 MB OCCT). V8 live heap (inspector, after GC) after the
+  starter on upstream: **18.9 MB** — it was 71 MB before `keep_names =
+  false` in wrangler.toml (wrangler re-bundles with esbuild keepNames ON by
+  default; ~216k embind closures each got a property store), lazy font
+  parsing in the headless asset path, and dropping the parsed Python source
+  map after boot. Per-model wasm + heap tables (fresh and same-isolate
+  sequences) are in FIDELITY-ON-WORKERS.md.
 - Wasm **only** as compiled module bindings (`[[rules]] type = "CompiledWasm"`);
   `WebAssembly.compile` is forbidden. No dynamic `import()` of a URL.
 - **No runtime code generation at all** — which embind violates by default: it
@@ -846,8 +927,8 @@ generate-occt-symbols does not demand it). Never test `typeof e ===
 - **Every asset is a module of the script.** Wasm as CompiledWasm, the
   four FreeSans faces as Data modules, the upstream Python as ONE
   relative-path -> text JSON imported as a Text module (rule glob
-  `**/upstream-b123d.json`). Total Upload **31.7 MiB lite / 34.9 MiB
-  upstream** of 64 MiB. The old static-assets split (`env.ASSETS`, built to
+  `**/upstream-b123d.json`), and for `--env real` the Pyodide bindings.
+  Every entry fits 64 MiB (Total Upload per entry: SIZE-INVESTIGATION.md). The old static-assets split (`env.ASSETS`, built to
   fit the retired 10 MiB-gzip cap) cost a subrequest per cold isolate
   (0.2-1.15 s on the edge) and forced the boot into a fetch handler; it is
   gone (`public/` is deleted by prepare-assets).
@@ -857,17 +938,28 @@ generate-occt-symbols does not demand it). Never test `typeof e ===
   (~80-120 ms), `warm` also boots Python and runs a Box -> BREP + STEP
   warm-up (~0.29-0.35 s of the 1 s startup budget for lite; afterwards a
   trivial request is single-digit ms). Upstream's library boot alone is
-  ~1 s, so `index-upstream.js` downgrades `warm` to `startup`. GOTCHAS:
+  ~1 s and real's Pyodide boot ~1.8 s, so `index-upstream.js` and
+  `real.js` downgrade `warm` to `startup`. GOTCHAS:
   workerd's `Date.now()` is 0 at global scope (a startup `exportSTEP`
   throws `Quantity_Date::Quantity_Date invalid parameters` — OCCT rejects
   years < 1979; the warm-up lends it a clock), and a top-level await on
   real I/O fails with "Top-level await in module is unsettled".
   `scripts/startup-bench.mjs` measures it by driving `src/app.js` from Node.
-- **Two flavors, two wrangler environments, two entry modules.**
-  `src/index.js` (lite, `cascade-headless`) and `src/index-upstream.js`
-  (`--env upstream`, `cascade-headless-upstream`, adds the Python map so a
-  lite isolate never holds it); routes in `src/app.js`; `--env warm` is
-  lite with `BOOT=warm`. One isolate serves one flavor: the engine
+- **Four wrangler environments, three entry modules.** `src/index.js`
+  (lite, `cascade-headless`), `src/index-upstream.js` (`--env upstream`,
+  `cascade-headless-upstream`, adds the Python map so a lite isolate never
+  holds it) and `src/real.js` (`--env real`, `cascade-headless-real`, NOT
+  deployed — the same map plus the Pyodide bindings, so only it carries
+  Pyodide; `scripts/prepare-pyodide.mjs` patches Pyodide 314's glue in three
+  places so nothing is compiled at runtime: numpy's 13 side modules and
+  CPython's call trampoline become CompiledWasm bindings, and
+  `addFunction`'s per-signature wrapper modules are precompiled — 28
+  signatures in `scripts/pyodide-sigs.json`; cold first render 1.85 s
+  locally). Routes in `src/app.js`; `--env warm` is lite with `BOOT=warm`.
+  Cloudflare's own Python Workers are NOT a host for this stack: a Python
+  Worker reaches no bundled JS/wasm module and cannot compile wasm or eval
+  (probed, `experiments/cf-fidelity/python-worker/`). One isolate serves one
+  flavor: the engine
   keeps its state on the worker global and a runtime registers ONE library.
   Edge (2026-08, static-assets layout, last deploy): cold first `/render`
   3.0 s (lite) / 5.6 s (upstream); warm trivial model 44-57 / 61-89 ms;
@@ -877,9 +969,10 @@ generate-occt-symbols does not demand it). Never test `typeof e ===
   `ttt-ppp0110` is a lite 422 ("Union produced near-zero volume") and an
   upstream 200 at the native 207159.364; `docs-selectors/sort_axis` is 200 on
   BOTH and only the volume differs (lite 8533.385, upstream 9353.444 =
-  native). `examples/toy_truck` is the counter-example: upstream builds what
-  lite's fillet cannot, but needs 168.7 MB, so the edge trades a 422 for an
-  `exceededMemory` 503.
+  native). `examples/toy_truck` WAS the counter-example (upstream needed
+  168.7 MB, an `exceededMemory` 503 on 2026-08-23); after the 2026-10-15
+  memory round it is 38.0 MB of wasm (57.5 MB with the V8 heap, local
+  workerd).
 - **All four FreeSans faces ship** (Data modules, parsed on first use), so
   `FontStyle.ITALIC`/`BOLDITALIC` resolve; a face that is genuinely absent
   still raises an error that NAMES it — that missing face was the whole of
@@ -913,12 +1006,15 @@ generate-occt-symbols does not demand it). Never test `typeof e ===
   is followed by `scheduler.wait(0)` or workerd flushes nothing until the end.
 - The capability ladder (`examples/cloudflare-worker/scripts/edge-bench.mjs`,
   measured against the deployed Workers) is in that example's README. On
-  **lite** 8 of 9 corpus models return STEP; `bicycle_tire` is out on both
-  counts — COMPROMISE(kernel-heap-reset) with no BREP carrier, and 163.3 MB
-  against the 128 MB isolate. On **upstream** 6 of 9 do: `clock`,
+  **lite** 8 of 9 corpus models return STEP; `bicycle_tire` was out on both
+  counts — the ThruSections stack overflow left no BREP carrier (fixed by
+  the fork's 512 KB stack: it exports STEP now), and 163.3 MB against the
+  128 MB isolate (94.3 MB wasm after the 2026-10 memory round). On **upstream** 6 of 9 do: `clock`,
   `heat_exchanger` and `bicycle_tire` all 503 with `exceededMemory` (confirmed
-  via `wrangler tail --env upstream`), which is the arena ratchet above, not a
-  CPU limit.
+  via `wrangler tail --env upstream`), which was the arena ratchet above, not a
+  CPU limit. (That ladder predates the 2026-10-15 memory round and has not
+  been re-run on the edge: locally all three now fit on a fresh isolate —
+  see FIDELITY-ON-WORKERS.md.)
 
 ## Playwright Testing
 

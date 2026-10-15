@@ -6,6 +6,10 @@
 #   np.linalg.lstsq   the 3x3 axis-intersection system (full-rank; upstream
 #                     guards coaxial/skew BEFORE calling)
 #   np.linspace       Color.color_wheel, Mixin1D.curvature_comb
+#   (0.13) Shape.tessellate_with_uvs — export_obj's UV path: np.empty((n, k)),
+#                     row/column/boolean-mask item assignment, 2-D @ 2-D,
+#                     row broadcasting in + - * /, `< scalar` masks,
+#                     .min/.max(axis=0)
 #
 # Loaded as module 'numpy' ONLY under pytopo=upstream (UpstreamB123d.js);
 # the honest RAISING stub (shims/numpy.py) stays everywhere else. Validated
@@ -46,11 +50,87 @@ class ndarray:
         return ndarray([-x for x in self.data])
 
     def _elementwise(self, other, op):
-        if isinstance(other, ndarray):
-            other = other.data
         if self._2d:
-            raise NotImplementedError('numpy_micro: 2-D elementwise')
+            # 2-D op scalar / 2-D op row (numpy broadcasting of a 1-D row
+            # over every row) / 2-D op same-shape 2-D
+            if isinstance(other, ndarray) and other._2d:
+                return ndarray([[op(a, b) for a, b in zip(r, q)]
+                                for r, q in zip(self.data, other.data)], True)
+            if isinstance(other, (ndarray, list, tuple)):
+                row = other.data if isinstance(other, ndarray) else list(other)
+                return ndarray([[op(a, b) for a, b in zip(r, row)]
+                                for r in self.data], True)
+            return ndarray([[op(a, other) for a in r] for r in self.data], True)
+        if isinstance(other, ndarray):
+            if other._2d:
+                raise NotImplementedError('numpy_micro: 1-D op 2-D')
+            other = other.data
+        elif not isinstance(other, (list, tuple)):
+            return ndarray([op(a, other) for a in self.data])
         return ndarray([op(a, b) for a, b in zip(self.data, other)])
+
+    def __truediv__(self, other):
+        return self._elementwise(other, lambda a, b: a / b)
+
+    def __lt__(self, other):
+        if self._2d:
+            raise NotImplementedError('numpy_micro: 2-D comparison')
+        return ndarray([a < other for a in self.data])
+
+    def __matmul__(self, other):
+        if not (self._2d and isinstance(other, ndarray) and other._2d):
+            raise NotImplementedError('numpy_micro: @ needs two 2-D arrays')
+        cols = list(zip(*other.data))
+
+        def dot(r, c):
+            # accumulate from the FIRST product (like numpy's dot), not from
+            # an int 0: keeps IEEE signed zeros (-0.0 normals) bit-identical
+            acc = r[0] * c[0]
+            for k in range(1, len(r)):
+                acc += r[k] * c[k]
+            return acc
+        return ndarray([[dot(r, c) for c in cols] for r in self.data], True)
+
+    def _reduce(self, fn, axis):
+        if not self._2d:
+            if axis not in (None, 0):
+                raise NotImplementedError('numpy_micro: axis on 1-D')
+            return fn(self.data)
+        if axis == 0:
+            return ndarray([fn(c) for c in zip(*self.data)])
+        raise NotImplementedError('numpy_micro: 2-D reduction needs axis=0')
+
+    def min(self, axis=None):
+        return self._reduce(min, axis)
+
+    def max(self, axis=None):
+        return self._reduce(max, axis)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, ndarray):
+            # boolean mask assignment (1-D): a[a < tol] = 1.0
+            for i, flag in enumerate(key.data):
+                if flag:
+                    self.data[i] = value
+            return
+        if isinstance(key, tuple):
+            # a[:, j] = column (2-D)
+            rows, col = key
+            if not (self._2d and _full_slice(rows)):
+                raise NotImplementedError('numpy_micro: only [:, j] indexing')
+            vals = value.data if isinstance(value, ndarray) else value
+            if isinstance(vals, (list, tuple)):
+                for r, v in zip(self.data, vals):
+                    r[col] = float(v)
+            else:
+                for r in self.data:
+                    r[col] = float(vals)
+            return
+        if self._2d:
+            v = value.data if isinstance(value, ndarray) else value
+            self.data[key] = [float(x) for x in v]
+        else:
+            self.data[key] = float(value)
 
     def __add__(self, other):
         return self._elementwise(other, lambda a, b: a + b)
@@ -75,12 +155,19 @@ class ndarray:
         return self.__mul__(k)
 
     def __iter__(self):
+        if self._2d:
+            return iter([ndarray(r) for r in self.data])
         return iter(self.data)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, i):
+        if isinstance(i, tuple):
+            rows, col = i
+            if not (self._2d and _full_slice(rows)):
+                raise NotImplementedError('numpy_micro: only [:, j] indexing')
+            return ndarray([r[col] for r in self.data])
         v = self.data[i]
         return ndarray(v) if isinstance(v, list) else v
 
@@ -98,6 +185,25 @@ def array(seq):
         return ndarray([list(r.data if isinstance(r, ndarray) else r)
                         for r in items], True)
     return ndarray([float(x) for x in items])
+
+
+def _full_slice(k):
+    # `[:, j]`; MicroPython cannot construct slice() to compare against
+    return isinstance(k, slice) and repr(k) == 'slice(None, None, None)'
+
+
+def empty(shape):
+    """np.empty((n, k)) / np.empty(n) — zero-filled (numpy leaves it
+    uninitialized; every billed caller writes each element before reading)."""
+    if isinstance(shape, (list, tuple)):
+        if len(shape) == 2:
+            return ndarray([[0.0] * int(shape[1]) for _ in range(int(shape[0]))],
+                           True)
+        if len(shape) == 1:
+            shape = shape[0]
+        else:
+            raise NotImplementedError('numpy_micro: empty() beyond 2-D')
+    return ndarray([0.0] * int(shape))
 
 
 def cross(a, b):

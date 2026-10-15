@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Dump pybind signatures (param names/types/DEFAULTS, staticness, tuple
-returns) for every OCP class the topology bill needs, from the REAL OCP
-7.9.3 in the reference venv. The shim generator uses the defaults to fill
-omitted trailing arguments (embind has no default args).
+returns) for every OCP class the topology bill needs, from the REAL OCP of
+the vendored build123d's reference venv (OCP 8.0.1 for 0.13.0). The shim
+generator uses the defaults to fill omitted trailing arguments (embind has
+no default args).
 
-  ~/Desktop/ocjs-deps/b123d-ref-venv/bin/python3 dump_ocp_defaults.py
+  ~/Desktop/ocjs-deps/b123d-013-venv/bin/python3 dump_ocp_defaults.py
+
+Collection classes are keyed by their EMBIND (OCCT typedef) names and
+introspected under their OCP 8 ``OCP.collections`` names (see
+COLLECTION_ALIASES in extract_ocp_bill.py).
 """
 import inspect
 import json
@@ -15,11 +20,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 BILL = json.loads((HERE / "ocp-method-bill.json").read_text())
 
-sys.path.insert(
-    0,
-    "/home/agent-untrusted/Desktop/ocjs-deps/b123d-ref-venv/lib/python3.12/"
-    "site-packages",
-)
+sys.path.insert(0, str(HERE))
+from extract_ocp_bill import EMBIND_TO_OCP8  # noqa: E402
 
 SIG_RE = re.compile(r"^\s*(?:\d+\.\s*)?(\w+)\((.*)\)\s*->\s*(.+?)\s*$")
 
@@ -155,10 +157,14 @@ def main():
         candidates = [mod_name] if mod_name and mod_name != "?" else []
         # fall back: guess module from prefix
         candidates.append(cls.split("_")[0])
+        ocp_name = cls
+        if cls in EMBIND_TO_OCP8:
+            candidates = ["collections"]
+            ocp_name = EMBIND_TO_OCP8[cls]
         for mod in candidates:
             try:
-                m = __import__("OCP." + mod, fromlist=[cls])
-                found = getattr(m, cls, None)
+                m = __import__("OCP." + mod, fromlist=[ocp_name])
+                found = getattr(m, ocp_name, None)
                 if found is not None:
                     break
             except Exception:

@@ -1,23 +1,23 @@
 # build123d-lite validation report
 
-Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded because real build123d fails natively).
+Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
-| PASS | 206 |
-| MISMATCH | 10 |
-| ERROR | 5 |
+| PASS | 223 |
+| MISMATCH | 9 |
+| ERROR | 6 |
 | TIMEOUT | 1 |
-| SKIP | 10 |
+| SKIP | 8 |
 
 ## Feature-gap frequency (ERROR bucket)
 
 | Gap | Scripts |
 |---|---|
+| `ImportError: undefined` | 2 |
 | `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf` | 1 |
-| `other: Line 11649: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O` | 1 |
+| `other: Line 13712: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O` | 1 |
 | `NameError: Draft` | 1 |
-| `ImportError: undefined` | 1 |
 | `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l` | 1 |
 
 ## Mismatches (runs, but geometry differs)
@@ -35,56 +35,52 @@ Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded becaus
 - **examples/projection_algebra**
   - 'projected_text' bbox[0] -49.7713 vs -49.6470 (d=0.1243)
 - **docs/objects_1d**
-  - 'l1' bbox[3] 5.0000 vs 0.0000 (d=5.0000)
-  - 'l3' bbox[0] 6.0000 vs 1.2420 (d=4.7580)
-  - 'l4' bbox[1] 4.5000 vs 0.0000 (d=4.5000)
   - 'scene' bbox[0] -0.1000 vs -0.1700 (d=0.0700)
-- **docs-selectors/filter_all_edges_circle**
-  - 'f' bbox[1] 21.0000 vs -21.0000 (d=42.0000)
 - **docs/tutorial_joints**
   - 'm6_screw' bbox[0] -155.1818 vs -157.0000 (d=1.8182)
+- **docs-selectors/filter_all_edges_circle**
+  - 'f' bbox[1] 21.0000 vs -21.0000 (d=42.0000)
 - **docs-selectors/sort_axis**
   - 'part' volume 4765.102 vs 5585.161 (-14.68%)
   - 'part' bbox[3] 34.0000 vs 50.0000 (d=16.0000)
-- **ttt/ttt-23-02-02-sm_hanger**
-  - 'l1' bbox[1] 65.0000 vs 0.0000 (d=65.0000)
-  - 'l2' bbox[4] 65.0000 vs 0.0000 (d=65.0000)
 - **docs-rst/tips/b04**
   - 'vertical_sketch' bbox[1] -0.5000 vs -0.7000 (d=0.2000)
 
 ## Passing scripts
 
-- examples/boxes_on_faces_algebra (2 shapes)
 - examples/boxes_on_faces (1 shapes)
-- examples/build123d_customizable_logo_algebra (13 shapes)
+- examples/boxes_on_faces_algebra (2 shapes)
+- examples/bicycle_tire (102 shapes)
 - examples/build123d_customizable_logo (14 shapes)
+- examples/build123d_customizable_logo_algebra (13 shapes)
 - examples/build123d_logo (13 shapes)
 - examples/build123d_logo_algebra (12 shapes)
 - examples/canadian_flag (20 shapes)
 - examples/canadian_flag_algebra (25 shapes)
+- examples/cast_bearing_unit (10 shapes)
 - examples/circuit_board (1 shapes)
 - examples/circuit_board_algebra (1 shapes)
-- examples/cast_bearing_unit (10 shapes)
+- examples/clock (5 shapes)
 - examples/clock_algebra (6 shapes)
 - examples/custom_sketch_objects (9 shapes)
+- examples/bracelet (16 shapes)
 - examples/custom_sketch_objects_algebra (9 shapes)
 - examples/din_rail (3 shapes)
 - examples/din_rail_algebra (41 shapes)
-- examples/clock (5 shapes)
-- examples/bicycle_tire (102 shapes)
 - examples/extrude_algebra (35 shapes)
 - examples/extrude (10 shapes)
-- examples/handle_algebra (4 shapes)
 - examples/handle (10 shapes)
+- examples/handle_algebra (4 shapes)
 - examples/fast_grid_holes (4 shapes)
+- examples/heat_exchanger (3 shapes)
 - examples/holes (4 shapes)
 - examples/holes_algebra (4 shapes)
 - examples/intersecting_chamfers (1 shapes)
 - examples/intersecting_chamfers_algebra (2 shapes)
+- examples/heat_exchanger_algebra (4 shapes)
 - examples/intersecting_pipes (3 shapes)
 - examples/key_cap (5 shapes)
 - examples/key_cap_algebra (5 shapes)
-- examples/bracelet (16 shapes)
 - examples/lego (3 shapes)
 - examples/lego_algebra (3 shapes)
 - examples/loft (4 shapes)
@@ -100,50 +96,51 @@ Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded becaus
 - examples/platonic_solids (5 shapes)
 - examples/playing_cards (14 shapes)
 - examples/maker_coin (8 shapes)
-- examples/heat_exchanger_algebra (4 shapes)
 - examples/roller_coaster (4 shapes)
 - examples/roller_coaster_algebra (4 shapes)
 - examples/shamrock (1 shapes)
+- examples/spring (3 shapes)
 - examples/stud_wall (2 shapes)
+- examples/tea_cup (5 shapes)
 - examples/tea_cup_algebra (5 shapes)
 - examples/twist_extrude (2 shapes)
 - examples/vase (8 shapes)
-- examples/heat_exchanger (3 shapes)
 - general_examples/ex01 (1 shapes)
 - general_examples/ex02 (1 shapes)
 - general_examples/ex03 (2 shapes)
 - general_examples/ex08 (3 shapes)
 - general_examples/ex09 (1 shapes)
 - general_examples/ex10 (1 shapes)
-- general_examples/ex11 (2 shapes)
 - examples/vase_algebra (8 shapes)
 - general_examples/ex12 (7 shapes)
+- general_examples/ex11 (2 shapes)
 - general_examples/ex14 (6 shapes)
 - general_examples/ex15 (8 shapes)
 - general_examples/ex13 (1 shapes)
 - general_examples/ex17 (2 shapes)
 - general_examples/ex18 (1 shapes)
-- general_examples/ex19 (6 shapes)
-- general_examples/ex20 (1 shapes)
-- general_examples/ex21 (2 shapes)
 - general_examples/ex16 (3 shapes)
+- general_examples/ex20 (1 shapes)
+- general_examples/ex19 (6 shapes)
+- general_examples/ex21 (2 shapes)
 - general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
 - general_examples/ex25 (4 shapes)
 - general_examples/ex24 (3 shapes)
 - general_examples/ex26 (2 shapes)
 - general_examples/ex27 (2 shapes)
-- general_examples/ex28 (7 shapes)
 - general_examples/ex29 (7 shapes)
+- general_examples/ex28 (7 shapes)
 - general_examples/ex30 (5 shapes)
 - general_examples/ex32 (3 shapes)
-- general_examples/ex31 (2 shapes)
 - general_examples/ex33 (3 shapes)
+- general_examples/ex31 (2 shapes)
 - general_examples/ex35 (5 shapes)
 - general_examples/ex36 (3 shapes)
 - general_examples/ex37 (2 shapes)
-- general_examples_algebra/ex01 (1 shapes)
+- general_examples/ex38 (2 shapes)
 - general_examples/ex34 (4 shapes)
+- general_examples_algebra/ex01 (1 shapes)
 - general_examples_algebra/ex02 (1 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
@@ -156,8 +153,8 @@ Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded becaus
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
 - general_examples_algebra/ex16 (10 shapes)
-- general_examples_algebra/ex19 (6 shapes)
 - general_examples_algebra/ex20 (2 shapes)
+- general_examples_algebra/ex19 (6 shapes)
 - general_examples_algebra/ex21 (1 shapes)
 - general_examples_algebra/ex22 (2 shapes)
 - general_examples_algebra/ex23 (4 shapes)
@@ -172,11 +169,13 @@ Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded becaus
 - general_examples_algebra/ex33 (1 shapes)
 - general_examples_algebra/ex31 (1 shapes)
 - general_examples_algebra/ex35 (4 shapes)
-- general_examples_algebra/ex34 (3 shapes)
 - general_examples_algebra/ex36 (3 shapes)
+- general_examples_algebra/ex38 (4 shapes)
 - docs/center (5 shapes)
+- general_examples_algebra/ex34 (3 shapes)
 - docs/objects_1d_airfoil (2 shapes)
 - docs/objects_1d_blend_curve (4 shapes)
+- docs/heart_token (16 shapes)
 - docs/objects_1d_bspline (2 shapes)
 - docs/objects_1d_constrained (7 shapes)
 - docs/objects_1d_ellipticalstartarc (4 shapes)
@@ -184,66 +183,74 @@ Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded becaus
 - docs/objects_3d (10 shapes)
 - docs/pack_demo (12 shapes)
 - docs/selector_example (1 shapes)
-- docs/heart_token (16 shapes)
+- docs/slide_latch (7 shapes)
 - docs-selectors/filter_axisplane (13 shapes)
 - docs-selectors/filter_geomtype (1 shapes)
-- docs/slide_latch (7 shapes)
+- docs-selectors/filter_inner_wire_count (53 shapes)
 - docs-selectors/filter_nested (7 shapes)
 - docs-selectors/filter_shape_properties (4 shapes)
-- docs-selectors/filter_inner_wire_count (53 shapes)
+- docs-selectors/group_axis (3 shapes)
 - docs-selectors/group_hole_area (3 shapes)
 - docs-selectors/group_properties_with_keys (10 shapes)
-- docs-selectors/sort_along_wire (2 shapes)
 - docs-selectors/selectors_operators (9 shapes)
+- docs-selectors/sort_along_wire (2 shapes)
+- docs-selectors/sort_distance_from (49 shapes)
 - docs-selectors/sort_sortby (6 shapes)
-- docs-selectors/group_axis (3 shapes)
+- ttt/ttt-23-02-02-sm_hanger (14 shapes)
+- ttt/ttt-24-SPO-06-Buffer_Stand (9 shapes)
 - ttt/ttt-ppp0101 (9 shapes)
-- ttt/ttt-ppp0102 (6 shapes)
 - ttt/ttt-ppp0103 (4 shapes)
 - ttt/ttt-ppp0104 (9 shapes)
-- ttt/ttt-ppp0106 (9 shapes)
 - ttt/ttt-ppp0105 (5 shapes)
+- ttt/ttt-ppp0106 (9 shapes)
+- ttt/ttt-ppp0107 (11 shapes)
 - ttt/ttt-ppp0108 (6 shapes)
 - ttt/ttt-ppp0109 (8 shapes)
+- docs-readme/readme (15 shapes)
 - docs-rst/OpenSCAD/b01 (2 shapes)
 - docs-rst/OpenSCAD/b02 (2 shapes)
 - docs-rst/OpenSCAD/all (2 shapes)
-- ttt/ttt-ppp0107 (11 shapes)
+- docs-rst/algebra_performance/b01 (3 shapes)
 - docs-rst/algebra_performance/b03 (1 shapes)
-- ttt/ttt-24-SPO-06-Buffer_Stand (9 shapes)
+- docs-rst/algebra_performance/b04 (1 shapes)
+- docs-rst/algebra_performance/all (67 shapes)
+- docs-rst/build_line/b01 (1 shapes)
 - docs-rst/build_sketch/b03 (1 shapes)
 - docs-rst/import_export/b01 (1 shapes)
+- docs-rst/import_export/b02 (1 shapes)
 - docs-rst/key_concepts_algebra/b01 (2 shapes)
 - docs-rst/key_concepts_algebra/b02 (1 shapes)
 - docs-rst/key_concepts_algebra/b03 (1 shapes)
 - docs-rst/key_concepts_algebra/b04 (1 shapes)
-- docs-rst/key_concepts_algebra/b13 (1 shapes)
+- docs-rst/key_concepts_algebra/b13 (3 shapes)
+- docs-rst/key_concepts_algebra/b14 (6 shapes)
+- docs-rst/key_concepts_algebra/b15 (1 shapes)
 - docs-rst/key_concepts_builder/b01 (4 shapes)
 - docs-rst/key_concepts_builder/b02 (1 shapes)
-- docs-rst/key_concepts_builder/b03 (1 shapes)
-- docs-rst/key_concepts_builder/b09 (2 shapes)
-- docs-rst/key_concepts_builder/b10 (1 shapes)
-- docs-rst/key_concepts_builder/b11 (1 shapes)
-- docs-rst/key_concepts_builder/b13 (2 shapes)
+- docs-rst/key_concepts_builder/b05 (1 shapes)
+- docs-rst/key_concepts_builder/b06 (1 shapes)
+- docs-rst/key_concepts_builder/b12 (2 shapes)
+- docs-rst/key_concepts_builder/b13 (1 shapes)
 - docs-rst/key_concepts_builder/b14 (1 shapes)
+- docs-rst/key_concepts_builder/b16 (2 shapes)
 - docs-rst/key_concepts_builder/b17 (1 shapes)
-- docs-rst/key_concepts_builder/b19 (1 shapes)
 - docs-rst/key_concepts_builder/b20 (1 shapes)
-- docs-rst/key_concepts_builder/b21 (2 shapes)
+- docs-rst/key_concepts_builder/b22 (1 shapes)
+- docs-rst/key_concepts_builder/b23 (1 shapes)
+- docs-rst/key_concepts_builder/b24 (2 shapes)
 - docs-rst/location_arithmetic/all (2 shapes)
 - docs-rst/selectors/b02 (3 shapes)
 - docs-rst/selectors/all (3 shapes)
 - docs-rst/tips/b01 (2 shapes)
 - docs-rst/tips/b05 (1 shapes)
 - docs-rst/topology_selection/b01 (1 shapes)
-- docs-rst/topology_selection/b03 (1 shapes)
-- docs-rst/topology_selection/b04 (1 shapes)
-- docs-rst/topology_selection/b05 (1 shapes)
-- docs-rst/topology_selection/b06 (1 shapes)
-- docs-rst/topology_selection/b07 (1 shapes)
-- docs-rst/topology_selection/b08 (3 shapes)
-- docs-rst/topology_selection/b09 (4 shapes)
-- docs-rst/topology_selection/b12 (14 shapes)
+- docs-rst/topology_selection/b05 (3 shapes)
+- docs-rst/topology_selection/b08 (13 shapes)
+- docs-rst/topology_selection/b09 (14 shapes)
+- docs-rst/topology_selection/b12 (1 shapes)
+- docs-rst/topology_selection/b13 (1 shapes)
+- docs-rst/topology_selection/b14 (1 shapes)
+- docs-rst/topology_selection/b15 (2 shapes)
 - docs-rst/tutorial_constraints/b03 (1 shapes)
 - docs-rst/tutorial_constraints/b05 (4 shapes)
 - docs-rst/tutorial_constraints/b06 (3 shapes)
@@ -258,16 +265,21 @@ Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded becaus
 - docs-rst/tutorial_stl_reconstruction/b04 (26 shapes)
 - docs-rst/objects-text/b10 (1 shapes)
 - docs-rst/topology_selection-filter_examples/b01 (1 shapes)
-- docs-rst/algebra_performance/b01 (3 shapes)
-- docs-rst/algebra_performance/all (67 shapes)
+- docs-rst/assemblies/c03 (2 shapes)
+- docs-rst/assemblies/c06 (3 shapes)
+- docs-rst/assemblies/c07 (4 shapes)
+- docs-rst/assemblies/call (17 shapes)
+- docs-rst/key_concepts/d01 (1 shapes)
+- ttt/ttt-ppp0102 (6 shapes)
 
 ## Errors by script
 
 - examples/dual_color_3mf: `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf`
-- examples/toy_truck: `other: Line 11649: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O`
+- examples/toy_truck: `other: Line 13712: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O`
 - docs/objects_2d: `NameError: Draft`
 - ttt/ttt-23-t-24-curved_support: `ImportError: undefined`
 - ttt/ttt-ppp0110: `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l`
+- docs-rst/topology_selection/b10: `ImportError: undefined`
 
 ## Timeouts
 
@@ -276,7 +288,6 @@ Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded becaus
 ## Excluded (reference failed natively)
 
 - examples/python_logo: reference no-shapes
-- examples/tea_cup: reference error
 - general_examples_algebra/ex10: reference error
 - docs/constraint_examples: reference error
 - docs/line_types: reference no-shapes
@@ -284,33 +295,60 @@ Generated 2026-08-20T03:24:42.139Z - 232 scripts (222 scored, 10 excluded becaus
 - docs/rod_end: reference error
 - docs/technical_drawing: reference error
 - docs-objects/text: reference error
-- docs-selectors/sort_distance_from: reference error
 
 # Defaults audit (every remaining non-PASS, root-caused)
 
 Hand-maintained (`defaults-audit.md`, appended to this report by run-lite.mjs).
 For each remaining non-PASS script: the root cause, the upstream (build123d
-0.11.1 / OCP 7.x) defaults compared against build123d-lite's (OCCT 8.0.1
-wasm), and an honest verdict. Closed-this-round rows are kept where the
-investigation itself is the record.
+**0.13.0** on OCP/OCCT 8.0.1) defaults compared against build123d-lite's
+(OCCT 8.0.1 wasm), and an honest verdict. Since 0.13.0 the reference and lite
+run the SAME OCCT version, so "OCP 7.x vs 8.0.1" is no longer an available
+explanation for any difference (and `native-0.11.1-vs-0.13.0.md` shows it
+never was: native 8.0.1 reproduces native 7.9.3 on every script below).
+Closed-this-round rows are kept where the investigation itself is the record.
+
+The Brython and the MicroPython lite legs classify **identically** on every
+script (223 PASS / 9 MISMATCH / 6 ERROR / 1 TIMEOUT / 8 SKIP of 247).
 
 | Script(s) | Root cause | Upstream defaults vs lite | Verdict |
 |---|---|---|---|
-| examples/joints, examples/joints_algebra (MISMATCH) | Slider/pin positions are measured along `Axis(edge)` of slot edges selected after booleans; the parts land at the other end of the (geometrically correct) slot. | Both sides map `position_at(u)` orientation-aware (`u -> 1-u` when the edge is not FORWARD): upstream `Mixin1D._occt_param_at`, lite `Edge.position_at`. Verified the underlying curves agree; only the sub-edge TopAbs orientation flag differs (OCP 7.x vs 8.0.1 wasm construction history). | Same defaults, kernel construction-history difference — COMPROMISE(edge-orientation). Canonicalising `Edge.make_mid_way`'s references (the upstream canonical free-edge rule, default-on) shrank pin_arm 8.16 -> 2.69 mm and slider_arm 11.80 -> 9.11 mm; the remainder needs the example itself to select its two TIED top edges with `sort_by(Axis.Z, tie_break=True)`, which is opt-in upstream too. |
-| examples/projection, examples/projection_algebra (MISMATCH, `projected_text` only, d=0.12) | The text wraps the *opposite way* around the sphere: the arch path (closed sphere-cylinder intersection edge) is TopAbs_REVERSED in OCP 7.x but FORWARD in 8.0.1 wasm over the SAME geometric parametrization (verified: raw curve at 25% is +Y on both; upstream's flag flips traversal to -Y first, lite's does not). | Everything else now byte-matches: `make_text` align default fixed to `None`, `position_at` switched to arc-length fraction via GCPnts_AbscissaPoint, and per-glyph text faces split disjoint outer contours (i/j dots) into separate faces (40 faces == upstream). | Same defaults, kernel edge-orientation history on a closed intersection curve — COMPROMISE(edge-orientation). Not honestly closable. |
-| docs-selectors/sort_axis (MISMATCH, -14.7% volume) | `revolve(face, -Axis(edge), 90)` sweeps the OTHER WAY: the slot edge selected off the extruded solid has raw parametrization `(34,16,4) -> (34,16,0)` in this kernel and `(34,16,0) -> (34,16,4)` in OCP 7.x, so `Axis(edge)` points -Z instead of +Z. The profile face, its edge, its length and midpoint all agree exactly. | `Axis(edge)` is RAW-curve on both sides by design (`canonical=True` is opt-in, exactly as in the upstream patch), so neither side canonicalizes here. | Same defaults, kernel construction-history difference — COMPROMISE(edge-orientation), the same species as joints/projection. Opting the example into `Axis(edge, canonical=True)` would close it, and the canonical rule does give upstream's direction (open edge from the lexicographically smaller end). |
-| docs-selectors/filter_all_edges_circle (MISMATCH, `f` only) | The script keeps the loop variable of `for i, f in enumerate(faces)`, i.e. THE LAST of a mirror-symmetric pair of bearing-bore faces at y = ±21. Every other measured shape (including all 53 sorted `faces[i]`) matches. | Not a defaults difference: `part.faces()` is the kernel's face traversal order, and the mirrored pair comes out in the opposite order here. | COMPROMISE(traversal-order). |
-| docs-rst/tips/b04 (MISMATCH, bbox 0.2 mm) | `vertices().group_by(Axis.X)[-1].sort_by(Axis.Z)[-1]` inside `BuildSketch(Plane.XZ)`: the sketch's LOCAL vertices all have z = 0, so `sort_by(Axis.Z)` is a COMPLETE TIE between (0.5, ±0.5) and the stable sort hands back whichever the kernel enumerated last. Verified natively: upstream's rectangle enumerates [(0.5, 0.5), (0.5, -0.5)] and picks (0.5, -0.5). | Same default (a plain stable sort; `tie_break=True` is opt-in upstream too, and is exactly the fix the canonical-edges work proposes for this). | COMPROMISE(traversal-order): lite builds its rectangle from a different first corner, so the tie resolves the other way. |
-| docs/objects_1d (MISMATCH, `scene` bbox 0.07 mm) | `scene = Compound(...) + Compound.make_triad(2)`. | The triad's axes and spline arrow heads are built exactly; upstream also draws 'X'/'Y'/'Z' with the **`singleline` STROKE font**, which this build does not ship (only the outline font FreeSans). | COMPROMISE(triad-labels). The triad is a viewer symbol; the deviation is confined to scripts that measure it. (`l1`/`l3`/`l4` also differ because the file reuses those names across nine examples and the harness compares the last binding.) |
-| examples/cast_bearing_unit (**was ERROR, now PASS**) | The previous verdict — "genuine kernel fault in the 8.0.1 wasm fillet" — was WRONG. `FilletEdges` was aborting the wasm heap because lite's `make_hull` handed it a POLYLINE boundary (hundreds of micro-edges) instead of the trimmed arcs upstream produces. | `make_hull` is now a statement-for-statement port of `Wire.make_convex_hull` (sample -> 2-D hull -> connecting lines + trimmed source edges), so the fillet sees the same topology upstream's does. | Closed: lite bug (a simplified hull), not a kernel fault. The same fix closed docs-rst/tips/b01 (ChamferEdges "internal OCCT error"). |
-| examples/toy_truck (ERROR) | `FilletEdges` raises "INTERNAL OPENCASCADE ERROR" (caught, no heap corruption) on the truck's body fillet. Unlike cast_bearing_unit this input has no hull in it. | Upstream `Solid.fillet` = `BRepFilletAPI_MakeFillet(shape)` (default ChFi3d_Rational) + `Add(radius, edge)`; lite is identical (explicit ChFi3d_Rational, same Add). No tolerance/continuity knobs differ. | Same defaults, kernel behaviour on this input. |
-| examples/dual_color_3mf (ERROR, geometry closed) | All six measured shapes match the reference exactly; the script fails on its last statement, `Mesher.write("dual_color.3mf")`. | Upstream's `Wire.offset_2d` open-mode branch is ported exactly. | COMPROMISE(mesher): there is no lib3mf in this wasm build, so only STL export exists. |
-| ttt/ttt-ppp0110 (ERROR) | The KNOWN 8.0.1 coplanar-BSpline fuse fault, in the one shape where the General-Fuse rebuild cannot recover the dropped operand (result volume 0). | Upstream fuse defaults reproduce the drop on this kernel; see the ex34 row below. | Genuine kernel fault, detected and raised (COMPROMISE(kernel-guard) cannot recover this one). |
-| general_examples/ex34, general_examples_algebra/ex34 (PASS since the kernel-guard round) | `BRepAlgoAPI_Fuse` silently DROPS an operand when coplanar faces meet along BSpline edges (glyph solids fused onto a box face); result was the bare box. | Upstream fuse defaults — no fuzzy value, glue off, NonDestructive unset — reproduce the drop identically on this kernel; it is the fuse *result-assembly* phase that is broken, the General-Fuse *split* phase is correct on the same inputs. Lite's `Union` detects the drop and rebuilds from the `BOPAlgo_Builder` partition; see COMPROMISE(kernel-guard). | Genuine kernel fault (8.0.1 wasm), worked around via the exact GF partition. |
-| examples/bracelet, examples/bicycle_tire, examples/build123d_logo*, examples/maker_coin (PASS) | Freeform-surface, wrap, Text-normal and `new_edges` rounds — see the git history of this file for the full write-ups; kept here only as the record that they are closed. | — | Closed in earlier rounds. |
-| SKIP x10 (python_logo, tea_cup builder, general_examples_algebra/ex10, docs/line_types, docs/constraint_examples, docs/rigid_joints_pipe, docs/rod_end, docs/technical_drawing, docs-objects/text, docs-selectors/sort_distance_from) | Real build123d 0.11.1 fails natively on these: no module-level shapes, or an import/API that 0.11.1 does not have (`bd_warehouse` x3, `ImageFace`, `tcv_screenshots`, `ColorMap`). | n/a | Excluded from scoring by the harness. |
+| examples/joints, examples/joints_algebra (MISMATCH) | Slider/pin positions are measured along `Axis(edge)` of slot edges selected after booleans; the parts land at the other end of the (geometrically correct) slot. | Both sides map `position_at(u)` orientation-aware (`u -> 1-u` when the edge is not FORWARD): upstream `Mixin1D._occt_param_at`, lite `Edge.position_at`. The underlying curves agree; only the sub-edge TopAbs orientation flag differs. Native 0.11.1 (OCP 7.9.3), 0.12.0 (7.9.3) and 0.13.0 (8.0.1) give byte-identical answers, so the flag comes from lite's CONSTRUCTION of the slot, not from the kernel version (the vendored-upstream topology on this same wasm kernel passes). | COMPROMISE(edge-orientation), with the old "OCP 7.x vs 8.0.1" explanation withdrawn. Canonicalising `Edge.make_mid_way`'s references (default-on, as in the upstream patch) shrank pin_arm 8.16 -> 2.69 mm and slider_arm 11.80 -> 9.11 mm; the remainder needs the example to break its two TIED top edges with `sort_by(Axis.Z, tie_break=True)`, opt-in upstream too. |
+| examples/projection, examples/projection_algebra (MISMATCH, `projected_text` only, d=0.12) | The text wraps the *opposite way* around the sphere: the arch path (a closed sphere-cylinder intersection edge) is REVERSED in upstream's construction and FORWARD in lite's over the SAME geometric parametrization (raw curve at 25% is +Y on both; upstream's flag flips traversal to -Y first). | Everything else byte-matches (`make_text` align `None`, arc-length `position_at`, one face per disjoint glyph contour — 40 faces == upstream). Native 7.9.3 and 8.0.1 agree, so this is lite's construction history, not the kernel. | COMPROMISE(edge-orientation). |
+| docs-selectors/sort_axis (MISMATCH, -14.7% volume) | `revolve(face, -Axis(edge), 90)` sweeps the OTHER WAY: the slot edge selected off the extruded solid has raw parametrization `(34,16,4) -> (34,16,0)` in lite's construction and `(34,16,0) -> (34,16,4)` in upstream's (on OCP 7.9.3 AND 8.0.1), so `Axis(edge)` points -Z instead of +Z. The profile face, its edge, its length and midpoint all agree exactly. | `Axis(edge)` is RAW-curve on both sides by design (`canonical=True` is opt-in, exactly as in the upstream patch). | COMPROMISE(edge-orientation). `Axis(edge, canonical=True)` would close it (the canonical rule gives upstream's direction). |
+| docs-selectors/filter_all_edges_circle (MISMATCH, `f` only) | The script keeps the loop variable of `for i, f in enumerate(faces)`, i.e. THE LAST of a mirror-symmetric pair of bearing-bore faces at y = ±21. Every other measured shape (including all 53 sorted `faces[i]`) matches. | Not a defaults difference: `part.faces()` is the traversal order of the built solid, and the mirrored pair comes out in the opposite order from lite's construction (native 7.9.3 and 8.0.1 agree with each other). | COMPROMISE(traversal-order). |
+| docs-rst/tips/b04 (MISMATCH, bbox 0.2 mm) | `vertices().group_by(Axis.X)[-1].sort_by(Axis.Z)[-1]` inside `BuildSketch(Plane.XZ)`: the sketch's LOCAL vertices all have z = 0, so `sort_by(Axis.Z)` is a COMPLETE TIE. | **Natively nondeterministic**: the same 0.13.0 install gave -0.5 three times and -0.7 three times in six runs (0.12.0 and 0.11.1 flip too); the committed reference holds -0.7, lite gives -0.5. `tie_break=True` (opt-in) is the deterministic form. | Coin flip — not counted for or against lite (COMPROMISE(traversal-order) only in the sense that lite resolves the tie deterministically). |
+| docs/objects_1d (MISMATCH, `scene` bbox 0.07 mm) | `scene = Compound(...) + Compound.make_triad(2)`. | The triad's axes and spline arrow heads are built exactly; upstream also draws 'X'/'Y'/'Z' with the **`singleline` STROKE font**, which this build does not ship (only the outline font FreeSans). The `l1`/`l3`/`l4` residuals of earlier rounds are GONE: 0.12 made variables created inside a `BuildLine(<workplane>)` LOCAL natively, and lite's BuildScope does the same. | COMPROMISE(triad-labels). |
+| docs/tutorial_joints (was ERROR `insert`, now MISMATCH on `m6_screw` alone, d=1.82 mm) | The other 7 shapes match to 1e-9. The screw is placed by `CylindricalJoint.relative_to(..., position=5, angle=30)` off `hole2`, and lite's hole-location enumeration puts it on a different hole frame of the imported STEP part. | Joint algebra is upstream's; the difference is which of the part's hole frames the script's selector lands on. | Open, unchanged from the 0.11.1 round apart from the `insert()` blocker in front of it. |
+| examples/toy_truck (ERROR) | `fillet(bumper.edges(), 0.25)` raises "BRep_API: command not done" (caught, decoded via COMPROMISE(failure-decode), no heap corruption). | Upstream `Solid.fillet` = `BRepFilletAPI_MakeFillet(shape)` (ChFi3d_Rational) + `Add(radius, edge)`; lite is identical. Native 0.13.0 on OCCT **8.0.1** fillets the same bumper, so "8.0.1 kernel fault" is not the whole story: either this wasm build misbehaves where native 8.0.1 does not, or lite's bumper topology differs. | Open; not root-caused this round. |
+| examples/dual_color_3mf (ERROR, geometry closed) | All six measured shapes match the reference exactly; the script fails on its last statement, `Mesher.write("dual_color.3mf")`. | — | COMPROMISE(mesher): no lib3mf in this wasm build, so only STL export exists. |
+| ttt/ttt-ppp0110 (ERROR) | The coplanar-BSpline fuse drop, in the one shape where the General-Fuse rebuild cannot recover the dropped operand (result volume 0). | Upstream fuse defaults reproduce the drop on THIS wasm build. Native 0.13.0 on OCCT 8.0.1 fuses it correctly (no geometry change vs 7.9.3 anywhere in the corpus), so the fault is specific to this wasm build, not to OCCT 8.0.1 itself. | Wasm-build kernel fault, detected and raised (COMPROMISE(kernel-guard) cannot recover this one). |
+| docs/objects_2d (ERROR, `Draft`) | `drafting.Draft` (the dimension-styling dataclass) + `ExtensionLine`/`DimensionLine`/`TechnicalDrawing`. | ~450 code lines whose accuracy rides on `Compound.make_text` glyph metrics. No OCCT binding is missing. | Deliberate gap (the real-build123d leg runs it). |
+| ttt/ttt-23-t-24-curved_support (ERROR, `sympy`) | The part's dimensions are derived with sympy's symbolic solver. | n/a | Deliberate gap. |
+| docs-rst/topology_selection/b10 (ERROR, new in the 0.13.0 corpus) | `Mesher().read(<stl>)` round-trip through `pathlib.Path` + `tempfile.TemporaryDirectory`, then `group_by(topo_distance_to(ring))` over the 218 triangle faces of the re-read mesh. | Upstream's Mesher reads and writes through lib3mf; lite writes STL into MEMFS but has no mesh reader, and the measured faces are individual BRepMesh triangles, so parity would also need triangulation-identical meshing. | Deliberate gap (COMPROMISE(mesher)). `topo_distance_to` itself is implemented. |
+| docs/spitfire_wing_gordon (TIMEOUT) | ~390 s building the wing's Gordon surface (harness budget 60 s), then a null surface. | — | Cost/robustness of COMPROMISE(gordon-surface-realization) at wing scale. |
+| SKIP x8 (python_logo, general_examples_algebra/ex10, docs/constraint_examples, docs/line_types, docs/rigid_joints_pipe, docs/rod_end, docs/technical_drawing, docs-objects/text) | Real build123d 0.13.0 fails natively on these (no module-level shapes, `bd_warehouse`, `ImageFace`, `ColorMap`, …). | n/a | Excluded from scoring by the harness. |
 
-### Selectors, 1-D solvers and GUI-doc round (this round)
+### build123d 0.13.0 round (this round)
+
+Baseline (unmodified lite against the 0.13.0 reference): **191 PASS /
+13 MISMATCH / 34 ERROR / 1 TIMEOUT / 8 SKIP** on Brython. Now **223 / 9 / 6 /
+1 / 8** on Brython AND on MicroPython, with no per-script regression (33
+improvements; every script that passed before still passes). Buckets, in
+corpus-frequency order:
+
+| Script(s) | Root cause | Upstream defaults vs lite | Verdict |
+|---|---|---|---|
+| 18 scripts, `NameError: insert` (clock, playing_cards, build123d_logo x2, custom_sketch_objects, mixed_algebra_context, ex16/32/33/38, heart_token, slide_latch, group_axis, sm_hanger, ttt-ppp0107, tutorial_constraints/b09+b13, tutorial_joints) | 0.12 renamed the builder-context `add()` to `insert()`. | `insert()` is upstream's; `add()` stays as a deprecated alias that warns like upstream's. Placement follows 0.12's BuildScope (below). | Closed (tutorial_joints moves on to its `m6_screw` MISMATCH). |
+| key_concepts_builder/b16, /b17 (MISMATCH, -50% volume), ttt-ppp0102 (+1.4%), sm_hanger `l1`/`l2`, objects_1d `l3`, build_line/b01 (`line_local`) | 0.12's **unified BuildScope**: a builder constructs LOCALLY on Plane.XY and publishes through its workplanes × the enclosing `Locations`; `sweep(path=<BuildLine>)` sweeps the builder's LOCAL line; module-level variables created inside a `BuildLine(<workplane>)` stay local. | Ported: `Builder.output_placements` + `_publication_locations`, `part`/`part_local`, `sketch`/`sketch_local`, `line`/`line_local`, and the BaseObject firewall (an object built inside a builder publishes once, into the innermost builder). MicroPython and Brython both run the metaclass firewall (`super().__call__`); a runtime without metaclass support falls back to an explicit check (COMPROMISE(object-firewall)). | Closed. |
+| examples/maker_coin (MISMATCH, +1.2%) | 0.12's `project()`: projected pending planes now follow each projected face's own orientation, so the far-side projection is extruded INTO the part. | Ported per piece. | Closed (frozen value updated to the 0.13.0 native 13000.308878460077). |
+| assemblies/c03, /call (`global_location`), assemblies/c06 (volume 2x/3x) | 0.12 assemblies: `Compound(label, color, material, joints, parent, children)`, `global_location`, and an assembly's `volume` that counts its plain children once. | Ported; `child.parent` is set by the constructor, the outermost `topo_parent` is the owner. | Closed (c06 was a lite-side measurement semantics difference, not geometry). |
+| topology_selection/b08 (`Convexity`), /b15 + key_concepts_algebra/b14 (`vertices()/faces()` positional select) | 0.13's `Convexity` enum on edges/faces/vertices; selectors take `select`/`indices`. | Convexity is upstream's dihedral rule for edges, the fundamental-form sign for faces, and the crease/on-face rules for vertices; `Select.LAST`/`NEW` are classified from the kernel's own `BRepTools_History` (`HistRecord`/`HistClassify` over BRepAlgoAPI/fillet/chamfer/UnifySameDomain), exactly upstream's `is_last`/`is_new`. | Closed. BuildLine has no kernel history, so its LAST/NEW stays geometric — COMPROMISE(buildline-select). |
+| import_export/b02 (`export_obj`), key_concepts_builder/b02 (`builder.label`), key_concepts/d01 (`Location.position`/`orientation` setters), docs-readme/readme (ChamferEdges 'no suitable edges') | New 0.12/0.13 APIs: `export_obj`/`tessellate_with_uvs`, a builder `label` that its `part` inherits, settable `Location.position`/`orientation`. The readme's `chamfer(bore.edges(), .2)` in its algebra half stopped failing with the selector/history rework (selectors now return the parent's own sub-shapes); it was not root-caused separately. | `export_obj` writes upstream's OBJ layout; the UV islands are packed with CascadeStudio's potpack instead of upstream's `_pack2d` shelf packer (COMPROMISE(obj-atlas)). | Closed. |
+| materials / mass (no corpus script measures them; frozen in `test/python-mode-b123d-013.spec.js`) | 0.13's `material=` / `mass` with the optional `bd_materials` catalogue. | The 156-row catalogue (density, colour, family) is embedded as data; finishes and the full property tables are not (COMPROMISE(materials)). | Closed for density/mass/colour, verified against native. |
+| 0.12 removals | The four tangent objects, `LocationEncoder`, `to_tuple()`, `end_angle`/`angular_direction`, `Workplanes`. | Removed from lite (and from the stubs) exactly like upstream; `Location.__iter__` replaces `to_tuple`. | Closed; frozen in `test/python-mode-upstream-exports.spec.js`. |
+| heap poisoning (infrastructure, both legs) | After certain long scripts OCCT's memory is silently damaged and an UNRELATED later script fails out of bounds; the culprit is order-dependent (bisected: not deletes, not history, not hashing). ROOT CAUSE (2026-10): emscripten's 64 KB default shadow stack, which grows down into OCCT's .data/.bss unchecked, overflowed on deep fillet/ThruSections recursions (corpus peak 83,552 B); the opencascade.js fork now links -sSTACK_SIZE=512KB. | — | COMPROMISE(kernel-heap-reset): `run-lite.mjs` re-runs any script that failed with a heap symptom on a fresh page, and the committed results merge solo re-runs of the TIMEOUT flaps. |
+
+### Selectors, 1-D solvers and GUI-doc round (0.11.1 era)
 
 177 PASS -> **204 PASS**, 34 ERROR -> 9, 11 MISMATCH -> 8, and every script
 that passed before still passes. Buckets worked in order:
@@ -335,7 +373,7 @@ topology-selection properties, 1-D constrained objects, the
 | ttt/ttt-ppp0107 (was MISMATCH, -1.0% / -0.9%, now PASS) | The audit's guess ("two `extrude(until=)` intermediates") was WRONG: `zz`/`zz2` are a TAPERED extrude, `extrude(amount=15, taper=-10)`. Lite always used `LocOpe_DPrism`. | `Solid.extrude_taper` uses TWO algorithms: DPrism only for a POSITIVE taper along the profile normal with no holes, otherwise a LOFT between the profile wires and their 2-D offsets (`-length * tan(taper)`, Kind.INTERSECTION, inner wires flipped). A bare `taper=-10` rectangle now measures 2957.1391331767363 — bit-identical to the reference. | Closed: lite bug (one algorithm instead of two). |
 | every raw kernel error, everywhere (infrastructure, earlier round) | Emscripten throws OCCT's C++ exceptions as bare pointer NUMBERS. | The fork binds `OCJS::getStandard_FailureData` for exactly this, but it is UNCALLABLE here ("unbound types: St9exception"). | COMPROMISE(failure-decode): CascadeWorker keeps the wasm `Memory` via Emscripten's `instantiateWasm` hook and StandardUtils reads `Standard_Failure`'s message out of it directly. |
 
-### OCCT binding round: Geom2dGcc, quadrics, STEP assets, Voronoi, brake forming (this round)
+### OCCT binding round: Geom2dGcc, quadrics, STEP assets, Voronoi, brake forming (0.11.1 era)
 
 204 PASS -> **207 PASS**, 9 ERROR -> 6, and the two remaining
 `import_step`/`sm_hanger` scripts went ERROR -> MISMATCH. Four of the nine

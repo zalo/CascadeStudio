@@ -313,8 +313,8 @@ class CascadeStudioWorker {
         console.error(message);
       }
 
-      // Snapshot the kernel's pristine linear memory so a poisoned heap can
-      // be rewound (see captureKernelImage). Opt-in: only hosts that can
+      // Snapshot the kernel's pristine linear memory so every job can start
+      // from it and a damaged kernel can be rewound (see captureKernelImage). Opt-in: only hosts that can
       // afford to lose every live shape (headless, one job per request) may
       // restore it, so only they pay for the snapshot.
       if (this.options.kernelImage === true) {
@@ -625,49 +625,37 @@ class CascadeStudioWorker {
   }
 
   // ------------------------------------------------------------------ //
-  // Kernel image: rewinding a heap that OCCT itself corrupted.
+  // Kernel image: a clean kernel per job, and the net under a kernel fault.
   //
-  // COMPROMISE(kernel-heap-reset). Several OCCT 8.0.1 algorithms scribble
-  // over their own heap in this wasm build. The geometry they return is
-  // correct (volume/bbox/copy/mesh all agree with upstream), but a live
-  // allocation somewhere else has been handed out twice, and the casualty is
-  // usually a lazily-built singleton. Two are reproducible from the
-  // validation corpus, both detectable in plain Node with the wasm memory
-  // free to grow — so this is NOT the 128 MB Cloudflare ceiling, and it does
-  // not need a single extra byte to trigger:
+  // COMPROMISE(kernel-heap-reset). Headless hosts snapshot OCCT's linear
+  // memory right after module init and rewind to it between jobs: every
+  // request starts on a pristine allocator (no heap ratcheting, no state
+  // leaking from the previous job), and an export whose writer machinery
+  // has been damaged is healed by carrying the shape out as BREP, rewinding
+  // and re-importing (headless.js `exportOrHeal`).
   //
-  //   examples/maker_coin   BRepFilletAPI_MakeFillet::Build (ChFi3d_Rational,
-  //                         9 Select.NEW edges) -> every later
-  //                         `new STEPControl_Writer`/`_Reader` traps with
-  //                         "memory access out of bounds"; an ALREADY-BUILT
-  //                         writer still transfers and writes correctly.
-  //   examples/bicycle_tire BRepOffsetAPI_ThruSections::Build (the ruled wall
-  //                         ThickenSolid lofts between a boundary wire and
-  //                         its offset image) -> BRepTools::Write AND the
-  //                         STEP transfer trap, even for a fresh 1 mm box.
+  // History: it was built in 2026-08 for what looked like OCCT algorithms
+  // corrupting their own heap — after maker_coin's fillet
+  // (BRepFilletAPI_MakeFillet, ChFi3d_Rational) or bicycle_tire's ruled walls
+  // (BRepOffsetAPI_ThruSections) every later `new STEPControl_Writer` (and
+  // BRepTools::Write) trapped "memory access out of bounds" for the rest of
+  // the realm. The cause, found 2026-10 (opencascade.js CHANGELOG "a 512 KB
+  // stack"), was a STACK OVERFLOW: emscripten puts the shadow stack directly
+  // above .data/.bss and lets it grow down into them, unchecked at -O3; those
+  // recursions peak at ~82 KB and the 64 KB default stack overflowed into
+  // OCCT's statics, the writer singletons being the nearest victims. Builds
+  // linked with -sSTACK_SIZE=512KB (corpus-wide high-water 83,552 B) do not
+  // overflow; the rewind stays for the clean-allocator property and as the
+  // safety net.
   //
-  // The damage is permanent for the isolate: it is what made a Cloudflare
-  // Worker that had once run maker_coin fail every later STEP export.
-  //
-  // ROOT CAUSE (found 2026-10, see opencascade.js CHANGELOG "a 512 KB
-  // stack"): not the heap at all. Emscripten puts the shadow stack directly
-  // above .data/.bss and lets it grow DOWN into them, unchecked at -O3; the
-  // fillet/ThruSections recursion peaks at ~82 KB and the 64 KB default
-  // stack overflowed into OCCT's statics — the writer singletons were the
-  // nearest victims. Builds linked with -sSTACK_SIZE=512KB (corpus-wide
-  // high-water 83,552 B) no longer overflow: tea_cup and bicycle_tire export
-  // STEP, kernelHealthy() stays true. The image/rewind machinery stays: it is
-  // still the per-job pristine allocator (no heap ratcheting across
-  // requests), and the safety net if a deeper model ever overflows again.
-  //
-  // The rewind is the cheap, total repair: OCCT's linear memory right after
-  // module init is ~3.7 MB of the 32 MB initial heap (data + bss + stack +
-  // the little embind allocates), so it snapshots in ~20 ms and restores in
-  // ~2 ms, and every OCCT singleton re-initialises lazily from its .bss
-  // guard afterwards. It is a nuclear reset: EVERY embind wrapper the host
-  // still holds dangles afterwards, so a caller must drop sceneShapes,
-  // currentShape, the op cache and any imported assets in the same breath
-  // (headless.js `reset()`/`_healKernel()` do).
+  // The rewind is cheap and total: OCCT's linear memory right after module
+  // init is ~4.1 MiB (data + bss + the 512 KB stack + the little embind
+  // allocates; ~3.7 MiB on 64 KB-stack builds), so it snapshots in ~20 ms
+  // and restores in ~2 ms, and every OCCT singleton re-initialises lazily
+  // from its .bss guard afterwards. It is a nuclear reset: EVERY embind
+  // wrapper the host still holds dangles afterwards, so a caller must drop
+  // sceneShapes, currentShape, the op cache and any imported assets in the
+  // same breath (headless.js `reset()`/`_healKernel()` do).
   // ------------------------------------------------------------------ //
 
   /** Snapshot OCCT's linear memory as it is immediately after module init.
@@ -766,10 +754,25 @@ class CascadeStudioWorker {
     const builder = new oc.BRep_Builder();
     builder.MakeCompound(self.currentShape);
     let count = 0;
+    let skipped = 0;
     for (const shape of self.sceneShapes) {
-      if (!shape || !shape.IsNull || shape.IsNull() || !shape.ShapeType) { continue; }
+      // A scene entry can be a PyProxy of a Python object (e.g. a ShapeList a
+      // script handed to show()); probing it for an embind method raises a
+      // Python AttributeError THROUGH the proxy trap. The browser's mesher
+      // path logs such entries and carries on — so must the headless one,
+      // instead of failing the whole run() after the script itself succeeded.
+      let isShape = false;
+      try {
+        isShape = !!shape && shape.$$ !== undefined && typeof shape.IsNull === 'function'
+          && !shape.IsNull() && !!shape.ShapeType;
+      } catch (e) { isShape = false; }
+      if (!isShape) { if (shape) { skipped++; } continue; }
       builder.Add(self.currentShape, shape);
       count++;
+    }
+    if (skipped) {
+      console.log('combineShapes: skipped ' + skipped + ' scene entr' + (skipped === 1 ? 'y' : 'ies')
+        + ' that are not OCCT shapes');
     }
     try { builder.delete(); } catch (e) { /* best effort */ }
     self.sceneShapes = [];

@@ -1,13 +1,13 @@
 from _typeshed import Incomplete
-from build123d.build_common import LocationList as LocationList, flatten_sequence as flatten_sequence, validate_inputs as validate_inputs
+from build123d.build_common import BaseObject as BaseObject, flatten_sequence as flatten_sequence
 from build123d.build_enums import Align as Align, FontStyle as FontStyle, Mode as Mode, TextAlign as TextAlign
 from build123d.build_sketch import BuildSketch as BuildSketch
-from build123d.geometry import Axis as Axis, Location as Location, Rotation as Rotation, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike, to_align_offset as to_align_offset
+from build123d.geometry import Axis as Axis, Location as Location, Plane as Plane, Rotation as Rotation, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike, to_align_offset as to_align_offset
 from build123d.topology import Compound as Compound, Edge as Edge, Face as Face, ShapeList as ShapeList, Sketch as Sketch, Vertex as Vertex, Wire as Wire, topo_explore_common_vertex as topo_explore_common_vertex, tuplify as tuplify
 from collections.abc import Iterable
 from os import PathLike
 
-class BaseSketchObject(Sketch):
+class BaseSketchObject(Sketch, BaseObject):
     """BaseSketchObject
 
     Base class for all BuildSketch objects
@@ -204,6 +204,30 @@ class SlotOverall(BaseSketchObject):
     slot_height: Incomplete
     def __init__(self, width: float, height: float, rotation: float = 0, align: Align | tuple[Align, Align] | None = ..., mode: Mode = ...) -> None: ...
 
+class Superellipse(BaseSketchObject):
+    '''Sketch Object: Superellipse
+
+    Create an superellipse ("squircle") defined by width, height, and order.
+    
+    Args:
+        width (float): superellipse width
+        height (float): superellipse height
+        order (float, optional): order of the superellipse. Defaults to 4
+        point_count (int, optional): number of points per quadrant to use for
+            generating the superellipse. Ignored when order == 1 or 2. Defaults
+            to 16
+        rotation (float, optional): angle to rotate object. Defaults to 0
+        align (Align | tuple[Align, Align], optional): align MIN, CENTER, or MAX
+            of object. Defaults to (Align.CENTER, Align.CENTER)
+        mode (Mode, optional): combination mode. Defaults to Mode.ADD
+    '''
+    width: Incomplete
+    height_: Incomplete
+    order: Incomplete
+    point_count: Incomplete
+    align: Incomplete
+    def __init__(self, width: float, height: float, order: float = 4, point_count: int = 16, rotation: float = 0, align: Align | tuple[Align, Align] | None = ..., mode: Mode = ...) -> None: ...
+
 class Text(BaseSketchObject):
     '''Sketch Object: Text
 
@@ -229,8 +253,10 @@ class Text(BaseSketchObject):
     Args:
         txt (str): text to render
         font_size (float): size of the font in model units
-        font (str, optional): font name. Defaults to "Arial"
-        font_path (PathLike | str, optional): system path to font file. Defaults to None
+        font (str, optional): requested font name. After construction, this attribute
+            contains the resolved font name. Defaults to "Arial"
+        font_path (PathLike | str, optional): system path to font file. After
+            construction, this attribute contains the resolved font path. Defaults to None
         font_style (Font_Style, optional): font style, REGULAR, BOLD, BOLDITALIC, or
             ITALIC. Defaults to Font_Style.REGULAR
         text_align (tuple[TextAlign, TextAlign], optional): horizontal text align

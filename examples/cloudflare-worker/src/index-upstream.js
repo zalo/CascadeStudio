@@ -1,5 +1,5 @@
 // cascade-headless on Cloudflare Workers — the verbatim-UPSTREAM build123d
-// 0.11.1 entry (`--env upstream`). Same routes (./app.js), same assets as the
+// 0.13.0 entry (`--env upstream`). Same routes (./app.js), same assets as the
 // lite entry, plus the upstream Python layer: 158 modules (vendored sources +
 // shims + the OCP binding table) as ONE relative-path -> source JSON map,
 // imported as a Text module (3.15 MB raw) and parsed once at engine boot.

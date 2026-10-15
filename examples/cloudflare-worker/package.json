@@ -1,7 +1,7 @@
 {
   "name": "cascade-headless-cloudflare-example",
   "version": "1.0.0",
-  "description": "Turn build123d Python into STEP/BREP/STL inside a Cloudflare Worker, using cascade-core headless. Every asset is a module of the script (~32-35 MiB of the 64 MiB limit). Two flavors: build123d-lite (default) and verbatim upstream build123d 0.11.1 (--env upstream); --env warm boots the engine at global scope.",
+  "description": "Turn build123d Python into STEP/BREP/STL inside a Cloudflare Worker, using cascade-core headless. Every asset is a module of the script (64 MiB uncompressed limit). Flavors: build123d-lite (default), verbatim upstream build123d 0.13.0 (--env upstream), the real build123d wheel on Pyodide (--env real); --env warm boots lite at global scope.",
   "scripts": {
     "prepare-assets": "node scripts/prepare-assets.cjs",
     "dev": "npm run prepare-assets && wrangler dev --env=\"\"",
@@ -10,7 +10,9 @@
     "dev:upstream": "npm run prepare-assets && wrangler dev --env upstream",
     "deploy:upstream": "npm run prepare-assets && wrangler deploy --env upstream",
     "dev:warm": "npm run prepare-assets && wrangler dev --env warm",
-    "bench:startup": "node scripts/startup-bench.mjs"
+    "bench:startup": "node scripts/startup-bench.mjs",
+    "prepare-pyodide": "node scripts/prepare-pyodide.mjs",
+    "dev:real": "npm run prepare-assets && npm run prepare-pyodide && wrangler dev --env real"
   },
   "devDependencies": {
     "wrangler": "^4.125.0"

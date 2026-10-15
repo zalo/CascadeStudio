@@ -1,63 +1,81 @@
 {
  "calls": {
   "array": {
-   "count": 5,
+   "count": 7,
    "sites": [
-    "geometry.py:967",
+    "geometry.py:963",
+    "geometry.py:964",
+    "geometry.py:965",
+    "geometry.py:966",
     "geometry.py:968",
-    "geometry.py:969",
-    "geometry.py:970",
-    "geometry.py:972"
+    "topology/shape_core.py:2444"
    ]
   },
   "cross": {
    "count": 1,
    "sites": [
-    "geometry.py:972"
+    "geometry.py:968"
+   ]
+  },
+  "empty": {
+   "count": 3,
+   "sites": [
+    "topology/shape_core.py:2455",
+    "topology/shape_core.py:2465",
+    "topology/shape_core.py:2477"
    ]
   },
   "linalg.lstsq": {
    "count": 1,
    "sites": [
-    "geometry.py:974"
+    "geometry.py:970"
    ]
   },
   "linspace": {
    "count": 2,
    "sites": [
-    "geometry.py:1510",
-    "topology/one_d.py:832"
+    "geometry.py:1627",
+    "topology/one_d.py:907"
    ]
   }
  },
  "attrs": {
   "array": {
-   "count": 5,
+   "count": 7,
    "sites": [
-    "geometry.py:967",
+    "geometry.py:963",
+    "geometry.py:964",
+    "geometry.py:965",
+    "geometry.py:966",
     "geometry.py:968",
-    "geometry.py:969",
-    "geometry.py:970",
-    "geometry.py:972"
+    "topology/shape_core.py:2444"
    ]
   },
   "cross": {
    "count": 1,
    "sites": [
-    "geometry.py:972"
+    "geometry.py:968"
+   ]
+  },
+  "empty": {
+   "count": 3,
+   "sites": [
+    "topology/shape_core.py:2455",
+    "topology/shape_core.py:2465",
+    "topology/shape_core.py:2477"
    ]
   },
   "linalg": {
    "count": 1,
    "sites": [
-    "geometry.py:974"
+    "geometry.py:970"
    ]
   },
   "linspace": {
    "count": 2,
    "sites": [
-    "geometry.py:1510",
-    "topology/one_d.py:832"
+    "geometry.py:1627",
+    "topology/one_d.py:907"
    ]
   }
  }
