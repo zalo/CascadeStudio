@@ -1373,7 +1373,7 @@ export function installOcpShim(self, table) {
   // the error path). ocp_core falls back to the classic entries for kwargs
   // and container args.
   const errText = (e) => {
-    if (typeof e === 'number' && self.describeOCCTException) {
+    if (self.isOCCTThrow && self.isOCCTThrow(e) && self.describeOCCTException) {
       return 'INTERNAL OPENCASCADE ERROR: ' + self.describeOCCTException(e);
     }
     return (e && e.message) ? String(e.message) : String(e);

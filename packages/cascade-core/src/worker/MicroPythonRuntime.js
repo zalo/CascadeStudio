@@ -404,7 +404,7 @@ async function _bootstrap(srcKind) {
       return { ok: true, value: fn.apply(self, args) };
     } catch (e) {
       let msg;
-      if (typeof e === 'number' && self.describeOCCTException) {
+      if (self.isOCCTThrow && self.isOCCTThrow(e) && self.describeOCCTException) {
         msg = 'INTERNAL OPENCASCADE ERROR: ' + self.describeOCCTException(e);
       } else {
         msg = (e && e.message) ? String(e.message) : String(e);
@@ -447,7 +447,7 @@ async function _bootstrap(srcKind) {
       }
       return fn.apply(self, args);
     } catch (e) {
-      if (typeof e === 'number' && self.describeOCCTException) {
+      if (self.isOCCTThrow && self.isOCCTThrow(e) && self.describeOCCTException) {
         self._csLastErr = 'INTERNAL OPENCASCADE ERROR: ' + self.describeOCCTException(e);
       } else {
         self._csLastErr = (e && e.message) ? String(e.message) : String(e);

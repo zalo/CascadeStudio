@@ -38,6 +38,7 @@ class CascadeStudioUtils {
     self.CantorPairing = CascadeStudioUtils.CantorPairing;
     self.decodeOCCTException = CascadeStudioUtils.decodeOCCTException;
     self.describeOCCTException = CascadeStudioUtils.describeOCCTException;
+    self.isOCCTThrow = CascadeStudioUtils.isOCCTThrow;
   }
 
   /** Hashes input arguments and checks the cache for that hash.
@@ -84,7 +85,7 @@ class CascadeStudioUtils {
         // a primitive ("Cannot create property '__traceback__' on number"),
         // which masks the real failure — normalize to a proper Error here,
         // DECODING the pointer back into OCCT's own message first.
-        if (typeof e === 'number' || typeof e === 'string') {
+        if (typeof e === 'string' || CascadeStudioUtils.isOCCTThrow(e)) {
           throw new Error("INTERNAL OPENCASCADE ERROR in " + fnName + ": " +
             CascadeStudioUtils.describeOCCTException(e));
         }
@@ -225,6 +226,30 @@ class CascadeStudioUtils {
    *  @param {*} e - the caught value
    *  @returns {{message: string}|null} */
   static decodeOCCTException(e) {
+    // Native wasm exceptions (an OCCT build linked with -fwasm-exceptions):
+    // the throw reaches JS as a WebAssembly.Exception, not a number, and
+    // its payload is only reachable through the C++ tag. Such a build must
+    // also be linked with -sEXPORT_EXCEPTION_HANDLING_HELPERS, which gives
+    // the module `getExceptionMessage(ex) -> [type, what()]` —
+    // Standard_Failure::what() IS the OCCT message.
+    if (CascadeStudioUtils._isWasmException(e)) {
+      // Bracket access on purpose: these helpers are OPTIONAL module
+      // members, and generate-occt-symbols.cjs would otherwise list them
+      // among the symbols every build must have.
+      const mod = self.oc || {};
+      const getMessage = mod['getExceptionMessage'];
+      const release = mod['decrementExceptionRefcount'];
+      if (typeof getMessage !== 'function') { return null; }
+      try {
+        const info = getMessage(e);
+        const message = CascadeStudioUtils._plausibleOCCTText(info && info[1]);
+        // The exception object is refcounted on the C++ side; a throw that
+        // ends in JS is never caught again, so release it.
+        try { if (typeof release === 'function') { release(e); } }
+        catch (refErr) { /* best effort */ }
+        return message === null ? null : { message };
+      } catch (decodeError) { return null; }
+    }
     // Only integral pointer-shaped values can be exception pointers.
     if (typeof e !== 'number' || !Number.isInteger(e) || e <= 0) { return null; }
     const memory = self.ocMemory;
@@ -247,6 +272,19 @@ class CascadeStudioUtils {
     } catch (decodeError) {
       return null; // undecodable: the caller reports the raw value
     }
+  }
+
+  /** Is this caught value a C++ throw out of the OCCT kernel? A raw NUMBER
+   *  (the thrown pointer) under Emscripten's JS-emulated exceptions — the
+   *  shipping build — or a WebAssembly.Exception under native wasm EH. */
+  static isOCCTThrow(e) {
+    return typeof e === 'number' || CascadeStudioUtils._isWasmException(e);
+  }
+
+  static _isWasmException(e) {
+    return typeof WebAssembly !== 'undefined'
+      && typeof WebAssembly.Exception === 'function'
+      && e instanceof WebAssembly.Exception;
   }
 
   /** Accept only short, printable, non-empty text as a decoded OCCT message

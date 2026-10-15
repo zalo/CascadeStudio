@@ -3267,7 +3267,13 @@ function ExportBREP(shape, filename) {
 function _exporterFault(what, e) {
   const trap = (e instanceof WebAssembly.RuntimeError)
     || /memory access out of bounds|null function or function signature/.test(String(e && e.message));
-  if (!trap) { return (e instanceof Error) ? e : new Error(what + ": " + String(e)); }
+  if (!trap) {
+    if (e instanceof Error) { return e; }
+    // A C++ throw (a raw pointer, or a WebAssembly.Exception under native
+    // wasm EH): name OCCT's own message rather than the pointer value.
+    return new Error(what + ": " + (self.isOCCTThrow && self.isOCCTThrow(e)
+      && self.describeOCCTException ? self.describeOCCTException(e) : String(e)));
+  }
   return new Error(what + ": the OCCT kernel's file-writer machinery is "
     + "unusable — an earlier operation in this evaluation corrupted the "
     + "kernel heap (a known OCCT 8.0.1 wasm fault; see "

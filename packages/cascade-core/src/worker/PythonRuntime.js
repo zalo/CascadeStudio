@@ -234,7 +234,7 @@ function _runGuarded(B, source, moduleName) {
     // escaped a direct oc.* call outside CacheOp cannot carry a Python
     // traceback; decode it into OCCT's own message rather than printing the
     // bare pointer value.
-    if (typeof caught === 'number' && self.describeOCCTException) {
+    if (self.isOCCTThrow && self.isOCCTThrow(caught) && self.describeOCCTException) {
       throw new Error('INTERNAL OPENCASCADE ERROR: ' + self.describeOCCTException(caught));
     }
     throw new Error(_formatPythonError(B, caught, moduleName));
