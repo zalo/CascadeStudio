@@ -1,26 +1,24 @@
 import abc
 from .composite import Compound as Compound, Curve as Curve
+from .history import ShapeHistory as ShapeHistory
 from .one_d import Edge as Edge, Mixin1D as Mixin1D, Wire as Wire
 from .shape_core import Shape as Shape, ShapeList as ShapeList, SkipClean as SkipClean, TOPODS as TOPODS, downcast as downcast, get_top_level_topods_shapes as get_top_level_topods_shapes, shapetype as shapetype
 from .three_d import Solid as Solid
 from .utils import find_max_dimension as find_max_dimension
 from .zero_d import Vertex as Vertex
 from OCP.Geom import Geom_Surface as Geom_Surface
-from OCP.TopoDS import TopoDS_Face, TopoDS_Shape, TopoDS_Shell
+from OCP.TopoDS import TopoDS_Face, TopoDS_Shell
 from abc import ABC, abstractmethod
-from build123d.build_enums import CenterOf as CenterOf, ContinuityLevel as ContinuityLevel, GeomType as GeomType, Keep as Keep, SortBy as SortBy, Transition as Transition
+from build123d.build_enums import CenterOf as CenterOf, ContinuityLevel as ContinuityLevel, Convexity as Convexity, GeomType as GeomType, Keep as Keep, SortBy as SortBy, Transition as Transition, Unit as Unit
 from build123d.geometry import Axis as Axis, Color as Color, DEG2RAD as DEG2RAD, Location as Location, OrientedBoundBox as OrientedBoundBox, Plane as Plane, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike
 from collections.abc import Iterable
-from typing import Any, Literal, TypeVar, overload
+from typing import Any, ClassVar, Literal, TypeVar, overload
 from typing_extensions import Self
 
 T = TypeVar('T', Edge, Wire, 'Face')
 
 class Mixin2D(ABC, Shape[TOPODS], metaclass=abc.ABCMeta):
     """Additional methods to add to Face and Shell class"""
-    @classmethod
-    def cast(cls, obj: TopoDS_Shape) -> Vertex | Edge | Wire | Face | Shell:
-        """Returns the right type of wrapper, given a OCCT object"""
     @classmethod
     def extrude(cls, obj: Shape, direction: VectorLike) -> Edge | Face | Shell | Solid | Compound:
         """Unused - only here because Mixin1D is a subclass of Shape"""
@@ -94,6 +92,7 @@ class Face(Mixin2D[TopoDS_Face]):
     These faces are integral components of complex structures, such as solids and
     shells. Face enables precise modeling and manipulation of surfaces, supporting
     operations like trimming, filleting, and Boolean operations."""
+    build123d_type: ClassVar[str]
     order: float
     @overload
     def __init__(self, obj: TopoDS_Face | Plane, label: str = '', color: Color | None = None, parent: Compound | None = None) -> None:
@@ -177,22 +176,37 @@ class Face(Mixin2D[TopoDS_Face]):
     def geometry(self) -> None | str:
         """geometry of planar face"""
     @property
-    def is_circular_convex(self) -> bool:
-        """
-        Determine whether a given face is convex relative to its underlying geometry
-        for supported geometries: cylinder, sphere, torus.
+    def convexity(self) -> Convexity:
+        """How the material behind this face sits against it.
 
-        Returns:
-            bool: True if convex; otherwise, False.
+        Read from the surface's principal curvatures against the outward
+        normal, sampled over the face: ``CONVEX`` where the surface curves
+        away from the material, as on a boss or the outside of a sphere;
+        ``CONCAVE`` where it curves into it, as in a hole or a cavity;
+        ``SMOOTH`` where it does not curve, as on a plane; and ``SADDLE`` where
+        the two principal curvatures disagree, as on the inner side of a torus,
+        or where different parts of the face curve different ways.
+
+        Which side is material comes from the face's orientation, so a face
+        taken from a solid reports against that solid. See
+        :class:`~build_enums.Convexity`.
+
+        Raises:
+            ValueError: the surface is degenerate everywhere it was sampled
+        """
+    @property
+    def is_circular_convex(self) -> bool:
+        """Does this face curve away from the material behind it?
+
+        Equivalent to ``face.convexity == Convexity.CONVEX``, as on a boss or
+        an outside fillet. See :attr:`convexity`.
         """
     @property
     def is_circular_concave(self) -> bool:
-        """
-        Determine whether a given face is concave relative to its underlying geometry
-        for supported geometries: cylinder, sphere, torus.
+        """Does this face curve into the material behind it?
 
-        Returns:
-            bool: True if concave; otherwise, False.
+        Equivalent to ``face.convexity == Convexity.CONCAVE``, as in a hole or
+        an inside fillet. See :attr:`convexity`.
         """
     @property
     def is_planar(self) -> Plane | None:
@@ -230,6 +244,8 @@ class Face(Mixin2D[TopoDS_Face]):
     @property
     def volume(self) -> float:
         """volume - the volume of this Face, which is always zero"""
+    def mass(self, mass_unit: Unit = ..., length_unit: Unit = ...) -> float:
+        """mass - the mass of this Face, which is always zero"""
     @property
     def width(self) -> None | float:
         """width of planar face"""
@@ -293,9 +309,6 @@ class Face(Mixin2D[TopoDS_Face]):
             Face: the interpolated Gordon surface
         """
     @classmethod
-    def make_plane(cls, plane: Plane = ...) -> Face:
-        """Create a unlimited size Face aligned with plane"""
-    @classmethod
     def make_rect(cls, width: float, height: float, plane: Plane = ...) -> Face:
         """make_rect
 
@@ -350,7 +363,9 @@ class Face(Mixin2D[TopoDS_Face]):
                 3 weights use for variational smoothing. Defaults to None.
             min_deg (int, optional): minimum spline degree. Enforced only when
                 smoothing is None. Defaults to 1.
-            max_deg (int, optional): maximum spline degree. Defaults to 3.
+            max_deg (int, optional): maximum spline degree. Defaults to 3. Raised
+                to 6 when smoothing is used, the lowest degree that can meet the
+                C2 continuity the smoothing algorithm requires.
 
         Raises:
             ValueError: B-spline approximation failed
@@ -593,21 +608,6 @@ class Face(Mixin2D[TopoDS_Face]):
         Returns:
             ShapeList[Face]: Face(s) projected on target object ordered by distance
         '''
-    def to_arcs(self, tolerance: float = 0.001) -> Face:
-        """to_arcs
-
-        Approximate planar face with arcs and straight line segments.
-
-        This is a utility used internally to convert or adapt a face for Boolean operations. Its
-        purpose is not typically for general use, but rather as a helper within the Boolean kernel
-        to ensure input faces are in a compatible and canonical form.
-
-        Args:
-            tolerance (float, optional): Approximation tolerance. Defaults to 1e-3.
-
-        Returns:
-            Face: approximated face
-        """
     def without_holes(self) -> Face:
         """without_holes
 
@@ -666,6 +666,7 @@ class Shell(Mixin2D[TopoDS_Shell]):
     in representing complex shapes with voids and surfaces. This hierarchical structure
     allows for efficient handling of surfaces within a model, supporting various
     operations and analyses."""
+    build123d_type: ClassVar[str]
     order: float
     def __init__(self, obj: TopoDS_Shell | Face | Iterable[Face] | None = None, label: str = '', color: Color | None = None, parent: Compound | None = None) -> None:
         """Build a shell from an OCCT TopoDS_Shape/TopoDS_Shell
@@ -679,6 +680,8 @@ class Shell(Mixin2D[TopoDS_Shell]):
     @property
     def volume(self) -> float:
         """volume - the volume of this Shell if manifold, otherwise zero"""
+    def mass(self, mass_unit: Unit = ..., length_unit: Unit = ...) -> float:
+        """mass - the mass of this Shell if manifold in g, otherwise zero"""
     @classmethod
     def extrude(cls, obj: Wire, direction: VectorLike) -> Shell:
         """extrude

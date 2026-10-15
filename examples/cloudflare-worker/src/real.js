@@ -1,4 +1,4 @@
-// Entry module of the `--env real` flavor: REAL, unmodified build123d 0.11.1
+// Entry module of the `--env real` flavor: REAL, unmodified build123d 0.13.0
 // (the PyPI wheel) + real numpy on Pyodide 314 (CPython 3.14), over the same
 // OCP-over-embind shim and the same OCCT kernel as the other two flavors.
 //
@@ -21,12 +21,12 @@ import wheels from '../assets/pyodide/wheels.mjs';
 import { bootPyodide, installWheel } from './boot-pyodide.mjs';
 import worker from './index.js';
 
-/** cascade-core's names (PyodideRealB123d.js) -> the bundled archives. numpy
+/** cascade-core asks for 'numpy' + REAL_WHEELS file names (PyodideRealB123d.js)
+ *  -> the bundled archives. numpy
  *  ships as numpy-lite.zip: its .so files are 0-byte placeholders, the real
  *  side modules are the precompiled `dynlibModules`. */
 const WHEELS = {
   numpy: ['numpy-lite.zip', 'numpy-2.4.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl'],
-  'typing-extensions': ['typing_extensions-4.15.0-py3-none-any.whl'],
 };
 
 globalThis.__csPyodideHost = {

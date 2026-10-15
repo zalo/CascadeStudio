@@ -88,6 +88,13 @@ DROP_LINE_PATTERNS = [
     # SVG/export helpers in docs scripts
     r"^\s*write_svg\s*\(",
     r"^\s*svgout\s*\(",
+    # show()/show_object() themselves are stubbed on both sides, but their
+    # ARGUMENTS still evaluate - a call that colours by an ocp_vscode-only
+    # name (`colors=ColorMap.listed(n)`, `reset_camera=Camera.KEEP`) would
+    # NameError once the ocp_vscode import is gone, failing an otherwise
+    # perfectly runnable script natively (sort_distance_from was a SKIP for
+    # exactly this until 0.13.0's corpus regen)
+    r"^\s*show(?:_object|_all)?\s*\(.*\b(?:ColorMap|Camera)\b",
 ]
 DROP_LINE_RE = [re.compile(p) for p in DROP_LINE_PATTERNS]
 
@@ -223,6 +230,9 @@ SCRIPT_DIRS = [
     ("docs/objects/examples", "docs-objects", "docs-script"),
     ("docs/topology_selection/examples", "docs-selectors", "docs-script"),
     ("docs/assets/ttt", "ttt", "ttt"),
+    # the project README's example (builder AND algebra halves) - added in
+    # the 0.13.0 regen; it existed in 0.11.1 too but was never collected
+    ("docs/assets/readme", "docs-readme", "docs-script"),
 ]
 
 
@@ -274,6 +284,18 @@ def collect_script_dirs(manifest):
 
 CODE_DIRECTIVE_RE = re.compile(
     r"^([ \t]*)\.\.\s+code-block::\s*(build123d|python)\s*$")
+# The docs also put code under directives the original collector never read:
+# ``.. code:: python`` (e.g. assemblies.rst's "Local and Global Locations" and
+# pack() walk-through, build_part.rst's unit constants), a bare ``.. code::``
+# (the shallow-copy assembly example - and console output, which simply fails
+# natively and is pruned) and a bare ``.. code-block::``. They get their own
+# id namespace (``c01``, ``c02``, ...) so the ``bNN`` numbering - and thus every
+# id shared with the 0.11.1 corpus - is unchanged.
+EXTRA_CODE_DIRECTIVE_RE = re.compile(
+    r"^([ \t]*)\.\.\s+(?:code::(?:\s*(build123d|python))?|code-block::())\s*$")
+# ``.. doctest::`` transcripts (key_concepts.rst's Location walk-through;
+# installation.rst's shell commands fail natively and are pruned) -> ``d01``...
+DOCTEST_DIRECTIVE_RE = re.compile(r"^([ \t]*)\.\.\s+doctest::()\s*$")
 RST_OPTION_RE = re.compile(r"^[ \t]*:[A-Za-z0-9_-]+:")
 
 
@@ -281,12 +303,14 @@ def _indent_width(line):
     return len(line) - len(line.lstrip())
 
 
-def extract_rst_blocks(path):
-    """Yield the dedented source of every python/build123d code-block."""
+def extract_rst_blocks(path, directive_re=CODE_DIRECTIVE_RE, with_lang=False):
+    """Yield the dedented source of every block under `directive_re` (default:
+    the python/build123d code-blocks); with_lang=True yields (language, code)
+    pairs, language being the directive's argument ('' when bare)."""
     lines = open(path).read().split("\n")
     i = 0
     while i < len(lines):
-        m = CODE_DIRECTIVE_RE.match(lines[i])
+        m = directive_re.match(lines[i])
         if not m:
             i += 1
             continue
@@ -314,7 +338,8 @@ def extract_rst_blocks(path):
         if not body:
             continue
         strip = min(_indent_width(l) for l in body if l.strip())
-        yield "\n".join(l[strip:] if l.strip() else "" for l in body)
+        code = "\n".join(l[strip:] if l.strip() else "" for l in body)
+        yield ((m.group(2) or ""), code) if with_lang else code
 
 
 DOCTEST_RE = re.compile(r"^(>>>|\.\.\.)\s?")
@@ -396,6 +421,42 @@ def collect_rst(manifest):
             })
 
 
+def collect_rst_extra(manifest):
+    """The ``.. code::`` / bare ``.. code-block::`` (``cNN``) and
+    ``.. doctest::`` (``dNN``) blocks - see EXTRA_CODE_DIRECTIVE_RE. Pages
+    with more than one python-tagged ``.. code::`` block also get a
+    cumulative ``call`` script (assemblies.rst's pack() walk-through defines
+    its boxes in one block and packs them in the next); the existing ``all``
+    script stays code-block-only so it remains comparable across versions."""
+    docs = os.path.join(B123D_SRC, "docs")
+    for path in rst_files():
+        rel = os.path.relpath(path, docs)
+        stem = rel[:-4].replace("/", "-")
+        for prefix, regex, label in (("c", EXTRA_CODE_DIRECTIVE_RE, "code"),
+                                     ("d", DOCTEST_DIRECTIVE_RE, "doctest")):
+            blocks = list(extract_rst_blocks(path, regex, with_lang=True))
+            for n, (lang, block) in enumerate(blocks, 1):
+                manifest.append({
+                    "id": "docs-rst/%s/%s%02d" % (stem, prefix, n),
+                    "source": "docs/%s %s block #%d" % (rel, label, n),
+                    "kind": "docs-rst",
+                    "code": prepare_snippet(block),
+                })
+            tagged = [b for lang, b in blocks if lang]
+            if prefix == "c" and len(tagged) > 1:
+                # always lead with the header: a page's first block may use
+                # names a LATER block imports (assemblies.rst does)
+                joined = "from build123d import *\nfrom math import *\n\n" + \
+                    "\n\n".join(unwrap_doctest(b) for b in tagged)
+                manifest.append({
+                    "id": "docs-rst/%s/call" % stem,
+                    "source": "docs/%s (all %d python code:: blocks)"
+                              % (rel, len(tagged)),
+                    "kind": "docs-rst-page",
+                    "code": prepare_snippet(joined),
+                })
+
+
 # --------------------------------------------------------------------------
 # Pruning: keep only candidates that natively produce measurable geometry
 # --------------------------------------------------------------------------
@@ -460,6 +521,7 @@ def main():
     collect_general(manifest, "general_examples_algebra.py", "docs-algebra")
     collect_script_dirs(manifest)
     collect_rst(manifest)
+    collect_rst_extra(manifest)
 
     seen = set()
     for entry in manifest:

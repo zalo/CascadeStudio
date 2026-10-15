@@ -53,7 +53,7 @@ THOU = 0.0254
 # challenge scripts to convert a volume into a mass check
 G = 1.0
 KG = 1000.0
-LB = 453.59237
+LB = 453.59237   # G_PER_LB * G
 
 _TOL = 1e-9
 _TOL_1E6 = 1e-6      # build123d's TOLERANCE
@@ -120,16 +120,20 @@ class Keep:
 
 
 class Unit:
-    """Standard units (build123d's Unit enum) — Mesher(unit=...)."""
-    MC = 'MC'
-    MM = 'MM'
-    CM = 'CM'
-    M = 'M'
-    IN = 'IN'
-    FT = 'FT'
+    """Standard units (build123d 0.12's Unit StrEnum: the members ARE their
+    symbols, Unit.MM == 'mm'), lengths and - for mass() - masses."""
+    MC = '\\u00b5m'  # MICRO
+    MM = 'mm'
+    CM = 'cm'
+    M = 'm'
+    IN = 'in'
+    FT = 'ft'
+    G = 'g'
+    KG = 'kg'
+    LB = 'lb'
 
 
-# build123d build_common's unit conversions (UNITS_PER_METER[Unit.MM] = 1000)
+# build_constants' unit conversions (UNITS_PER_METER[Unit.MM] = 1000)
 UNITS_PER_METER = {
     Unit.IN: M / IN,
     Unit.FT: M / FT,
@@ -138,6 +142,338 @@ UNITS_PER_METER = {
     Unit.CM: M / CM,
     Unit.M: 1,
 }
+
+G_PER_LB = 453.59237
+
+UNITS_PER_KILOGRAM = {
+    Unit.G: KG / G,
+    Unit.KG: 1,
+    Unit.LB: KG / LB,
+}
+
+# ------------------------------------------------------------ materials ---
+# build123d 0.12 materials (Shape.material / mass()): upstream takes them from
+# the bd_materials package. COMPROMISE(materials): lite embeds bd_materials
+# 0.2.4's NAME -> grade/family/category/density/colour table (all 156
+# registry keys, generated from the package) - everything Shape.material,
+# mass() and the PBR colour side effect need; a grade's other property
+# ranges, finishes, processes and PBR models are inert stand-ins.
+
+_MATERIAL_ROWS = """
+abs|ABS_GENERIC|ABS|plastic|1050|1.0,1.0,1.0,1.0
+abs_flame_retardant|ABS_FLAME_RETARDANT|ABS|plastic|1200|1.0,1.0,1.0,1.0
+abs_generic|ABS_GENERIC|ABS|plastic|1050|1.0,1.0,1.0,1.0
+alloy_steel|AlloySteel_G4140_QUENCHED_TEMPERED|alloy_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+alloysteel.g52100_hardened_low_tempered|AlloySteel.G52100_HARDENED_LOW_TEMPERED|alloy_steel|metal|7810|0.7548,0.7439,0.7314,1.0
+alloysteel_g1215_cold_drawn|AlloySteel_G1215_COLD_DRAWN|alloy_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+alloysteel_g4140_quenched_tempered|AlloySteel_G4140_QUENCHED_TEMPERED|alloy_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+alloysteel_g4340_quenched_tempered|AlloySteel_G4340_QUENCHED_TEMPERED|alloy_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+alu_alsi10mg_as_built|Alu_ALSI10MG_AS_BUILT|aluminum|metal|2670|0.9621,0.9654,0.9658,1.0
+alu_g2024_aerospace|Alu_G2024_AEROSPACE|aluminum|metal|2780|0.9621,0.9654,0.9658,1.0
+alu_g2a12_t4|Alu_G2A12_T4|aluminum|metal|2800|0.9621,0.9654,0.9658,1.0
+alu_g5052_h32|Alu_G5052_H32|aluminum|metal|2680|0.9621,0.9654,0.9658,1.0
+alu_g6061_t6|Alu_G6061_T6|aluminum|metal|2700|0.9621,0.9654,0.9658,1.0
+alu_g7075_t6|Alu_G7075_T6|aluminum|metal|2810|0.9621,0.9654,0.9658,1.0
+aluminum|Alu_G6061_T6|aluminum|metal|2700|0.9621,0.9654,0.9658,1.0
+american_cherry|Hardwood_AMERICAN_CHERRY|cherry|wood|570|0.4431,0.302,0.1922,1.0
+asa|Asa_GENERIC|ASA|plastic|1070|1.0,1.0,1.0,1.0
+asa_generic|Asa_GENERIC|ASA|plastic|1070|1.0,1.0,1.0,1.0
+ash|Hardwood_ASH|ash|wood|670|0.8471,0.7294,0.6471,1.0
+beech|Hardwood_BEECH|beech|wood|720|0.7451,0.5255,0.302,1.0
+birch|Hardwood_BIRCH|birch|wood|660|0.8941,0.8235,0.749,1.0
+borosilicate|Borosilicate_GENERIC|borosilicate|glass|2230|0.9929,0.9978,0.9978,0.3
+borosilicate_generic|Borosilicate_GENERIC|borosilicate|glass|2230|0.9929,0.9978,0.9978,0.3
+brass|Brass_C360_HALF_HARD|brass|metal|8500|0.9593,0.8952,0.6822,1.0
+brass_c360_half_hard|Brass_C360_HALF_HARD|brass|metal|8500|0.9593,0.8952,0.6822,1.0
+brass_c360_soft_annealed|Brass_C360_SOFT_ANNEALED|brass|metal|8500|0.9593,0.8952,0.6822,1.0
+bronze|Bronze_C51000_PHOSPHOR|bronze|metal|8800|0.8338,0.6966,0.5457,1.0
+bronze_c51000_phosphor|Bronze_C51000_PHOSPHOR|bronze|metal|8800|0.8338,0.6966,0.5457,1.0
+bronze_c90500_tin|Bronze_C90500_TIN|bronze|metal|8800|0.8338,0.6966,0.5457,1.0
+bronze_c93200_bearing|Bronze_C93200_BEARING|bronze|metal|8900|0.8338,0.6966,0.5457,1.0
+cardboard|Cardboard_CORRUGATED|corrugated_cardboard|paper|140|0.7294,0.5647,0.302,1.0
+cardboard_corrugated|Cardboard_CORRUGATED|corrugated_cardboard|paper|140|0.7294,0.5647,0.302,1.0
+castable|Castable_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+castable_generic|Castable_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+ceramic|Ceramic_GENERIC|resin|resin|1650|1.0,1.0,1.0,1.0
+ceramic_generic|Ceramic_GENERIC|resin|resin|1650|1.0,1.0,1.0,1.0
+cfrp|CFRP_PLATE|CFRP|plastic|1600|0.1843,0.1843,0.1843,1.0
+cfrp_plate|CFRP_PLATE|CFRP|plastic|1600|0.1843,0.1843,0.1843,1.0
+copper|Copper_C110_ANNEALED|copper|metal|8900|0.9695,0.8112,0.7497,1.0
+copper_c110_annealed|Copper_C110_ANNEALED|copper|metal|8900|0.9695,0.8112,0.7497,1.0
+engineered_wood|EngineeredWood_MDF|mdf|wood|750|0.5843,0.3961,0.2667,1.0
+engineeredwood_mdf|EngineeredWood_MDF|mdf|wood|750|0.5843,0.3961,0.2667,1.0
+engineeredwood_osb|EngineeredWood_OSB|osb|wood|640|0.8196,0.6549,0.451,1.0
+esd|Esd_GENERIC|resin|resin|1300|1.0,1.0,1.0,1.0
+esd_generic|Esd_GENERIC|resin|resin|1300|1.0,1.0,1.0,1.0
+felt|Felt_GENERIC|felt|textile|120|0.6314,0.6235,0.6471,1.0
+felt_generic|Felt_GENERIC|felt|textile|120|0.6314,0.6235,0.6471,1.0
+flexible|Flexible_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+flexible_generic|Flexible_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+foamboard|Foamboard_GENERIC|foamboard|paper|120|0.9216,0.9216,0.9216,1.0
+foamboard_generic|Foamboard_GENERIC|foamboard|paper|120|0.9216,0.9216,0.9216,1.0
+fr4|FR4_GENERIC|FR4|plastic|1850|1.0,1.0,1.0,1.0
+fr4_generic|FR4_GENERIC|FR4|plastic|1850|1.0,1.0,1.0,1.0
+gold|Gold_PURE|gold|metal|19300|1.0,0.8927,0.59,1.0
+gold_pure|Gold_PURE|gold|metal|19300|1.0,0.8927,0.59,1.0
+hardwood|Hardwood_GENERIC|oak|wood|675|0.4745,0.3294,0.2039,1.0
+hardwood_american_cherry|Hardwood_AMERICAN_CHERRY|cherry|wood|570|0.4431,0.302,0.1922,1.0
+hardwood_ash|Hardwood_ASH|ash|wood|670|0.8471,0.7294,0.6471,1.0
+hardwood_beech|Hardwood_BEECH|beech|wood|720|0.7451,0.5255,0.302,1.0
+hardwood_birch|Hardwood_BIRCH|birch|wood|660|0.8941,0.8235,0.749,1.0
+hardwood_generic|Hardwood_GENERIC|oak|wood|675|0.4745,0.3294,0.2039,1.0
+hardwood_maple|Hardwood_MAPLE|maple|wood|705|0.9333,0.8275,0.702,1.0
+hardwood_oak|Hardwood_OAK|oak|wood|755|0.4745,0.3294,0.2039,1.0
+hardwood_walnut|Hardwood_WALNUT|walnut|wood|640|0.349,0.2392,0.1647,1.0
+high_temp|HighTemp_GENERIC|resin|resin|1300|1.0,1.0,1.0,1.0
+hightemp_generic|HighTemp_GENERIC|resin|resin|1300|1.0,1.0,1.0,1.0
+leather|Leather_GENERIC|leather|textile|950|0.4011,0.267,0.153,1.0
+leather_generic|Leather_GENERIC|leather|textile|950|0.4011,0.267,0.153,1.0
+magnesium|Magnesium_GENERIC_STRUCTURAL|magnesium|metal|1810|0.8373,0.8204,0.7966,1.0
+magnesium_generic_structural|Magnesium_GENERIC_STRUCTURAL|magnesium|metal|1810|0.8373,0.8204,0.7966,1.0
+maple|Hardwood_MAPLE|maple|wood|705|0.9333,0.8275,0.702,1.0
+mdf|EngineeredWood_MDF|mdf|wood|750|0.5843,0.3961,0.2667,1.0
+mild_steel|MildSteel_PLAIN_CARBON_GENERIC|mild_steel|metal|7800|0.7548,0.7439,0.7314,1.0
+mildsteel_g1018_cold_drawn|MildSteel_G1018_COLD_DRAWN|mild_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+mildsteel_g1045_cold_drawn|MildSteel_G1045_COLD_DRAWN|mild_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+mildsteel_ga36_hot_rolled|MildSteel_GA36_HOT_ROLLED|mild_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+mildsteel_plain_carbon_generic|MildSteel_PLAIN_CARBON_GENERIC|mild_steel|metal|7800|0.7548,0.7439,0.7314,1.0
+nylon|Nylon_PA12|PA|plastic|1010|1.0,1.0,1.0,1.0
+nylon_pa12|Nylon_PA12|PA|plastic|1010|1.0,1.0,1.0,1.0
+nylon_pa12_gf35|Nylon_PA12_GF35|PA|plastic|1300|1.0,1.0,1.0,1.0
+nylon_pa12_sintered|Nylon_PA12_SINTERED|PA|plastic|1000|1.0,1.0,1.0,1.0
+nylon_pa6|Nylon_PA6|PA|plastic|1140|1.0,1.0,1.0,1.0
+oak|Hardwood_OAK|oak|wood|755|0.4745,0.3294,0.2039,1.0
+osb|EngineeredWood_OSB|osb|wood|640|0.8196,0.6549,0.451,1.0
+paper|Paper_OFFICE|paper|paper|800|0.9608,0.9569,0.949,1.0
+paper_office|Paper_OFFICE|paper|paper|800|0.9608,0.9569,0.949,1.0
+pc|PC_GENERIC|PC|plastic|1200|1.0,1.0,1.0,0.3
+pc_generic|PC_GENERIC|PC|plastic|1200|1.0,1.0,1.0,0.3
+pe|PE_HDPE|PE|plastic|960|1.0,1.0,1.0,1.0
+pe_hdpe|PE_HDPE|PE|plastic|960|1.0,1.0,1.0,1.0
+peek|Peek_MOLDED|PEEK|plastic|1300|1.0,1.0,1.0,1.0
+peek_molded|Peek_MOLDED|PEEK|plastic|1300|1.0,1.0,1.0,1.0
+peek_printed|Peek_PRINTED|PEEK|plastic|1300|1.0,1.0,1.0,1.0
+petg|PETG_GENERIC|PETG|plastic|1270|1.0,1.0,1.0,1.0
+petg_cf|PETG_CF|PETG|plastic|1320|1.0,1.0,1.0,1.0
+petg_generic|PETG_GENERIC|PETG|plastic|1270|1.0,1.0,1.0,1.0
+phenolic|Phenolic_BAKELITE|phenolic|plastic|1300|1.0,1.0,1.0,1.0
+phenolic_bakelite|Phenolic_BAKELITE|phenolic|plastic|1300|1.0,1.0,1.0,1.0
+pine|Softwood_PINE|pine|wood|500|0.8235,0.7255,0.6314,1.0
+pla|PLA_GENERIC|PLA|plastic|1240|1.0,1.0,1.0,1.0
+pla_carbon_filled|PLA_CARBON_FILLED|PLA|plastic|1250|1.0,1.0,1.0,1.0
+pla_generic|PLA_GENERIC|PLA|plastic|1240|1.0,1.0,1.0,1.0
+pmma|PMMA_GENERIC|PMMA|plastic|1180|1.0,1.0,1.0,0.3
+pmma_generic|PMMA_GENERIC|PMMA|plastic|1180|1.0,1.0,1.0,0.3
+pom|POM_GENERIC|POM|plastic|1410|1.0,1.0,1.0,1.0
+pom_generic|POM_GENERIC|POM|plastic|1410|1.0,1.0,1.0,1.0
+pp|PP_GENERIC|PP|plastic|905|1.0,1.0,1.0,1.0
+pp_generic|PP_GENERIC|PP|plastic|905|1.0,1.0,1.0,1.0
+pps|PPS_CF|PPS|plastic|1400|1.0,1.0,1.0,1.0
+pps_cf|PPS_CF|PPS|plastic|1400|1.0,1.0,1.0,1.0
+ptfe|PTFE_GENERIC|PTFE|plastic|2170|1.0,1.0,1.0,1.0
+ptfe_generic|PTFE_GENERIC|PTFE|plastic|2170|1.0,1.0,1.0,1.0
+rubber|Rubber_GENERIC|rubber|plastic|1200|1.0,1.0,1.0,1.0
+rubber_generic|Rubber_GENERIC|rubber|plastic|1200|1.0,1.0,1.0,1.0
+silver|Silver_PURE|silver|metal|10490|0.996,0.9934,0.9885,1.0
+silver_pure|Silver_PURE|silver|metal|10490|0.996,0.9934,0.9885,1.0
+soda_lime|SodaLime_GENERIC|soda_lime|glass|2500|0.9929,0.9978,0.9978,0.3
+sodalime_generic|SodaLime_GENERIC|soda_lime|glass|2500|0.9929,0.9978,0.9978,0.3
+softwood|Softwood_GENERIC|spruce|wood|470|0.9294,0.898,0.7765,1.0
+softwood_generic|Softwood_GENERIC|spruce|wood|470|0.9294,0.898,0.7765,1.0
+softwood_pine|Softwood_PINE|pine|wood|500|0.8235,0.7255,0.6314,1.0
+softwood_spruce|Softwood_SPRUCE|spruce|wood|430|0.9294,0.898,0.7765,1.0
+spring_steel|SpringSteel_GENERIC_QUENCHED_TEMPERED|spring_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+springsteel_generic_quenched_tempered|SpringSteel_GENERIC_QUENCHED_TEMPERED|spring_steel|metal|7850|0.7548,0.7439,0.7314,1.0
+spruce|Softwood_SPRUCE|spruce|wood|430|0.9294,0.898,0.7765,1.0
+stainless|Stainless_G304_ANNEALED|stainless|metal|7930|0.8373,0.8204,0.7966,1.0
+stainless_g201_annealed|Stainless_G201_ANNEALED|stainless|metal|7860|0.8373,0.8204,0.7966,1.0
+stainless_g303_annealed|Stainless_G303_ANNEALED|stainless|metal|8030|0.8373,0.8204,0.7966,1.0
+stainless_g304_annealed|Stainless_G304_ANNEALED|stainless|metal|7930|0.8373,0.8204,0.7966,1.0
+stainless_g316l_annealed|Stainless_G316L_ANNEALED|stainless|metal|8000|0.8373,0.8204,0.7966,1.0
+stainless_g316l_as_built|Stainless_G316L_AS_BUILT|stainless|metal|7990|0.8373,0.8204,0.7966,1.0
+stainless_g430_annealed|Stainless_G430_ANNEALED|stainless|metal|7750|0.8373,0.8204,0.7966,1.0
+stainless_g430_cold_worked|Stainless_G430_COLD_WORKED|stainless|metal|7750|0.8373,0.8204,0.7966,1.0
+standard|Standard_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+standard_generic|Standard_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+titanium|Titanium_GR5_ANNEALED|titanium|metal|4430|0.6951,0.6652,0.635,1.0
+titanium_gr5_annealed|Titanium_GR5_ANNEALED|titanium|metal|4430|0.6951,0.6652,0.635,1.0
+titanium_tc4_as_built|Titanium_TC4_AS_BUILT|titanium|metal|4430|0.6951,0.6652,0.635,1.0
+tool_steel|ToolSteel_D2_HARDENED|tool_steel|metal|7700|0.7548,0.7439,0.7314,1.0
+toolsteel_a2_hardened|ToolSteel_A2_HARDENED|tool_steel|metal|7860|0.7548,0.7439,0.7314,1.0
+toolsteel_a3_hardened|ToolSteel_A3_HARDENED|tool_steel|metal|7860|0.7548,0.7439,0.7314,1.0
+toolsteel_d2_hardened|ToolSteel_D2_HARDENED|tool_steel|metal|7700|0.7548,0.7439,0.7314,1.0
+toolsteel_generic_as_built|ToolSteel_GENERIC_AS_BUILT|tool_steel|metal|7800|0.7548,0.7439,0.7314,1.0
+toolsteel_h13_hardened|ToolSteel_H13_HARDENED|tool_steel|metal|7800|0.7548,0.7439,0.7314,1.0
+toolsteel_o1_hardened|ToolSteel_O1_HARDENED|tool_steel|metal|7830|0.7548,0.7439,0.7314,1.0
+toolsteel_s7_hardened|ToolSteel_S7_HARDENED|tool_steel|metal|7830|0.7548,0.7439,0.7314,1.0
+tough|Tough_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+tough_generic|Tough_GENERIC|resin|resin|1150|1.0,1.0,1.0,1.0
+tpu|TPU_SHORE_95A|TPU|plastic|1200|1.0,1.0,1.0,1.0
+tpu_shore_95a|TPU_SHORE_95A|TPU|plastic|1200|1.0,1.0,1.0,1.0
+tpu_sintered|TPU_SINTERED|TPU|plastic|1200|1.0,1.0,1.0,1.0
+transparent|Transparent_GENERIC|resin|resin|1300|1.0,1.0,1.0,0.3
+transparent_generic|Transparent_GENERIC|resin|resin|1300|1.0,1.0,1.0,0.3
+walnut|Hardwood_WALNUT|walnut|wood|640|0.349,0.2392,0.1647,1.0
+woven|Woven_GENERIC|fabric_weave|textile|500|0.9529,0.9647,0.9804,1.0
+woven_generic|Woven_GENERIC|fabric_weave|textile|500|0.9529,0.9647,0.9804,1.0
+"""
+
+_MATERIAL_FAMILY_MODULES = """
+abs_:plastics alloy_steel:metals aluminum:metals american_cherry:wood
+asa:plastics ash:wood beech:wood birch:wood borosilicate:glass
+brass:metals bronze:metals cardboard:paper castable:resins ceramic:resins
+cfrp:plastics copper:metals engineered_wood:wood esd:resins felt:textile
+flexible:resins foamboard:paper fr4:plastics gold:metals hardwood:wood
+high_temp:resins leather:textile magnesium:metals maple:wood mdf:wood
+mild_steel:metals nylon:plastics oak:wood osb:wood paper:paper pc:plastics
+pe:plastics peek:plastics petg:plastics phenolic:plastics pine:wood
+pla:plastics pmma:plastics pom:plastics pp:plastics pps:plastics
+ptfe:plastics rubber:plastics silver:metals soda_lime:glass softwood:wood
+spring_steel:metals spruce:wood stainless:metals standard:resins
+titanium:metals tool_steel:metals tough:resins tpu:plastics
+transparent:resins walnut:wood woven:textile
+"""
+
+_PROPERTY_UNITS = {
+    'areal_density': 'g/m\\u00b2',
+    'compressive_strength_parallel': 'MPa',
+    'density': 'kg/m\\u00b3',
+    'elongation_at_break': '%',
+    'hardness': 'per hardness_scale',
+    'janka_hardness': 'N',
+    'modulus_of_elasticity': 'GPa',
+    'modulus_of_rupture': 'MPa',
+    'poisson_ratio': '',
+    'shear_modulus': 'GPa',
+    'shear_strength': 'MPa',
+    'tensile_strength': 'MPa',
+    'thickness': 'mm',
+    'yield_strength': 'MPa',
+    'glass_transition_temperature': '\\u00b0C',
+    'heat_deflection_temperature': '\\u00b0C',
+    'max_service_temp': '\\u00b0C',
+    'melting_temperature': '\\u00b0C',
+    'specific_heat_capacity': 'J/(kg\\u00b7K)',
+    'thermal_conductivity': 'W/(m\\u00b7K)',
+    'thermal_expansion': '1/K',
+}
+
+_MATERIAL_TABLE = {}
+
+
+def _material_table():
+    if not _MATERIAL_TABLE:
+        for line in _MATERIAL_ROWS.split(chr(10)):
+            if not line.strip():
+                continue
+            key, grade, family, category, density, color = line.split('|')
+            rgba = tuple(float(x) for x in color.split(',')) if color else None
+            _MATERIAL_TABLE[key] = (grade, family, category, float(density),
+                                    rgba)
+    return _MATERIAL_TABLE
+
+
+def _normalize_material_name(name):
+    return name.strip().lower().replace(' ', '_').replace('-', '_')
+
+
+class _MaterialGrade:
+    """A bd_materials material record (the grade): name, family, category
+    and density in kg/m^3 (the only scalar property)."""
+
+    def __init__(self, name, family, category, density, transparent=False):
+        self.name = name
+        self.family = family
+        self.category = category
+        self.density = density
+        self.transparent = transparent
+
+    def __repr__(self):
+        return (self.category.capitalize() + 'Material(name=' +
+                repr(self.name) + ', family=' + repr(self.family) +
+                ', density=' + repr(self.density) + ')')
+
+
+class _FinishedMaterial:
+    """bd_materials' FinishedMaterial: a material grade plus its finish and
+    per-part appearance (lite keeps the fields; only the grade's density and
+    colour have consequences)."""
+
+    def __init__(self, material, finish=None, color=None, thickness_mm=None,
+                 opacity=None, roughness=None, scale=(1.0, 1.0),
+                 rotation=0.0, process=None, pbr=None):
+        self.material = material
+        self.finish = finish
+        self.color = color
+        self.thickness_mm = thickness_mm
+        self.opacity = opacity
+        self.roughness = roughness
+        self.scale = scale
+        self.rotation = rotation
+        self.process = process
+        self.pbr = pbr
+
+    @property
+    def name(self):
+        return self.material.name
+
+    def __repr__(self):
+        return 'FinishedMaterial(' + self.material.name + ')'
+
+
+def _material_from_row(row, density=None, finish=None, process=None,
+                       color=None):
+    grade, family, category, dens, rgba = row
+    fm = _FinishedMaterial(
+        _MaterialGrade(grade, family, category,
+                       dens if density is None else float(density)),
+        finish=finish, process=process, color=color)
+    fm._lite_rgba = rgba
+    return fm
+
+
+def _material_suggestions(key, names):
+    scored = []
+    for n in names:
+        common = 0
+        for a, b in zip(key, n):
+            if a != b:
+                break
+            common += 1
+        if common or key in n or n in key:
+            scored.append((-common, len(n), n))
+    scored = _stable_sorted(scored)
+    return [t[2] for t in scored[:3]]
+
+
+def _resolve_material(name):
+    """bd_materials.resolve: a fresh FinishedMaterial for a family name
+    (its default grade) or a grade name, matched case-insensitively with
+    spaces/hyphens read as underscores."""
+    table = _material_table()
+    key = _normalize_material_name(str(name))
+    if key not in table:
+        names = sorted(table.keys())
+        hint = _material_suggestions(key, names)
+        raise ValueError('unknown material ' + repr(str(name)) +
+                         (' -- did you mean ' + ', '.join(hint) + '?'
+                          if hint else '') +
+                         ' (bd_materials.material_names() lists all ' +
+                         str(len(names)) + ')')
+    return _material_from_row(table[key])
+
+
+def _material_names():
+    return sorted(_material_table().keys())
+
+
+def _canonical_material_name(material):
+    return _normalize_material_name(material.material.name)
+
+
+# OCCT write.step.unit names for the length units (export_step)
+_STEP_UNIT_NAMES = {Unit.MC: 'UM', Unit.MM: 'MM', Unit.CM: 'CM', Unit.M: 'M',
+                    Unit.IN: 'INCH', Unit.FT: 'FT'}
 
 
 class ApproxOption:
@@ -299,6 +635,50 @@ class GeomType:
     OTHER = ('Other',)
 
 
+class _EnumMember:
+    """A minimal Enum member for the build123d 0.12 enums lite must tell
+    apart from plain strings in selectors (filter_by/group_by): identity
+    equality, a name and a value, ordered by value like GroupBy orders
+    Enum keys."""
+
+    def __init__(self, owner, name, value):
+        self._owner = owner
+        self.name = name
+        self.value = value
+
+    def __repr__(self):
+        return '<' + self._owner + '.' + self.name + ': ' + \
+            repr(self.value) + '>'
+
+    def __str__(self):
+        return self._owner + '.' + self.name
+
+    def __lt__(self, other):
+        return self.value < other.value
+
+    def __gt__(self, other):
+        return self.value > other.value
+
+    def __hash__(self):
+        return hash((self._owner, self.value))
+
+
+class Convexity:
+    """How the material of a shape sits around one of its elements
+    (build123d 0.12): a property of a Vertex/Edge/Face RELATIVE to the shape
+    it was selected from - CONVEX (closes around it by less than half a
+    turn), CONCAVE (more than half a turn), SMOOTH (no bend) or SADDLE (both
+    senses present)."""
+    CONVEX = _EnumMember('Convexity', 'CONVEX', 1)
+    CONCAVE = _EnumMember('Convexity', 'CONCAVE', 2)
+    SMOOTH = _EnumMember('Convexity', 'SMOOTH', 3)
+    SADDLE = _EnumMember('Convexity', 'SADDLE', 4)
+
+    @staticmethod
+    def _of(name):
+        return getattr(Convexity, str(name))
+
+
 try:
     FileNotFoundError
 except NameError:
@@ -374,6 +754,28 @@ def _stable_sorted(seq, key=None, reverse=False):
     dec = [(kf(v), (-i if reverse else i), v) for i, v in enumerate(items)]
     dec.sort(reverse=reverse)
     return [t[2] for t in dec]
+
+
+_WARNED = set()
+
+
+def _warn(message, category='UserWarning'):
+    """warnings.warn stand-in (lite ships no warnings module): printed once
+    per message, the way Python's default filter shows a warning once per
+    call site."""
+    if message in _WARNED:
+        return
+    _WARNED.add(message)
+    print(category + ': ' + message)
+
+
+def _js_error_text(exc):
+    """The message of an error raised across the JS boundary."""
+    text = str(exc)
+    for prefix in ('Error: ', 'JavascriptError: '):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    return text
 
 
 def _is_nested_seq(x):
@@ -545,9 +947,6 @@ class Vector:
         (the joint math only ever rotates direction vectors)."""
         R = _axis_angle_mat(tuple(axis.direction), angle)
         return Vector(_mat_vec(R, self._v))
-
-    def to_tuple(self):
-        return self._v
 
     def __repr__(self):
         return 'Vector' + repr(self._v)
@@ -1031,6 +1430,10 @@ class Location:
     def position(self):
         return Vector(self._t)
 
+    @position.setter
+    def position(self, value):
+        self._t = tuple(_v3(value))
+
     @property
     def orientation(self):
         # Euler intrinsic-XYZ extraction (inverse of _rot_mat)
@@ -1046,10 +1449,16 @@ class Location:
             rz = 0.0
         return Vector(math.degrees(rx), math.degrees(ry), math.degrees(rz))
 
-    def to_tuple(self):
-        """((x, y, z), (rx, ry, rz)) — translation plus intrinsic-XYZ Euler
-        DEGREES (build123d Location.to_tuple)."""
-        return tuple(self.position), tuple(self.orientation)
+    @orientation.setter
+    def orientation(self, value):
+        r = _v3(value)
+        self._R = _rot_mat(r[0], r[1], r[2])
+
+    def __iter__(self):
+        """tuple(location) -> (position, orientation): the translation and
+        the intrinsic-XYZ Euler DEGREES (build123d 0.12 replaced
+        Location.to_tuple with iteration)."""
+        return iter((self.position, self.orientation))
 
     @property
     def x_axis(self):
@@ -1117,8 +1526,21 @@ class Location:
                     # TOPO is still exact, only spec-level chaining is lost
                     moved._specs = []
             return moved
-        if isinstance(other, (list, tuple, ShapeList)):
-            return ShapeList([self * s for s in other])
+        if isinstance(other, (str, Vector)):
+            return NotImplemented
+        # build123d 0.12: an iterable (list, generator, map...) is consumed
+        # once and applied element-wise - all Locations compose, all movable
+        # objects (Shapes, Planes) move
+        try:
+            items = list(other)
+        except TypeError:
+            return NotImplemented
+        if all(isinstance(i, Location) for i in items):
+            return [self * i for i in items]
+        if all(isinstance(i, Plane) for i in items):
+            return [self * i for i in items]
+        if all(isinstance(i, (Shape, Plane)) for i in items):
+            return ShapeList([self * i for i in items])
         return NotImplemented
 
     def __neg__(self):
@@ -1146,14 +1568,113 @@ class Pos(Location):
             Location.__init__(self, (x, y, z))
 
 
+def _is_ordering(value):
+    for cls in (Intrinsic, Extrinsic):
+        for name in ('XYZ', 'XZY', 'YZX', 'YXZ', 'ZXY', 'ZYX', 'XYX', 'XZX',
+                     'YZY', 'YXY', 'ZXZ', 'ZYZ'):
+            if getattr(cls, name) == value:
+                return True
+    return False
+
+
 class Rotation(Location):
-    def __init__(self, X=0, Y=0, Z=0, **kwargs):
-        if len(kwargs) > 0:
-            X = kwargs.get('X', X)
-            Y = kwargs.get('Y', Y)
-            Z = kwargs.get('Z', Z)
+    """A pure rotation (build123d 0.12 Rotation overloads): Euler angles
+    Rotation(X, Y, Z, ordering=Intrinsic.XYZ), a RotationLike
+    Rotation((x, y, z) | Vector | Rotation, ordering), or - new in 0.12 -
+    Rotation(Axis, angle): a rotation about the axis LINE (an axis off the
+    origin carries a translation, like gp_Trsf.SetRotation)."""
+
+    def __init__(self, *args, **kwargs):
+        rotation_like = kwargs.pop('rotation', None)
+        x_angle = kwargs.pop('X', None)
+        y_angle = kwargs.pop('Y', None)
+        z_angle = kwargs.pop('Z', None)
+        ordering = kwargs.pop('ordering', None)
+        axis = kwargs.pop('axis', None)
+        axis_angle = kwargs.pop('angle', None)
+        if kwargs:
+            raise TypeError('Unexpected keyword arguments: ' +
+                            ', '.join(kwargs))
+        if args:
+            first = args[0]
+            if isinstance(first, Axis):
+                axis = first if axis is None else axis
+                if len(args) > 1 and axis_angle is None:
+                    axis_angle = args[1]
+                if len(args) > 2:
+                    raise TypeError('Too many arguments for axis-angle '
+                                    'Rotation')
+            elif isinstance(first, (Rotation, Vector, tuple)):
+                rotation_like = first if rotation_like is None \
+                    else rotation_like
+                if len(args) > 1 and ordering is None:
+                    ordering = args[1]
+                if len(args) > 2:
+                    raise TypeError('Too many arguments for RotationLike '
+                                    'Rotation')
+            elif isinstance(first, (int, float)):
+                if x_angle is None:
+                    x_angle = first
+                if len(args) > 1 and y_angle is None:
+                    y_angle = args[1]
+                if len(args) > 2 and z_angle is None:
+                    z_angle = args[2]
+                if len(args) > 3 and ordering is None:
+                    ordering = args[3]
+                if len(args) > 4:
+                    raise TypeError('Too many arguments for Euler-angle '
+                                    'Rotation')
+            else:
+                raise TypeError('Invalid positional arguments: ' + repr(args))
+        has_axis_angle = axis is not None or axis_angle is not None
+        has_euler = x_angle is not None or y_angle is not None or \
+            z_angle is not None
         Location.__init__(self)
-        self._R = _rot_mat(X, Y, Z)
+        if has_axis_angle:
+            if axis is None or axis_angle is None:
+                raise TypeError('Both an Axis and angle must be provided')
+            if rotation_like is not None or has_euler or ordering is not None:
+                raise TypeError('Unsupported or ambiguous Rotation arguments')
+            if not isinstance(axis, Axis):
+                raise TypeError('Axis must be an Axis, not ' +
+                                type(axis).__name__)
+            if not isinstance(axis_angle, (int, float)):
+                raise TypeError('Angle must be an int or float, not ' +
+                                type(axis_angle).__name__)
+            if axis_angle != 0.0:
+                R = _axis_angle_mat(tuple(axis.direction), axis_angle)
+                p = tuple(axis.position)
+                q = _mat_vec(R, p)
+                self._R = R
+                self._t = (p[0] - q[0], p[1] - q[1], p[2] - q[2])
+            return
+        if ordering is not None and not _is_ordering(ordering):
+            raise TypeError('ordering must be an Extrinsic or Intrinsic value')
+        if rotation_like is not None:
+            if has_euler:
+                raise TypeError('Unsupported or ambiguous Rotation arguments')
+            if isinstance(rotation_like, Rotation):
+                self._R, self._t = rotation_like._R, rotation_like._t
+                return
+            if not isinstance(rotation_like, (Vector, tuple)):
+                raise TypeError('rotation must be a Rotation, Vector, or '
+                                'tuple of Euler angles')
+            angles = list(rotation_like)[:3]
+            angles.extend([0.0] * (3 - len(angles)))
+        else:
+            angles = [x_angle if x_angle is not None else 0.0,
+                      y_angle if y_angle is not None else 0.0,
+                      z_angle if z_angle is not None else 0.0]
+        for a in angles:
+            if not isinstance(a, (int, float)):
+                raise TypeError('Euler angles must be int or float values')
+        if ordering is None or ordering == Intrinsic.XYZ:
+            self._R = _rot_mat(angles[0], angles[1], angles[2])
+        else:
+            intrinsic = not ordering.startswith('x')
+            self._R = _euler_mat(tuple(angles),
+                                 ordering if intrinsic else ordering[1:],
+                                 intrinsic)
 
 
 Rot = Rotation
@@ -1545,8 +2066,6 @@ def _wrap_like(obj, topo):
         cls = Curve
     elif cls is Face:
         cls = Sketch
-    elif cls is Vertex:
-        cls = Part
     res = object.__new__(cls)
     Shape.__init__(res, topo)
     if isinstance(res, Mixin1D):
@@ -1571,11 +2090,107 @@ def _tolist(objs):
     return list(objs)
 
 
+class ShapeHistory:
+    """The record of what an operation did to its inputs' sub-shapes
+    (build123d 0.12+ topology.ShapeHistory, wrapping the kernel's own
+    BRepTools_History). Booleans, unify-cleans and fillets/chamfers hand
+    over their record (the JS primitives keep it on the result as
+    ._csHist); records chain with merge(). 'before' are the inputs that were
+    already there and 'brought' the ones the operation brought in: Select.LAST
+    keeps a result sub-shape that descends (untouched or rebuilt) from
+    something brought in - or from no input at all - and Select.NEW one that
+    descends from no input in any form. The Trace itself runs in JS
+    (HistClassify) over IsSame-keyed maps, like upstream's."""
+
+    def __init__(self, history=None, before=(), brought=()):
+        self.wrapped = history      # JS BRepTools_History, None = empty record
+        self.before = list(before)  # raw TopoDS inputs
+        self.brought = list(brought)
+
+    @classmethod
+    def of(cls, *shapes):
+        """The records the given shapes carry, merged into one, or None."""
+        found = []
+        for shape in shapes:
+            if isinstance(shape, (list, tuple)):
+                nested = cls.of(*shape)
+                if nested is not None:
+                    found.append(nested)
+            else:
+                history = getattr(shape, '_history', None)
+                if isinstance(history, ShapeHistory):
+                    found.append(history)
+        if not found:
+            return None
+        if len(found) == 1:
+            return found[0]
+        merged = cls(before=[s for h in found for s in h.before],
+                     brought=[s for h in found for s in h.brought])
+        for history in found:
+            merged.merge(history)
+        return merged
+
+    def copy(self):
+        return ShapeHistory(self.wrapped, self.before, self.brought)
+
+    def merge(self, later):
+        """Extend this record with the operation that came after it."""
+        # (None never crosses into JS: Brython hands it over as an object)
+        if later is None or later.wrapped is None:
+            return self
+        if self.wrapped is None:
+            self.wrapped = w.HistMerge(later.wrapped)
+        else:
+            self.wrapped = w.HistMerge(self.wrapped, later.wrapped)
+        return self
+
+    def with_inputs(self, before, brought):
+        """Say which inputs were already there and which were brought in."""
+        self.before = list(before)
+        self.brought = list(brought)
+        return self
+
+    def _flags(self, topos):
+        if not topos:
+            return []
+        hist = self.wrapped if self.wrapped is not None else False
+        return list(w.HistClassify(hist, self.before, self.brought,
+                                   list(topos)))
+
+    def is_last(self, shape):
+        return bool(self._flags([_topo(shape)])[0] & 1)
+
+    def is_new(self, shape):
+        return bool(self._flags([_topo(shape)])[0] & 2)
+
+
+class _RecordHolder:
+    """Lets ShapeHistory.of() merge bare records."""
+
+    def __init__(self, record):
+        self._history = record
+
+
+def _record_of(topo, before, brought):
+    """The ShapeHistory a history-recording JS primitive left on its result
+    (HistRecord), with the inputs exactly as that operation saw them (a
+    CacheOp hit hands back the record of THAT result); an empty record over
+    the given inputs when the result carries none."""
+    rec = w.HistRecord(topo) if topo is not None else None
+    if rec is None:
+        return ShapeHistory(None, before, brought)
+    rec = list(rec)
+    args = list(rec[1])
+    tools = list(rec[2])
+    return ShapeHistory(rec[0], args if args else before,
+                        tools if tools else brought)
+
+
 class Shape:
     """A shape wrapping a raw OCCT TopoDS shape (self.topo, may be None for
     empty algebra starters like Part()). Supports build123d algebra."""
 
-    material = ''   # upstream Shape surface (BasePartObject reads it)
+    _material = None
     _dim = None     # topological dimension; set per subclass like upstream
 
     def __init__(self, topo=None):
@@ -1602,6 +2217,38 @@ class Shape:
         # here so joints / locate() / .position can reason about frames.
         self._loc = None  # None = identity
         self.joints = {}
+        # how this shape was made (build123d 0.12 _made_by): Select.LAST/NEW
+        self._history = None
+        # the shapes this one was selected through, outermost first (0.12)
+        self.topo_path = ()
+
+    def _made_by(self, history):
+        """Note the record of how this shape was made (Select.LAST/NEW)."""
+        self._history = history
+        return self
+
+    def _select(self, shapes, select):
+        """Narrow a list of this shape's sub-shapes by what the last
+        operation did (upstream Shape._select)."""
+        if select is None or select == Select.ALL:
+            return shapes
+        if select != Select.LAST and select != Select.NEW:
+            raise ValueError('Invalid input, must be one of ' +
+                             repr([Select.ALL, Select.LAST, Select.NEW]))
+        record = self._history
+        if record is None:
+            raise ValueError('Select.' + str(select) + ' needs a record of '
+                             'how this shape was made, and this one has none '
+                             '- it is the result of no recorded operation')
+        if len(shapes) == 0:
+            return ShapeList()
+        flags = record._flags([s.topo for s in shapes])
+        bit = 1 if select == Select.LAST else 2
+        out = ShapeList()
+        for i in range(len(shapes)):
+            if flags[i] & bit:
+                out.append(shapes[i])
+        return out
 
     @property
     def wrapped(self):
@@ -1637,27 +2284,63 @@ class Shape:
             # this) costs O(len(children)) per selector call for nothing
             value.children.append(self)
 
+    def _extracted_from(self, source):
+        """Record that this sub-shape was selected from 'source' (upstream
+        _extracted_from: topo_path grows by the source). This is NOT the
+        assembly parent (.parent), so selecting never adds children."""
+        if isinstance(source, Shape):
+            self.topo_path = tuple(source.topo_path) + (source,)
+        return self
+
     @property
     def topo_parent(self):
-        """The shape this sub-shape was selected from (upstream
-        Shape.topo_parent; lite's selectors track the same link as .parent)."""
-        return self._parent
+        """The OUTERMOST shape this sub-shape was selected through
+        (build123d 0.12 topo_path[0])."""
+        path = self.topo_path
+        return path[0] if path else None
 
     @topo_parent.setter
     def topo_parent(self, value):
-        # upstream topo_parent is a PLAIN attribute (objects assign it when
-        # re-homing selector results); it is not the assembly link, so no
-        # children bookkeeping happens here
-        self._parent = value
+        # upstream: topo_path = () or (value,); it is not the assembly link,
+        # so no children bookkeeping happens here
+        self.topo_path = () if value is None else (value,)
+
+    @property
+    def topo_owner(self):
+        """The shape this one was DIRECTLY selected from (0.12
+        topo_path[-1])."""
+        path = self.topo_path
+        return path[-1] if path else None
+
+    @property
+    def convexity(self):
+        raise ValueError('a ' + type(self).__name__ + ' has no convexity - '
+                         'only a Vertex, Edge or Face selected from a larger '
+                         'shape does')
 
     # --- location bookkeeping (baked geometry + tracked frame) ---
     @property
     def location(self):
-        return self._loc if self._loc is not None else Location()
+        # a COPY, like upstream's Location(self.wrapped.Location()): editing
+        # the returned location must not move the shape
+        return Location(self._loc) if self._loc is not None else Location()
 
     @location.setter
     def location(self, value):
         self.locate(value)
+
+    @property
+    def global_location(self):
+        """This shape's location composed with every assembly ancestor's
+        (build123d Shape.global_location)."""
+        loc = self.location
+        node = self._parent
+        depth = 0
+        while node is not None and depth < 256:
+            loc = node.location * loc
+            node = node._parent
+            depth += 1
+        return loc
 
     @property
     def position(self):
@@ -1686,7 +2369,7 @@ class Shape:
         if len(topos) == 1:
             return _wrap_like(self, topos[0])
         vols = [_solid_volume(t) for t in topos]
-        fused = w.Union(topos)
+        fused = w.Union(topos, False, 0, False, True)
         # COMPROMISE(kernel-guard): this OCCT 8.0.1 wasm build has a known
         # kernel fault where BooleanFuse SILENTLY DROPS an operand when
         # coplanar faces meet along BSpline edges. The JS Union now detects
@@ -1704,7 +2387,9 @@ class Shape:
                     'rebuild could not recover it. This build\\'s '
                     'BooleanFuse mishandles coplanar BSpline-edged contact '
                     'faces; offset or restructure the touching geometry.')
-        return _wrap_like(self, fused)
+        # the left operand was there before, the rest is brought in
+        record = _record_of(fused, topos[:1], topos[1:])
+        return _wrap_like(self, fused)._made_by(record)
 
     def __iter__(self):
         """Iterate contained shapes like build123d Compound iteration:
@@ -1726,16 +2411,29 @@ class Shape:
         if len(others) == 0:
             return _wrap_like(self, self.topo)
         tools = [_topo(o) for o in others]
+        originals = list(tools)
+        tool_record = None
         if len(tools) > 1:
             # fuse the tools first: ONE boolean cut, like build123d — the
             # sequential per-tool cuts are also less robust in this OCCT
-            tools = [w.Union(tools)]
-        return _wrap_like(self, w.Difference(self.topo, tools))
+            fused_tools = w.Union(tools, False, 0, False, True)
+            tool_record = _record_of(fused_tools, tools[:1], tools[1:])
+            tools = [fused_tools]
+        cut = w.Difference(self.topo, tools, False, 0, False, True)
+        # upstream records ONE cut with every tool brought in; the tool
+        # pre-fuse chains in front of it (BRepTools_History merge)
+        record = _record_of(cut, [self.topo], tools)
+        if tool_record is not None:
+            record = tool_record.copy().merge(record)
+        record.with_inputs([self.topo], originals)
+        return _wrap_like(self, cut)._made_by(record)
 
     def __and__(self, other):
         others = _tolist(other)
         topos = [self.topo] + [_topo(o) for o in others]
-        return _wrap_like(self, w.Intersection(topos))
+        common = w.Intersection(topos, False, 0, False, True)
+        return _wrap_like(self, common)._made_by(
+            _record_of(common, topos[:1], topos[1:]))
 
     def __neg__(self):
         """Reversed-orientation copy (build123d's Mixin2D.__neg__:
@@ -1769,21 +2467,24 @@ class Shape:
         return self.__and__(list(others))
 
     # --- selectors ---
-    def edges(self, indices=None):
-        """All (unique) edges as a ShapeList of Edge. indices=[...] is the
+    def edges(self, select=None, indices=None):
+        """All (unique) edges as a ShapeList of Edge, or those the operation
+        that made this shape brought in or created (select=Select.LAST) or
+        created outright (Select.NEW) - build123d 0.12. indices=[...] is the
         CascadeStudio escape hatch used by the GUI Fillet tool."""
         if self.topo is None:
             return ShapeList()
-        sel = w.Edges(self.topo)
+        # degenerated edges are never returned (upstream filters them)
+        sel = w.Edges(self.topo).nonDegenerate()
         idxs = list(sel.indices())
         raws = list(sel.edges())
         out = ShapeList()
         for i in range(len(idxs)):
             if indices is None or idxs[i] in indices:
                 out.append(Edge(raws[i], parent=self, index=idxs[i]))
-        return out
+        return self._select(out, select)
 
-    def faces(self):
+    def faces(self, select=None):
         if self.topo is None:
             return ShapeList()
         sel = w.Faces(self.topo)
@@ -1792,39 +2493,52 @@ class Shape:
         out = ShapeList()
         for i in range(len(idxs)):
             out.append(Face(raws[i], parent=self, index=idxs[i]))
-        return out
+        return self._select(out, select)
 
-    def vertices(self):
+    def vertices(self, select=None):
         if self.topo is None:
             return ShapeList()
         out = ShapeList()
         seen = set()   # a list made this O(n^2) on solid-heavy builders
         def _cb(vtx):
             p = w._vertexPoint(vtx)
-            key = (round(p[0], 9), round(p[1], 9), round(p[2], 9))
+            # INTEGER keys: Brython hashes an integral JS number (int) and the
+            # same value arriving as a float differently, so float-tuple keys
+            # let duplicates through there
+            key = (int(round(p[0] * 1e9)), int(round(p[1] * 1e9)),
+                   int(round(p[2] * 1e9)))
             if key not in seen:
                 seen.add(key)
                 out.append(Vertex(vtx, parent=self))
         w.ForEachVertex(self.topo, _cb)
-        return out
+        return self._select(out, select)
 
-    def solids(self):
+    def solids(self, select=None):
         if self.topo is None:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
-            out.append(Solid(s))
+            out.append(Solid(s)._extracted_from(self))
         w.ForEachSolid(self.topo, _cb)
-        return out
+        return self._select(out, select)
 
-    def wires(self):
+    def shells(self, select=None):
         if self.topo is None:
             return ShapeList()
         out = ShapeList()
         def _cb(i, s):
-            out.append(Wire(s))
+            out.append(Shell(s)._extracted_from(self))
+        w.ForEachShell(self.topo, _cb)
+        return self._select(out, select)
+
+    def wires(self, select=None):
+        if self.topo is None:
+            return ShapeList()
+        out = ShapeList()
+        def _cb(i, s):
+            out.append(Wire(s)._extracted_from(self))
         w.ForEachWire(self.topo, _cb)
-        return out
+        return self._select(out, select)
 
     def face(self):
         fs = self.faces()
@@ -1842,6 +2556,123 @@ class Shape:
         ss = self.solids()
         return ss[0] if len(ss) > 0 else None
 
+    # --- tessellation (build123d 0.12 tessellate_with_uvs) ---
+    def _tessellation(self, tolerance, angular_tolerance, atlas_packing,
+                      atlas_gutter):
+        if self.topo is None:
+            raise ValueError('Cannot tessellate an empty shape')
+        m = w.TessellateWithUVs(self.topo, tolerance, angular_tolerance,
+                                bool(atlas_packing), float(atlas_gutter))
+        v = list(m.vertices)
+        n = list(m.normals)
+        uv = list(m.uvs)
+        t = list(m.triangles)
+        verts = [Vector(v[i], v[i + 1], v[i + 2]) for i in range(0, len(v), 3)]
+        norms = [Vector(n[i], n[i + 1], n[i + 2]) for i in range(0, len(n), 3)]
+        uvs = [(uv[i], uv[i + 1]) for i in range(0, len(uv), 2)]
+        tris = [(int(t[i]), int(t[i + 1]), int(t[i + 2]))
+                for i in range(0, len(t), 3)]
+        return verts, tris, norms, uvs
+
+    def tessellate(self, tolerance, angular_tolerance=0.1):
+        verts, tris, _n, _uv = self._tessellation(tolerance,
+                                                  angular_tolerance, False,
+                                                  0.0)
+        return verts, tris
+
+    def tessellate_with_uvs(self, tolerance, angular_tolerance=0.1,
+                            atlas_packing=True, atlas_gutter=0.0):
+        """(vertices, triangles, normals, uvs): the tessellation with
+        per-face [0, 1] UVs, optionally packed into one atlas (0.12)."""
+        return self._tessellation(tolerance, angular_tolerance,
+                                  atlas_packing, atlas_gutter)
+
+    # --- materials and mass (build123d 0.12) ---
+    @property
+    def material(self):
+        """The shape's material: its own, else the nearest assembly
+        ancestor's (cached once found), else None."""
+        node = self
+        depth = 0
+        while node is not None and depth < 256:
+            m = node._material
+            if m is not None:
+                if node is not self:
+                    self._material = m
+                return m
+            node = node._parent
+            depth += 1
+        return None
+
+    @material.setter
+    def material(self, value):
+        """A bd_materials FinishedMaterial, a material NAME ('brass',
+        'Mild Steel', a grade name...) or None. Sets the colour from the
+        material's PBR colour, like upstream."""
+        if value is None:
+            self._material = None
+            return
+        if isinstance(value, _FinishedMaterial):
+            m = value
+        elif isinstance(value, str):
+            m = _resolve_material(value)
+        else:
+            raise TypeError('Non supported type ' + type(value).__name__ +
+                            ', need FinishedMaterial, str or None')
+        self._material = m
+        rgba = getattr(m, '_lite_rgba', None)
+        if rgba:
+            self.color = Color(*rgba)
+
+    def compute_volume(self):
+        """The GProp measure of the shape (0.12): 0 for a vertex, length
+        for 1-D, area for 2-D, volume for solids."""
+        if self.topo is None:
+            return 0.0
+        st = self.topo.ShapeType().value
+        if st == 7:
+            return 0.0
+        if st in (5, 6):
+            return float(w.EdgeLength(self.topo))
+        if st in (3, 4):
+            return float(w.SurfaceArea(self.topo))
+        return float(self.volume)
+
+    def compute_mass(self, mass_unit=None, length_unit=None):
+        """volume x density in mass_unit (default grams), the volume
+        measured in length_unit^3 (default mm) - build123d 0.12."""
+        mass_unit = Unit.G if mass_unit is None else mass_unit
+        length_unit = Unit.MM if length_unit is None else length_unit
+        if self.topo is None:
+            return 0.0
+        volume = self.volume
+        if volume == 0:
+            return 0.0
+        material = self.material
+        density = material.material.density if \
+            isinstance(material, _FinishedMaterial) else None
+        if density is None:
+            raise ValueError("Shape's density is missing")
+        if density == 0:
+            _warn("Shape's density is 0")
+            return 0.0
+        return volume * density * UNITS_PER_KILOGRAM[mass_unit] / \
+            UNITS_PER_METER[length_unit] ** 3
+
+    def mass(self, mass_unit=None, length_unit=None):
+        """Mass from the material's density (0.12): solids and closed
+        shells weigh their volume; faces, edges and vertices weigh 0."""
+        if self.topo is None:
+            return 0.0
+        if isinstance(self, Shell):
+            return self.compute_mass(mass_unit, length_unit)
+        st = self.topo.ShapeType().value
+        if st in (2, 3):   # solid / shell
+            return self.compute_mass(mass_unit, length_unit)
+        if st in (0, 1):   # compound / compsolid
+            return Compound.mass(self, mass_unit, length_unit)
+        return 0.0
+
     # --- measurement ---
     @property
     def volume(self):
@@ -1853,7 +2684,7 @@ class Shape:
     def area(self):
         if self.topo is None:
             return 0.0
-        return w.SurfaceArea(self.topo)
+        return float(w.SurfaceArea(self.topo))
 
     @property
     def length(self):
@@ -1908,8 +2739,8 @@ class Shape:
         (build123d Shape.closest_points)."""
         return self.distance_to_with_closest_points(other)[1:3]
 
-    def bounding_box(self, tolerance=None):
-        return BoundBox(list(w.BoundingBox(self.topo)))
+    def bounding_box(self, tolerance=None, optimal=True):
+        return BoundBox(self)
 
     # --- placement ---
     def moved(self, loc):
@@ -2203,6 +3034,42 @@ class Compound(Shape):
     Compound subclasses; builder transfers classify through Compound and
     extract base objects with get_type)."""
 
+    @property
+    def volume(self):
+        """build123d Compound.volume: the solids/shells one level down
+        (Compound.get_type reads the DIRECT children of the compound and of
+        its direct child compounds). For an ASSEMBLY that means each plain
+        child counts and a nested sub-assembly does not (its parts sit two
+        levels down) - assemblies.rst: assembly3.volume == 1. Lite flattens
+        single-child layers, so a non-assembly compound keeps the per-solid
+        sum (COMPROMISE(volume-measure))."""
+        if self.topo is None:
+            return 0.0
+        if self.children:
+            total = 0.0
+            for child in self.children:
+                if isinstance(child, Shape) and not child.children:
+                    total += child.volume
+            return total
+        return w.SolidsVolume(self.topo)
+
+    def mass(self, mass_unit=None, length_unit=None):
+        """build123d 0.12 Compound.mass: an assembly sums its children's
+        masses (each with its own material); otherwise every solid and shell
+        weighs in with the compound's material."""
+        if self.children:
+            return sum(c.mass(mass_unit, length_unit) for c in self.children)
+        total = 0.0
+        material = self.material
+        pieces = list(self.get_type(Solid)) + list(self.get_type(Shell))
+        if not pieces and self.topo is not None and \
+                self.topo.ShapeType().value in (2, 3):
+            pieces = [self]
+        for piece in pieces:
+            piece._material = material
+            total += piece.compute_mass(mass_unit, length_unit)
+        return total
+
     @classmethod
     def make_triad(cls, axes_scale):
         """The coordinate-system triad symbol (build123d Compound.make_triad):
@@ -2224,31 +3091,44 @@ class Compound(Shape):
         parts.append(Pos(0, 0, s) * (arrow.rotate(Axis.Y, -90)))
         return Curve(parts)
 
-    def __init__(self, children=None, label='', obj=None, **kwargs):
-        # Compound(shape.wrapped) / Compound(topods): a single raw TopoDS shape
-        # (build123d's Shape(obj) form, used by Compound subclasses that call
-        # super().__init__(builder.part.wrapped, ...) - tutorial_joints' Hinge)
-        if children is None and obj is not None:
-            children = obj  # upstream Compound.__init__'s first kwarg is obj=
-        if children is not None and not isinstance(children, Shape) and \
-                hasattr(children, 'ShapeType'):
-            children = [children]
-        topos = [_topo(c) for c in _tolist(children) if not (isinstance(c, Shape) and c.topo is None)]
+    def __init__(self, obj=None, label='', color=None, material=None,
+                 joints=None, parent=None, children=None, **kwargs):
+        """build123d Compound(obj, label, color, material, joints, parent,
+        children): obj is a raw TopoDS shape or shape(s) gathered into ONE
+        compound; children= builds an ASSEMBLY - the children become the
+        compound's anytree children (their .parent is this compound) and
+        make up its geometry when no obj is given."""
+        if obj is not None and not isinstance(obj, Shape) and \
+                hasattr(obj, 'ShapeType'):
+            obj = [obj]
+        kids = _tolist(children) if children is not None else []
+        source = obj if obj is not None else kids
+        topos = [_topo(c) for c in _tolist(source)
+                 if not (isinstance(c, Shape) and c.topo is None)]
         topo = None
         if len(topos) == 1:
             topo = topos[0]
         elif len(topos) > 1:
             topo = w.MakeCompound(topos)
         Shape.__init__(self, topo)
-        self.label = label
-        self.children = _tolist(children)
+        self.label = label or ''
+        if color is not None:
+            self.color = color
+        if material is not None and material != '':
+            self.material = material
+        self.children = []
+        for kid in kids:
+            if isinstance(kid, Shape):
+                kid._parent = self
+            self.children.append(kid)
         # Compound(..., joints=<dict>) — build123d's Compound.__init__ adopts a
         # joint dict and REPARENTS every joint onto the new compound. This is
         # how a Compound subclass built from a builder keeps the joints the
         # builder collected (tutorial_joints' Hinge).
-        joints = kwargs.get('joints')
         if joints:
             self.joints = {k: j._lite_rebind(self) for k, j in joints.items()}
+        if parent is not None:
+            self.parent = parent
 
     # upstream tags every topology class with its dimension (Shape._dim);
     # operations dispatch fillet/chamfer/offset on it. A generic Compound's
@@ -2380,10 +3260,13 @@ def _apply_compound_kwargs(self, label, color, material, joints, parent,
     self.label = label or ''
     if color is not None:
         self.color = color
-    if material:
+    if material is not None and material != '':
         self.material = material
     if children:
         self.children = list(children)
+        for kid in self.children:
+            if isinstance(kid, Shape):
+                kid._parent = self
     if joints:
         self.joints = {k: j._lite_rebind(self) for k, j in joints.items()}
     if parent is not None:
@@ -2399,7 +3282,7 @@ class Part(Compound):
     _dim = 3
 
     def __init__(self, topo=None, obj=None, label='', color=None,
-                 material='', joints=None, parent=None, children=None,
+                 material=None, joints=None, parent=None, children=None,
                  **kwargs):
         if topo is None and obj is not None:
             topo = obj
@@ -2414,12 +3297,22 @@ class Solid(Shape):
 
     _dim = 3
 
-    def __init__(self, topo=None, obj=None, label='', **kwargs):
+    def __init__(self, topo=None, obj=None, label='', color=None,
+                 material=None, joints=None, parent=None, **kwargs):
         if topo is None and obj is not None:
             topo = obj
         Shape.__init__(self, _adopt_solid_topo(topo))
         if label:
             self.label = label
+        if color is not None:
+            self.color = color
+        if material is not None:
+            self.material = material
+        if joints:
+            self.joints = dict((k, j._lite_rebind(self))
+                               for k, j in joints.items())
+        if parent is not None:
+            self.parent = parent
 
     @classmethod
     def extrude(cls, obj, direction):
@@ -2463,6 +3356,8 @@ class Solid(Shape):
             t = _topo(o)
             wires.append(t if t.ShapeType().value == 5
                          else w.GetWire(t, 0, True))
+        if ruled:
+            return cls(w.Loft(wires, False, True))
         return cls(w.Loft(wires))
 
     @classmethod
@@ -2534,7 +3429,7 @@ class Sketch(Compound):
     _dim = 2
 
     def __init__(self, topo=None, obj=None, label='', color=None,
-                 material='', joints=None, parent=None, children=None,
+                 material=None, joints=None, parent=None, children=None,
                  **kwargs):
         if topo is None and obj is not None:
             topo = obj
@@ -2855,6 +3750,26 @@ class Mixin1D(Shape):
             out.append(Edge.make_line(pnt, pnt + kappa_dir * length))
         return out
 
+    def common_plane(self, *lines, tolerance=1e-6):
+        """The plane containing this and the given edges/wires, or None
+        (build123d Mixin1D.common_plane, including its CPython-set-order
+        choice of normal sign - see _cpy_set_order)."""
+        return _common_plane([self] + list(lines), tolerance)
+
+    @property
+    def convexity(self):
+        """How the shape this edge was selected from sits around it
+        (build123d 0.12 Mixin1D.convexity): the dihedral crease between its
+        two faces in topo_parent, sampled along the edge; a seam is SMOOTH."""
+        parent = self.topo_parent
+        if parent is None or getattr(parent, 'topo', None) is None:
+            raise ValueError('edge has no valid parent')
+        try:
+            name = w.EdgeConvexity(self.topo, _topo(parent))
+        except Exception as exc:
+            raise ValueError(_js_error_text(exc))
+        return Convexity._of(name)
+
     def reversed(self):
         """A copy of this Edge/Wire with the opposite orientation
         (build123d Edge.reversed - the OCCT orientation flag, not a rebuild)."""
@@ -3082,7 +3997,8 @@ def _single_edge_of(curve):
 class Edge(Mixin1D):
     def __init__(self, topo, parent=None, index=None):
         Mixin1D.__init__(self, topo)
-        self.parent = parent
+        if parent is not None:
+            self._extracted_from(parent)
         self.index = index
 
     @property
@@ -3193,12 +4109,9 @@ class Edge(Mixin1D):
 
     @property
     def is_interior(self):
-        """True when this edge lies between two faces of the SAME body rather
-        than on its outer boundary (build123d Edge.is_interior): offset both
-        adjoining faces outward by length/100 and see whether they still
-        intersect in an edge."""
-        return bool(w.EdgeIsInterior(self.topo, _topo(self.parent)
-                                    if self.parent is not None else None))
+        """Is this a CONCAVE edge of the shape it was selected from (build123d
+        0.12: convexity == Convexity.CONCAVE)."""
+        return self.convexity == Convexity.CONCAVE
 
     def find_tangent(self, angle):
         """The normalized parameters at which this edge's tangent is at 'angle'
@@ -3247,10 +4160,12 @@ class Edge(Mixin1D):
     def position_at(self, u):
         # orientation-aware like build123d (Axis(edge) stays raw-curve).
         # COMPROMISE(edge-orientation): which end of a selector edge is
-        # FORWARD depends on the kernel's construction history, and OCCT
-        # 8.0.1 (wasm) does not always orient sub-edges the way OCP 7.x
-        # does — scripts that measure along Axis(edge) of a selected edge
-        # (the joints examples) can legitimately land at the opposite end.
+        # FORWARD depends on the CONSTRUCTION history of the shape, and lite
+        # builds its shapes through different operations than upstream (the
+        # kernel is not the cause: native build123d on OCP 7.9.3 and on OCP
+        # 8.0.1 agree byte for byte, and upstream's own topology on this same
+        # wasm kernel matches them) — scripts that measure along Axis(edge)
+        # of a selected edge (the joints examples) can land at the other end.
         uu = u if self.is_forward else 1.0 - u
         return Vector(tuple(w._edgePointAt(self.topo, float(uu))))
 
@@ -3362,6 +4277,29 @@ class Edge(Mixin1D):
                               list(plane.x_dir))
         edge = cls(topo)
         return _reverse_1d(edge) if cw and partial else edge
+
+    @classmethod
+    def make_ellipse(cls, x_radius, y_radius, plane=None, start_angle=360.0,
+                     end_angle=360.0, angular_direction=None):
+        """Full ellipse or elliptical arc edge (build123d
+        Edge.make_ellipse): a full ellipse by default (start == end); a
+        CLOCKWISE arc is the CCW arc over the same span traversed backwards."""
+        if plane is None:
+            plane = Plane.XY
+        cw = getattr(angular_direction, 'name',
+                     angular_direction) == 'CLOCKWISE'
+        a0, a1 = float(start_angle), float(end_angle)
+        if (a0 % 360.0) == (a1 % 360.0):
+            a0, a1 = 0.0, 360.0
+        elif cw:
+            a0, a1 = a1, a0
+        if a1 <= a0:
+            a1 += 360.0
+        spec = _ellipse_arc_spec((0.0, 0.0, 0.0), x_radius, y_radius, a0, a1,
+                                 0.0)
+        local = Curve(w.WireFromSegments(_chain_segments([spec])), [spec])
+        edge = cls(_single_edge_of(plane.location * local).topo)
+        return _reverse_1d(edge) if cw else edge
 
     @classmethod
     def make_three_point_arc(cls, p1, p2, p3):
@@ -3555,7 +4493,8 @@ class Face(Shape):
                 # build123d's Face(wire) is always PLANAR (OnlyPlane=True)
                 topo = w.MakeFace(outer, True, True)
         Shape.__init__(self, topo)
-        self.parent = parent
+        if parent is not None:
+            self._extracted_from(parent)
         self.index = index
 
     @classmethod
@@ -3585,7 +4524,7 @@ class Face(Shape):
 
     @property
     def area(self):
-        return w._faceArea(self.topo)
+        return float(w._faceArea(self.topo))
 
     def center(self, center_of=CenterOf.GEOMETRY):
         if center_of == CenterOf.BOUNDING_BOX:
@@ -3651,6 +4590,9 @@ class Face(Shape):
         origin = Vector(tuple(d[0]))
         du, dv = Vector(tuple(d[1])), Vector(tuple(d[2]))
         z_dir = du.cross(dv).normalized()
+        # build123d 0.12: a REVERSED face's location z matches normal_at
+        if w._shapeIsReversed(self.topo):
+            z_dir = -z_dir
         x_dir = Vector(user_x_dir) if user_x_dir is not None else du
         return Location(Plane(origin=origin, x_dir=x_dir, z_dir=z_dir))
 
@@ -3680,15 +4622,27 @@ class Face(Shape):
 
     @property
     def is_circular_convex(self):
-        """Is this cylinder/sphere/torus face convex relative to its own
-        geometry (build123d Face.is_circular_convex)."""
-        return self._curvature_sign > _TOL_1E6
+        """Is this face CONVEX (build123d 0.12: convexity == CONVEX, for any
+        surface type)."""
+        return self.convexity == Convexity.CONVEX
 
     @property
     def is_circular_concave(self):
-        """Is this cylinder/sphere/torus face concave relative to its own
-        geometry (build123d Face.is_circular_concave)."""
-        return self._curvature_sign < -_TOL_1E6
+        """Is this face CONCAVE (build123d 0.12: convexity == CONCAVE)."""
+        return self.convexity == Convexity.CONCAVE
+
+    @property
+    def convexity(self):
+        """How the material sits around this face (build123d 0.12
+        Face.convexity): the signs of the principal curvatures relative to
+        the outward normal, sampled across the face."""
+        if self.topo is None:
+            raise ValueError('an empty face has no convexity')
+        try:
+            name = w.FaceConvexity(self.topo)
+        except Exception as exc:
+            raise ValueError(_js_error_text(exc))
+        return Convexity._of(name)
 
     def offset(self, amount):
         """The face's plane offset by amount (build123d Face.offset)."""
@@ -4003,7 +4957,11 @@ class Face(Shape):
         pts = [[list(_v3(p)) for p in row] for row in points]
         # [] = no smoothing (None does not survive CacheOp's JSON hashing)
         smooth = list(smoothing) if smoothing is not None else []
-        topo = w.SurfaceFromPoints(pts, tol, min_deg, max_deg, smooth)
+        # build123d 0.12: the smoothing (variational) branch needs degree >= 6
+        # in OCCT 8 for C2 (PLib_JacobiPolynomial); upstream passes
+        # DegMax=max(max_deg, 6) there
+        degmax = max(max_deg, 6) if smoothing is not None else max_deg
+        topo = w.SurfaceFromPoints(pts, tol, min_deg, degmax, smooth)
         if topo is None:
             raise ValueError('B-spline surface approximation failed')
         return cls(topo)
@@ -4089,6 +5047,14 @@ class Shell(Shape):
         shell._face_shapes = None
         return shell
 
+    @property
+    def volume(self):
+        """The volume a manifold shell encloses, else 0 (build123d
+        Shell.volume) - what Shell.mass() weighs."""
+        if self.topo is None:
+            return 0.0
+        return float(w.ShellEnclosedVolume([f.topo for f in self.faces()]))
+
     def __init__(self, faces=None):
         if faces is None:
             Shape.__init__(self, None)
@@ -4097,6 +5063,11 @@ class Shell(Shape):
         if isinstance(faces, Shape):
             Shape.__init__(self, faces.topo)
             self._face_shapes = list(faces.faces())
+            return
+        if not isinstance(faces, (list, tuple)) and hasattr(faces, 'ShapeType'):
+            # Shell(TopoDS_Shell): wrap the raw shell (shells() selector)
+            Shape.__init__(self, faces)
+            self._face_shapes = None
             return
         fl = [f for f in _tolist(faces)]
         self._face_shapes = fl
@@ -4124,20 +5095,67 @@ class Vertex(Shape):
                 pt = tuple(Vector(topo))
             topo = w.PointVertex(list(pt))
         Shape.__init__(self, topo)
-        self.parent = parent
+        if parent is not None:
+            self._extracted_from(parent)
+
+    def _xyz(self):
+        """The CURRENT point (build123d 0.12 reads BRep_Tool.Pnt, so a
+        moved/located vertex reports where it is now), cached per topo."""
+        topo = self.topo
+        cache = getattr(self, '_xyz_cache', None)
+        if cache is not None and cache[0] is topo:
+            return cache[1]
         p = w._vertexPoint(topo)
         # float() NOW: on MicroPython the elements arrive as JS number
         # proxies and every later arithmetic op would cross the FFI
-        self.X, self.Y, self.Z = float(p[0]), float(p[1]), float(p[2])
+        xyz = (float(p[0]), float(p[1]), float(p[2]))
+        self._xyz_cache = (topo, xyz)
+        return xyz
+
+    @property
+    def X(self):
+        return self._xyz()[0]
+
+    @property
+    def Y(self):
+        return self._xyz()[1]
+
+    @property
+    def Z(self):
+        return self._xyz()[2]
 
     def center(self, center_of=CenterOf.GEOMETRY):
-        return Vector(self.X, self.Y, self.Z)
-
-    def to_tuple(self):
-        return (self.X, self.Y, self.Z)
+        return Vector(self._xyz())
 
     def __iter__(self):
         return iter((self.X, self.Y, self.Z))
+
+    @property
+    def convexity(self):
+        """How the shape this vertex was selected from sits around it
+        (build123d 0.12 Vertex.convexity): selected through a face it is a
+        corner of that face (read in the face's own parameters); straight off
+        a solid or shell it is classified by the creases meeting there."""
+        face = None
+        for step in reversed(self.topo_path):
+            t = getattr(step, 'topo', None)
+            if t is not None and t.ShapeType().value == 4:
+                face = step
+                break
+        try:
+            if face is not None:
+                name = w.VertexConvexityOnFace(self.topo, face.topo)
+            else:
+                parent = self.topo_parent
+                if parent is None or getattr(parent, 'topo', None) is None:
+                    raise ValueError('this vertex was not selected from a '
+                                     'shape, so it has no convexity')
+                name = w.VertexConvexityCrease(self.topo, _topo(parent))
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError(_js_error_text(exc))
+        return Convexity._of(name)
 
     def _pos_key(self):
         # INTEGER key tuple: micron-rounded position. Ints, not floats —
@@ -4167,9 +5185,53 @@ class Vertex(Shape):
 
 
 class BoundBox:
-    def __init__(self, six):
+    """An axis-aligned bounding box (build123d BoundBox). Since 0.12 it can
+    be built straight from a Shape (BoundBox(shape)) and carries upstream's
+    full predicate set - covers/covered_by, contains/within (enclosure WITH
+    relevant-dimensional interior), contains_properly, intersects/disjoint
+    (distance within tolerance), touches and overlaps (shared interior,
+    neither containing the other) - with degenerate axes coincident in both
+    boxes dropped from interior comparisons (coplanar rectangles compare in
+    2-D). A void box (empty shape) has wrapped None and answers False."""
+
+    def __init__(self, *args, **kwargs):
+        shape = kwargs.pop('shape', None)
+        kwargs.pop('tolerance', None)
+        kwargs.pop('optimal', None)
+        six = kwargs.pop('bounding_box', None)
+        if kwargs:
+            raise TypeError('Unexpected keyword arguments: ' +
+                            ', '.join(kwargs))
+        void = False
+        if args:
+            a = args[0]
+            if isinstance(a, BoundBox):
+                six = None if a.wrapped is None else \
+                    list(tuple(a.min)) + list(tuple(a.max))
+                void = a.wrapped is None
+            elif isinstance(a, (Shape, Builder)) or hasattr(a, 'ShapeType'):
+                shape = a
+            elif a is None:
+                void = True
+            elif _is_nested_seq(a) or isinstance(a, (list, tuple)):
+                six = list(a)
+            else:
+                raise TypeError('Invalid positional arguments: ' + repr(args))
+        if shape is not None:
+            topo = shape.topo if isinstance(shape, Shape) else \
+                (_topo(shape) if isinstance(shape, Builder) else shape)
+            if topo is None:
+                void = True
+            else:
+                bb = w.BoundingBox(topo)
+                if bb:
+                    six = list(bb)
+                else:
+                    void = True
         if six is None:
+            void = True
             six = [0.0] * 6
+        self.wrapped = None if void else True
         self.min = Vector(six[0], six[1], six[2])
         self.max = Vector(six[3], six[4], six[5])
 
@@ -4177,15 +5239,145 @@ class BoundBox:
     def size(self):
         return self.max - self.min
 
+    @property
+    def measure(self):
+        """The bounding box's Lebesgue measure: length, area or volume over
+        its non-degenerate axes."""
+        result = 1.0
+        for x in self.size:
+            if x > _TOL_1E6:
+                result *= x
+        return result
+
     def center(self):
         return (self.min + self.max) * 0.5
 
     @property
     def diagonal(self):
+        if self.wrapped is None:
+            return 0.0
         return (self.max - self.min).length
 
+    def add(self, obj, tol=None):
+        """A copy expanded to enclose a point or another box (upstream adds
+        a Bnd_Box gap of tol, default TOL = 1e-2, on every side)."""
+        tol = 1e-2 if tol is None else tol
+        pts = []
+        if self.wrapped is not None:
+            pts.extend([tuple(self.min), tuple(self.max)])
+        if isinstance(obj, BoundBox):
+            if obj.wrapped is not None:
+                pts.extend([tuple(obj.min), tuple(obj.max)])
+        else:
+            pts.append(tuple(Vector(obj)))
+        if not pts:
+            return BoundBox(None)
+        lo = [min(p[i] for p in pts) - tol for i in range(3)]
+        hi = [max(p[i] for p in pts) + tol for i in range(3)]
+        return BoundBox(lo + hi)
+
+    @staticmethod
+    def find_outside_box_2d(bb1, bb2):
+        """Deprecated since build123d 0.12: use BoundBox.contains()."""
+        _warn('Use BoundBox.contains() to identify the bounding box that '
+              'encloses the other.', 'DeprecationWarning')
+        if (bb1.min.X < bb2.min.X and bb1.max.X > bb2.max.X and
+                bb1.min.Y < bb2.min.Y and bb1.max.Y > bb2.max.Y):
+            return bb1
+        if (bb2.min.X < bb1.min.X and bb2.max.X > bb1.max.X and
+                bb2.min.Y < bb1.min.Y and bb2.max.Y > bb1.max.Y):
+            return bb2
+        return None
+
+    def _axes(self, other):
+        return list(zip(tuple(self.min), tuple(self.max),
+                        tuple(other.min), tuple(other.max)))
+
+    def _interior_axes(self, other, tolerance):
+        axes = []
+        for s0, s1, o0, o1 in self._axes(other):
+            if s1 - s0 <= tolerance and o1 - o0 <= tolerance:
+                if abs((s0 + s1) / 2 - (o0 + o1) / 2) > tolerance:
+                    return None
+            else:
+                axes.append((s0, s1, o0, o1))
+        return axes
+
+    def _has_interior_overlap(self, other, tolerance):
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        axes = self._interior_axes(other, tolerance)
+        if axes is None:
+            return False
+        for s0, s1, o0, o1 in axes:
+            if not (max(s0, o0) < min(s1, o1) - tolerance):
+                return False
+        return True
+
+    def covers(self, other, tolerance=_TOL_1E6):
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        for s0, s1, o0, o1 in self._axes(other):
+            if not (s0 <= o0 + tolerance and o1 <= s1 + tolerance):
+                return False
+        return True
+
+    def covered_by(self, other, tolerance=_TOL_1E6):
+        return other.covers(self, tolerance)
+
+    def contains(self, other, tolerance=_TOL_1E6):
+        return self.covers(other, tolerance) and \
+            self._has_interior_overlap(other, tolerance)
+
+    def contains_properly(self, other, tolerance=_TOL_1E6):
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        axes = self._interior_axes(other, tolerance)
+        if not axes:
+            return False
+        for s0, s1, o0, o1 in axes:
+            if not (s0 + tolerance < o0 and o1 < s1 - tolerance):
+                return False
+        return True
+
+    def within(self, other, tolerance=_TOL_1E6):
+        return other.contains(self, tolerance)
+
+    def intersects(self, other, tolerance=_TOL_1E6):
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        dist2 = 0.0
+        for s0, s1, o0, o1 in self._axes(other):
+            gap = max(0.0, o0 - s1, s0 - o1)
+            dist2 += gap * gap
+        return dist2 ** 0.5 <= tolerance
+
+    def disjoint(self, other, tolerance=_TOL_1E6):
+        return not self.intersects(other, tolerance)
+
+    def touches(self, other, tolerance=_TOL_1E6):
+        return self.intersects(other, tolerance) and \
+            not self._has_interior_overlap(other, tolerance)
+
+    def overlaps(self, other, tolerance=_TOL_1E6):
+        return self._has_interior_overlap(other, tolerance) and \
+            not self.contains(other, tolerance) and \
+            not other.contains(self, tolerance)
+
+    def is_inside(self, other, tolerance=_TOL_1E6):
+        """Deprecated since build123d 0.12: use within()."""
+        _warn('Use BoundBox.within() instead.', 'DeprecationWarning')
+        return self.within(other, tolerance)
+
+    def to_align_offset(self, align):
+        """Amount to move the object to achieve the desired alignment."""
+        a = _norm_align(align, 3)
+        return Vector(_align_shift(a, tuple(self.min), tuple(self.max)))
+
     def __repr__(self):
-        return 'BoundBox(' + repr(tuple(self.min)) + ', ' + repr(tuple(self.max)) + ')'
+        return ('bbox: ' + repr(self.min.X) + ' <= x <= ' + repr(self.max.X) +
+                ', ' + repr(self.min.Y) + ' <= y <= ' + repr(self.max.Y) +
+                ', ' + repr(self.min.Z) + ' <= z <= ' + repr(self.max.Z))
 
 
 class OrientedBoundBox:
@@ -4388,6 +5580,9 @@ def _canonical_center_key(shape):
 def _sort_key_fn(key):
     if isinstance(key, Axis):
         return lambda s: _axis_value(s, key)
+    if key is Convexity:
+        # 0.12: group_by(Convexity) keys every shape by its convexity
+        return lambda s: s.convexity
     if isinstance(key, Mixin1D) and getattr(key, 'topo', None) is not None:
         # sort_by(<edge or wire>): the parameter, along that 1-D shape, of the
         # point closest to each object's centre (build123d's
@@ -4424,17 +5619,26 @@ def _property_getter(p):
     except AttributeError:
         pass
     state = [None]
-    def get(s):
-        name = state[0]
-        if name is None:
-            klass = type(s)
+
+    def find_name(klasses):
+        for klass in klasses:
             for cand in dir(klass):
                 try:
                     if getattr(klass, cand) is p:
-                        name = cand
-                        break
+                        return cand
                 except Exception:
                     pass
+        return None
+
+    def get(s):
+        name = state[0]
+        if name is None:
+            # the receiver's class first, then every topology class (a
+            # property of one class - Solid.volume - used on another whose
+            # class overrides it - a Part's Compound.volume)
+            name = find_name([type(s)]) or find_name(
+                [Shape, Solid, Shell, Face, Mixin1D, Edge, Wire, Vertex,
+                 Compound, Part, Sketch, Curve])
             if name is None:
                 raise TypeError('unsupported property key: ' + repr(p))
             state[0] = name
@@ -4470,7 +5674,7 @@ def topo_distance_to(other):
         if not isinstance(s, type(sources[0])):
             raise ValueError('Topological distance requires shapes of the '
                              'same type')
-    parent = getattr(sources[0], 'parent', None)
+    parent = sources[0].topo_parent
     if parent is None or parent.topo is None:
         raise ValueError('Topological distance requires shapes with a '
                          'topo_parent')
@@ -4592,6 +5796,9 @@ class ShapeList(list):
     def filter_by(self, f, reverse=False, tolerance=1e-5):
         if isinstance(f, Axis):
             pred = lambda s: _is_parallel(s, f, tolerance)
+        elif isinstance(f, _EnumMember) and f._owner == 'Convexity':
+            # 0.12: filter_by(Convexity.CONCAVE)
+            pred = lambda s: s.convexity == f
         elif isinstance(f, tuple):  # a GeomType member
             def pred(s):
                 try:
@@ -4604,7 +5811,7 @@ class ShapeList(list):
             def pred(s):
                 try:
                     for v in s.vertices():
-                        d = (Vector(v.to_tuple()) - Vector(f.origin)).dot(
+                        d = (Vector(tuple(v)) - Vector(f.origin)).dot(
                             Vector(f.z_dir))
                         if abs(d) > tolerance:
                             return False
@@ -4640,10 +5847,11 @@ class ShapeList(list):
         ties carry the incoming order - which is itself a useful contract for
         CHAINED sorts (sort_by(SortBy.RADIUS).sort_by(Axis.Z) keeps the radius
         order inside each equal-Z group). COMPROMISE(traversal-order): that
-        incoming order is the CAD kernel's traversal of lite's construction,
-        so a script that resolves a COMPLETE tie this way (or keeps whichever
-        of two symmetric results came last) can land on the other candidate
-        than it does on OCP 7.x - which is exactly the ambiguity the canonical
+        incoming order is the CAD kernel's traversal of lite's construction
+        (not a kernel-version effect: native OCP 7.9.3 and 8.0.1 agree), so a
+        script that resolves a COMPLETE tie this way (or keeps whichever of
+        two symmetric results came last) can land on the other candidate
+        than upstream's construction does - which is exactly the ambiguity the canonical
         rule below exists to remove, opt-in on both sides. tie_break=True instead resolves ties
         with _canonical_sort_key, so identical geometry always sorts identically
         rather than in the kernel's traversal order (see Curve.canonical). Like
@@ -4722,6 +5930,18 @@ class ShapeList(list):
 
     def __lt__(self, key):
         return self.sort_by(key, reverse=True)
+
+    def __rshift__(self, key):
+        """shapes >> key: the LAST group of group_by(key)."""
+        return self.group_by(key)[-1]
+
+    def __lshift__(self, key):
+        """shapes << key: the FIRST group of group_by(key)."""
+        return self.group_by(key)[0]
+
+    def __or__(self, f):
+        """shapes | f: filter_by(f) (e.g. edges() | Convexity.CONCAVE)."""
+        return self.filter_by(f)
 
     def edges(self):
         out = ShapeList()
@@ -4809,10 +6029,33 @@ class GroupBy:
         return self.group(self.key_f(shape))
 
 
+# build123d 0.12's build123d_type class variable (an external-application
+# type tag on the geometry, topology and builder classes)
+for _cls in (Vector, Axis, Location, Plane, Shape, Vertex, Edge, Wire, Face,
+             Shell, Solid, Compound, Curve, Sketch, Part, ShapeList):
+    _cls.build123d_type = _cls.__name__
+Pos.build123d_type = 'Location'
+Rotation.build123d_type = 'Location'
+del _cls
+
+
 # ------------------------------------------------------------- builders ---
 
 _builders = []
 _loc_stack = []
+
+
+class _ObjectScope:
+    """The construction firewall around a custom Base*Object (build123d 0.12
+    BaseObjectMeta + an isolated BuildScope): while the object's __init__
+    runs, the objects and builders it creates see NO builder and NO location
+    context, so nothing it makes for itself leaks into the caller's builder
+    or gets replicated by the caller's Locations. Pushed onto _builders by
+    _BaseObjectMeta.__call__; the finished object is then placed and
+    published to the caller like any built-in object."""
+
+    def __init__(self):
+        self._loc_depth = len(_loc_stack)
 
 
 def _reset_state():
@@ -4829,29 +6072,36 @@ def _active_builder(cls=None):
     if not _builders:
         return None
     b = _builders[-1]
+    if isinstance(b, _ObjectScope):
+        return None
     if cls is not None and not isinstance(b, cls):
         return None
     return b
 
 
 def _ctx_locations():
-    """The active local locations, in the CURRENT builder's scope only.
+    """The active locations, in the CURRENT scope only.
 
-    build123d 0.11.1 gives every builder a fresh location context on entry
-    (build_common Builder.__enter__ sets local_locations = LocationList(
-    [Location()])), so a Locations context wrapping a builder does NOT
-    replicate what the builder constructs - the builder always builds locally.
-    Truncating at the builder's own stack depth reproduces that exactly; before
-    this, an enclosing GridLocations fanned out objects created inside a nested
-    BuildSketch (key_concepts_builder's documented "Locations around a builder"
-    case built four rectangles instead of one)."""
-    builder = _active_builder()
-    start = builder._loc_depth if (builder is not None and
-                                   builder._loc_depth is not None) else 0
+    build123d gives every builder (and, since 0.12, every custom object
+    construction) a fresh identity location context on entry, so a Locations
+    context wrapping a builder does NOT replicate what the builder constructs
+    - the builder always builds locally on Plane.XY. Since 0.12 the enclosing
+    locations instead PLACE the builder's finished result (its publication
+    locations, captured in Builder.__enter__). Truncating at the innermost
+    scope's stack depth reproduces both."""
+    top = _builders[-1] if _builders else None
+    start = top._loc_depth if (top is not None and
+                               top._loc_depth is not None) else 0
     locs = [Location()]
     for ctx in _loc_stack[start:]:
         locs = [a * b for a in locs for b in ctx.locations]
     return locs
+
+
+def _loc_is_identity(loc):
+    t = loc._t
+    return _mat_is_identity(loc._R) and abs(t[0]) <= _TOL and \
+        abs(t[1]) <= _TOL and abs(t[2]) <= _TOL
 
 
 def _sub_shapes_of(shape, kind):
@@ -4867,6 +6117,13 @@ def _sub_shapes_of(shape, kind):
     return list(shape.solids())
 
 
+def _ik6(x):
+    """A micron-rounded INTEGER key component: float-tuple keys hash
+    inconsistently on Brython (an integral JS number arrives as int, the
+    same value computed in Python as float)."""
+    return int(round(float(x) * 1e6))
+
+
 def _shape_key(shape, kind):
     """Geometric identity of a sub-shape, for 'post - pre' set arithmetic.
 
@@ -4877,28 +6134,29 @@ def _shape_key(shape, kind):
     topo = shape.topo
     if kind == 'vertex':
         p = w._vertexPoint(topo)
-        return (round(p[0], 6), round(p[1], 6), round(p[2], 6))
+        return (_ik6(p[0]), _ik6(p[1]), _ik6(p[2]))
     if kind == 'edge':
         c = w._edgeMidpoint(topo)
-        return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-                round(w._edgeLength(topo), 6))
+        return (_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+                _ik6(w._edgeLength(topo)))
     if kind == 'face' or kind == 'shell':
         # CenterOfMass is a VOLUME integral in this build and degenerates to
         # the bounding-box corner on an open shape, so every face of a solid
         # got the same key — the face centroid is the honest identity
         c = tuple(w._faceCentroid(topo)) if kind == 'face' else \
             tuple(w.CenterOfMass(topo))
-        return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-                round(w.SurfaceArea(topo), 6))
+        return (_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+                _ik6(w.SurfaceArea(topo)))
     c = tuple(w.CenterOfMass(topo))
-    return (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-            round(w.SolidsVolume(topo), 6))
+    return (_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+            _ik6(w.SolidsVolume(topo)))
 
 
 def new_edges(*objects, combined=None):
     """build123d's new_edges(): the edges of 'combined' that none of 'objects'
     contributed - i.e. the edges the combining operation created
-    (topology/utils.py). Used by 'builder.edges(Select.NEW)'."""
+    (topology/utils.py). It predates 0.12's operation record and still
+    compares shapes geometrically, like upstream's."""
     if combined is None:
         raise ValueError('new_edges() requires combined=')
     topos = []
@@ -4919,13 +6177,13 @@ def new_edges(*objects, combined=None):
     keyed = {}
     for e in own:
         c = w._edgeMidpoint(e.topo)
-        keyed[(round(c[0], 6), round(c[1], 6), round(c[2], 6),
-               round(w._edgeLength(e.topo), 6))] = e
+        keyed[(_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+               _ik6(w._edgeLength(e.topo)))] = e
     out = ShapeList()
     for raw in w.NewEdges(combined.topo, topos):
         c = w._edgeMidpoint(raw)
-        key = (round(c[0], 6), round(c[1], 6), round(c[2], 6),
-               round(w._edgeLength(raw), 6))
+        key = (_ik6(c[0]), _ik6(c[1]), _ik6(c[2]),
+               _ik6(w._edgeLength(raw)))
         match = keyed.get(key)
         # COMPROMISE(new-edges-partial): an edge that is only PARTLY new comes
         # back as a trimmed piece with no counterpart in 'combined'; it is
@@ -4984,52 +6242,149 @@ def _align_sketch_faces(obj):
     return Sketch(topos[0] if len(topos) == 1 else w.MakeCompound(topos))
 
 
+def _pieces_of(obj):
+    """The separate objects an operation brings into a builder: a Compound's
+    DIRECT children (upstream _add_to_context reads them with
+    Compound.get_type), otherwise the object itself. Kept separate so the
+    fuse sees each piece as its own tool, like upstream's
+    self._obj.fuse(*solids) - and so the record knows each piece was brought
+    in."""
+    if obj is None or obj.topo is None:
+        return []
+    kids = list(w.DirectChildren(obj.topo))
+    if len(kids) > 1 and obj.topo.ShapeType().value == 0:
+        return [_wrap_like(obj, k) for k in kids]
+    return [obj]
+
+
 def _combine(builder, obj, mode, warn_cls=None):
-    """Merge obj into builder._obj per mode. Returns the CREATED object."""
+    """Merge obj into builder._obj per mode (upstream Builder._add_to_context
+    for the builder's own shape type) and leave the operation's record on
+    the result for Select.LAST/NEW: what was there before, what the
+    operation brought in, and the kernel's history of the combining
+    boolean. Returns the CREATED object."""
     if builder is None or mode == Mode.PRIVATE:
+        return obj
+    if isinstance(builder, BuildLine):
+        builder._add_curve(obj, mode)
         return obj
     if isinstance(builder, BuildSketch) and obj is not None and \
             getattr(obj, 'topo', None) is not None:
         obj = _align_sketch_faces(obj)
     before = builder._obj
-    pre = builder._sub_shape_lists()
-    if mode == Mode.REPLACE or builder._obj is None or builder._obj.topo is None:
+    if before is not None and before.topo is None:
+        before = None
+    pieces = _pieces_of(obj)
+    before_topos = [before.topo] if before is not None else []
+    if mode == Mode.REPLACE:
+        # the replacement IS the result, so nothing was brought in; its own
+        # record (a fillet's, a split's...) relates it to what it replaces
+        record = ShapeHistory.of(obj)
+        record = record.copy() if record is not None else ShapeHistory()
+        builder._obj = builder._wrap(obj.topo)
+        builder._obj._made_by(record.with_inputs(before_topos, []))
+        return obj
+    if before is None:
         if mode == Mode.SUBTRACT:
             raise ValueError('Mode.SUBTRACT with nothing to subtract from')
         if mode == Mode.INTERSECT:
             raise ValueError('Mode.INTERSECT with nothing to intersect')
-        builder._obj = builder._wrap(obj.topo)
+        if len(pieces) > 1:
+            fused = pieces[0] + pieces[1:]
+            builder._obj = builder._wrap(fused.topo)
+            record = fused._history.copy() if fused._history is not None \
+                else ShapeHistory()
+        else:
+            builder._obj = builder._wrap(obj.topo)
+            record = ShapeHistory()    # nothing changed: all untouched
     elif mode == Mode.ADD:
-        builder._obj = builder._wrap((builder._obj + obj).topo)
+        result = before + pieces
+        builder._obj = builder._wrap(result.topo)
+        record = result._history.copy()
     elif mode == Mode.SUBTRACT:
-        builder._obj = builder._wrap((builder._obj - obj).topo)
+        result = before - pieces
+        builder._obj = builder._wrap(result.topo)
+        record = result._history.copy()
     elif mode == Mode.INTERSECT:
-        builder._obj = builder._wrap((builder._obj & obj).topo)
+        result = before & obj
+        builder._obj = builder._wrap(result.topo)
+        record = result._history.copy()
     else:
         raise ValueError('unsupported mode ' + repr(mode))
-    builder._record_lasts(pre, obj, before)
+    builder._obj._made_by(record.with_inputs(before_topos,
+                                             [p.topo for p in pieces]))
     return obj
 
 
+def _publish_to(target, placed, mode):
+    """Hand a finished builder's PLACED result to the builder it was nested
+    in (upstream _PublicationService.publish -> target._add_to_context):
+    a BuildPart takes faces as pending faces and a line as the pending
+    path, a BuildSketch takes a line as pending edges, everything else is
+    combined per mode."""
+    if target is None or placed is None or mode == Mode.PRIVATE:
+        return
+    if isinstance(target, BuildLine):
+        target._add_curve(placed, mode)
+    elif isinstance(target, BuildSketch):
+        if isinstance(placed, Mixin1D):
+            specs = placed._specs if placed._specs else \
+                _specs_from_topo_edges(placed)
+            target.pending_edge_specs.extend(specs)
+        else:
+            _combine(target, placed, mode)
+    elif isinstance(target, BuildPart):
+        if isinstance(placed, Mixin1D):
+            # a BuildLine directly inside BuildPart provides the sweep() path
+            target.pending_path = placed
+        elif placed.topo is not None and len(placed.solids()) == 0 and \
+                len(placed.faces()) > 0:
+            for f in placed.faces():
+                target.pending_faces.append(Sketch(f.topo))
+                target.pending_face_planes.append(Plane(f))
+        else:
+            _combine(target, placed, mode)
+
+
+def _builder_placement(p):
+    if isinstance(p, Location):
+        return p
+    if isinstance(p, Plane):
+        return p.location
+    if isinstance(p, Face):
+        return Plane(p).location
+    raise ValueError('Builder does not accept placement ' + type(p).__name__)
+
+
 class Builder:
+    """Base of the three builders (build123d 0.12 BuildScope model): a
+    builder constructs LOCALLY on Plane.XY - its selectors, _obj and
+    <part|sketch|line>_local are all local - and on exit PUBLISHES its
+    result through its output placement(s) and the locations of any
+    enclosing Locations context (so an enclosing Locations now positions a
+    builder), handing the placed result to the builder it is nested in."""
+
     _shape_cls = Part
     _tag = 'part'
+    _obj_name = 'None'
+    build123d_type = 'Builder'
 
-    def __init__(self, *workplanes, mode=Mode.ADD):
-        planes = []
-        for wp in workplanes:
-            if isinstance(wp, Plane):
-                planes.append(wp)
-            elif isinstance(wp, Location):
-                planes.append(Plane(wp))
-            elif isinstance(wp, Face):
-                planes.append(Plane(wp))
+    def __init__(self, *placements, mode=Mode.ADD):
+        locs = []
+        for p in placements:
+            if isinstance(p, (list, tuple)):
+                locs.extend(_builder_placement(q) for q in p)
             else:
-                raise TypeError('workplane must be a Plane/Location/Face')
-        self.workplanes = planes or [Plane.XY]
+                locs.append(_builder_placement(p))
+        self.output_placements = tuple(locs) if locs else (Location(),)
+        self.placements = self.output_placements
         self.mode = mode
+        self._label = ''
         self._obj = None
         self._loc_depth = None
+        self._publication_locations = (Location(),)
+        self._placed_obj = None
+        self._parent = None
         self.pending_faces = []        # [Face/Sketch] for BuildPart
         self.pending_face_planes = []  # parallel [Plane] (build123d layout)
         self.joints = {}               # joints created with to_part=None
@@ -5037,6 +6392,23 @@ class Builder:
 
     def _wrap(self, topo):
         return self._shape_cls(topo)
+
+    @property
+    def label(self):
+        """Label assigned to the builder's output object (0.12)."""
+        return self._label
+
+    @label.setter
+    def label(self, value):
+        self._label = value
+
+    @property
+    def max_dimension(self):
+        """Maximum size of the object in all directions."""
+        o = self._obj
+        if o is None or o.topo is None:
+            return 0.0
+        return o.bounding_box().diagonal
 
     def _lite_copy(self):
         """copy.copy(<builder>) — a SHALLOW copy of the builder, exactly like
@@ -5051,13 +6423,18 @@ class Builder:
         return clone
 
     def __enter__(self):
+        # where the ENCLOSING location context publishes this builder's
+        # result (0.12: an enclosing Locations positions a builder) - read
+        # BEFORE this builder's own (fresh) location scope starts
+        self._publication_locations = tuple(_ctx_locations())
         self._loc_depth = len(_loc_stack)
+        self._placed_obj = None
         # build123d only transfers a builder's result to the enclosing
         # builder when both with-statements share a stack frame (an inner
         # builder inside e.g. a BaseSketchObject subclass __init__ must NOT
         # auto-combine — the object machinery adds it instead)
         self._python_frame = w._pythonCallerFrame()
-        enclosing = _builders[-1] if _builders else None
+        enclosing = _active_builder()
         if enclosing is not None and \
                 enclosing._python_frame is self._python_frame:
             self._parent = enclosing
@@ -5066,118 +6443,132 @@ class Builder:
         _builders.append(self)
         return self
 
+    def _exit_extras(self):
+        """Any builder specific exit actions."""
+
     def __exit__(self, exc_type, exc, tb):
         del _loc_stack[self._loc_depth:]
-        _builders.pop()
+        for i in range(len(_builders) - 1, -1, -1):
+            if _builders[i] is self:
+                del _builders[i:]
+                break
         if exc_type is not None:
             return False
-        self._finalize(self._parent)
-        # transfer joints created in this context onto the result shape
-        # (build123d BuildPart._exit_extras)
-        if self.joints and self._obj is not None:
-            self._obj.joints = self.joints
-            for j in self.joints.values():
-                j.parent = self._obj
+        self._exit_extras()
+        local = self._obj
+        if local is not None and local.topo is None:
+            local = None
+        if local is not None and self._label:
+            local.label = self._label
+        placed = self._place(local)
+        self._placed_obj = placed
+        parent = self._parent
+        if parent is not None and self.mode != Mode.PRIVATE:
+            if placed is None:
+                _warn(self._obj_name + ' is None - ' + type(self).__name__ +
+                      " didn't create anything")
+            else:
+                _publish_to(parent, placed, self.mode)
         return False
 
-    def _finalize(self, parent):
-        if parent is not None and self._obj is not None and self._obj.topo is not None:
-            _combine(parent, self._obj, self.mode)
+    def _place(self, local):
+        """Apply every publication location x output placement combination
+        once (upstream _PublicationService.place)."""
+        if local is None or local.topo is None:
+            return None
+        combos = [p * o for p in self._publication_locations
+                  for o in self.output_placements]
+        if len(combos) == 1 and _loc_is_identity(combos[0]):
+            return local
+        placed = [loc * local for loc in combos]
+        if len(placed) == 1:
+            result = placed[0]
+        else:
+            result = self._place_many(placed)
+        if local.label and not result.label:
+            result.label = local.label
+        if local.color is not None and result.color is None:
+            result.color = local.color
+        if getattr(local, '_material', None) is not None and \
+                getattr(result, '_material', None) is None:
+            result._material = local._material
+        return result
+
+    def _place_many(self, placed):
+        return self._shape_cls(w.MakeCompound([p.topo for p in placed]))
+
+    def _output_obj(self):
+        """The PLACED result: after exit the published object; inside the
+        builder's own scope it is placed on demand; inside a nested location
+        context (where the scope belongs to the Locations) upstream hands
+        back the local object."""
+        if self._placed_obj is not None:
+            return self._placed_obj
+        if _builders and _builders[-1] is self and \
+                len(_loc_stack) == self._loc_depth:
+            return self._place(self._obj)
+        return self._obj
 
     @property
     def location(self):
-        """The result shape's location (build123d BuildPart.location)."""
-        return self._obj.location if self._obj is not None else Location()
+        """The (placed) result's location (build123d BuildPart.location)."""
+        o = self._output_obj()
+        return o.location if o is not None else Location()
 
     def locate(self, loc):
         if self._obj is None:
             raise ValueError('builder has no result to locate')
         return self._obj.locate(loc)
 
-    # ---------------------------------------------------------------- #
-    # Select.LAST / Select.NEW bookkeeping (build123d Builder.lasts)
-    #
-    # Upstream records, per operation, 'post - pre' over the builder's
-    # sub-shapes — except for the builder's OWN shape type, which is just the
-    # objects that were combined in (build_common._add_to_context). The set
-    # difference relies on TopoDS identity surviving a boolean; lite wraps
-    # every shape in a fresh handle, so the difference is taken on GEOMETRY
-    # (vertex position / edge midpoint+length / face center+area / solid
-    # center+volume, rounded to 6 digits), which answers the same question.
-    # ---------------------------------------------------------------- #
-    _SELECT_KINDS = ('vertex', 'edge', 'face', 'solid')
-    # the shape type each builder itself produces (build123d Builder._shape)
-    _core_kind = 'solid'
-
-    def _sub_shape_lists(self):
-        """Current vertices/edges/faces/solids. Topology traversal only — the
-        measurements that turn these into keys are deferred until a
-        Select.LAST/NEW query actually asks for them."""
-        o = self._obj
-        if o is None or o.topo is None:
-            return dict((k, []) for k in Builder._SELECT_KINDS)
-        return {'vertex': list(o.vertices()), 'edge': list(o.edges()),
-                'face': list(o.faces()), 'solid': list(o.solids())}
-
-    def _record_lasts(self, pre, created, before):
-        self._lasts_pre = pre
-        self._lasts_post = self._sub_shape_lists()
-        self._lasts_created = created
-        self._lasts_before = before
-        self._lasts_cache = {}
-
-    def _lasts(self, kind):
-        if not hasattr(self, '_lasts_post'):
-            return ShapeList()
-        if kind in self._lasts_cache:
-            return ShapeList(self._lasts_cache[kind])
-        if kind == self._core_kind:
-            created = self._lasts_created
-            out = ShapeList(_sub_shapes_of(created, kind)) if created is not None \
-                else ShapeList()
-        else:
-            seen = set(_shape_key(s, kind) for s in self._lasts_pre[kind])
-            out = ShapeList([s for s in self._lasts_post[kind]
-                             if _shape_key(s, kind) not in seen])
-        self._lasts_cache[kind] = list(out)
-        return out
-
     @property
     def new_edges(self):
-        """Edges that the last operation CREATED (build123d Builder.new_edges):
-        the combined result's edges cut by the operands' edges."""
-        if self._obj is None or not hasattr(self, '_lasts_created'):
-            return ShapeList()
-        originals = []
-        if self._lasts_before is not None and self._lasts_before.topo is not None:
-            originals.append(self._lasts_before)
-        if self._lasts_created is not None:
-            originals.append(self._lasts_created)
-        return new_edges(*originals, combined=self._obj)
+        """Edges the last operation created outright, as edges(Select.NEW)
+        (deprecated in build123d 0.12)."""
+        _warn('Builder.new_edges is deprecated; use edges(Select.NEW) '
+              'instead.', 'DeprecationWarning')
+        return self.edges(Select.NEW)
 
+    # ---------------------------------------------------------------- #
+    # Select.LAST / Select.NEW (build123d 0.12): read from the record the
+    # last operation left on the builder's object (see _combine and
+    # ShapeHistory) - the kernel's own history, so a face an operation
+    # merely trimmed is NOT last, and NEW works for every shape type.
+    # ---------------------------------------------------------------- #
     def _selection_shape(self):
-        """The shape the selectors read. BuildLine overrides it so that
-        mid-context selectors (side_line.vertices() inside the with-block, which
-        the sheet-metal examples fillet) see the line built SO FAR - _obj only
-        exists after __exit__."""
         return self._obj
 
-    # selector passthroughs (builder.edges() etc.)
-    def edges(self, select=Select.ALL):
-        if select == Select.LAST:
-            return self._lasts('edge')
-        if select == Select.NEW:
-            return self.new_edges
+    def _selected(self, kind, select):
         shape = self._selection_shape()
-        return shape.edges() if shape is not None else ShapeList()
+        if shape is None or shape.topo is None:
+            return ShapeList()
+        return getattr(shape, kind)(select)
+
+    @property
+    def lasts(self):
+        return dict((k, self._selected(k, Select.LAST))
+                    for k in ('vertices', 'edges', 'faces', 'solids'))
+
+    @property
+    def news(self):
+        return dict((k, self._selected(k, Select.NEW))
+                    for k in ('vertices', 'edges', 'faces', 'solids'))
+
+    def vertices(self, select=Select.ALL):
+        return self._selected('vertices', select)
+
+    def edges(self, select=Select.ALL):
+        return self._selected('edges', select)
 
     def wires(self, select=Select.ALL):
-        if select == Select.LAST:
-            return ShapeList(edges_to_wires(self._lasts('edge')))
-        if select == Select.NEW:
-            raise ValueError('Select.NEW only valid for edges')
-        shape = self._selection_shape()
-        return shape.wires() if shape is not None else ShapeList()
+        if select == Select.ALL:
+            return self._selected('wires', select)
+        return ShapeList(edges_to_wires(self.edges(select)))
+
+    def faces(self, select=Select.ALL):
+        return self._selected('faces', select)
+
+    def solids(self, select=Select.ALL):
+        return self._selected('solids', select)
 
     # singular getters (build_common Builder.vertex/edge/wire/face/solid):
     # exactly one sub-shape must be selected, like upstream
@@ -5221,116 +6612,170 @@ class Builder:
                              str(solid_count))
         return all_solids[0]
 
-    def faces(self, select=Select.ALL):
-        if select == Select.LAST:
-            return self._lasts('face')
-        if select == Select.NEW:
-            raise ValueError('Select.NEW only valid for edges')
-        shape = self._selection_shape()
-        return shape.faces() if shape is not None else ShapeList()
-
-    def vertices(self, select=Select.ALL):
-        if select == Select.LAST:
-            return self._lasts('vertex')
-        if select == Select.NEW:
-            raise ValueError('Select.NEW only valid for edges')
-        shape = self._selection_shape()
-        return shape.vertices() if shape is not None else ShapeList()
-
-    def solids(self, select=Select.ALL):
-        if select == Select.LAST:
-            return self._lasts('solid')
-        if select == Select.NEW:
-            raise ValueError('Select.NEW only valid for edges')
-        shape = self._selection_shape()
-        return shape.solids() if shape is not None else ShapeList()
-
 
 class BuildPart(Builder):
     _shape_cls = Part
     _tag = 'part'
-    _core_kind = 'solid'
+    _obj_name = 'part'
+    build123d_type = 'BuildPart'
 
     @property
     def part(self):
+        """The PLACED part (0.12; part_local is the local construction)."""
+        return self._output_obj()
+
+    @property
+    def part_local(self):
         return self._obj
 
     @property
     def _snapshot(self):
         return self._obj
 
+    def _exit_extras(self):
+        # transfer joints created in this context onto the (local) result
+        # shape (build123d BuildPart._exit_extras)
+        if self.joints and self._obj is not None:
+            self._obj.joints = self.joints
+            for j in self.joints.values():
+                j.parent = self._obj
+
 
 class BuildSketch(Builder):
     _shape_cls = Sketch
     _tag = 'sketch'
-    _core_kind = 'face'
+    _obj_name = 'sketch'
+    build123d_type = 'BuildSketch'
 
     @property
     def sketch(self):
-        """The sketch PLACED on the workplane (unlike _obj, which is local —
-        matching build123d's sketch_local semantics)."""
-        if self._obj is None or self._obj.topo is None:
-            return self._obj
-        placed = [wp.location * self._obj for wp in self.workplanes]
-        if len(placed) == 1:
-            return placed[0]
-        return placed[0] + placed[1:]
+        """The PLACED sketch (sketch_local is the construction on
+        Plane.XY)."""
+        return self._output_obj()
 
     @property
     def sketch_local(self):
         return self._obj
 
-    def _finalize(self, parent):
-        if self._obj is None or self._obj.topo is None:
-            return
-        if isinstance(parent, BuildPart):
-            for wp in self.workplanes:
-                placed = wp.location * self._obj
-                parent.pending_faces.append(placed)
-                parent.pending_face_planes.append(wp)
-        elif parent is not None:
-            _combine(parent, self.sketch, self.mode)
+    def solids(self, *args):
+        raise NotImplementedError("solids() doesn't apply to BuildSketch")
 
 
 class BuildLine(Builder):
+    """BuildLine keeps its curve as LOCAL segment specs (so make_face()/
+    sweep() chain exact geometry); _obj / line_local is the curve built from
+    them and .line the placed one. Select.LAST/NEW use the geometric 'post -
+    pre' comparison: the line is re-chained from its specs, so no TopoDS
+    identity survives between operations for a kernel record to describe
+    - COMPROMISE(buildline-select)."""
+
     _shape_cls = Curve
     _tag = 'line'
-    _core_kind = 'edge'
+    _obj_name = 'line'
+    build123d_type = 'BuildLine'
 
-    def __init__(self, *workplanes, mode=Mode.ADD):
-        Builder.__init__(self, *workplanes, mode=mode)
+    def __init__(self, *placements, mode=Mode.ADD):
         self._specs = []
-
-    def _selection_shape(self):
-        return self._obj if self._obj is not None else self.line
+        Builder.__init__(self, *placements, mode=mode)
+        if len(self.output_placements) > 1:
+            raise ValueError('BuildLine only accepts one placement')
+        self._specs = []
+        self._lasts_before = None
+        self._lasts_brought = None
 
     @property
-    def line(self):
-        if self._obj is not None:
-            return self._obj
+    def _obj(self):
         if not self._specs:
             return None
-        # mid-context access (e.g. mirror(bl.line, ...)): build from the
-        # accumulated local segments
         return Curve(w.WireFromSegments(_chain_segments(self._specs)),
                      list(self._specs))
 
-    def _finalize(self, parent):
-        # transform local specs by this builder's workplane
-        wp = self.workplanes[0]
-        loc = wp.location
-        fn_dir = lambda d: _mat_vec(loc._R, d)
-        specs = [_seg_transform(s, loc._transform_point, fn_dir, loc)
-                 for s in self._specs]
-        if specs:
-            self._obj = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
-        if isinstance(parent, BuildSketch):
-            parent.pending_edge_specs.extend(specs)
-        elif isinstance(parent, BuildPart):
-            # a BuildLine directly inside BuildPart provides the sweep() path
-            parent.pending_path = self._obj
-        elif parent is not None and self._obj is not None:
-            _combine(parent, self._obj, self.mode)
+    @_obj.setter
+    def _obj(self, value):
+        if value is None:
+            self._specs = []
+        elif isinstance(value, Mixin1D) and value._specs:
+            self._specs = list(value._specs)
+        else:
+            self._specs = _specs_from_topo_edges(value)
+
+    @property
+    def line(self):
+        """The PLACED line (line_local is the construction on Plane.XY)."""
+        return self._output_obj()
+
+    @property
+    def line_local(self):
+        return self._obj
+
+    # --- spec bookkeeping (every BuildLine operation goes through these) ---
+    def _add_specs(self, specs):
+        self._lasts_before = list(self._specs)
+        self._lasts_brought = list(specs)
+        self._specs.extend(specs)
+
+    def _set_specs(self, specs):
+        """An operation REPLACED the whole line (fillet, offset...)."""
+        self._lasts_before = list(self._specs)
+        self._lasts_brought = []
+        self._specs = list(specs)
+
+    def _add_curve(self, curve, mode):
+        if curve is None or mode == Mode.PRIVATE:
+            return
+        specs = curve._specs if (isinstance(curve, Mixin1D) and curve._specs) \
+            else _specs_from_topo_edges(curve)
+        if mode == Mode.REPLACE:
+            self._set_specs(specs)
+        elif mode == Mode.ADD:
+            self._add_specs(specs)
+        else:
+            raise ValueError(str(mode) + ' is not supported inside BuildLine')
+
+    def _place_many(self, placed):
+        specs = []
+        for p in placed:
+            specs.extend(p._specs or [])
+        return Curve(w.MakeCompound([p.topo for p in placed]), specs)
+
+    def _selected(self, kind, select):
+        line = self._obj
+        if line is None:
+            return ShapeList()
+        if select is None or select == Select.ALL:
+            return getattr(line, kind)()
+        if select != Select.LAST and select != Select.NEW:
+            raise ValueError('Invalid input, must be one of ' +
+                             repr([Select.ALL, Select.LAST, Select.NEW]))
+        key_kind = {'vertices': 'vertex', 'edges': 'edge', 'faces': 'face',
+                    'solids': 'solid'}[kind]
+        if self._lasts_before is None:
+            # never operated on: everything was brought in by nothing
+            return getattr(line, kind)() if select == Select.LAST \
+                else ShapeList()
+
+        def _keys(specs):
+            if not specs:
+                return set()
+            c = Curve(w.WireFromSegments(_chain_segments(specs)), list(specs))
+            return set(_shape_key(s, key_kind) for s in getattr(c, kind)())
+        before = _keys(self._lasts_before)
+        brought = _keys(self._lasts_brought)
+        out = ShapeList()
+        for s in getattr(line, kind)():
+            k = _shape_key(s, key_kind)
+            if select == Select.LAST:
+                if k in brought or k not in before:
+                    out.append(s)
+            elif k not in brought and k not in before:
+                out.append(s)
+        return out
+
+    def faces(self, *args):
+        raise NotImplementedError("faces() doesn't apply to BuildLine")
+
+    def solids(self, *args):
+        raise NotImplementedError("solids() doesn't apply to BuildLine")
 
 
 # Selectors that read the builder in scope: 'edges()' == '<builder>.edges()'
@@ -5347,6 +6792,102 @@ edge = _context_selector('edge')
 wire = _context_selector('wire')
 face = _context_selector('face')
 solid = _context_selector('solid')
+
+
+class _BaseObjectMeta(type):
+    """build123d 0.12 BaseObjectMeta: construct a custom Base*Object behind
+    a builder + placement firewall (an _ObjectScope), then place the finished
+    object at the CALLER's locations and publish it to the caller's builder.
+    So objects a custom object's __init__ creates for itself no longer leak
+    into the caller's builder, and the caller's Locations place the object
+    as a whole."""
+
+    def __call__(cls, *args, **kwargs):
+        caller = _active_builder()
+        applies = getattr(cls, '_lite_applies_to', None)
+        if caller is not None and applies is not None and \
+                not isinstance(caller, _BUILDER_CLASSES[applies]):
+            raise RuntimeError(type(caller).__name__ + " doesn't have a " +
+                               cls.__name__ + ' object or operation (' +
+                               cls.__name__ + " applies to ['" + applies +
+                               "'])")
+        locs = _ctx_locations()
+        scope = _ObjectScope()
+        _builders.append(scope)
+        try:
+            instance = super().__call__(*args, **kwargs)
+        finally:
+            for i in range(len(_builders) - 1, -1, -1):
+                if _builders[i] is scope:
+                    del _builders[i:]
+                    break
+            del _loc_stack[scope._loc_depth:]
+        instance._lite_publish(caller, locs)
+        return instance
+
+
+_BUILDER_CLASSES = {'BuildPart': BuildPart, 'BuildSketch': BuildSketch,
+                    'BuildLine': BuildLine}
+
+
+def _probe_metaclass():
+    """Custom metaclasses run instance construction on CPython, Brython and
+    the patched MicroPython (micropython-cs). COMPROMISE(object-firewall):
+    the STOCK MicroPython fallback artifact has none, so there custom
+    Base*Objects keep the pre-0.12 direct publication path (objects created
+    inside a custom object's __init__ can reach the caller's builder)."""
+    try:
+        class _ProbeMeta(type):
+            def __call__(cls, *args, **kwargs):
+                return 'meta'
+
+        _Probe = _ProbeMeta('_Probe', (), {})
+        return _Probe() == 'meta'
+    except Exception:
+        return False
+
+
+_HAS_METACLASS = _probe_metaclass()
+
+
+class _BaseObjectMixin:
+    """Publication behaviour shared by the Base*Object classes."""
+
+    def _lite_publish(self, caller, locs):
+        mode = getattr(self, 'mode', Mode.ADD)
+        if self.topo is None:
+            return
+        if not (len(locs) == 1 and _loc_is_identity(locs[0])):
+            placed = [loc * self for loc in locs]
+            if len(placed) == 1:
+                one = placed[0]
+                topo, loc_, joints = one.topo, one._loc, one.joints
+            else:
+                topo = w.MakeCompound([p.topo for p in placed])
+                loc_, joints = self._loc, self.joints
+            specs = []
+            if isinstance(self, Mixin1D):
+                for p in placed:
+                    specs.extend(p._specs or [])
+            # preserve identity: the instance itself adopts the placement
+            self.topo = topo
+            self._loc = loc_
+            self.joints = dict((k, j._lite_rebind(self))
+                               for k, j in joints.items())
+            if isinstance(self, Mixin1D):
+                self._specs = specs
+        if caller is None or mode == Mode.PRIVATE:
+            return
+        if isinstance(caller, BuildLine):
+            caller._add_curve(self, mode)
+        else:
+            _combine(caller, self, mode)
+
+
+if _HAS_METACLASS:
+    _BaseObject = _BaseObjectMeta('_BaseObject', (_BaseObjectMixin,), {})
+else:
+    _BaseObject = _BaseObjectMixin
 
 
 # ------------------------------------------------- location contexts -----
@@ -5401,10 +6942,33 @@ class LocationList:
         return NotImplemented
 
 
+def _flatten_points(items):
+    """build123d flatten_sequence for Locations: lists, sets, non-point
+    tuples and iterators (generators, map, zip...) are flattened; a tuple of
+    numbers is a point, and Vector/Vertex/Location/Plane/Axis/Face stay
+    whole."""
+    out = []
+    for item in items:
+        if isinstance(item, (Location, Vector, Vertex, Plane, Axis, Shape,
+                             str, int, float)):
+            out.append(item)
+        elif isinstance(item, tuple) and \
+                all(isinstance(v, (int, float)) for v in item):
+            out.append(item)
+        else:
+            try:
+                nested = list(item)
+            except TypeError:
+                out.append(item)
+                continue
+            out.extend(_flatten_points(nested))
+    return out
+
+
 class Locations(LocationList):
     def __init__(self, *pts):
         locs = []
-        for p in pts:
+        for p in _flatten_points(pts):
             if isinstance(p, Location):
                 locs.append(p)
             elif isinstance(p, Plane):
@@ -5445,35 +7009,70 @@ def _grid_offset(a, extent):
 
 
 class HexLocations(LocationList):
-    """Hex-packed circle centers (touching circles of the given radius):
-    columns 2*apothem apart, rows 2*radius apart, odd columns offset by
-    radius; the whole grid is centered like build123d."""
+    """Hexagon-array locations (build123d HexLocations, ported verbatim):
+    radius is the major radius (centre to vertex) with major_radius=True,
+    otherwise the apothem; the array is aligned on its own bounding box."""
 
-    def __init__(self, radius, x_count, y_count, align=(Align.CENTER, Align.CENTER)):
+    def __init__(self, radius, x_count, y_count, major_radius=False,
+                 align=(Align.CENTER, Align.CENTER)):
         x_count, y_count = int(x_count), int(y_count)
-        apothem = radius * math.cos(math.radians(30))
-        pts = []
-        for i in range(x_count):
-            for k in range(y_count):
-                x = (i - (x_count - 1) / 2.0) * 2.0 * apothem
-                y = (k - (y_count - 1) / 2.0) * 2.0 * radius + \
-                    (i % 2) * radius - radius / 2.0
-                pts.append((x, y))
-        # center the grid (build123d aligns on the bounding box)
-        align = _norm_align(align, 2)
-        xs = [p[0] for p in pts]
-        ys = [p[1] for p in pts]
-        sh = _align_shift(align, (min(xs), min(ys), 0), (max(xs), max(ys), 0))
-        LocationList.__init__(self, [Pos(p[0] + sh[0], p[1] + sh[1], 0)
-                                     for p in pts])
+        if major_radius:
+            diagonal = 2 * radius
+            apothem = radius * math.cos(math.pi / 6)
+        else:
+            diagonal = 4 * radius / math.sqrt(3)
+            apothem = radius
+        x_spacing = 3 * diagonal / 4
+        y_spacing = diagonal * math.sqrt(3) / 2
+        if x_spacing <= 0 or y_spacing <= 0 or x_count < 1 or y_count < 1:
+            raise ValueError('Spacing and count must be > 0 ')
+        self.radius = radius
+        self.apothem = apothem
+        self.diagonal = diagonal
+        self.x_count = x_count
+        self.y_count = y_count
+        self.major_radius = major_radius
+        self.align = _norm_align(align, 2)
+        points = []
+        for x_val in range(0, x_count, 2):
+            for y_val in range(y_count):
+                points.append((x_spacing * x_val,
+                               y_spacing * y_val + y_spacing / 2))
+        for x_val in range(1, x_count, 2):
+            for y_val in range(y_count):
+                points.append((x_spacing * x_val, y_spacing * y_val + y_spacing))
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        size = (max(xs) - min(xs), max(ys) - min(ys))
+        al = self.align
+        offset = []
+        for i in range(2):
+            if al[i] == Align.MIN:
+                offset.append(0.0)
+            elif al[i] == Align.MAX:
+                offset.append(-size[i])
+            elif al[i] == Align.CENTER:
+                offset.append(-size[i] / 2)
+            else:
+                offset.append(0.0)
+        min_x, min_y = min(xs), min(ys)
+        LocationList.__init__(self, [Pos(p[0] + offset[0] - min_x,
+                                         p[1] + offset[1] - min_y, 0)
+                                     for p in points])
 
 
 class PolarLocations(LocationList):
     def __init__(self, radius, count, start_angle=0.0, angular_range=360.0,
-                 rotate=True):
+                 rotate=True, endpoint=False):
         count = int(count)
+        if count < 1:
+            raise ValueError('At least 1 elements required, requested ' +
+                             str(count))
+        if count == 1:
+            step = 0.0
+        else:
+            step = angular_range / (count - int(endpoint))
         locs = []
-        step = angular_range / count
         for i in range(count):
             a = start_angle + i * step
             loc = Pos(radius * math.cos(math.radians(a)),
@@ -5482,29 +7081,6 @@ class PolarLocations(LocationList):
                 loc = loc * Rot(0, 0, a)
             locs.append(loc)
         LocationList.__init__(self, locs)
-
-
-class Workplanes(LocationList):
-    """with Workplanes(*planes): — fan objects out over full plane bases.
-    The location-fanout stack (Locations/GridLocations/PolarLocations)
-    always carries complete Locations, and a Plane's basis IS its
-    location (rotation + origin), so Workplanes shares that exact code
-    path: every object created inside is replicated onto each plane with
-    the plane's orientation applied — 0.11.1 semantics."""
-
-    def __init__(self, *objs):
-        locs = []
-        for o in objs:
-            if isinstance(o, Plane):
-                locs.append(o.location)
-            elif isinstance(o, Location):
-                locs.append(Location(o))
-            elif isinstance(o, Face):
-                locs.append(Plane(o).location)
-            else:
-                raise TypeError('Workplanes expects Planes, Faces or '
-                                'Locations')
-        LocationList.__init__(self, locs or [Location()])
 
 
 # ----------------------------------------------------- object creation ---
@@ -5536,18 +7112,17 @@ def _align_shift(align, bbox_min, bbox_max):
 
 def _create_object(cls, topo_maker, analytic_bbox, rotation3, align, mode,
                    builder_cls):
-    """Shared creation pipeline: align (own bbox) -> rotate -> replicate at
-    workplane x location-context products -> combine into the builder."""
+    """Shared creation pipeline: align (own bbox) -> rotate -> place at the
+    active locations -> combine into the builder. Since build123d 0.12 a
+    builder constructs LOCALLY (its placement applies when it publishes), so
+    only the location context places objects; several placements make a
+    Compound, like upstream's BaseObject publication."""
     builder = _active_builder(builder_cls)
-    if builder is None and _builders:
-        raise RuntimeError('a ' + cls.__name__ + ' object cannot be created '
-                           'directly inside a ' + type(_builders[-1]).__name__ +
-                           ' context')
+    top = _active_builder()
+    if builder is None and top is not None:
+        raise RuntimeError(type(top).__name__ + " doesn't have a " +
+                           cls.__name__ + ' object or operation')
     ctx_locs = _ctx_locations()
-    if builder is not None and builder_cls is BuildPart:
-        planes = builder.workplanes
-    else:
-        planes = [Plane.XY]
 
     rot = None
     if rotation3 is not None:
@@ -5558,27 +7133,30 @@ def _create_object(cls, topo_maker, analytic_bbox, rotation3, align, mode,
             rot = Rotation(r[0], r[1], r[2])
 
     results = []
-    for pl in planes:
-        for loc in ctx_locs:
-            topo = topo_maker()
-            if align is not None and any(a is not None for a in align):
-                if analytic_bbox is not None:
-                    bmin, bmax = analytic_bbox
-                else:
-                    bb = list(w.BoundingBox(topo))
-                    bmin, bmax = bb[0:3], bb[3:6]
-                sh = _align_shift(align, bmin, bmax)
-                if sh[0] or sh[1] or sh[2]:
-                    topo = w.Translate(sh, topo)
-            shape = object.__new__(cls)
-            Shape.__init__(shape, topo)
-            if rot is not None:
-                shape = rot * shape
-            full = pl.location * loc
-            shape = full * shape
-            results.append(shape)
+    for loc in ctx_locs:
+        topo = topo_maker()
+        if align is not None and any(a is not None for a in align):
+            if analytic_bbox is not None:
+                bmin, bmax = analytic_bbox
+            else:
+                bb = list(w.BoundingBox(topo))
+                bmin, bmax = bb[0:3], bb[3:6]
+            sh = _align_shift(align, bmin, bmax)
+            if sh[0] or sh[1] or sh[2]:
+                topo = w.Translate(sh, topo)
+        shape = object.__new__(cls)
+        Shape.__init__(shape, topo)
+        if rot is not None:
+            shape = rot * shape
+        if not _loc_is_identity(loc):
+            shape = loc * shape
+        results.append(shape)
 
-    obj = results[0] if len(results) == 1 else results[0] + results[1:]
+    if len(results) == 1:
+        obj = results[0]
+    else:
+        obj = object.__new__(cls)
+        Shape.__init__(obj, w.MakeCompound([r.topo for r in results]))
     # Select.LAST/NEW bookkeeping happens inside _combine for every operation.
     return _combine(builder, obj, mode)
 
@@ -5686,11 +7264,19 @@ def Wedge(xsize, ysize, zsize, xmin, zmin, xmax, zmax, rotation=(0, 0, 0),
     return _create_object(Part, maker, bbox, rotation, align, mode, BuildPart)
 
 
-def _part_maxdim(builder):
+def _through_hole_depth():
+    """build123d 0.12 _BaseHole._through_hole_depth: the part's bounding-box
+    diagonal plus the farthest any active hole location sits from the
+    part's centre (so holes on parts away from the origin still cut
+    through)."""
+    builder = _active_builder(BuildPart)
     if builder is None or builder._obj is None or builder._obj.topo is None:
-        raise ValueError('Hole requires an existing part in a BuildPart context')
-    bb = list(w.BoundingBox(builder._obj.topo, 0.01))
-    return max(bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2])
+        raise ValueError('No depth provided')
+    center = builder._obj.bounding_box().center()
+    dist = 0.0
+    for loc in _ctx_locations():
+        dist = max(dist, (center - loc.position).length)
+    return builder.max_dimension + dist
 
 
 def _hole_length(depth):
@@ -5698,7 +7284,7 @@ def _hole_length(depth):
     build123d holes are CENTERED on the location and span +-depth."""
     if depth is not None:
         return depth
-    return 2.0 * _part_maxdim(_active_builder(BuildPart))
+    return _through_hole_depth()
 
 
 def Hole(radius, depth=None, mode=Mode.SUBTRACT):
@@ -5742,9 +7328,13 @@ def CounterSinkHole(radius, counter_sink_radius, depth=None,
 
 # ------------------------------------------------------- 2D primitives ---
 
-class BasePartObject(Part):
+class BasePartObject(Part, _BaseObject):
     """Base for user-defined part objects: places an existing Part with
-    rotation/align/mode like the built-in primitives (build123d compat)."""
+    rotation/align/mode like the built-in primitives (build123d compat).
+    Constructed behind the _BaseObjectMeta firewall, then placed at the
+    caller's locations and published to the caller's BuildPart (0.12)."""
+
+    _lite_applies_to = 'BuildPart'
 
     def __init__(self, part, rotation=(0, 0, 0),
                  align=None, mode=Mode.ADD):
@@ -5753,15 +7343,36 @@ class BasePartObject(Part):
         created = _create_object(Part, lambda: topo, None, rotation, align3,
                                  mode, BuildPart)
         Shape.__init__(self, created.topo)
+        self.mode = mode
+        if isinstance(rotation, (int, float)):
+            rotation = (0, 0, rotation)
+        self.rotation = Rotation(*rotation) if isinstance(rotation, tuple) \
+            else rotation
+        if isinstance(part, Shape):
+            if part.label:
+                self.label = part.label
+            if getattr(part, '_material', None) is not None:
+                self._material = part._material
+            if part.joints:
+                # 0.12: joints of the input part follow it into the object
+                # (rotated with it) and are re-parented onto the object
+                rotated = self.rotation * part
+                self._loc = rotated._loc
+                self.joints = dict((k, j._lite_rebind(self))
+                                   for k, j in rotated.joints.items())
 
 
-class BaseSketchObject(Sketch):
+class BaseSketchObject(Sketch, _BaseObject):
     """Base for user-defined sketch objects (build123d compat)."""
+
+    _lite_applies_to = 'BuildSketch'
 
     def __init__(self, obj, rotation=0, align=None, mode=Mode.ADD):
         topo = _topo(obj)
         created = _sketch_object(lambda: topo, None, rotation, align, mode)
         Shape.__init__(self, created.topo)
+        self.mode = mode
+        self.rotation = rotation
 
 
 def _sketch_object(topo_maker, analytic_bbox, rotation, align, mode):
@@ -5883,6 +7494,46 @@ def SlotCenterPoint(center, point, height, rotation=0,
                        mode=Mode.PRIVATE)
     placed = Pos(c.X, c.Y, c.Z) * slot
     return _combine(_active_builder(BuildSketch), placed, mode)
+
+
+class Superellipse(BaseSketchObject):
+    """Sketch object: a superellipse ("squircle") of the given width, height
+    and order (build123d 0.12 Superellipse): the top-right quadrant is a line
+    (order 1), an elliptical arc (order 2) or an interpolating spline through
+    point_count-2 points of |x/a|^n + |y/b|^n = 1, mirrored into the other
+    three quadrants."""
+
+    def __init__(self, width, height, order=4, point_count=16, rotation=0,
+                 align=(Align.CENTER, Align.CENTER), mode=Mode.ADD):
+        if order <= 0:
+            raise ValueError('Order must be greater than zero.')
+        self.width = width
+        self.height_ = height
+        self.order = order
+        self.point_count = point_count
+        self.align = _norm_align(align, 2)
+        if order == 1:
+            top_right = Edge.make_line((width / 2, 0), (0, height / 2))
+        elif order == 2:
+            top_right = Edge.make_ellipse(width / 2, height / 2,
+                                          start_angle=0, end_angle=90)
+        else:
+            points = [Vector(width / 2, 0.0)]
+            for i in range(1, point_count - 1):
+                t = i * math.pi / point_count / 2
+                cos_t, sin_t = math.cos(t), math.sin(t)
+                x = abs(cos_t) ** (2 / order) * width * \
+                    math.copysign(1, cos_t) / 2
+                y = abs(sin_t) ** (2 / order) * height * \
+                    math.copysign(1, sin_t) / 2
+                points.append(Vector(x, y))
+            points.append(Vector(0.0, height / 2))
+            top_right = Edge.make_spline(points)
+        top_left = _single_edge_of(top_right.mirror(Plane.YZ)).reversed()
+        bottom_left = _single_edge_of(top_left.mirror(Plane.XZ)).reversed()
+        bottom_right = _single_edge_of(top_right.mirror(Plane.XZ)).reversed()
+        face = Face(Wire([top_right, top_left, bottom_left, bottom_right]))
+        BaseSketchObject.__init__(self, face, rotation, align, mode)
 
 
 def Trapezoid(width, height, left_side_angle, right_side_angle=None,
@@ -6093,7 +7744,7 @@ def Triangle(a=None, b=None, c=None, A=None, B=None, C=None, align=None,
     def _common_vertex(e1, e2):
         for v1 in e1.vertices():
             for v2 in e2.vertices():
-                if (Vector(v1.to_tuple()) - Vector(v2.to_tuple())).length < \
+                if (Vector(tuple(v1)) - Vector(tuple(v2))).length < \
                         _TOL_1E6:
                     return v1
         raise ValueError('these edges share no vertex')
@@ -6401,37 +8052,85 @@ def _chain_segments(specs):
     return ordered
 
 
+def _place_specs(specs, locs):
+    """Segment specs placed at every location (identity: unchanged)."""
+    if len(locs) == 1 and _loc_is_identity(locs[0]):
+        return specs
+    placed = []
+    for loc in locs:
+        fn_dir = lambda d, loc=loc: _mat_vec(loc._R, d)
+        placed.extend([_seg_transform(s, loc._transform_point, fn_dir, loc)
+                       for s in specs])
+    return placed
+
+
 def _line_object(specs, mode=Mode.ADD):
-    """Register specs with the active BuildLine (if any) and return a Curve."""
+    """Place specs at the active locations (0.12: a Locations context
+    places 1-D objects too, inside a BuildLine and out), register them with
+    the active BuildLine (if any) and return a Curve."""
     builder = _active_builder(BuildLine)
+    specs = _place_specs(specs, _ctx_locations())
     curve = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
     if builder is not None and mode != Mode.PRIVATE:
-        builder._specs.extend(specs)
+        builder._add_specs(specs)
     return curve
 
 
-class BaseLineObject(Curve):
-    """Wrap an already-built wire/curve as a BuildLine object (build123d
-    objects_curve.BaseLineObject): registers the curve with the active
-    BuildLine per mode and becomes that wire. Lite's stock 1-D objects are
-    spec-emitting functions, so this class is the exported subclassing hook —
-    a custom line object builds a Wire/Curve and calls
-    super().__init__(wire, mode)."""
+def _curve_specs_of(curve):
+    if isinstance(curve, Mixin1D) and curve._specs:
+        specs = curve._specs
+    elif isinstance(curve, Shape) and curve.topo is not None:
+        specs = _specs_from_topo_edges(curve)
+    else:
+        specs = []
+    return [_seg_make(s[0], [tuple(p) for p in _seg_pts(s)],
+                      _seg_params(s)) for s in specs]
+
+
+class BaseCurveObject(Curve, _BaseObject):
+    """Wrap an already-built curve as a BuildLine object (build123d
+    objects_curve.BaseCurveObject / BaseLineObject / BaseEdgeObject):
+    constructed behind the _BaseObjectMeta firewall, then placed at the
+    caller's locations and registered with the caller's BuildLine per mode.
+    Lite's stock 1-D objects are spec-emitting functions, so these classes
+    are the exported subclassing hooks — a custom line object builds a
+    Wire/Curve/Edge and calls super().__init__(curve, mode)."""
+
+    _lite_applies_to = 'BuildLine'
 
     def __init__(self, curve, mode=Mode.ADD):
-        if isinstance(curve, Mixin1D) and curve._specs:
-            specs = curve._specs
-        elif isinstance(curve, Shape) and curve.topo is not None:
-            specs = _specs_from_topo_edges(curve)
-        else:
-            specs = []
-        specs = [_seg_make(s[0], [tuple(p) for p in _seg_pts(s)],
-                           _seg_params(s)) for s in specs]
+        specs = _curve_specs_of(curve)
         topo = curve.topo if isinstance(curve, Shape) else curve
         Curve.__init__(self, topo, specs)
-        builder = _active_builder(BuildLine)
-        if builder is not None and mode != Mode.PRIVATE and specs:
-            builder._specs.extend(specs)
+        self.mode = mode
+        if not _HAS_METACLASS:
+            # stock MicroPython (no metaclasses): the pre-0.12 direct path
+            builder = _active_builder(BuildLine)
+            if builder is not None and mode != Mode.PRIVATE and specs:
+                builder._add_specs(specs)
+
+
+class BaseLineObject(BaseCurveObject):
+    """build123d's Wire-based line object base (Polyline, FilletPolyline,
+    Airfoil derive from it upstream)."""
+
+
+class BaseEdgeObject(Edge, _BaseObject):
+    """build123d 0.12's Edge-based line object base (most stock 1-D
+    objects derive from it upstream)."""
+
+    _lite_applies_to = 'BuildLine'
+
+    def __init__(self, curve, mode=Mode.ADD):
+        specs = _curve_specs_of(curve)
+        topo = curve.topo if isinstance(curve, Shape) else curve
+        Edge.__init__(self, topo)
+        self._specs = specs
+        self.mode = mode
+        if not _HAS_METACLASS:
+            builder = _active_builder(BuildLine)
+            if builder is not None and mode != Mode.PRIVATE and specs:
+                builder._add_specs(specs)
 
 
 def Line(*pts, mode=Mode.ADD):
@@ -6620,6 +8319,201 @@ def _closest_on_curve(samples, p):
     return dist, tuple(q), e0, u
 
 
+# --- CPython set ordering (for upstream code that iterates list(set(...))) -
+# build123d's Mixin1D.common_plane picks its plane from the max-area triangle
+# over list(set(points)), so the plane normal's SIGN follows CPython's set
+# iteration order of Vector keys (tuples of floats rounded to 5 digits). These
+# helpers reproduce CPython 3.11+'s float hash, xxHash tuple hash and set
+# table probing exactly (validated against CPython 3.13 on random keys), so
+# lite's common_plane - and DoubleTangentArc's TOP/BOTTOM - agree on every
+# interpreter.
+_M64 = (1 << 64) - 1
+_P61 = (1 << 61) - 1
+
+
+def _frexp(v):
+    if v == 0.0:
+        return 0.0, 0
+    a = abs(v)
+    e = int(math.floor(math.log2(a))) + 1
+    m = a / (2.0 ** e)
+    while m >= 1.0:
+        m /= 2.0
+        e += 1
+    while m < 0.5:
+        m *= 2.0
+        e -= 1
+    return (m if v > 0 else -m), e
+
+
+def _cpy_hash_float(v):
+    m, e = _frexp(float(v))
+    sign = 1
+    if m < 0:
+        sign = -1
+        m = -m
+    x = 0
+    while m:
+        x = ((x << 28) & _P61) | (x >> 33)
+        m *= 268435456.0
+        e -= 28
+        y = int(m)
+        m -= y
+        x += y
+        if x >= _P61:
+            x -= _P61
+    if e >= 0:
+        e = e % 61
+    else:
+        e = 60 - ((-1 - e) % 61)
+    x = ((x << e) & _P61) | (x >> (61 - e))
+    x = x * sign
+    if x == -1:
+        x = -2
+    return x
+
+
+def _cpy_hash_tuple(t):
+    acc = 2870177450012600261
+    for item in t:
+        lane = _cpy_hash_float(item) & _M64
+        acc = (acc + lane * 14029467366897019727) & _M64
+        acc = ((acc << 31) | (acc >> 33)) & _M64
+        acc = (acc * 11400714785074694791) & _M64
+    acc = (acc + (len(t) ^ (2870177450012600261 ^ 3527539))) & _M64
+    if acc == _M64:
+        return 1546275796
+    return acc - (1 << 64) if acc >> 63 else acc
+
+
+def _cpy_set_order(items, key):
+    """The order list(set(items)) has on CPython, items equal (and hashed)
+    by key(item) - a tuple of floats."""
+    size = 8
+    table = [None] * size
+    fill = 0
+
+    def insert_clean(tab, mask, entry):
+        h = entry[1]
+        perturb = h & _M64
+        i = perturb & mask
+        while True:
+            if tab[i] is None:
+                tab[i] = entry
+                return
+            if i + 9 <= mask:
+                for j in range(1, 10):
+                    if tab[i + j] is None:
+                        tab[i + j] = entry
+                        return
+            perturb >>= 5
+            i = (i * 5 + 1 + perturb) & mask
+    for item in items:
+        k = key(item)
+        h = _cpy_hash_tuple(k)
+        mask = size - 1
+        perturb = h & _M64
+        i = perturb & mask
+        done = False
+        while not done:
+            probes = 9 if i + 9 <= mask else 0
+            j = i
+            for _p in range(probes + 1):
+                ent = table[j]
+                if ent is None:
+                    table[j] = (item, h, k)
+                    fill += 1
+                    done = True
+                    break
+                if ent[1] == h and ent[2] == k:
+                    done = True
+                    break
+                j += 1
+            if done:
+                break
+            perturb >>= 5
+            i = (i * 5 + 1 + perturb) & mask
+        if fill * 5 >= mask * 3:
+            minused = fill * 2 if fill > 50000 else fill * 4
+            newsize = 8
+            while newsize <= minused:
+                newsize <<= 1
+            newtab = [None] * newsize
+            for ent in table:
+                if ent is not None:
+                    insert_clean(newtab, newsize - 1, ent)
+            table = newtab
+            size = newsize
+    return [ent[0] for ent in table if ent is not None]
+
+
+def _vector_key5(v):
+    return (round(v.X, 5) + 0.0, round(v.Y, 5) + 0.0, round(v.Z, 5) + 0.0)
+
+
+def _common_plane(lines, tolerance=1e-6):
+    """build123d Mixin1D.common_plane over the given edges/wires: the plane
+    containing them all (None if there is none), centred on the lines."""
+    all_lines = [l for l in lines if l is not None]
+    all_edges = []
+    for l in all_lines:
+        all_edges.extend(l.edges())
+    result = None
+    if all(e.geom_type == GeomType.LINE for e in all_edges):
+        axes = [Axis(e @ 0, e % 0) for e in all_edges]
+        coaxial = True
+        for a0 in axes:
+            for a1 in axes:
+                d0, d1 = Vector(a0.direction), Vector(a1.direction)
+                if d0.cross(d1).length > 1e-5:
+                    coaxial = False
+                off = Vector(a1.position) - Vector(a0.position)
+                if off.cross(d0).length > 1e-5:
+                    coaxial = False
+        if coaxial:
+            result = Plane(axes[0].position,
+                           z_dir=Plane(axes[0].position,
+                                       z_dir=axes[0].direction).x_dir)
+    if result is None:
+        points = []
+        for line in all_lines:
+            is_line = isinstance(line, Edge) and line.geom_type == GeomType.LINE
+            n = 2 if is_line else 8
+            points.extend([Vector(line.position_at(i / (n - 1)))
+                           for i in range(n)])
+        points = _cpy_set_order(points, _vector_key5)
+        extreme_areas = {}
+        count = len(points)
+        for a in range(count):
+            for b in range(a + 1, count):
+                for c in range(b + 1, count):
+                    v1 = points[b] - points[a]
+                    v2 = points[c] - points[a]
+                    extreme_areas[0.5 * v1.cross(v2).length] = \
+                        (points[a], points[b], points[c])
+        if not extreme_areas:
+            return None
+        extremes = extreme_areas[_stable_sorted(list(extreme_areas.keys()))[-1]]
+        x_dir = (extremes[1] - extremes[0]).normalized()
+        z_dir = (extremes[2] - extremes[0]).cross(x_dir)
+        if z_dir.length <= 1e-12:
+            return None
+        origin = (extremes[0] + extremes[1] + extremes[2]) * (1.0 / 3.0)
+        c_plane = Plane(origin, z_dir=z_dir)
+        zn = Vector(c_plane.z_dir)
+        for p in points:
+            if abs((p - Vector(c_plane.origin)).dot(zn)) > tolerance:
+                return None
+        result = c_plane
+    total = Vector(0, 0, 0)
+    for l in all_lines:
+        total = total + Vector(l.position_at(0.5))
+    center = total * (1.0 / len(all_lines))
+    zn = Vector(result.z_dir)
+    shift = (center - Vector(result.origin)).dot(zn)
+    return result.shift_origin(center - zn * shift)
+
+
 def DoubleTangentArc(pnt, tangent, other, keep=Keep.TOP, mode=Mode.ADD):
     """Arc tangent to a point/tangent pair AND to another curve.
     COMPROMISE(double-tangent-arc): upstream solves radius with
@@ -6633,9 +8527,13 @@ def DoubleTangentArc(pnt, tangent, other, keep=Keep.TOP, mode=Mode.ADD):
         raise ValueError('Only the TOP or BOTTOM options are supported')
     arc_pt = _v3(pnt)
     t = Vector(tangent).normalized()
-    # BuildLine geometry is local-XY planar; upstream flips the derived
-    # common plane, making the rotation axis -Z
-    axis_dir = (0.0, 0.0, -1.0)
+    # upstream: workplane = -common_plane(Line(pnt, pnt + tangent), *edges)
+    # ("flip to help with TOP/BOTTOM"); the rotation axis is its z
+    coplane = _common_plane([Edge.make_line(arc_pt, Vector(arc_pt) + t)] +
+                            list(other.edges()))
+    if coplane is None:
+        raise ValueError('DoubleTangentArc only works on a single plane')
+    axis_dir = tuple(-Vector(coplane.z_dir))
     samples = _sample_curve(other, 512)
     bb = other.bounding_box()
     mins = [min(bb.min[i], arc_pt[i]) for i in range(3)]
@@ -6921,19 +8819,8 @@ def Spline(*pts, tangents=None, tangent_scalars=None, periodic=False,
                         mode)
 
 
-def EllipticalCenterArc(center, x_radius, y_radius, start_angle=0.0,
-                        arc_size=90.0, rotation=0.0, angular_direction=None,
-                        mode=Mode.ADD):
-    if not isinstance(arc_size, (int, float)):
-        raise NotImplementedError('EllipticalCenterArc arc limits (Shape/'
-                                  'Axis/...) are not supported in build123d-lite')
-    c = _v3(center)
-    if arc_size >= 0:
-        end_angle = start_angle + arc_size
-    else:
-        # negative size sweeps clockwise: same point set as the CCW arc
-        # from (start + arc_size) to start
-        start_angle, end_angle = start_angle + arc_size, start_angle
+def _ellipse_arc_spec(c, x_radius, y_radius, start_angle, end_angle,
+                      rotation):
     rot = math.radians(rotation)
     xd = (math.cos(rot), math.sin(rot), 0.0)
 
@@ -6949,9 +8836,33 @@ def EllipticalCenterArc(center, x_radius, y_radius, start_angle=0.0,
         major, minor = y_radius, x_radius
         a0, a1 = start_angle - 90.0, end_angle - 90.0
         xdir = [-xd[1], xd[0], 0.0]
-    spec = ('earc', [at(start_angle), at(end_angle)],
+    return ('earc', [at(start_angle), at(end_angle)],
             [list(c), xdir, [0.0, 0.0, 1.0], major, minor, a0, a1])
-    return _line_object([spec], mode)
+
+
+def EllipticalCenterArc(center, x_radius, y_radius, start_angle=0.0, *,
+                        arc_size=90.0, rotation=0.0, mode=Mode.ADD):
+    """Elliptical arc about a center (build123d 0.12 EllipticalCenterArc:
+    end_angle/angular_direction gave way to arc_size - a signed angle, or a
+    limit shape the full ellipse is trimmed to, both ways, keeping the
+    shorter piece)."""
+    c = _v3(center)
+    if isinstance(arc_size, (int, float)):
+        if arc_size >= 0:
+            end_angle = start_angle + arc_size
+            a0 = start_angle
+        else:
+            # negative size sweeps clockwise: same point set as the CCW arc
+            # from (start + arc_size) to start
+            a0, end_angle = start_angle + arc_size, start_angle
+        spec = _ellipse_arc_spec(c, x_radius, y_radius, a0, end_angle,
+                                 rotation)
+        return _line_object([spec], mode)
+    if isinstance(arc_size, (tuple, list)):
+        arc_size = Vector(arc_size)
+    spec = _ellipse_arc_spec(c, x_radius, y_radius, 0.0, 360.0, rotation)
+    trimmed = _arc_limit_curve([spec], arc_size)
+    return _line_object(_specs_from_topo_edges(trimmed), mode)
 
 
 # ----------------------------------------------- conic & spline 1-D objects
@@ -7016,43 +8927,36 @@ def _arc_limit_curve(specs, arc_limit):
     return candidates.sort_by(Edge.length)[0]
 
 
-def ParabolicCenterArc(vertex, focal_length, start_angle=0.0, end_angle=None,
-                       arc_size=90.0, rotation=0.0, angular_direction=None,
-                       mode=Mode.ADD):
+def ParabolicCenterArc(vertex, focal_length, start_angle=0.0, *,
+                       arc_size=90.0, rotation=0.0, mode=Mode.ADD):
     """Parabolic arc about a vertex point (build123d ParabolicCenterArc):
     gp_Parab(plane, focal_length) trimmed by GC_MakeArcOfParabola between the
     two given "angles" (upstream converts them to radians and passes them as
-    the curve parameters)."""
+    the curve parameters). 0.12 replaced end_angle/angular_direction with
+    arc_size (signed, or a limit shape)."""
     c = _v3(vertex)
     xdir = _rot_z([1.0, 0.0, 0.0], rotation)
     normal = [0.0, 0.0, 1.0]
-    if end_angle is not None or angular_direction is not None:
-        if not isinstance(arc_size, (int, float)):
-            raise ValueError('ParabolicCenterArc limit arc_size cannot be '
-                             'combined with end_angle / angular_direction')
-        end_a = end_angle if end_angle is not None else start_angle + arc_size
-        sense = angular_direction != AngularDirection.CLOCKWISE
-        spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
-                               start_angle, end_a, sense)
-        return _line_object([spec], mode)
     if isinstance(arc_size, (int, float)):
         spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
                                start_angle, start_angle + arc_size,
                                arc_size >= 0)
         return _line_object([spec], mode)
+    if isinstance(arc_size, (tuple, list)):
+        arc_size = Vector(arc_size)
     spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
                            start_angle, start_angle + 180.0, True)
     trimmed = _arc_limit_curve([spec], arc_size)
     return _line_object(_specs_from_topo_edges(trimmed), mode)
 
 
-def HyperbolicCenterArc(center, x_radius, y_radius, start_angle=0.0,
-                        end_angle=None, arc_size=90.0, rotation=0.0,
-                        angular_direction=None, mode=Mode.ADD):
+def HyperbolicCenterArc(center, x_radius, y_radius, start_angle=0.0, *,
+                        arc_size=90.0, rotation=0.0, mode=Mode.ADD):
     """Hyperbolic arc about a center point (build123d HyperbolicCenterArc):
     gp_Hypr trimmed by GC_MakeArcOfHyperbola. gp_Hypr needs major >= minor, so
     a taller-than-wide hyperbola is built rotated by 90 degrees with its angle
-    range shifted to match, exactly like Edge.make_hyperbola."""
+    range shifted to match, exactly like Edge.make_hyperbola. 0.12 replaced
+    end_angle/angular_direction with arc_size (signed, or a limit shape)."""
     c = _v3(center)
     normal = [0.0, 0.0, 1.0]
     if y_radius > x_radius:
@@ -7061,22 +8965,14 @@ def HyperbolicCenterArc(center, x_radius, y_radius, start_angle=0.0,
         major, minor, correction = x_radius, y_radius, 0.0
     xdir = _rot_z([1.0, 0.0, 0.0], rotation + correction)
     sizes = [float(major), float(minor)]
-    if end_angle is not None or angular_direction is not None:
-        if not isinstance(arc_size, (int, float)):
-            raise ValueError('HyperbolicCenterArc limit arc_size cannot be '
-                             'combined with end_angle / angular_direction')
-        end_a = end_angle if end_angle is not None else start_angle + arc_size
-        sense = angular_direction != AngularDirection.CLOCKWISE
-        spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
-                               start_angle - correction, end_a - correction,
-                               sense)
-        return _line_object([spec], mode)
     if isinstance(arc_size, (int, float)):
         spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
                                start_angle - correction,
                                start_angle + arc_size - correction,
                                arc_size >= 0)
         return _line_object([spec], mode)
+    if isinstance(arc_size, (tuple, list)):
+        arc_size = Vector(arc_size)
     spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
                            start_angle - correction,
                            start_angle + 180.0 - correction, True)
@@ -7155,7 +9051,7 @@ def _tangency_pair(arg):
         p1 = Vector(arg.position) + Vector(arg.direction) * big
         arg = Edge.make_line(p0, p1)
     if isinstance(arg, Vertex):
-        return {'point': list(arg.to_tuple())[:2]}
+        return {'point': list(tuple(arg))[:2]}
     if isinstance(arg, Mixin1D) and getattr(arg, 'topo', None) is not None:
         edge = arg if isinstance(arg, Edge) else _single_edge_of(arg)
         return {'edge': edge.topo, 'qualifier': qualifier}
@@ -7292,401 +9188,6 @@ def ConstrainedLines(*args, angle=None, direction=None, selector=None,
         selector, mode)
 
 
-# ------------------------------------------- deprecated tangent objects ---
-# build123d 0.11's PointArcTangentLine / PointArcTangentArc /
-# ArcArcTangentLine / ArcArcTangentArc (all deprecated upstream in favour of
-# ConstrainedLines/ConstrainedArcs, which lite has on the real Geom2dGcc
-# solvers). Ported statement-for-statement in the workplane's LOCAL frame:
-# inside a BuildLine lite keeps every spec local until __exit__, which is
-# exactly upstream's math evaluated on Plane.XY.
-
-def _tangent_object_plane(name, arcs, points):
-    """The plane the tangent-object math runs in. Inside a BuildLine
-    everything is local, so it is Plane.XY; in algebra mode it is built from
-    the first arc like upstream (origin at its center, z along its normal)
-    and every input is validated coplanar (upstream's common_plane check).
-    Lite's 1-D emitters work in the XY plane, so a non-XY-parallel algebra
-    plane raises instead of emitting wrong geometry."""
-    if _active_builder(BuildLine) is not None:
-        return Plane((0, 0, 0), (1, 0, 0), (0, 0, 1))
-    plane = Plane(arcs[0].arc_center, z_dir=arcs[0].normal())
-    for p in list(points) + [a.arc_center for a in arcs]:
-        if abs(plane.to_local_coords(p).Z) > 1e-4:
-            raise ValueError(name + ' only works on a single plane.')
-    if abs(plane.z_dir.X) > 1e-9 or abs(plane.z_dir.Y) > 1e-9:
-        raise NotImplementedError(
-            name + ': build123d-lite 1-D objects work in the XY plane or a '
-            'BuildLine workplane')
-    return plane
-
-
-def _wp_dir_in(plane, d):
-    """A world direction expressed in the plane's frame (no origin shift)."""
-    d = Vector(d)
-    return Vector(d.dot(plane.x_dir), d.dot(plane.y_dir), d.dot(plane.z_dir))
-
-
-def _wp_dir_out(plane, d):
-    """A plane-frame direction expressed in world coordinates."""
-    d = Vector(d)
-    return plane.x_dir * d.X + plane.y_dir * d.Y + plane.z_dir * d.Z
-
-
-def _tangent_arc_geom_check(arc, message):
-    if _single_edge_of(arc).geom_type != GeomType.CIRCLE:
-        raise ValueError(message)
-
-
-def PointArcTangentLine(point, arc, side=Side.LEFT, mode=Mode.ADD):
-    """Create a straight tangent line from a point to a circular arc
-    (build123d objects_curve.PointArcTangentLine). side picks which of the
-    two tangents to keep."""
-    side_sign = {Side.LEFT: -1, Side.RIGHT: 1}
-    _tangent_arc_geom_check(arc, 'Arc must have GeomType.CIRCLE.')
-    workplane = _tangent_object_plane('PointArcTangentLine', [arc],
-                                      [Vector(point)])
-    tangent_point = workplane.to_local_coords(Vector(point))
-    arc_center = workplane.to_local_coords(arc.arc_center)
-    radius = arc.radius
-    midline = tangent_point - arc_center
-
-    if midline.length <= radius:
-        raise ValueError('Cannot find tangent for point on or inside arc.')
-
-    # Find angle phi between midline and x and angle theta between midline
-    # length and radius; add them with a sign on theta to pick a direction.
-    # This angle is the tangent location around the circle from x.
-    x_dir = Vector(1, 0, 0)
-    phi = midline.get_signed_angle(x_dir)
-    other_leg = math.sqrt(midline.length ** 2 - radius ** 2)
-    theta = Vector(radius, other_leg).get_signed_angle(x_dir)
-    angle = side_sign[side] * theta + phi
-    intersect = Vector(radius * math.cos(math.radians(angle)),
-                       radius * math.sin(math.radians(angle))) + arc_center
-
-    return Line(workplane.from_local_coords(tangent_point),
-                workplane.from_local_coords(intersect), mode=mode)
-
-
-def ArcArcTangentLine(start_arc, end_arc, side=Side.LEFT, keep=Keep.INSIDE,
-                      mode=Mode.ADD):
-    """Create a straight line tangent to two circular arcs (build123d
-    objects_curve.ArcArcTangentLine). side places the tangent, keep picks
-    the INSIDE (crossing) or OUTSIDE tangent pair member."""
-    _tangent_arc_geom_check(start_arc, 'Start arc must have GeomType.CIRCLE.')
-    _tangent_arc_geom_check(end_arc, 'End arc must have GeomType.CIRCLE.')
-    workplane = _tangent_object_plane('ArcArcTangentLine',
-                                      [start_arc, end_arc], [])
-
-    side_sign = 1 if side == Side.LEFT else -1
-    arcs = [start_arc, end_arc]
-    points = [workplane.to_local_coords(a.arc_center) for a in arcs]
-    radii = [a.radius for a in arcs]
-    midline = points[1] - points[0]
-
-    if midline.length <= abs(radii[1] - radii[0]):
-        raise ValueError('Cannot find tangent when one arc contains the '
-                         'other.')
-    if keep == Keep.INSIDE:
-        if midline.length < sum(radii):
-            raise ValueError('Cannot find INSIDE tangent for overlapping '
-                             'arcs.')
-        if midline.length == sum(radii):
-            raise ValueError('Cannot find INSIDE tangent for tangent arcs.')
-
-    # Method: Wikipedia "Tangent lines to two circles" — theta is the angle
-    # formed by the triangle legs midline.length and r0 -+ r1; INSIDE theta
-    # for arc1 is 180 degrees from theta for arc0.
-    x_dir = Vector(1, 0, 0)
-    phi = midline.get_signed_angle(x_dir)
-    radius = radii[0] + radii[1] if keep == Keep.INSIDE else \
-        radii[0] - radii[1]
-    other_leg = math.sqrt(midline.length ** 2 - radius ** 2)
-    theta = Vector(radius, other_leg).get_signed_angle(x_dir)
-    angle = side_sign * theta + phi
-
-    intersect = []
-    for i in range(len(arcs)):
-        angle = i * 180 + angle if keep == Keep.INSIDE else angle
-        intersect.append(Vector(radii[i] * math.cos(math.radians(angle)),
-                                radii[i] * math.sin(math.radians(angle))) +
-                         points[i])
-
-    return Line(workplane.from_local_coords(intersect[0]),
-                workplane.from_local_coords(intersect[1]), mode=mode)
-
-
-def PointArcTangentArc(point, direction, arc, side=Side.LEFT, mode=Mode.ADD):
-    """Create an arc from a point/tangent pair whose other end is tangent to
-    a circular arc (build123d objects_curve.PointArcTangentArc — the tangent
-    radius is found with the same Nelder-Mead minimization, on the scipy
-    shim)."""
-    from scipy.optimize import minimize
-    _tangent_arc_geom_check(arc, 'Arc must have GeomType.CIRCLE')
-    workplane = _tangent_object_plane('PointArcTangentArc', [arc],
-                                      [Vector(point)])
-    arc_point = workplane.to_local_coords(Vector(point))
-    arc_tangent = _wp_dir_in(workplane, direction).normalized()
-    arc_center = workplane.to_local_coords(arc.arc_center)
-    arc_radius = arc.radius
-    z_dir = Vector(0, 0, 1)
-
-    midline = arc_point - arc_center
-    if midline.length == arc_radius:
-        raise ValueError('Cannot find tangent for point on arc.')
-    if midline.length <= arc_radius:
-        raise NotImplementedError('Point inside arc not yet implemented.')
-
-    # Determine where arc_point is located relative to arc: ref forms a
-    # bisecting line parallel to arc tangent with the same distance from the
-    # arc center as arc point in the direction of the arc tangent.
-    tangent_perp = arc_tangent.cross(z_dir)
-    ref_scale = (arc_center - arc_point).dot(-arc_tangent)
-    ref = arc_tangent * ref_scale + arc_center
-    ref_to_point = (arc_point - ref).dot(tangent_perp)
-
-    keep_sign = -1 if side == Side.LEFT else 1
-    # Tangent radius to infinity (and beyond)
-    if keep_sign * ref_to_point == arc_radius:
-        raise ValueError('Point is already tangent to arc, use tangent line.')
-
-    # Use magnitude and sign of ref to arc point along with keep to determine
-    # which "side" angle the arc center will be on.
-    side_sign = 1 if ref_to_point < 0 else -1
-    if abs(ref_to_point) < arc_radius:
-        # point/tangent pointing inside arc, both arcs near
-        arc_type = 1
-        angle = keep_sign * -90
-        if ref_scale > 1:
-            angle = -angle
-    else:
-        # point/tangent pointing outside arc, one near arc one far
-        angle = side_sign * -90
-        if side == Side.LEFT:
-            arc_type = -side_sign
-        else:
-            arc_type = side_sign
-
-    # Protect against massive circles that are effectively straight lines
-    # (upstream: 1000 * the arc+point bounding box diagonal; the full circle
-    # bbox covers any partial arc and stays deterministic in local coords)
-    min_x = min(arc_center.X - arc_radius, arc_point.X)
-    max_x = max(arc_center.X + arc_radius, arc_point.X)
-    min_y = min(arc_center.Y - arc_radius, arc_point.Y)
-    max_y = max(arc_center.Y + arc_radius, arc_point.Y)
-    max_size = 1000 * math.hypot(max_x - min_x, max_y - min_y)
-
-    # Function to be minimized
-    def func(radius_arr, perpendicular_bisector, minimize_type):
-        rr = radius_arr[0]
-        center = arc_point + perpendicular_bisector * rr
-        separation = (arc_center - center).length - arc_radius
-        if minimize_type == 1:
-            # near side arc
-            return abs(separation - rr)
-        # far side arc
-        return abs(separation - rr + arc_radius * 2)
-
-    # Find arc center by minimizing func result
-    rotation_axis = Axis((0, 0, 0), (0, 0, 1))
-    perpendicular_bisector = arc_tangent.rotate(rotation_axis, angle)
-    result = minimize(func, x0=0, args=(perpendicular_bisector, arc_type),
-                      method='Nelder-Mead', bounds=[(0.0, max_size)],
-                      tol=_TOL_1E6)
-    tangent_radius = result.x[0]
-    tangent_center = arc_point + perpendicular_bisector * tangent_radius
-
-    # Check if minimizer hit max size
-    if tangent_radius == max_size:
-        raise RuntimeError('Arc radius very large. Can tangent line be used?')
-
-    # dir needs to be flipped for far arc
-    tangent_normal = (arc_center - tangent_center).normalized()
-    tangent_dir = tangent_normal.cross(z_dir) * arc_type
-    tangent_point = tangent_normal * tangent_radius + tangent_center
-
-    # Sanity checks: the tangent point must be on the arc, and the new
-    # tangent direction colinear with the arc's tangent there (a circle's
-    # tangent is perpendicular to its radius)
-    if abs(arc_radius - (tangent_point - arc_center).length) > _TOL_1E6:
-        raise RuntimeError('No tangent arc found, no tangent point found.')
-    arc_dir = (tangent_point - arc_center).normalized().cross(z_dir)
-    if tangent_dir.cross(arc_dir).length > _TOL_1E6:
-        raise RuntimeError('No tangent arc found, found tangent out of '
-                           'tolerance.')
-
-    return TangentArc(workplane.from_local_coords(arc_point),
-                      workplane.from_local_coords(tangent_point),
-                      tangent=_wp_dir_out(workplane, arc_tangent), mode=mode)
-
-
-def _circle_intersections_2d(c0, r0, c1, r1):
-    """Intersection points of two circles in the local XY plane — the
-    analytic form of the sympy.intersection upstream's ArcArcTangentArc
-    leans on (lite has no sympy; the algebra is exact either way)."""
-    d = (c1 - c0).length
-    if d < 1e-12:
-        return []
-    a = (d * d + r0 * r0 - r1 * r1) / (2.0 * d)
-    h2 = r0 * r0 - a * a
-    if h2 < -1e-9 * max(r0 * r0, 1.0):
-        return []
-    h = math.sqrt(max(h2, 0.0))
-    ex = (c1 - c0) / d
-    ey = Vector(-ex.Y, ex.X, 0.0)
-    base = c0 + ex * a
-    if h < 1e-12:
-        return [base]
-    return [base + ey * h, base - ey * h]
-
-
-def ArcArcTangentArc(start_arc, end_arc, radius, side=Side.LEFT,
-                     keep=(Keep.INSIDE, Keep.INSIDE), short_sagitta=True,
-                     mode=Mode.ADD):
-    """Create an arc of the given radius tangent to two circular arcs
-    (build123d objects_curve.ArcArcTangentArc). keep is a (placement, type)
-    pair: placement is start_arc tangent INSIDE or OUTSIDE the tangent arc
-    (BOTH for overlapping arcs with type INSIDE); type is the tangent arc
-    INSIDE or OUTSIDE start/end arc."""
-    keep_placement, keep_type = (keep, keep) if isinstance(keep, str) \
-        else keep
-
-    if keep_placement == Keep.BOTH and keep_type != Keep.INSIDE:
-        raise ValueError('Keep.BOTH can only be used in configuration: '
-                         '(Keep.BOTH, Keep.INSIDE)')
-    _tangent_arc_geom_check(start_arc, 'Start arc must have GeomType.CIRCLE.')
-    _tangent_arc_geom_check(end_arc, 'End arc must have GeomType.CIRCLE.')
-    workplane = _tangent_object_plane('ArcArcTangentArc',
-                                      [start_arc, end_arc], [])
-
-    arcs = [start_arc, end_arc]
-    points = [workplane.to_local_coords(a.arc_center) for a in arcs]
-    radii = [a.radius for a in arcs]
-    side_sign = 1 if side == Side.LEFT else -1
-    keep_sign = 1 if keep_placement == Keep.OUTSIDE else -1
-    r_sign = 1 if radii[0] < radii[1] else -1
-
-    # Normal vector for sorting intersections
-    z_dir = Vector(0, 0, 1)
-    midline = points[1] - points[0]
-    normal = midline.cross(z_dir) * side_sign
-
-    if midline.length < _TOL_1E6:
-        raise ValueError('Cannot find tangent for concentric arcs.')
-    if abs(midline.length - sum(radii)) < _TOL_1E6 and \
-            keep_type == Keep.INSIDE:
-        raise ValueError('Cannot find tangent type Keep.INSIDE for '
-                         'non-overlapping arcs already tangent.')
-    if abs(midline.length - abs(radii[0] - radii[1])) < _TOL_1E6 and \
-            keep_placement == Keep.INSIDE:
-        raise ValueError('Cannot find tangent placement Keep.INSIDE for '
-                         'completely overlapping arcs already tangent.')
-
-    # Set parameters based on overlap condition and keep configuration
-    min_radius = 0.0
-    max_radius = None
-    x_sign = [1, 1]
-    pick_index = 0
-    if midline.length > abs(radii[0] - radii[1]) and \
-            keep_type == Keep.OUTSIDE:
-        # No full overlap, placed externally
-        ref_radii = [keep_sign * radii[0] + radius,
-                     keep_sign * radii[1] + radius]
-        x_sign = [keep_sign, keep_sign]
-        min_radius = (midline.length - keep_sign * (radii[0] + radii[1])) / 2
-        min_radius = 0 if min_radius < 0 else min_radius
-    elif midline.length > radii[0] + radii[1] and keep_type == Keep.INSIDE:
-        # No overlap, placed inside
-        ref_radii = [abs(radii[0] + keep_sign * radius),
-                     abs(radii[1] - keep_sign * radius)]
-        x_sign = [1, -1] if keep_placement == Keep.OUTSIDE else [-1, 1]
-        min_radius = (midline.length - keep_sign * (radii[0] - radii[1])) / 2
-    elif midline.length <= abs(radii[0] - radii[1]):
-        # Full overlap
-        pick_index = -1
-        if keep_placement == Keep.OUTSIDE:
-            # External tangent to start
-            ref_radii = [radii[0] + r_sign * radius,
-                         radii[1] - r_sign * radius]
-            min_radius = (-midline.length - r_sign * radii[0] +
-                          r_sign * radii[1]) / 2
-            max_radius = (midline.length - r_sign * radii[0] +
-                          r_sign * radii[1]) / 2
-        elif keep_placement == Keep.INSIDE:
-            # Internal tangent to start
-            ref_radii = [abs(radii[0] - radius), abs(radii[1] - radius)]
-            min_radius = (-midline.length + radii[0] + radii[1]) / 2
-            max_radius = (midline.length + radii[0] + radii[1]) / 2
-            if radii[0] < radii[1]:
-                x_sign = [-1, 1]
-            else:
-                x_sign = [1, -1]
-        else:
-            raise ValueError('Keep.BOTH requires partially overlapping arcs.')
-    else:
-        # Partial overlap
-        pick_index = -1
-        if keep_placement == Keep.BOTH:
-            # Internal tangent to both
-            ref_radii = [abs(radii[0] - radius), abs(radii[1] - radius)]
-            max_radius = (-midline.length + radii[0] + radii[1]) / 2
-        elif keep_placement == Keep.OUTSIDE:
-            # External tangent to start
-            ref_radii = [radii[0] + r_sign * radius,
-                         radii[1] - r_sign * radius]
-            max_radius = (midline.length - r_sign * radii[0] +
-                          r_sign * radii[1]) / 2
-        else:
-            # Internal tangent to start
-            ref_radii = [radii[0] - r_sign * radius,
-                         radii[1] + r_sign * radius]
-            max_radius = (midline.length + r_sign * radii[0] -
-                          r_sign * radii[1]) / 2
-
-    if min_radius >= radius:
-        raise ValueError('The arc radius is too small. Should be greater '
-                         'than ' + str(min_radius) + '.')
-    if max_radius is not None and max_radius <= radius:
-        raise ValueError('The arc radius is too large. Should be less than ' +
-                         str(max_radius) + '.')
-
-    # The tangent arc's center is an intersection of the circles offset by
-    # the construction radii (upstream does this with sympy.Circle;
-    # _circle_intersections_2d is the same algebra in closed form)
-    ref_intersections = _circle_intersections_2d(points[0], ref_radii[0],
-                                                 points[1], ref_radii[1])
-    if not ref_intersections:
-        raise ValueError('The arc radius does not produce a tangent arc '
-                         'center (no intersection of the construction '
-                         'circles).')
-    # sort_by(Axis(points[0], normal)): distance along that axis
-    ref_intersections = _stable_sorted(ref_intersections, key=lambda p: (p - points[0]).dot(normal))
-    arc_center = ref_intersections[pick_index]
-
-    # x_sign determines if tangent is near side or far side of circle
-    intersect = [points[i] + (arc_center - points[i]).normalized() *
-                 (x_sign[i] * radii[i]) for i in range(len(arcs))]
-    if side == Side.LEFT:
-        intersect.reverse()
-
-    p0 = workplane.from_local_coords(intersect[0])
-    p1 = workplane.from_local_coords(intersect[1])
-    arc = RadiusArc(p0, p1, radius=radius, short_sagitta=short_sagitta,
-                    mode=Mode.PRIVATE)
-
-    # Check and flip arc if not tangent
-    start_circle = CenterArc(workplane.from_local_coords(points[0]),
-                             radii[0], 0, 360, mode=Mode.PRIVATE)
-    _, _, point = start_circle.distance_to_with_closest_points(arc)
-    circle_tan = start_circle.tangent_at(start_circle.param_at_point(point))
-    arc_tan = arc.tangent_at(arc.param_at_point(point))
-    if circle_tan.cross(arc_tan).length > _TOL_1E6:
-        arc = RadiusArc(p0, p1, radius=-radius, short_sagitta=short_sagitta,
-                        mode=Mode.PRIVATE)
-
-    return BaseLineObject(arc, mode)
-
-
 def BSpline(control_points, knots, degree, weights=None, periodic=False,
             mode=Mode.ADD):
     """An EXACT B-spline edge from poles, a knot sequence and a degree
@@ -7784,10 +9285,10 @@ def BlendCurve(curve0, curve1, continuity=ContinuityLevel.C2, end_points=None,
         best, end_pnts = None, None
         for v0 in curve0.vertices():
             for v1 in curve1.vertices():
-                d = (Vector(v0.to_tuple()) - Vector(v1.to_tuple())).length
+                d = (Vector(tuple(v0)) - Vector(tuple(v1))).length
                 if best is None or d < best:
                     best = d
-                    end_pnts = (v0.to_tuple(), v1.to_tuple())
+                    end_pnts = (tuple(v0), tuple(v1))
     else:
         end_pnts = tuple(end_points)
     end_params = [0, 0]
@@ -7922,8 +9423,7 @@ def topo_explore_connected_edges(edge, parent=None,
     continuity_map = {0: ContinuityLevel.C0, 1: ContinuityLevel.C1,
                       2: ContinuityLevel.C1, 3: ContinuityLevel.C2,
                       4: ContinuityLevel.C2}
-    parent = parent if parent is not None else \
-        getattr(edge, 'topo_parent', None) or edge.parent
+    parent = parent if parent is not None else edge.topo_parent
     if parent is None:
         raise ValueError('edge has no valid parent')
     if edge.wrapped is None:
@@ -8205,12 +9705,12 @@ def make_brake_formed(thickness, station_widths, line=None, side=Side.LEFT,
 
     station_edges = ShapeList()
     for vertex in line_vertices:
-        base = Vector(vertex.to_tuple())
+        base = Vector(tuple(vertex))
         others = offset_vertices.sort_by_distance(base)
         for other in others[1:]:
-            if abs((base - Vector(other.to_tuple())).length - thickness) < 1e-2:
+            if abs((base - Vector(tuple(other))).length - thickness) < 1e-2:
                 station_edges.append(Edge.make_line(base,
-                                                    Vector(other.to_tuple())))
+                                                    Vector(tuple(other))))
                 break
     station_edges = station_edges.sort_by(line)
 
@@ -8236,17 +9736,58 @@ def make_brake_formed(thickness, station_widths, line=None, side=Side.LEFT,
     return _combine(builder, Part(solid.topo), mode)
 
 
+def _permutations(items):
+    """itertools.permutations order (lexicographic over positions)."""
+    if len(items) <= 1:
+        return [tuple(items)]
+    out = []
+    for i in range(len(items)):
+        rest = items[:i] + items[i + 1:]
+        for tail in _permutations(rest):
+            out.append((items[i],) + tail)
+    return out
+
+
 def loft(sections=None, ruled=False, clean=True, mode=Mode.ADD):
-    if ruled:
-        raise NotImplementedError('loft(ruled=True) is not supported in '
-                                  'build123d-lite')
+    """Loft through the sections (build123d loft): the outer wires make the
+    solid; since 0.12 faces with ANY number of inner wires are supported -
+    the holes are matched section to section by the permutation minimising
+    the summed centre distance, lofted separately and cut out."""
     builder = _active_builder(BuildPart)
-    profs = _pending_or_given(sections)
-    wires = []
-    for (face, plane) in profs:
-        wires.append(w.GetWire(face))
-    solid = w.Loft(wires)
-    return _combine(builder, Part(solid), mode)
+    if sections is None:
+        profs = _pending_or_given(None)
+        faces = [Face(t) for t, _pl in profs]
+    else:
+        faces = []
+        for s in _tolist(sections):
+            faces.extend(s.faces())
+    outer = [f.outer_wire() for f in faces]
+    hole_counts = [len(f.inner_wires()) for f in faces]
+    if any(hole_counts) and len(set(hole_counts)) != 1:
+        raise ValueError('All sections must have the same number of inner '
+                         'wires')
+    hole_sections = []
+    if hole_counts and hole_counts[0]:
+        hole_sections = [[wire] for wire in faces[0].inner_wires()]
+        n = len(hole_sections)
+        for face in faces[1:]:
+            holes = face.inner_wires()
+            best = None
+            for perm in _permutations(list(range(n))):
+                grouping = list(zip(range(n), perm))
+                quality = sum((hole_sections[j][-1].center() -
+                               holes[k].center()).length
+                              for j, k in grouping)
+                cand = (quality, grouping)
+                if best is None or cand < best:
+                    best = cand
+            for j, k in best[1]:
+                hole_sections[j].append(holes[k])
+    solid = Solid.make_loft(outer, ruled)
+    if hole_sections:
+        solid = Part(solid.topo) - [Solid.make_loft(h, ruled)
+                                    for h in hole_sections]
+    return _combine(builder, Part(_topo(solid)), mode)
 
 
 def sweep(sections=None, path=None, multisection=False, is_frenet=False,
@@ -8257,9 +9798,9 @@ def sweep(sections=None, path=None, multisection=False, is_frenet=False,
     transition usage (SetMode(is_frenet); normal= -> fixed-binormal gp_Ax2
     with WithCorrection; binormal= wire -> auxiliary spine; multisection
     never sets a transition mode and uses each face's OUTER wire only).
-    COMPROMISE(sweep): the calls match upstream exactly, but MakePipeShell
-    surfaces differ numerically between OCCT 8.0.1 (this wasm) and OCP 7.x
-    (~0.02% volume on the multisection handle example)."""
+    The calls match upstream exactly; the ~0.02% volume residual seen on the
+    multisection handle example against OCP 7.x was the kernel version -
+    against build123d 0.13.0 (OCCT 8.0.1) it agrees to 1e-8 relative."""
     builder = _active_builder(BuildPart)
     if path is None and builder is not None:
         path = getattr(builder, 'pending_path', None)
@@ -8337,9 +9878,11 @@ def _edges_by_parent(objects):
                               builder._obj is not None and
                               builder._obj.topo is not None) else None
     if target is None:
-        target = edges[0].parent
+        # algebra mode: the shape the edges were selected from (upstream
+        # objects[0].topo_parent - the OUTERMOST source)
+        target = edges[0].topo_parent
         for e in edges:
-            if e.parent is not target:
+            if e.topo_parent is not target:
                 raise ValueError('all edges must belong to the same shape')
     if target is None or target.topo is None:
         raise ValueError('these edges have no parent shape, so they cannot be '
@@ -8350,7 +9893,7 @@ def _edges_by_parent(objects):
         keyed[_shape_key(e, 'edge')] = e.index
     indices = []
     for e in edges:
-        if e.parent is target and e.index is not None:
+        if e.topo_owner is target and e.index is not None:
             indices.append(e.index)
             continue
         idx = keyed.get(_shape_key(e, 'edge'))
@@ -8417,15 +9960,15 @@ def _wire_fillet_corner(edges, index, vertex, radius):
         trimmed = []
         for e in (e0, e1):
             contact = arc.vertices().sort_by_distance(e)[0]
-            pieces = _split_1d_at_point(e, Vector(contact.to_tuple()))
+            pieces = _split_1d_at_point(e, Vector(tuple(contact)))
             far = [v for v in e.vertices()
-                   if (Vector(v.to_tuple()) - Vector(point)).length > _TOL_1E6]
+                   if (Vector(tuple(v)) - Vector(point)).length > _TOL_1E6]
             keep = None
             for piece in pieces:
                 for v in piece.vertices():
                     for f in far:
-                        if (Vector(v.to_tuple()) -
-                                Vector(f.to_tuple())).length <= _TOL_1E6:
+                        if (Vector(tuple(v)) -
+                                Vector(tuple(f))).length <= _TOL_1E6:
                             keep = piece
             trimmed.append(keep if keep is not None else e)
 
@@ -8454,7 +9997,7 @@ def _wire_fillet_2d(line, vertices, radius):
     plane = _wire_common_plane(line)
     to_local = plane.location.inverse()
     local_line = to_local * line
-    local_points = [to_local._transform_point(v.to_tuple()) for v in vertices]
+    local_points = [to_local._transform_point(tuple(v)) for v in vertices]
     edges = ShapeList([Edge(t) for t in w.OrderedEdges(local_line.topo)])
     start = local_line.position_at(0)
     end = local_line.position_at(1)
@@ -8467,7 +10010,7 @@ def _wire_fillet_2d(line, vertices, radius):
         touching = []
         for i, e in enumerate(edges):
             for ev in e.vertices():
-                if (Vector(ev.to_tuple()) - v).length <= _TOL_1E6:
+                if (Vector(tuple(ev)) - v).length <= _TOL_1E6:
                     touching.append(i)
                     break
         if len(touching) != 2:
@@ -8486,11 +10029,10 @@ def _wire_fillet_2d(line, vertices, radius):
     builder = _active_builder()
     if builder is not None:
         if isinstance(builder, BuildLine):
-            builder._specs = _specs_from_topo_edges(result)
-            builder._obj = result
+            builder._set_specs(_specs_from_topo_edges(result))
         elif (builder._obj is not None and
                 (builder._obj is line or builder._obj.topo is line.topo)):
-            builder._obj = result
+            _replace_obj(builder, result)
     return result
 
 
@@ -8500,25 +10042,53 @@ def _vertex_op_2d(objs, radius, opname):
         raise NotImplementedError('2D vertex chamfers are not supported in '
                                   'build123d-lite')
     verts = [o for o in objs if isinstance(o, Vertex)]
-    parent = verts[0].parent
+    parent = verts[0].topo_parent
     for v in verts:
-        if v.parent is not parent:
+        if v.topo_parent is not parent:
             raise ValueError('all vertices must belong to the same sketch')
     if parent is None or parent.topo is None:
         raise ValueError('fillet: vertices have no parent sketch')
     faces = parent.faces()
     if len(faces) == 0:
         return _wire_fillet_2d(parent, verts, radius)
-    if len(faces) != 1:
-        raise NotImplementedError('2D vertex fillets on multi-face sketches '
-                                  'are not supported in build123d-lite')
-    pts = [[v.X, v.Y, v.Z] for v in verts]
-    result = _wrap_like(parent, w.FilletFace2D(faces[0].topo, radius, pts))
+    # upstream fillet()'s 2-D branch: every face of the sketch is filleted at
+    # the given vertices it contains, the others pass through
+    new_topos = []
+    records = []
+    for face in faces:
+        pts = [[v.X, v.Y, v.Z] for v in face.vertices() if v in verts]
+        if pts:
+            ftopo = w.FilletFace2D(face.topo, radius, pts, False, True)
+            records.append(_record_of(ftopo, [face.topo], []))
+            new_topos.append(ftopo)
+        else:
+            new_topos.append(face.topo)
+    rtopo = new_topos[0] if len(new_topos) == 1 else w.MakeCompound(new_topos)
+    record = ShapeHistory.of(*[_RecordHolder(r) for r in records])
+    if record is not None:
+        record = record.copy().with_inputs([parent.topo], [])
+    result = _wrap_like(parent, rtopo)._made_by(record)
     builder = _active_builder()
     if builder is not None and builder._obj is not None and \
             (builder._obj is parent or builder._obj.topo is parent.topo):
-        builder._obj = result
+        _replace_obj(builder, result)
     return result
+
+
+def _replace_obj(builder, result):
+    """An operation REPLACED the builder's object (fillet/chamfer/2-D
+    fillet/offset: upstream _add_to_context(..., mode=Mode.REPLACE)): the
+    operation's record relates the result to what it replaces."""
+    if isinstance(builder, BuildLine):
+        builder._set_specs(_curve_specs_of(result))
+        return
+    before = builder._obj
+    record = ShapeHistory.of(result)
+    record = record.copy() if record is not None else ShapeHistory()
+    builder._obj = builder._wrap(result.topo)
+    builder._obj._made_by(record.with_inputs(
+        [before.topo] if before is not None and before.topo is not None
+        else [], []))
 
 
 def _edge_op(objects, jsfunc, value, opname):
@@ -8529,11 +10099,14 @@ def _edge_op(objects, jsfunc, value, opname):
     if parent is None or parent.topo is None:
         raise ValueError(opname + ': edges have no parent shape')
     ptopo = parent.topo
-    result = _wrap_like(parent, jsfunc(ptopo, value, indices))
+    rtopo = jsfunc(ptopo, value, indices, False, True)
+    # the operation's own record (BRepFilletAPI Modified/Generated, like
+    # upstream's ShapeHistory.from_algorithm) rides on the result
+    result = _wrap_like(parent, rtopo)._made_by(_record_of(rtopo, [ptopo], []))
     builder = _active_builder()
     if builder is not None and builder._obj is not None and \
             (builder._obj is parent or builder._obj.topo is ptopo):
-        builder._obj = result
+        _replace_obj(builder, result)
     return result
 
 
@@ -8580,9 +10153,9 @@ def offset(objects=None, amount=0, openings=None, kind=Kind.ARC,
         curve = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
         if isinstance(builder, BuildLine):
             if mode == Mode.REPLACE:
-                builder._specs = list(specs)
+                builder._set_specs(specs)
             elif mode == Mode.ADD:
-                builder._specs.extend(specs)
+                builder._add_specs(specs)
             elif mode != Mode.PRIVATE:
                 raise ValueError('offset: unsupported mode ' + repr(mode) +
                                  ' inside BuildLine')
@@ -8673,7 +10246,7 @@ def mirror(objects=None, about=Plane.XZ, mode=Mode.ADD):
         specs = [_mirror_seg(s) for s in src]
         curve = Curve(w.WireFromSegments(_chain_segments(specs)), specs)
         if isinstance(builder, BuildLine) and mode == Mode.ADD:
-            builder._specs.extend(specs)
+            builder._add_specs(specs)
         return curve
     targets = _tolist(objects) if objects is not None else \
         ([builder._obj] if builder is not None and builder._obj is not None else [])
@@ -8736,7 +10309,7 @@ def scale(objects=None, by=1, about=None, mode=Mode.REPLACE):
     if objects is None and isinstance(builder, BuildLine) and factors is None:
         # scale the accumulated line segments in place (spec-level, so
         # make_face() after scale() still chains exactly)
-        builder._specs = [_seg_scale(s, by) for s in builder._specs]
+        builder._set_specs([_seg_scale(s, by) for s in builder._specs])
         return builder.line
     targets = _tolist(objects) if objects is not None else \
         ([builder._obj] if builder is not None and builder._obj is not None else [])
@@ -8762,13 +10335,17 @@ def scale(objects=None, by=1, about=None, mode=Mode.REPLACE):
     return _combine(builder, obj, mode)
 
 
-def add(objects, rotation=None, clean=True, mode=Mode.ADD):
+def insert(objects, rotation=None, clean=True, mode=Mode.ADD):
+    """Generic object: insert objects into the builder in context (build123d
+    0.12's insert(); add() is its deprecated wrapper). Objects are placed at
+    the active locations in the builder's LOCAL construction coordinates."""
     builder = _active_builder()
     if builder is None:
-        raise ValueError('add() requires an active builder context')
+        raise RuntimeError('Insert must have an active builder context')
     objs = _tolist(objects)
-    # build123d's add() replaces each Builder argument with its result and
-    # drops the ones that have none yet (operations_generic.add's object_iter)
+    # build123d's insert() replaces each Builder argument with its result and
+    # drops the ones that have none yet (operations_generic.insert's
+    # object_iter)
     objs = [(o._obj if isinstance(o, Builder) else o) for o in objs
             if not (isinstance(o, Builder) and o._obj is None)]
     # curves added to a BuildLine contribute their segments (optionally
@@ -8786,24 +10363,24 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
             elif isinstance(o, Mixin1D):
                 specs = _specs_from_topo_edges(o)
             else:
-                raise TypeError('add() to BuildLine expects curves')
+                raise TypeError('insert() to BuildLine expects curves')
             if rot is not None:
                 fn_dir = lambda d: _mat_vec(rot._R, d)
                 specs = [_seg_transform(s, rot._transform_point, fn_dir, rot)
                          for s in specs]
             # replicate at the active Locations contexts, like every other
             # object creation (build123d dimension-arrow pattern)
-            placed_specs = []
-            for loc in ctx_locs:
-                fn_dir = lambda d: _mat_vec(loc._R, d)
-                placed_specs.extend([_seg_transform(s, loc._transform_point,
-                                                    fn_dir, loc)
-                                     for s in specs])
-            builder._specs.extend(placed_specs)
+            placed_specs = _place_specs(specs, ctx_locs)
+            if mode != Mode.PRIVATE:
+                if mode == Mode.REPLACE:
+                    builder._set_specs(placed_specs)
+                else:
+                    builder._add_specs(placed_specs)
             out.append(Curve(w.WireFromSegments(_chain_segments(placed_specs)),
                              placed_specs))
         return out[0] if len(out) == 1 else ShapeList(out)
-    # 2D objects added to a BuildPart become pending sketch faces (build123d)
+    # 2D objects inserted into a BuildPart become pending sketch faces, in
+    # local Plane.XY construction coordinates (build123d 0.12)
     def _is_2d(o):
         if not (isinstance(o, Shape) and o.topo is not None):
             return False
@@ -8814,30 +10391,40 @@ def add(objects, rotation=None, clean=True, mode=Mode.ADD):
         return count[0] == 0 and len(o.faces()) > 0
     if isinstance(builder, BuildPart) and mode == Mode.ADD and \
             all(_is_2d(o) for o in objs):
-        for o in objs:
-            for f in o.faces():
-                n = w._faceNormal(f.topo)
-                c = w._faceCentroid(f.topo)
-                builder.pending_faces.append(Sketch(f.topo))
-                builder.pending_face_planes.append(
-                    Plane(origin=tuple(c), z_dir=tuple(n)))
-        return objs[0] if len(objs) == 1 else ShapeList(objs)
+        placed = []
+        for loc in _ctx_locations():
+            for o in objs:
+                for f in o.faces():
+                    pf = f if _loc_is_identity(loc) else loc * f
+                    builder.pending_faces.append(Sketch(_topo(pf)))
+                    builder.pending_face_planes.append(Plane.XY)
+                    placed.append(pf)
+        return placed[0] if len(placed) == 1 else ShapeList(placed)
     results = []
     for o in objs:
         s = _wrap_like(o, _topo(o))
         if rotation is not None:
             r = tuple(rotation) if not isinstance(rotation, (int, float)) else (0, 0, rotation)
             s = Rotation(r[0], r[1], r[2]) * s
-        # replicate at location contexts / workplanes like object creation
-        locs = _ctx_locations()
-        planes = builder.workplanes if isinstance(builder, BuildPart) else [Plane.XY]
+        # replicate at the active location context, like object creation
         placed = []
-        for pl in planes:
-            for loc in locs:
-                placed.append((pl.location * loc) * _wrap_like(s, w.Translate([0, 0, 0], s.topo, True)))
-        results.append(placed[0] if len(placed) == 1 else placed[0] + placed[1:])
-    obj = results[0] if len(results) == 1 else results[0] + results[1:]
+        for loc in _ctx_locations():
+            placed.append(loc * _wrap_like(s, w.Translate([0, 0, 0], s.topo, True)))
+        if len(placed) == 1:
+            results.append(placed[0])
+        else:
+            results.append(_wrap_like(s, w.MakeCompound([p.topo for p in placed])))
+    if len(results) == 1:
+        obj = results[0]
+    else:
+        obj = _wrap_like(results[0], w.MakeCompound([r.topo for r in results]))
     return _combine(builder, obj, mode)
+
+
+def add(objects, rotation=None, clean=True, mode=Mode.ADD):
+    """Deprecated since build123d 0.12: use insert()."""
+    _warn('add() is deprecated; use insert() instead.', 'DeprecationWarning')
+    return insert(objects, rotation=rotation, clean=clean, mode=mode)
 
 
 def make_face(edges=None, mode=Mode.ADD):
@@ -9154,7 +10741,7 @@ def draft(faces, neutral_plane, angle):
     face_list = _tolist(faces)
     if not face_list:
         raise ValueError('draft: no faces given')
-    parent = face_list[0].parent
+    parent = face_list[0].topo_parent
     builder = _active_builder(BuildPart)
     target = parent if parent is not None else \
         (builder._obj if builder is not None else None)
@@ -9164,7 +10751,7 @@ def draft(faces, neutral_plane, angle):
         target.topo, [f.topo for f in face_list], angle,
         list(neutral_plane.origin), list(neutral_plane.z_dir)))
     if builder is not None:
-        builder._obj = builder._wrap(result.topo)
+        _replace_obj(builder, result)
     return result
 
 
@@ -9233,17 +10820,19 @@ def project(objects=None, workplane=None, target=None, mode=Mode.ADD):
                 if not projected:
                     raise ValueError('project: projection missed the part')
                 # ALL projected surface pieces become pending faces (front
-                # AND back, like build123d's project into BuildPart). Their
-                # pending plane z_dir is the REVERSED projection direction
-                # (validated against 0.11.1 maker_coin: a following
-                # extrude(-depth, SUBTRACT) cuts front pieces INTO the part
-                # and back pieces harmlessly out the back).
-                back = -d
+                # AND back, like build123d's project into BuildPart). Since
+                # 0.12 each goes in through _add_to_context with ITS OWN plane
+                # (Plane(face): the piece's outward normal), so a following
+                # extrude(-depth, SUBTRACT) cuts front AND back pieces into
+                # the part (0.11.1 used the workplane for every piece, which
+                # sent the back pieces harmlessly out the back).
                 for piece in projected:
-                    c = w._faceCentroid(piece.topo)
                     builder.pending_faces.append(Sketch(piece.topo))
-                    builder.pending_face_planes.append(
-                        Plane(origin=tuple(c), z_dir=tuple(back)))
+                    try:
+                        piece_plane = Plane(Face(piece.topo))
+                    except Exception:
+                        piece_plane = Plane.XY
+                    builder.pending_face_planes.append(piece_plane)
         return Sketch(w.MakeCompound(
             [s.topo for s in builder.pending_faces], True)) \
             if len(builder.pending_faces) > 1 else builder.pending_faces[0]
@@ -9429,11 +11018,17 @@ class RevoluteJoint(Joint):
         if axis is None:
             axis = Axis.Z
         self.angular_range = angular_range
+        self._angle_reference_provided = angle_reference is not None
         if angle_reference is not None:
-            self.angle_reference = Vector(angle_reference)
+            ref = Vector(angle_reference)
+            if abs(ref.normalized().dot(Vector(axis.direction).normalized())) \
+                    > 1e-5:
+                raise ValueError('angle_reference must be normal to axis')
+            self.angle_reference = ref
         else:
             self.angle_reference = Plane(origin=(0, 0, 0),
                                          z_dir=axis.direction).x_dir
+        self._angle = None
         self.relative_axis = axis.located(part.location.inverse())
         part.joints[label] = self
         Joint.__init__(self, label, part)
@@ -9460,10 +11055,20 @@ class RevoluteJoint(Joint):
             raise ValueError('angle (' + str(angle_degrees) +
                              ') must be in range of ' +
                              str(self.angular_range))
+        self._angle = angle_degrees
         # build123d: "Avoid strange rotations when angle is zero" quirk
         if angle_degrees == 0.0:
             angle_degrees = 360.0
-        return (self.relative_axis.location * Rotation(0, 0, angle_degrees) *
+        if self._angle_reference_provided:
+            # 0.12 fix: the angle is measured from angle_reference
+            rotation = Location(Plane(
+                origin=(0, 0, 0),
+                x_dir=self.angle_reference.rotate(self.relative_axis,
+                                                  angle_degrees),
+                z_dir=self.relative_axis.direction))
+        else:
+            rotation = Rotation(0, 0, angle_degrees)
+        return (self.relative_axis.location * rotation *
                 other.relative_location.inverse())
 
 
@@ -9626,7 +11231,7 @@ class Mesher:
     StlAPI_Writer into the worker's Emscripten MEMFS — there is no lib3mf in
     the WASM build, so .3mf paths raise; read() is not supported."""
 
-    def __init__(self, unit='MM', **kwargs):
+    def __init__(self, unit=Unit.MM, **kwargs):
         self.unit = unit
         self._shapes = []
         self.linear_deflection = 0.001
@@ -9729,6 +11334,19 @@ def export_stl(to_export, file_path, tolerance=1e-3, angular_tolerance=0.1,
     return text is not None
 
 
+def export_obj(to_export, file_path, linear_deflection=0.001,
+               angular_deflection=0.1, include_uvs=True, atlas_packing=True,
+               atlas_gutter=0.0):
+    """Export the shape's tessellation as a Wavefront OBJ with UVs and
+    normals (build123d 0.12 export_obj). COMPROMISE(mesher): written into
+    the worker's MEMFS like export_stl."""
+    text = w.ExportOBJ(_topo(to_export), str(file_path).replace('/', '_'),
+                       linear_deflection, angular_deflection,
+                       bool(include_uvs), bool(atlas_packing),
+                       float(atlas_gutter))
+    return text is not None
+
+
 def export_brep(to_export, file_path):
     """Export the shape to a BREP file (build123d exporters3d.export_brep,
     BRepTools::Write). COMPROMISE(mesher): browser workers have no
@@ -9752,7 +11370,8 @@ def export_step(to_export, file_path, unit=None, write_pcurves=True,
     Interface_Static keys behind them are not bound in this wasm build);
     unit= is honoured via write.step.unit. Returns True like upstream."""
     text = w.ExportSTEP(_topo(to_export), str(file_path).replace('/', '_'),
-                        str(unit) if unit is not None else None)
+                        _STEP_UNIT_NAMES.get(unit, str(unit))
+                        if unit is not None else '')
     return bool(text)
 
 
@@ -9781,7 +11400,7 @@ class GeomEncoder(json.JSONEncoder):
             # lite's Color is a stub keeping its constructor args
             return {'Color': tuple(getattr(o, 'args', ()))}
         if isinstance(o, Location):
-            tup = o.to_tuple()
+            tup = tuple(o)
             return {'Location': (tuple(tup[0]), tuple(tup[1]))}
         if isinstance(o, Plane):
             return {'Plane': (tuple(o.origin), tuple(o.x_dir),
@@ -9803,25 +11422,6 @@ class GeomEncoder(json.JSONEncoder):
             return registry[key](*value)
 
 
-class LocationEncoder(json.JSONEncoder):
-    """Custom JSON Encoder for Location values (build123d
-    geometry.LocationEncoder — deprecated upstream in favour of
-    GeomEncoder, kept for compatibility)."""
-
-    def default(self, o):
-        """Return a serializable object"""
-        if not isinstance(o, Location):
-            raise TypeError('Only applies to Location objects')
-        return {'Location': o.to_tuple()}
-
-    @staticmethod
-    def location_hook(obj):
-        """Convert Locations loaded from json to Location objects."""
-        if 'Location' in obj:
-            obj = Location(*[[float(f) for f in v] for v in obj['Location']])
-        return obj
-
-
 def _pack2d(objects, width_fn, length_fn):
     """Growing rectangle packer (port of build123d.pack_utils._pack2d, which
     is itself a port of jakesgordon/bin-packing packer.growing.js)."""
@@ -9832,6 +11432,8 @@ def _pack2d(objects, width_fn, length_fn):
             self.down = None
             self.right = None
 
+    if not objects:
+        raise ValueError('no objects to pack')
     sizes = _stable_sorted(((o, width_fn(o), length_fn(o)) for o in objects),
                    key=lambda t: min(t[1], t[2]), reverse=True)
     sizes = _stable_sorted(sizes, key=lambda t: max(t[1], t[2]), reverse=True)
@@ -9892,6 +11494,8 @@ def _pack2d(objects, width_fn, length_fn):
     for (o, ww, hh) in sizes:
         node = find_node(root, ww, hh)
         node = split_node(node, ww, hh) if node else grow_node(ww, hh)
+        if node is None:
+            raise RuntimeError('Failed to grow the packing area')
         placements[id(o)] = (node.x, node.y)
     return [placements[id(o)] for o in objects]
 
@@ -9975,17 +11579,50 @@ def _json_num(x):
     return repr(x)
 
 
-def _shape_result_of(obj):
-    """obj._obj when it is a Shape with geometry (an upstream-source builder;
-    guarded because attribute access on module stubs like the numpy shim
-    RAISES rather than returning AttributeError defaults)."""
+def _builder_product(obj):
+    """The builder result a variable is measured by — test/b123d-validation
+    reference.py's rule, 0.11.1's meaning of _obj held fixed: the PLACED
+    product for BuildPart/BuildLine (.part/.line) and the LOCAL one for
+    BuildSketch (.sketch_local). Since 0.12 _obj is the local construction
+    product of every builder."""
+    cls = type(obj)
     try:
-        cand = getattr(obj, '_obj', None)
+        if hasattr(cls, 'sketch_local'):
+            return obj.sketch_local
+        for attr in ('part', 'line'):
+            if hasattr(cls, attr):
+                return getattr(obj, attr)
+        return getattr(obj, '_obj', None)
     except Exception:
         return None
+
+
+def _shape_result_of(obj):
+    """The measured builder product when it is a Shape with geometry (an
+    upstream-source builder; guarded because attribute access on module
+    stubs like the numpy shim RAISES rather than returning AttributeError
+    defaults)."""
+    try:
+        if getattr(obj, '_obj', None) is None and \
+                not hasattr(type(obj), 'sketch_local'):
+            return None
+    except Exception:
+        return None
+    cand = _builder_product(obj)
     if isinstance(cand, Shape) and cand.topo is not None:
         return cand
     return None
+
+
+def _override_volume(entries, name, volume):
+    prefix = '"' + name + '":{"volume":'
+    for i in range(len(entries)):
+        e = entries[i]
+        if e.startswith(prefix):
+            rest = e[len(prefix):]
+            comma = rest.find(',')
+            entries[i] = prefix + _json_num(abs(volume)) + rest[comma:]
+            return
 
 
 def _measure_globals_json(g):
@@ -10021,8 +11658,9 @@ def _measure_globals_json(g):
         if name.startswith('_') or name in ('show', 'show_object', 'show_all'):
             continue
         if isinstance(obj, Builder):
-            if obj._obj is not None and obj._obj.topo is not None:
-                measure(name, obj._obj)
+            product = _builder_product(obj)
+            if product is not None and product.topo is not None:
+                measure(name, product)
         elif not isinstance(obj, Shape) and _shape_result_of(obj) is not None:
             # An upstream-source builder (pysrc=upstream) is not a lite
             # Builder, but its result IS a lite-class shape - measure it so
@@ -10031,6 +11669,11 @@ def _measure_globals_json(g):
         elif isinstance(obj, Shape):
             if obj.topo is not None:
                 measure(name, obj)
+                if isinstance(obj, Compound) and obj.children:
+                    # an assembly's volume is upstream's Compound.volume (its
+                    # plain children), which reference.py records via
+                    # obj.volume - not the per-solid sum of the whole tree
+                    _override_volume(entries, name, obj.volume)
         elif isinstance(obj, (list, tuple)) and len(obj) > 0 and \
                 all(isinstance(x, Shape) for x in obj):
             # Skip face-less elements (edge/vertex selector lists) and sort
@@ -10568,6 +12211,220 @@ def shuffle(x):
     for i in range(len(x) - 1, 0, -1):
         j = _randbelow(i + 1)
         x[i], x[j] = x[j], x[i]
+`,
+  _bd_materials_shim: `
+# bd_materials shim (build123d-lite): the materials API build123d 0.12+
+# documents (resolve/material_names, the category modules' family
+# functions, custom_<category>, finishes, core.PROPERTY_UNITS) over lite's
+# embedded name table. COMPROMISE(materials): grades carry name, family,
+# category and density only; finishes and processes are inert records.
+# build123d is imported lazily: shims load before build123d-lite does.
+
+_FAMILIES = """
+abs_:plastics alloy_steel:metals aluminum:metals american_cherry:wood
+asa:plastics ash:wood beech:wood birch:wood borosilicate:glass
+brass:metals bronze:metals cardboard:paper castable:resins ceramic:resins
+cfrp:plastics copper:metals engineered_wood:wood esd:resins felt:textile
+flexible:resins foamboard:paper fr4:plastics gold:metals hardwood:wood
+high_temp:resins leather:textile magnesium:metals maple:wood mdf:wood
+mild_steel:metals nylon:plastics oak:wood osb:wood paper:paper pc:plastics
+pe:plastics peek:plastics petg:plastics phenolic:plastics pine:wood
+pla:plastics pmma:plastics pom:plastics pp:plastics pps:plastics
+ptfe:plastics rubber:plastics silver:metals soda_lime:glass softwood:wood
+spring_steel:metals spruce:wood stainless:metals standard:resins
+titanium:metals tool_steel:metals tough:resins tpu:plastics
+transparent:resins walnut:wood woven:textile
+"""
+
+PROPERTY_UNITS = {
+    'areal_density': 'g/m\\u00b2',
+    'compressive_strength_parallel': 'MPa',
+    'density': 'kg/m\\u00b3',
+    'elongation_at_break': '%',
+    'hardness': 'per hardness_scale',
+    'janka_hardness': 'N',
+    'modulus_of_elasticity': 'GPa',
+    'modulus_of_rupture': 'MPa',
+    'poisson_ratio': '',
+    'shear_modulus': 'GPa',
+    'shear_strength': 'MPa',
+    'tensile_strength': 'MPa',
+    'thickness': 'mm',
+    'yield_strength': 'MPa',
+    'glass_transition_temperature': '\\u00b0C',
+    'heat_deflection_temperature': '\\u00b0C',
+    'max_service_temp': '\\u00b0C',
+    'melting_temperature': '\\u00b0C',
+    'specific_heat_capacity': 'J/(kg\\u00b7K)',
+    'thermal_conductivity': 'W/(m\\u00b7K)',
+    'thermal_expansion': '1/K',
+}
+
+
+def _b():
+    import build123d
+    return build123d
+
+
+def resolve(name):
+    return _b()._resolve_material(name)
+
+
+def material_names():
+    return _b()._material_names()
+
+
+def canonical_name(material):
+    return _b()._canonical_material_name(material)
+
+
+def factory(name):
+    def make(**kwargs):
+        return _family_material(name, None, kwargs)
+    return make
+
+
+def _family_material(key, grade, kwargs):
+    b = _b()
+    fm = b._resolve_material(grade if isinstance(grade, str) else key)
+    density = kwargs.get('density')
+    if density is not None:
+        fm.material.density = float(density)
+    for attr in ('finish', 'process', 'color', 'thickness_mm', 'opacity',
+                 'roughness', 'scale', 'rotation', 'pbr'):
+        if kwargs.get(attr) is not None:
+            setattr(fm, attr, kwargs[attr])
+    return fm
+
+
+class _Category:
+    """One bd_materials catalog module (metals, plastics, wood, ...)."""
+
+    def __init__(self, name, category):
+        self.__name__ = 'bd_materials.materials.' + name
+        self._category = category
+
+
+def _make_family(key):
+    def family(grade=None, **kwargs):
+        return _family_material(key, grade, kwargs)
+    return family
+
+
+def _make_custom(category):
+    def custom(name, density, family=None, **kwargs):
+        b = _b()
+        fm = b._FinishedMaterial(b._MaterialGrade(name, family or name,
+                                                  category, float(density)))
+        for attr in ('finish', 'process', 'color', 'thickness_mm', 'opacity',
+                     'roughness', 'pbr'):
+            if kwargs.get(attr) is not None:
+                setattr(fm, attr, kwargs[attr])
+        return fm
+    return custom
+
+
+_CATEGORY = {'metals': 'metal', 'plastics': 'plastic', 'resins': 'resin',
+             'glass': 'glass', 'wood': 'wood', 'paper': 'paper',
+             'textile': 'textile'}
+metals = _Category('metals', 'metal')
+plastics = _Category('plastics', 'plastic')
+resins = _Category('resins', 'resin')
+glass = _Category('glass', 'glass')
+wood = _Category('wood', 'wood')
+paper = _Category('paper', 'paper')
+textile = _Category('textile', 'textile')
+_MODULES = {'metals': metals, 'plastics': plastics, 'resins': resins,
+            'glass': glass, 'wood': wood, 'paper': paper, 'textile': textile}
+for _entry in _FAMILIES.split():
+    _key, _mod = _entry.split(':')
+    setattr(_MODULES[_mod], _key, _make_family(_key.rstrip('_')))
+for _mod in _MODULES:
+    setattr(_MODULES[_mod], 'custom_' + _CATEGORY[_mod],
+            _make_custom(_CATEGORY[_mod]))
+
+
+class Finish:
+    def __init__(self, name, notes=None):
+        self.name = name
+        self.notes = notes
+
+    def __repr__(self):
+        return 'Finish(name=' + repr(self.name) + ', notes=' + \
+            repr(self.notes) + ')'
+
+
+class AppliedFinish:
+    def __init__(self, finish, color=None, sheen=None, scale=(1.0, 1.0),
+                 rotation=0.0):
+        self.finish = finish
+        self.color = color
+        self.sheen = sheen
+        self.scale = scale
+        self.rotation = rotation
+
+    def __repr__(self):
+        return ('AppliedFinish(finish=' + repr(self.finish) + ', color=' +
+                repr(self.color) + ', sheen=' + repr(self.sheen) +
+                ', scale=' + repr(self.scale) + ', rotation=' +
+                repr(self.rotation) + ')')
+
+
+def _finish(label):
+    def apply(color=None, sheen=None, scale=(1.0, 1.0), rotation=0.0):
+        return AppliedFinish(Finish(label), color, sheen, scale, rotation)
+    return apply
+
+
+bead_blast = _finish('Bead Blast')
+brushed = _finish('Brushed')
+fine_sanding = _finish('Fine Sanding')
+smooth_machining = _finish('Smooth Machining')
+electropolish = _finish('Electropolish')
+anodize = _finish('Anodize')
+chem_film = _finish('Chem Film')
+conductive_oxidation = _finish('Conductive Oxidation')
+black_oxide = _finish('Black Oxide')
+passivate = _finish('Passivate')
+pickle = _finish('Pickle')
+dye = _finish('Dye')
+chrome = _finish('Chrome')
+gold_plate = _finish('Gold Plate')
+nickel_plate = _finish('Nickel Plate')
+silver_plate = _finish('Silver Plate')
+tin_plate = _finish('Tin Plate')
+pvd = _finish('Pvd')
+zinc_plate = _finish('Zinc Plate')
+vacuum_plating = _finish('Vacuum Plating')
+powder_coat = _finish('Powder Coat')
+spray_paint = _finish('Spray Paint')
+electrophoresis = _finish('Electrophoresis')
+laser_engrave = _finish('Laser Engrave')
+etch = _finish('Etch')
+silkscreen = _finish('Silkscreen')
+
+
+class _Namespace:
+    pass
+
+
+finishes = _Namespace()
+for _name in ['bead_blast', 'brushed', 'fine_sanding', 'smooth_machining', 'electropolish', 'anodize', 'chem_film', 'conductive_oxidation', 'black_oxide', 'passivate', 'pickle', 'dye', 'chrome', 'gold_plate', 'nickel_plate', 'silver_plate', 'tin_plate', 'pvd', 'zinc_plate', 'vacuum_plating', 'powder_coat', 'spray_paint', 'electrophoresis', 'laser_engrave', 'etch', 'silkscreen']:
+    setattr(finishes, _name, globals()[_name])
+core = _Namespace()
+core.PROPERTY_UNITS = PROPERTY_UNITS
+`,
+  bd_materials: `
+# Package marker (see the scipy shim) for the bd_materials.* submodules.
+if '__path__' not in globals():
+    __path__ = []
+from _bd_materials_shim import resolve, material_names, canonical_name, factory, metals, plastics, resins, glass, wood, paper, textile, finishes, core
+`,
+  'bd_materials.core': `
+from _bd_materials_shim import PROPERTY_UNITS
+`,
+  'bd_materials.finishes': `
+from _bd_materials_shim import Finish, AppliedFinish, bead_blast, brushed, fine_sanding, smooth_machining, electropolish, anodize, chem_film, conductive_oxidation, black_oxide, passivate, pickle, dye, chrome, gold_plate, nickel_plate, silver_plate, tin_plate, pvd, zinc_plate, vacuum_plating, powder_coat, spray_paint, electrophoresis, laser_engrave, etch, silkscreen
 `,
   _scipy_shim: `
 # scipy shim implementation module (imported by the 'scipy' package shims).

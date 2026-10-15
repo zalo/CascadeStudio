@@ -1,5 +1,5 @@
 # real_glue (pyodide, pysrc=real) — the worker glue under REAL, UNMODIFIED
-# build123d 0.11.1 running on Pyodide (CPython/wasm) with the OCP-over-embind
+# build123d 0.13.0 running on Pyodide (CPython/wasm) with the OCP-over-embind
 # shim as the ONLY substitution.
 #
 # The Pyodide port of ocp_shim/topo_glue.py (the MicroPython pytopo=upstream
@@ -101,15 +101,57 @@ def _from_raw(topo, cls=None):
     return by_code.get(code, Compound)(p)
 
 
-def _builder_shape(obj):
-    """obj._obj when obj is a BUILDER holding a shape with geometry."""
+def _as_imported_shape(topo):
+    """build123d 0.13's import_step/import_brep result shape: the file's
+    free shapes as a root Compound's CHILDREN, with the wrapper removed when
+    there is exactly ONE (so a single-part STEP imports as a Solid — 0.11.1
+    returned a Compound there). The worker's readers hand back the file's
+    whole TopoDS (no XCAF label tree — assembly names/colors/locations stay a
+    roadmap item), so a top-level compound's direct sub-shapes stand in for
+    the free shapes; a single one unwraps, recursively like upstream's
+    unwrap of a single free object."""
+    shp = _from_raw(topo)
+    if not isinstance(shp, Compound):
+        return shp
+    from OCP.TopoDS import TopoDS_Iterator
+    kids = []
+    it = TopoDS_Iterator(shp.wrapped)
+    while it.More():
+        kids.append(it.Value())
+        it.Next()
+    if len(kids) == 1:
+        return _as_imported_shape(_raw(kids[0]))
+    root = Compound()
+    root.children = [_from_raw(_raw(k)) for k in kids]
+    return root
+
+
+def _builder_shape(obj, measure=False):
+    """The product of a BUILDER holding a shape with geometry (None for
+    anything else). Since 0.12's unified BuildScope a builder constructs
+    LOCALLY and publishes through its placement: `_obj` is the local
+    construction product, `.part`/`.sketch`/`.line` what the user sees —
+    shown in the viewport. measure=True follows the validation reference's
+    rule (test/b123d-validation/reference.py builder_product, 0.11.1's `_obj`
+    meaning held fixed): the PLACED .part/.line, the LOCAL .sketch_local."""
     try:
         cand = getattr(obj, '_obj', None)
     except Exception:
         return None
-    if isinstance(cand, Shape) and cand.wrapped is not None:
-        return cand
-    return None
+    if not (isinstance(cand, Shape) and cand.wrapped is not None):
+        return None
+    cls = type(obj)
+    attrs = (('sketch_local',) if measure else ('sketch',)) + ('part', 'line')
+    for attr in attrs:
+        if hasattr(cls, attr):
+            try:
+                prod = getattr(obj, attr)
+            except Exception:
+                break
+            if isinstance(prod, Shape) and prod.wrapped is not None:
+                return prod
+            break
+    return cand
 
 
 # ------------------------------------------------------------- scene ----- #
@@ -220,8 +262,19 @@ def _measure_globals_json(g):
         mb = m.bbox
         if mb is not None and int(mb.length) == 6:
             bbox = '[' + ','.join([_json_num(v) for v in mb]) + ']'
+        # volume by upstream's OWN definition, exactly as the reference
+        # (test/b123d-validation/reference.py: abs(obj.volume)) measures it:
+        # since 0.12 Compound.volume sums its DIRECT Solid/Shell children
+        # (an assembly's nested compounds are not double-counted), which a
+        # raw whole-shape kernel measurement cannot know
+        vol = m.volume
+        if isinstance(obj, Shape):
+            try:
+                vol = abs(float(obj.volume))
+            except Exception:  # noqa: BLE001 - keep the kernel figure
+                pass
         entries.append('"' + name + '":{' +
-                       '"volume":' + _json_num(m.volume) +
+                       '"volume":' + _json_num(vol) +
                        ',"area":' + _json_num(m.area) +
                        ',"faces":' + str(int(m.faces)) +
                        ',"edges":' + str(int(m.edges)) +
@@ -230,7 +283,7 @@ def _measure_globals_json(g):
     for name, obj in list(g.items()):
         if name.startswith('_') or name in ('show', 'show_object', 'show_all'):
             continue
-        b = _builder_shape(obj)
+        b = _builder_shape(obj, measure=True)
         if b is not None:
             measure(name, b)
         elif isinstance(obj, Shape):
@@ -279,7 +332,8 @@ def import_brep(file_name):
     topo = w.ImportBREP(name)
     if topo is None or not topo:
         raise ValueError('Could not import ' + str(file_name))
-    res = _from_raw(topo, Compound)
+    # upstream: Compound.cast(shape) — the class of the shape read
+    res = _from_raw(topo)
     res.label = str(file_name).split('/')[-1]
     return res
 
@@ -295,7 +349,7 @@ def import_step(file_name):
             'The CAD worker has no filesystem; pass the file content with '
             'CascadeAPI.loadExternalFiles({"' + name.split('/')[-1] +
             '": <step text>}) before running the script.')
-    res = _from_raw(topo, Compound)
+    res = _as_imported_shape(topo)
     res.label = name.split('/')[-1]
     return res
 
@@ -378,8 +432,10 @@ class Mesher:
         return True
 
     def read(self, file_name):
-        raise NotImplementedError('Mesher.read is not supported in '
-                                  'the browser worker')
+        raise NotImplementedError(
+            'Mesher.read is not supported in the browser worker: build123d '
+            'reads STL/3MF meshes through lib3mf, which this wasm build '
+            'does not include (COMPROMISE(mesher))')
 
 
 # ------------------------------------------- kernel-gap method routing ---- #
@@ -427,6 +483,28 @@ def _cs_make_text(cls, txt, font_size, font='Arial', font_path=None,
 Compound.make_text = classmethod(_cs_make_text)
 
 
+# 0.12+ objects_sketch.Text resolves its font up front via
+# Compound.resolve_font -> (name, path, Font_SystemFont); there is no
+# Font_FontMgr in this wasm build (COMPROMISE(kernel-fonts)). Resolve the way
+# the glue-routed make_text renders (lite's FontManager: the bundled FreeSans
+# family; unknown names fall back to FreeSans) — same as topo_glue.py.
+def _cs_resolve_font(font='Arial', font_path=None, font_style=None):
+    fm = _lt.FontManager()
+    style = _lite_enum(font_style) if font_style is not None \
+        else _lt.FontStyle.REGULAR
+    try:
+        face = fm.find_font(font, style)
+    except Exception:
+        try:
+            face = fm.find_font('FreeSans', style)
+        except Exception:
+            face = 'FreeSans'
+    return (face, 'fonts/' + face + '.ttf', face)
+
+
+Compound.resolve_font = staticmethod(_cs_resolve_font)
+
+
 # Joint reparenting: pybind's downcast() returns THE SAME C++ object, so
 # Joint.connect_to's in-place parent.locate() moves the new wrapper too;
 # embind casts return VALUE COPIES, so Compound(joints=) must REBIND the
@@ -464,6 +542,35 @@ def _cs_make_gordon_surface(cls, profiles, guides, tolerance=3e-4):
 Face.make_gordon_surface = classmethod(_cs_make_gordon_surface)
 
 
+# COMPROMISE(material-look): build123d 0.13's Shape.material setter stores
+# the FinishedMaterial and THEN derives the display color from the material's
+# three.js PBR look (FinishedMaterial.pbr -> threejs_materials). The look
+# stack (Pillow + pygltflib + ~86 MB of textures) is not bundled
+# (real-deps/threejs_materials_stub.py raises CsPbrUnavailable), so the
+# material — density, mass(), property ranges, all REAL bd_materials — is
+# kept and only the derived color is skipped. Reading `.pbr` still raises.
+def _cs_wrap_material_setter():
+    prop = Shape.__dict__.get('material')
+    if not isinstance(prop, property) or prop.fset is None:
+        return
+    try:
+        from threejs_materials import CsPbrUnavailable
+    except ImportError:
+        return
+    orig_set = prop.fset
+
+    def _set(self, value):
+        try:
+            orig_set(self, value)
+        except CsPbrUnavailable:
+            pass  # self._material is already assigned (setter order)
+
+    Shape.material = property(prop.fget, _set, prop.fdel, prop.__doc__)
+
+
+_cs_wrap_material_setter()
+
+
 # ------------------------------------------------- package-level hooks ---- #
 
 def _reset_state():
@@ -471,9 +578,14 @@ def _reset_state():
     builder stacks AND the upstream builder ContextVars (a JS-level abort can
     skip Python unwinding, leaking builder contexts)."""
     _lt._reset_state()
-    from build123d.build_common import Builder, LocationList, WorkplaneList
-    for _cls in (Builder, LocationList, WorkplaneList):
-        var = getattr(_cls, '_current', None)
+    import build123d.build_common as _bc
+    # 0.12+: ONE authoritative ContextVar (the BuildScope stack) replaced the
+    # per-class Builder/LocationList/WorkplaneList ContextVars of 0.11.1
+    scope_var = getattr(_bc, '_build_scope', None)
+    if scope_var is not None and scope_var.get(None) is not None:
+        scope_var.set(None)
+    for _cls_name in ('Builder', 'LocationList', 'WorkplaneList'):
+        var = getattr(getattr(_bc, _cls_name, None), '_current', None)
         if var is not None and var.get(None) is not None:
             var.set(None)
 

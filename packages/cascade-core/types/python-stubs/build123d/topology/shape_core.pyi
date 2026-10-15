@@ -2,6 +2,8 @@ import OCP.GeomAbs as ga
 import abc
 import types
 from .composite import Compound as Compound
+from .history import ShapeHistory as ShapeHistory
+from .kernel import list_shapes as list_shapes
 from .one_d import Edge as Edge, Wire as Wire
 from .three_d import Solid as Solid
 from .two_d import Face as Face, Shell as Shell
@@ -10,13 +12,16 @@ from IPython.lib.pretty import RepresentationPrinter as RepresentationPrinter
 from OCP.BRepAlgoAPI import BRepAlgoAPI_BooleanOperation as BRepAlgoAPI_BooleanOperation
 from OCP.GProp import GProp_GProps
 from OCP.TopAbs import TopAbs_ShapeEnum
+from OCP.TopLoc import TopLoc_Location
 from OCP.TopoDS import TopoDS_Compound, TopoDS_Shape
 from _typeshed import Incomplete
 from abc import ABC, abstractmethod
 from anytree import NodeMixin
-from build123d.build_enums import CenterOf as CenterOf, GeomType as GeomType, Keep as Keep, SortBy as SortBy, Transition as Transition
+from bd_materials import FinishedMaterial
+from build123d.build_constants import UNITS_PER_KILOGRAM as UNITS_PER_KILOGRAM, UNITS_PER_METER as UNITS_PER_METER
+from build123d.build_enums import CenterOf as CenterOf, Convexity as Convexity, GeomType as GeomType, Keep as Keep, Select as Select, SortBy as SortBy, Transition as Transition, Unit as Unit
 from build123d.build_part import BuildPart as BuildPart
-from build123d.geometry import Axis as Axis, BoundBox as BoundBox, Color as Color, ColorLike as ColorLike, DEG2RAD as DEG2RAD, Location as Location, Matrix as Matrix, NotAllLocationLikeError as NotAllLocationLikeError, OrientedBoundBox as OrientedBoundBox, Plane as Plane, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike, all_location_like as all_location_like, logger as logger
+from build123d.geometry import Axis as Axis, BoundBox as BoundBox, Color as Color, ColorLike as ColorLike, DEG2RAD as DEG2RAD, Location as Location, Matrix as Matrix, OrientedBoundBox as OrientedBoundBox, Plane as Plane, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike, apply_location_like as apply_location_like, logger as logger
 from collections.abc import Callable, Iterable, Iterator
 from typing import Any, ClassVar, Generic, Literal, Protocol, SupportsIndex, TypeVar, overload
 from typing_extensions import Self
@@ -26,6 +31,8 @@ TrimmingTool: Incomplete
 TOPODS = TypeVar('TOPODS', bound=TopoDS_Shape)
 CalcFn = Callable[[TopoDS_Shape, GProp_GProps], None]
 CompositeFactory: Incomplete
+ShapeConstructor: Incomplete
+GeometryConstructor: Incomplete
 
 class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
     """Shape
@@ -44,10 +51,16 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
         color (Color): object color
         joints (dict[str:Joint]): dictionary of joints bound to this object (Solid only)
         children (Shape): list of assembly children of this object (Compound only)
-        topo_parent (Shape): assembly parent of this object
+        topo_path (tuple[Shape, ...]): the shapes this one was extracted through,
+            outermost first
+        topo_parent (Shape): the outermost of those, where it came from
+        topo_owner (Shape): the innermost of those, what it was taken out of
 
     """
+    build123d_type: ClassVar[str]
     composite_factories: ClassVar[dict[int | None, CompositeFactory]]
+    shape_constructors: ClassVar[dict[TopAbs_ShapeEnum, ShapeConstructor]]
+    geometry_constructors: ClassVar[dict[type, GeometryConstructor]]
     shape_LUT: Incomplete
     shape_properties_LUT: dict[TopAbs_ShapeEnum, CalcFn | None]
     inverse_shape_LUT: Incomplete
@@ -66,8 +79,26 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
     label: Incomplete
     color: Incomplete
     parent: Incomplete
-    topo_parent: Shape | None
+    topo_path: tuple[Shape, ...]
     def __init__(self, obj: TopoDS_Shape | None = None, label: str = '', color: ColorLike | None = None, parent: Compound | None = None) -> None: ...
+    @property
+    def topo_parent(self) -> Shape | None:
+        """The shape this one was ultimately taken out of.
+
+        The outermost step of ``topo_path``: selecting an edge from a face of a
+        shell reports the shell, not the face. Use ``topo_owner`` for the face.
+        """
+    @topo_parent.setter
+    def topo_parent(self, value: Shape | None) -> None:
+        """Record a single step of provenance, discarding any longer path."""
+    @property
+    def topo_owner(self) -> Shape | None:
+        """The shape this one was taken directly out of.
+
+        The innermost step of ``topo_path``. An edge picked off a face knows
+        that face, which is what says which side of the edge the face is on -
+        something the edge alone cannot tell.
+        """
     @property
     def wrapped(self):
         """OCP TopoDS object"""
@@ -84,6 +115,30 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
     @color.setter
     def color(self, value: ColorLike | None) -> None:
         """Set the shape's color"""
+    @property
+    def material(self) -> None | FinishedMaterial:
+        """Get the shape's material.  If it's None, get the material of the nearest
+        ancestor, assign it to this Shape and return this value.
+
+        NOTE (build123d-lite): materials resolve through an embedded copy of
+        bd_materials 0.2.4's name table (grade, family, density, colour); a
+        grade's other property ranges, finishes, processes and PBR models are
+        inert stand-ins — COMPROMISE(materials)."""
+    @material.setter
+    def material(self, value: FinishedMaterial | str | None) -> None:
+        """Set the shape's material"""
+    @property
+    def convexity(self) -> Convexity:
+        """How the shape this was selected from sits around it.
+
+        Defined for a ``Vertex``, ``Edge`` or ``Face`` relative to the shape
+        it was taken out of - see :class:`~build_enums.Convexity`. Other
+        shapes are the region itself rather than an element of one, so the
+        question does not apply to them.
+
+        Raises:
+            ValueError: the shape has no convexity
+        """
     @property
     def geom_type(self) -> GeomType:
         """Gets the underlying geometry type.
@@ -108,9 +163,6 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
         underlying shape with the potential to be given a location and an
         orientation.
         """
-    @property
-    def is_planar_face(self) -> bool:
-        """Is the shape a planar face even though its geom_type may not be PLANE"""
     @property
     def is_valid(self) -> bool:
         """Returns True if no defect is detected on the shape S or any of its
@@ -228,8 +280,34 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
 
         """
     @classmethod
-    @abstractmethod
-    def cast(cls, obj: TopoDS_Shape) -> Self:
+    def register_shape_constructor(cls, shape_type: TopAbs_ShapeEnum, constructor: ShapeConstructor) -> None:
+        """Register a wrapper class for a TopAbs type without importing it here.
+
+        Each topology module registers the classes it defines as it is imported,
+        so that :meth:`cast` can build any shape without shape_core needing to
+        import classes that in turn import it.
+        """
+    @classmethod
+    def register_geometry_constructor(cls, geometry_type: type, constructor: GeometryConstructor) -> None:
+        """Register how a geometry class becomes a Shape, without importing it.
+
+        Registered by whichever topology module defines the target class, since
+        the lower modules cannot import the higher ones.
+        """
+    @classmethod
+    def as_shape(cls, obj: Shape | Vector | Location | Axis | Plane) -> Shape:
+        """Return the Shape equivalent of a geometry object.
+
+        Vector and Location become a Vertex, Axis an Edge and Plane a Face.
+        A Shape is returned unchanged. Subclasses are honoured, so Pos and
+        Rotation convert like the Location they derive from.
+
+        The return type is what makes this usable in place of an isinstance
+        chain: the chain narrowed the operand to a Shape for type checkers, and
+        this has to do the same.
+        """
+    @classmethod
+    def cast(cls, obj: TopoDS_Shape) -> Shape:
         """Returns the right type of wrapper, given a OCCT object"""
     @classmethod
     @abstractmethod
@@ -268,17 +346,6 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
 
         Returns:
             Vector: center of multiple objects
-        """
-    @staticmethod
-    def compute_mass(obj: Shape) -> float:
-        """Calculates the 'mass' of an object.
-
-        Args:
-          obj: Compute the mass of this object
-          obj: Shape:
-
-        Returns:
-
         """
     @overload
     @staticmethod
@@ -370,6 +437,20 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
     def __sub__(self, other: None) -> Self: ...
     @overload
     def __sub__(self, other: Shape | Iterable[Shape]) -> Self | Compound: ...
+    def compute_volume(self) -> float:
+        """Calculates the volume of an object.
+
+        Returns:
+            float: the volume of the shape
+
+        """
+    def compute_mass(self, mass_unit: Unit = ..., length_unit: Unit = ...) -> float:
+        """Calculates the 'mass' of an object.
+
+        Returns:
+            float: the mass of the shape based on the material density
+
+        """
     def bounding_box(self, tolerance: float | None = None, optimal: bool = True) -> BoundBox:
         """Create a bounding box for this Shape.
 
@@ -439,14 +520,23 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
         """
     def edge(self) -> Edge:
         """Return the Edge"""
-    def edges(self) -> ShapeList[Edge]:
-        """edges - all the edges in this Shape - subclasses may override"""
+    def edges(self, select: Select = ..., indices: list[int] | None = None) -> ShapeList[Edge]:
+        """edges - all the edges in this Shape - subclasses may override
+
+        indices=[...] (build123d-lite extension) keeps only the edges with
+        those per-shape indices - what the CascadeStudio GUI Fillet tool emits.
+
+        Args:
+            select (Select, optional): all edges, or those the operation that
+                made this shape brought in or created (``LAST``) or created
+                outright (``NEW``). Defaults to Select.ALL.
+        """
     def entities(self, topo_type: Shapes) -> list[TopoDS_Shape]:
         """Return all of the TopoDS sub entities of the given type"""
     def face(self) -> Face:
         """Return the Face"""
-    def faces(self) -> ShapeList[Face]:
-        """faces - all the faces in this Shape"""
+    def faces(self, select: Select = ...) -> ShapeList[Face]:
+        """faces - all the faces in this Shape, or those selected by ``select``"""
     def faces_intersected_by_axis(self, axis: Axis, tol: float = 0.0001) -> ShapeList[Face]:
         """Line Intersection
 
@@ -661,12 +751,6 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
             - The radius of gyration is computed based on the shape’s mass properties.
             - It is useful for evaluating structural stability and rotational behavior.
         """
-    def relocate(self, loc: Location):
-        """Change the location of self while keeping it geometrically similar
-
-        Args:
-            loc (Location): new location to set for self
-        """
     def rotate(self, axis: Axis, angle: float, transform: bool = False) -> Self:
         """rotate a copy
 
@@ -698,8 +782,8 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
         """
     def shell(self) -> Shell:
         """Return the Shell"""
-    def shells(self) -> ShapeList[Shell]:
-        """shells - all the shells in this Shape"""
+    def shells(self, select: Select = ...) -> ShapeList[Shell]:
+        """shells - all the shells in this Shape, or those selected by ``select``"""
     def show_topology(self, limit_class: Literal['Compound', 'Edge', 'Face', 'Shell', 'Solid', 'Vertex', 'Wire'] = 'Vertex', show_center: bool | None = None) -> str:
         """Display internal topology
 
@@ -729,8 +813,8 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
         """
     def solid(self) -> Solid:
         """Return the Solid"""
-    def solids(self) -> ShapeList[Solid]:
-        """solids - all the solids in this Shape"""
+    def solids(self, select: Select = ...) -> ShapeList[Solid]:
+        """solids - all the solids in this Shape, or those selected by ``select``"""
     @overload
     def split(self, tool: TrimmingTool, keep: Literal[Keep.TOP, Keep.BOTTOM]) -> Self | list[Self] | None:
         """split and keep inside or outside"""
@@ -746,17 +830,40 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
     @overload
     def split(self, tool: TrimmingTool) -> Self | list[Self] | None:
         """split and keep inside (default)"""
-    @overload
-    def split_by_perimeter(self, perimeter: Edge | Wire, keep: Literal[Keep.INSIDE, Keep.OUTSIDE]) -> Face | Shell | ShapeList[Face] | None:
-        """split_by_perimeter and keep inside or outside"""
-    @overload
-    def split_by_perimeter(self, perimeter: Edge | Wire, keep: Literal[Keep.BOTH]) -> tuple[Face | Shell | ShapeList[Face] | None, Face | Shell | ShapeList[Face] | None]:
-        """split_by_perimeter and keep inside and outside"""
-    @overload
-    def split_by_perimeter(self, perimeter: Edge | Wire, keep: Literal[Keep.INSIDE] = ...) -> Face | Shell | ShapeList[Face] | None:
-        """split_by_perimeter and keep inside (default)"""
     def tessellate(self, tolerance: float, angular_tolerance: float = 0.1) -> tuple[list[Vector], list[tuple[int, int, int]]]:
         """General triangulated approximation"""
+    def tessellate_with_uvs(self, tolerance: float, angular_tolerance: float = 0.1, atlas_packing: bool = True, atlas_gutter: float = 0.0) -> tuple[list[Vector], list[tuple[int, int, int]], list[Vector], list[tuple[float, float]]]:
+        """Triangulated approximation with per-vertex normals and UV coordinates.
+
+        Extracts UV coordinates from OpenCASCADE's surface parameterization for
+        each face, normalizes them to [0, 1], and optionally packs all faces
+        into a single UV atlas so textures can span the entire model.
+
+        The UV mapping approach is ported from CascadeStudio's ShapeToMesh:
+        arc-lengths of isoparametric curves are used to determine each face's
+        physical aspect ratio, and a shelf-based bin packing algorithm arranges
+        all faces into a single [0, 1] texture atlas.
+
+        Args:
+            tolerance: linear deflection for tessellation.
+            angular_tolerance: angular deflection for tessellation. Default 0.1.
+            atlas_packing: if True (default), pack per-face UVs into a single
+                texture atlas.  If False, each face's UVs are independently
+                normalized to [0, 1].
+            atlas_gutter: fraction of the atlas (in normalized [0, 1] units) to
+                reserve as an empty margin around every packed face. A non-zero
+                value prevents neighbouring islands from bleeding into one
+                another when the atlas is sampled with interpolation (useful for
+                texture baking). Only used when ``atlas_packing`` is True.
+                Defaults to 0.0.
+
+        Returns:
+            A 4-tuple of (vertices, triangles, normals, uvs) where:
+            - vertices: list of Vector positions
+            - triangles: list of (i0, i1, i2) index triples
+            - normals: list of Vector per-vertex normals
+            - uvs: list of (u, v) texture coordinates per vertex
+        """
     def to_splines(self, degree: int = 3, tolerance: float = 0.001, nurbs: bool = False) -> Self:
         """to_splines
 
@@ -829,12 +936,12 @@ class Shape(NodeMixin, Generic[TOPODS], metaclass=abc.ABCMeta):
         """
     def wire(self) -> Wire:
         """Return the Wire"""
-    def wires(self) -> ShapeList[Wire]:
-        """wires - all the wires in this Shape"""
+    def wires(self, select: Select = ...) -> ShapeList[Wire]:
+        """wires - all the wires in this Shape, or those selected by ``select``"""
     def vertex(self) -> Vertex:
         """Return the Vertex"""
-    def vertices(self) -> ShapeList[Vertex]:
-        """vertices - all the vertices in this Shape"""
+    def vertices(self, select: Select = ...) -> ShapeList[Vertex]:
+        """vertices - all the vertices in this Shape, or those selected by ``select``"""
 
 class Comparable(ABC, metaclass=abc.ABCMeta):
     """Abstract base class that requires comparison methods"""
@@ -863,6 +970,32 @@ class GroupBy(Generic[T, K]):
     def group_for(self, shape: T):
         """Select group by shape"""
 
+def find_same_topods(query: TopoDS_Shape, candidates: Iterable[TopoDS_Shape]) -> TopoDS_Shape | None:
+    """Find the candidate that is ``query``, allowing for a relocation.
+
+    Moving a shape leaves its TShape alone and changes only its Location, so a
+    sub-shape taken out of a container and then moved no longer answers
+    ``IsSame`` (same TShape *and* Location) against the container's own
+    sub-shapes even though the geometry is shared. An exact ``IsSame`` match is
+    preferred; failing that, the first ``IsPartner`` match (same TShape at
+    another Location) is returned. The exact pass has to come first because a
+    container can hold one TShape at several locations.
+
+    Args:
+        query (TopoDS_Shape): the shape to look for
+        candidates (Iterable[TopoDS_Shape]): the container's sub-shapes
+
+    Returns:
+        TopoDS_Shape | None: the matching candidate, or None if there isn't one
+    """
+def relocation_between(source: TopoDS_Shape, target: TopoDS_Shape) -> TopLoc_Location:
+    """The Location that carries ``source``'s frame onto ``target``'s.
+
+    For two shapes sharing a TShape at different Locations (see
+    :func:`find_same_topods`) this is the move that took one to the other, and
+    ``Moved`` with it brings anything found beside ``source`` into ``target``'s
+    frame.
+    """
 def topo_distance_to(other: Shape | Iterable[Shape]) -> Callable[[Shape], int | float]:
     """Return a key function that yields topological distance to ``other``.
 
@@ -897,6 +1030,7 @@ def topo_distance_to(other: Shape | Iterable[Shape]) -> Callable[[Shape], int | 
 
 class ShapeList(list[T]):
     """Subclass of list with custom filter and sort methods appropriate to CAD"""
+    build123d_type: ClassVar[str]
     @property
     def first(self) -> T:
         """First element in the ShapeList"""
@@ -950,7 +1084,7 @@ class ShapeList(list[T]):
         """Return the Face"""
     def faces(self) -> ShapeList[Face]:
         """faces - all the faces in this ShapeList"""
-    def filter_by(self, filter_by: Callable[[T], bool] | Axis | Plane | GeomType | property, reverse: bool = False, tolerance: float = 1e-05) -> ShapeList[T]:
+    def filter_by(self, filter_by: Callable[[T], bool] | Axis | Plane | GeomType | Convexity | property, reverse: bool = False, tolerance: float = 1e-05) -> ShapeList[T]:
         """filter by
 
         Either:
@@ -960,9 +1094,11 @@ class ShapeList(list[T]):
         objects.
 
         Args:
-            filter_by (Callable[[T], bool] | Axis | Plane | GeomType): function, axis,
-                plane, or geom type to filter and possibly sort by. Filtering by a plane
-                returns faces/edges parallel to that plane.
+            filter_by (Callable[[T], bool] | Axis | Plane | GeomType | Convexity):
+                function, axis, plane, geom type or convexity to filter and possibly
+                sort by. Filtering by a plane returns faces/edges parallel to that
+                plane. Filtering by a convexity classifies each object relative to
+                the shape it was selected from.
             reverse (bool, optional): invert the geom type filter. Defaults to False.
             tolerance (float, optional): maximum deviation from axis. Defaults to 1e-5.
 
@@ -992,11 +1128,14 @@ class ShapeList(list[T]):
         """group by
 
         Group objects by provided criteria and then sort the groups according to the criteria.
-        Note that not all group_by criteria apply to all objects.
+        Note that not all group_by criteria apply to all objects. Grouping by
+        ``Convexity`` classifies each object relative to the shape it was selected
+        from, with the groups in the enum's definition order.
 
         Args:
             group_by (Callable[[T], K] | Axis | Edge | Wire | SortBy | property,
-                optional): group and sort criteria. Defaults to Axis.Z.
+                optional): group and sort criteria, or the ``Convexity`` enum itself.
+                Defaults to Axis.Z.
             reverse (bool, optional): flip order of sort. Defaults to False.
             tol_digits (int, optional): Tolerance for building the group keys by
                 round(key, tol_digits)
@@ -1066,6 +1205,8 @@ class Joint(ABC, metaclass=abc.ABCMeta):
         connected_to (Joint): joint that is connect to this joint
 
     """
+    relative_axis: Axis
+    relative_location: Location
     label: Incomplete
     parent: Incomplete
     connected_to: Joint | None

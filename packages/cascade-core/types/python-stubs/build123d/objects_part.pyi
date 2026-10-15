@@ -1,12 +1,12 @@
 from _typeshed import Incomplete
-from build123d.build_common import LocationList as LocationList, validate_inputs as validate_inputs
+from build123d.build_common import BaseObject as BaseObject
 from build123d.build_enums import Align as Align, Mode as Mode
 from build123d.build_part import BuildPart as BuildPart
 from build123d.geometry import Location as Location, Plane as Plane, Rotation as Rotation, RotationLike as RotationLike, Vector as Vector, VectorLike as VectorLike
 from build123d.topology import Compound as Compound, Face as Face, Part as Part, ShapeList as ShapeList, Shell as Shell, Solid as Solid, Wire as Wire, tuplify as tuplify
 from collections.abc import Iterable
 
-class BasePartObject(Part):
+class BasePartObject(Part, BaseObject):
     """BasePartObject
 
     Base class for all BuildPart objects & operations
@@ -77,7 +77,10 @@ class ConvexPolyhedron(BasePartObject):
     """
     def __init__(self, points: Iterable[VectorLike], rotation: RotationLike = (0, 0, 0), align: Align | tuple[Align, Align, Align] | None = ..., mode: Mode = ...) -> None: ...
 
-class CounterBoreHole(BasePartObject):
+class _BaseHole(BasePartObject):
+    """Shared functionality for hole-style part operations."""
+
+class CounterBoreHole(_BaseHole):
     """Part Operation: Counter Bore Hole
 
     Create a counter bore hole defined by radius, counter bore radius, counter bore and depth.
@@ -96,7 +99,7 @@ class CounterBoreHole(BasePartObject):
     mode: Incomplete
     def __init__(self, radius: float, counter_bore_radius: float, counter_bore_depth: float, depth: float | None = None, mode: Mode = ...) -> None: ...
 
-class CounterSinkHole(BasePartObject):
+class CounterSinkHole(_BaseHole):
     """Part Operation: Counter Sink Hole
 
     Create a countersink hole defined by radius, countersink radius, countersink
@@ -136,7 +139,7 @@ class Cylinder(BasePartObject):
     align: Incomplete
     def __init__(self, radius: float, height: float, arc_size: float = 360, rotation: RotationLike = (0, 0, 0), align: Align | tuple[Align, Align, Align] = ..., mode: Mode = ...) -> None: ...
 
-class Hole(BasePartObject):
+class Hole(_BaseHole):
     """Part Operation: Hole
 
     Create a hole defined by radius and depth.

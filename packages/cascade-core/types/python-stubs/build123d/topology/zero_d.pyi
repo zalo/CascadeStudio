@@ -1,11 +1,11 @@
+from .kernel import list_shapes as list_shapes
 from .one_d import Edge as Edge, Wire as Wire
-from .shape_core import Shape as Shape, ShapeList as ShapeList, TrimmingTool as TrimmingTool, downcast as downcast, shapetype as shapetype
-from OCP.TopoDS import TopoDS_Edge, TopoDS_Shape as TopoDS_Shape, TopoDS_Vertex
-from build123d.build_enums import Keep as Keep
-from build123d.geometry import Axis as Axis, Location as Location, Matrix as Matrix, Plane as Plane, Vector as Vector, VectorLike as VectorLike
+from .shape_core import Shape as Shape, ShapeList as ShapeList, TrimmingTool as TrimmingTool, downcast as downcast, find_same_topods as find_same_topods
+from OCP.TopoDS import TopoDS_Edge, TopoDS_Face as TopoDS_Face, TopoDS_Vertex
+from build123d.build_enums import Convexity as Convexity, Keep as Keep, Select as Select, Unit as Unit
+from build123d.geometry import Axis as Axis, Location as Location, Matrix as Matrix, Plane as Plane, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike
 from collections.abc import Iterable
-from typing import overload
-from typing_extensions import Self
+from typing import ClassVar, overload
 
 class Vertex(Shape[TopoDS_Vertex]):
     """A Vertex in build123d represents a zero-dimensional point in the topological
@@ -14,6 +14,7 @@ class Vertex(Shape[TopoDS_Vertex]):
     and the connectivity between edges, facilitating accurate representation and
     manipulation of 3D shapes. They hold coordinate information and are essential
     for constructing complex structures like wires, faces, and solids."""
+    build123d_type: ClassVar[str]
     order: float
     @overload
     def __init__(self) -> None:
@@ -30,9 +31,40 @@ class Vertex(Shape[TopoDS_Vertex]):
     @property
     def volume(self) -> float:
         """volume - the volume of this Vertex, which is always zero"""
-    @classmethod
-    def cast(cls, obj: TopoDS_Shape) -> Self:
-        """Returns the right type of wrapper, given a OCCT object"""
+    def mass(self, mass_unit: Unit = ..., length_unit: Unit = ...) -> float:
+        """mass - the mass of this Vertex, which is always zero"""
+    @property
+    def convexity(self) -> Convexity:
+        """How the shape this vertex was selected from sits around it.
+
+        Selected through a face, as ``face.vertices()`` or
+        ``face.edges()[0].vertices()`` does, the vertex is a corner of that
+        face: ``CONVEX`` at the corner of a plate, ``CONCAVE`` at the corner of
+        a slot or the step in an L, ``SMOOTH`` where two edges meet in line.
+        The corner is read in the face's own parameters, so a corner on a
+        curved face classifies the same way as one on a flat face.
+
+        Selected straight off a solid or shell, the vertex is classified by the
+        edges meeting there: ``CONVEX`` where every crease is convex, as at the
+        corner of a box, ``CONCAVE`` where every crease is concave, as at the
+        bottom corner of a pocket, and ``SADDLE`` where both kinds meet, as at
+        the inner corner of a step. Smooth edges do not count. See
+        :class:`~build_enums.Convexity`.
+
+        Raises:
+            ValueError: the vertex has no ``topo_parent``, or its face or edges
+                cannot be classified - a seam vertex has no single corner in
+                its face's parameters, for instance
+        """
+    @property
+    def X(self) -> float:
+        """The X coordinate of this Vertex, including its current Location."""
+    @property
+    def Y(self) -> float:
+        """The Y coordinate of this Vertex, including its current Location."""
+    @property
+    def Z(self) -> float:
+        """The Z coordinate of this Vertex, including its current Location."""
     @classmethod
     def extrude(cls, obj: Shape, direction: VectorLike) -> Vertex:
         """extrude - invalid operation for Vertex"""
@@ -81,8 +113,6 @@ class Vertex(Shape[TopoDS_Vertex]):
         """The center of a vertex is itself!"""
     def split(self, tool: TrimmingTool, keep: Keep = ...):
         """split - not implemented"""
-    def to_tuple(self) -> tuple[float, float, float]:
-        """Return vertex as three tuple of floats"""
     def transform_shape(self, t_matrix: Matrix) -> Vertex:
         """Apply affine transform without changing type
 
@@ -98,7 +128,7 @@ class Vertex(Shape[TopoDS_Vertex]):
         """
     def vertex(self) -> Vertex:
         """Return the Vertex"""
-    def vertices(self) -> ShapeList[Vertex]:
+    def vertices(self, select: Select = ...) -> ShapeList[Vertex]:
         """vertices - all the vertices in this Shape"""
 
 def topo_explore_common_vertex(edge1: Edge | TopoDS_Edge, edge2: Edge | TopoDS_Edge) -> Vertex | None:

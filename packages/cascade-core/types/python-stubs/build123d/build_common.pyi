@@ -1,26 +1,17 @@
 import abc
 import types
 from _typeshed import Incomplete
-from abc import ABC
-from build123d.build_enums import Align as Align, Mode as Mode, Select as Select, Unit as Unit
+from abc import ABC, ABCMeta
+from build123d.build_constants import CM as CM, FT as FT, G as G, G_PER_LB as G_PER_LB, IN as IN, KG as KG, LB as LB, M as M, MC as MC, MM as MM, THOU as THOU, UNITS_PER_KILOGRAM as UNITS_PER_KILOGRAM, UNITS_PER_METER as UNITS_PER_METER
+from build123d.build_enums import Align as Align, Mode as Mode, Select as Select
 from build123d.geometry import Axis as Axis, Location as Location, Plane as Plane, Vector as Vector, VectorLike as VectorLike, to_align_offset as to_align_offset
-from build123d.topology import Compound as Compound, Curve as Curve, Edge as Edge, Face as Face, Joint as Joint, Part as Part, Shape as Shape, ShapeList as ShapeList, Sketch as Sketch, Solid as Solid, Vertex as Vertex, Wire as Wire, new_edges as new_edges, tuplify as tuplify
+from build123d.topology import Compound as Compound, Curve as Curve, Edge as Edge, Face as Face, Joint as Joint, Part as Part, Shape as Shape, ShapeHistory as ShapeHistory, ShapeList as ShapeList, Sketch as Sketch, Solid as Solid, Vertex as Vertex, Wire as Wire, tuplify as tuplify
 from collections.abc import Callable as Callable, Iterable
-from typing import Any, Generic, TypeVar, overload
+from dataclasses import dataclass, field as dataclass_field
+from typing import Any, Generic, TypeVar
 from typing_extensions import Self
 
 logger: Incomplete
-MC: float
-MM: int
-CM: Incomplete
-M: Incomplete
-IN: Incomplete
-FT: Incomplete
-THOU: Incomplete
-UNITS_PER_METER: Incomplete
-G: int
-KG: Incomplete
-LB: Incomplete
 T = TypeVar('T', Any, list[Any])
 
 def flatten_sequence(*obj: T) -> ShapeList[Any]:
@@ -36,31 +27,36 @@ class Builder(ABC, Generic[ShapeT], metaclass=abc.ABCMeta):
     Base class for the build123d Builders.
 
     Args:
-        workplanes: sequence of Union[Face, Plane, Location]: set plane(s) to work on
+        placements: sequence of Union[Face, Plane, Location]: output placement(s)
         mode (Mode, optional): combination mode. Defaults to Mode.ADD.
 
     Attributes:
         mode (Mode): builder's combination mode
-        workplanes (list[Plane]): active workplanes
+        placements (tuple[Location, ...]): output placement(s)
         builder_parent (Builder): build to pass objects to on exit
+        label (str): label assigned to the builder's output object
 
     """
     mode: Incomplete
-    workplanes: Incomplete
+    output_placements: Incomplete
+    placements: Incomplete
     parent_frame: Incomplete
     builder_parent: Builder | None
-    lasts: dict
-    workplanes_context: Incomplete
-    exit_workplanes: list[Plane]
     obj_before: Shape | None
     to_combine: list[Shape]
-    def __init__(self, *workplanes: Face | Plane | Location, mode: Mode = ...) -> None: ...
+    def __init__(self, *placements: Face | Plane | Location, mode: Mode = ...) -> None: ...
     @property
     def max_dimension(self) -> float:
         """Maximum size of object in all directions"""
     @property
+    def label(self) -> str:
+        """Label assigned to the builder's output object."""
+    @label.setter
+    def label(self, value: str) -> None:
+        """Assign a label to the builder's output object."""
+    @property
     def new_edges(self) -> ShapeList[Edge]:
-        """Edges that changed during last operation"""
+        """Edges the last operation created outright, as ``edges(Select.NEW)``"""
     def __enter__(self) -> Self:
         """Upon entering record the parent and a token to restore contextvars"""
     def __exit__(self, exception_type: type[BaseException] | None, exception_value: BaseException | None, traceback: types.TracebackType | None) -> None:
@@ -175,6 +171,12 @@ class Builder(ABC, Generic[ShapeT], metaclass=abc.ABCMeta):
         Returns:
             Solid: Solid extracted
         """
+    @property
+    def lasts(self) -> dict:
+        """Shapes the last operation brought in or created, by type"""
+    @property
+    def news(self) -> dict:
+        """Shapes the last operation created outright, by type"""
     def validate_inputs(self, validating_class, objects: Shape | Iterable[Shape] | None = None):
         """Validate that objects/operations and parameters apply"""
     def __add__(self, _other) -> Self:
@@ -193,9 +195,10 @@ class LocationList:
     """Location Context
 
     A stateful context of active locations. At least one must be active
-    at all time. Note that local locations are stored and global locations
-    are returned as a property of the local locations and the currently
-    active workplanes.
+    at all times. Locations are expressed in the Builder's local Plane.XY
+    construction coordinates. Consequently, ordinary ``Vector`` and tuple
+    arithmetic is already local and no workplane-aware Vector monkeypatch is
+    required; output placements are applied only when the product is published.
 
     Args:
         locations (list[Location]): list of locations to add to the context
@@ -203,7 +206,7 @@ class LocationList:
     """
     @property
     def locations(self) -> list[Location]:
-        """Current local locations globalized with current workplanes"""
+        """Current locations in local construction coordinates."""
     local_locations: Incomplete
     def __init__(self, locations: list[Location]) -> None: ...
     def __enter__(self):
@@ -333,33 +336,75 @@ class GridLocations(LocationList):
     planes: list[Plane]
     def __init__(self, x_spacing: float, y_spacing: float, x_count: int, y_count: int, align: Align | tuple[Align, Align] = ...) -> None: ...
 
-class WorkplaneList:
-    """Workplane Context
+class _InheritedScopeValue:
+    """Sentinel identifying an omitted ``BuildScope.derive()`` argument.
 
-    A stateful context of active workplanes. At least one must be active
-    at all time.
-
-    Args:
-        workplanes (sequence of Union[Face, Plane, Location]): objects to become planes
-
-    Attributes:
-        workplanes (list[Plane]): list of workplanes
-
+    A nullable scope field needs three instructions when deriving a child:
+    inherit the parent value, replace it, or explicitly clear it with ``None``.
+    The sentinel represents inheritance without making ``None`` ambiguous.
+    It is only an argument state; it is never stored in a ``BuildScope`` field.
     """
-    workplanes: Incomplete
-    locations_context: Incomplete
-    def __init__(self, *workplanes: Face | Plane | Location) -> None: ...
-    def __enter__(self):
-        """Upon entering create a token to restore contextvars"""
-    def __exit__(self, exception_type: type[BaseException] | None, exception_value: BaseException | None, traceback: types.TracebackType | None) -> None:
-        """Upon exiting restore context"""
-    def __iter__(self): ...
-    @overload
+
+@dataclass(frozen=True, slots=True)
+class BuildScope:
+    """Immutable context state shared by Builders and BaseObjects.
+
+    One scope groups Builder construction, publication, location, and BaseObject
+    isolation state so a context transition replaces all related state atomically.
+    Earlier implementations used independent ``ContextVar`` stacks for Builder,
+    LocationList, WorkplaneList, and BaseObject; those stacks could temporarily
+    disagree and made firewall restoration dependent on reset ordering.
+    """
+    parent: BuildScope | None = ...
+    builder: Builder | None = ...
+    operation_locations: tuple[Location, ...] = dataclass_field(default_factory=_identity_locations)
+    publication_locations: tuple[Location, ...] = dataclass_field(default_factory=_identity_locations)
+    output_placements: tuple[Location, ...] = dataclass_field(default_factory=_identity_locations)
+    owner: object | None = ...
+    publication_target: Builder | None = ...
+    isolated: bool = ...
+    location_context: LocationList | None = ...
+    object_context: BuildScope | None = ...
+    object_local_locations: tuple[Location, ...] = dataclass_field(default_factory=_identity_locations)
+    object_placements: tuple[Location, ...] = dataclass_field(default_factory=_identity_locations)
+    def __post_init__(self) -> None:
+        """Reject empty transform sets that would silently produce no geometry.
+
+        Internal factories normally guarantee this invariant, but ``derive()``
+        can be called directly with an empty tuple. Publication and operation
+        code use Cartesian products over these fields, so an empty value would
+        discard a valid product rather than fail near the source of the error.
+        """
+    def derive(self, *, builder: Builder | None | _InheritedScopeValue = ..., operation_locations: tuple[Location, ...] | _InheritedScopeValue = ..., publication_locations: tuple[Location, ...] | _InheritedScopeValue = ..., output_placements: tuple[Location, ...] | _InheritedScopeValue = ..., owner: object | _InheritedScopeValue = ..., publication_target: Builder | None | _InheritedScopeValue = ..., isolated: bool | _InheritedScopeValue = ..., location_context: LocationList | None | _InheritedScopeValue = ..., object_context: BuildScope | None | _InheritedScopeValue = ..., object_local_locations: tuple[Location, ...] | _InheritedScopeValue = ..., object_placements: tuple[Location, ...] | _InheritedScopeValue = ...) -> BuildScope:
+        """Create a child scope, inheriting arguments that were omitted.
+
+        For nullable fields such as ``builder``, omission inherits the parent,
+        ``None`` explicitly clears the field, and an object replaces it. The
+        private sentinel distinguishes omission from the meaningful ``None``.
+        """
+
+@dataclass(slots=True)
+class _BaseObjectScopeOwner:
+    """Mutable lifecycle state for an otherwise immutable object scope."""
+    root: BaseObject | None = ...
+
+class BaseObjectMeta(ABCMeta):
+    """Isolate BaseObject internals from their caller's implicit contexts."""
+    def __call__(cls, *args, **kwargs):
+        """Construct the outer object behind a Builder and placement firewall."""
+
+class _PublicationService:
+    """Place completed products and publish them to captured Builders."""
+    @staticmethod
+    def place(build_product: Shape | None, scope: BuildScope, *, result_type: type[Shape] | None = None) -> Shape | None:
+        """Apply every publication/output placement combination exactly once."""
     @classmethod
-    def localize(cls, points: VectorLike) -> Vector: ...
-    @overload
-    @classmethod
-    def localize(cls, *points: VectorLike) -> list[Vector]: ...
+    def publish(cls, build_product: Shape | None, scope: BuildScope, mode: Mode, *, result_type: type[Shape] | None = None, place: bool = True, preserve_identity: bool = False) -> Shape | None:
+        """Place a product and dispatch it once to its publication target."""
+
+class BaseObject(metaclass=BaseObjectMeta):
+    """Common context-isolation behavior for builder-aware objects."""
+    def __new__(cls, *_args, **_kwargs): ...
 T2 = TypeVar('T2')
 vertices: Incomplete
 edges: Incomplete

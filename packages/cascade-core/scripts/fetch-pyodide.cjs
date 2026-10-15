@@ -32,17 +32,22 @@ const RUNTIME_FILES = [
   'pyodide-lock.json',
 ];
 
-// pysrc=real (REAL build123d 0.11.1 over the OCP shim on Pyodide —
+// pysrc=real (REAL build123d 0.13.0 over the OCP shim on Pyodide —
 // PyodideRealB123d.js) additionally needs these wheels next to the core
-// files. numpy/typing_extensions come from the Pyodide CDN matching the
-// vendored version; the pure wheels come from PyPI via `pip download`
-// (version-pinned; PyodideRealB123d.REAL_WHEELS lists the same names).
+// files. numpy comes from the Pyodide CDN matching the vendored version
+// (2.4.3 satisfies 0.13.0's numpy>=2,<3); the pure wheels come from PyPI via
+// `pip download` (version-pinned to the 0.13.0 reference venv;
+// PyodideRealB123d.REAL_WHEELS lists the same names). typing_extensions is
+// the PyPI 4.16.0 wheel, NOT the lock's 4.15.0: build123d 0.13.0 pins
+// typing_extensions>=4.16.0. bd_materials is new in 0.13 (pure Python, the
+// materials catalog behind Shape.material / mass()).
 const CDN_WHEELS = [
   'numpy-2.4.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl',
-  'typing_extensions-4.15.0-py3-none-any.whl',
 ];
 const PYPI_WHEELS = {
-  'build123d-0.11.1-py3-none-any.whl': 'build123d==0.11.1',
+  'build123d-0.13.0-py3-none-any.whl': 'build123d==0.13.0',
+  'bd_materials-0.2.4-py3-none-any.whl': 'bd_materials==0.2.4',
+  'typing_extensions-4.16.0-py3-none-any.whl': 'typing_extensions==4.16.0',
   'anytree-2.13.0-py3-none-any.whl': 'anytree==2.13.0',
   'webcolors-24.8.0-py3-none-any.whl': 'webcolors==24.8.0',
   'trianglesolver-1.2-py3-none-any.whl': 'trianglesolver==1.2',

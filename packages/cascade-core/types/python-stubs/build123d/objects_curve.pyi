@@ -1,6 +1,6 @@
 from _typeshed import Incomplete
-from build123d.build_common import WorkplaneList as WorkplaneList, flatten_sequence as flatten_sequence, validate_inputs as validate_inputs
-from build123d.build_enums import AngularDirection as AngularDirection, ContinuityLevel as ContinuityLevel, GeomType as GeomType, Keep as Keep, LengthMode as LengthMode, Mode as Mode, Sagitta as Sagitta, Side as Side, Tangency as Tangency
+from build123d.build_common import BaseObject as BaseObject, flatten_sequence as flatten_sequence
+from build123d.build_enums import AngularDirection as AngularDirection, ContinuityLevel as ContinuityLevel, GeomType as GeomType, Keep as Keep, LengthMode as LengthMode, Mode as Mode, Sagitta as Sagitta, Tangency as Tangency
 from build123d.build_line import BuildLine as BuildLine
 from build123d.geometry import Axis as Axis, Location as Location, Plane as Plane, TOLERANCE as TOLERANCE, Vector as Vector, VectorLike as VectorLike
 from build123d.topology import Curve as Curve, Edge as Edge, Face as Face, Vertex as Vertex, Wire as Wire
@@ -8,31 +8,34 @@ from build123d.topology.shape_core import Shape as Shape, ShapeList as ShapeList
 from collections.abc import Callable as Callable, Iterable
 from typing import overload
 
-class BaseCurveObject(Curve):
+class BaseCurveObject(Curve, BaseObject):
     """BaseCurveObject specialized for Curve.
 
     Args:
         curve (Wire): wire to create
         mode (Mode, optional): combination mode. Defaults to Mode.ADD
     """
+    mode: Incomplete
     def __init__(self, curve: Curve, mode: Mode = ...) -> None: ...
 
-class BaseLineObject(Wire):
+class BaseLineObject(Wire, BaseObject):
     """BaseLineObject specialized for Wire.
 
     Args:
         curve (Wire): wire to create
         mode (Mode, optional): combination mode. Defaults to Mode.ADD
     """
+    mode: Incomplete
     def __init__(self, curve: Wire, mode: Mode = ...) -> None: ...
 
-class BaseEdgeObject(Edge):
+class BaseEdgeObject(Edge, BaseObject):
     """BaseEdgeObject specialized for Edge.
 
     Args:
         curve (Edge): edge to create
         mode (Mode, optional): combination mode. Defaults to Mode.ADD
     """
+    mode: Incomplete
     def __init__(self, curve: Edge, mode: Mode = ...) -> None: ...
 
 class Airfoil(BaseLineObject):
@@ -236,13 +239,13 @@ class ConstrainedArcs(BaseCurveObject):
     @overload
     def __init__(self, tangency_one: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, tangency_two: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, *, radius: float, sagitta: Sagitta = ..., selector: Callable[[ShapeList[Edge]], Edge | ShapeList[Edge]] = ..., mode: Mode = ...) -> None:
         """
-        Create all planar circular arcs of a given radius that are tangent/contacting
-        the two provided objects on the XY plane.
+        Create all planar circular arcs of a given radius that are tangent to curve
+        inputs or pass through point inputs on the XY plane.
 
         Args:
             tangency_one, tangency_two
                 (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entities to be contacted/touched by the circle(s)
+                Curve tangency targets or point-incidence targets for the circle(s)
             radius (float): arc radius
             sagitta (LengthConstraint, optional): returned arc selector
                 (i.e. either the short, long or both arcs). Defaults to
@@ -267,7 +270,7 @@ class ConstrainedArcs(BaseCurveObject):
         Args:
             tangency_one, tangency_two
                 (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entities to be contacted/touched by the circle(s)
+                Curve tangency targets or point-incidence targets for the circle(s)
             center_on (Axis | Edge): center must lie on this object
             sagitta (LengthConstraint, optional): returned arc selector
                 (i.e. either the short, long or both arcs). Defaults to
@@ -286,14 +289,14 @@ class ConstrainedArcs(BaseCurveObject):
                 )
         """
     @overload
-    def __init__(self, tangency_one: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, tangency_two: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, tangency_three: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, *, sagitta: Sagitta = ..., selector: Callable[[ShapeList[Edge]], Edge | ShapeList[Edge]] = ..., mode: Mode = ...) -> None:
+    def __init__(self, tangency_one: tuple[Axis | Edge, Tangency] | Axis | Edge, tangency_two: tuple[Axis | Edge, Tangency] | Axis | Edge, tangency_three: tuple[Axis | Edge, Tangency] | Axis | Edge, *, sagitta: Sagitta = ..., selector: Callable[[ShapeList[Edge]], Edge | ShapeList[Edge]] = ..., mode: Mode = ...) -> None:
         """
         Create planar circular arc(s) on XY tangent to three provided objects.
 
         Args:
             tangency_one, tangency_two, tangency_three
-                (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entities to be contacted/touched by the circle(s)
+                (tuple[Axis | Edge, PositionConstraint] | Axis | Edge):
+                Curve tangency targets for the circle(s)
             sagitta (LengthConstraint, optional): returned arc selector
                 (i.e. either the short, long or both arcs). Defaults to
                 LengthConstraint.SHORT.
@@ -316,13 +319,13 @@ class ConstrainedArcs(BaseCurveObject):
     @overload
     def __init__(self, tangency_one: tuple[Axis | Edge, Tangency] | Axis | Edge | Vertex | VectorLike, *, center: VectorLike, selector: Callable[[ShapeList[Edge]], Edge | ShapeList[Edge]] = ..., mode: Mode = ...) -> None:
         """
-        Create planar circle(s) on XY whose center is fixed and that are tangent/contacting
-        a single object.
+        Create planar circle(s) on XY whose center is fixed and that are tangent to a
+        curve input or pass through a point input.
 
         Args:
             tangency_one
                 (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entity to be contacted/touched by the circle(s)
+                Curve tangency target or point-incidence target for the circle(s)
             center (VectorLike): center position
             selector (Callable, optional): typically a lambda which chooses one or more of the
                 results. Defaults to lambda arcs: arcs.
@@ -340,14 +343,14 @@ class ConstrainedArcs(BaseCurveObject):
         """
 
         Create planar circle(s) on XY that:
-        - are tangent/contacting a single object, and
+        - are tangent to a curve input or pass through a point input, and
         - have a fixed radius, and
         - have their CENTER constrained to lie on a given locus curve.
 
         Args:
             tangency_one
                 (tuple[Axis | Edge, PositionConstraint] | Axis | Edge | Vertex | VectorLike):
-                Geometric entity to be contacted/touched by the circle(s)
+                Curve tangency target or point-incidence target for the circle(s)
             radius (float): arc radius
             center_on (Axis | Edge): center must lie on this object
             selector (Callable, optional): typically a lambda which chooses one or more of the
@@ -387,7 +390,7 @@ class ConstrainedLines(BaseCurveObject):
         Args:
             tangency_one, tangency_two
                 (tuple[Edge, Tangency] | Axis | Edge):
-                Geometric entities to be contacted/touched by the line(s).
+                Curves to which the line(s) must be tangent.
             selector (Callable, optional): typically a lambda which chooses one or more of the
                 results. Defaults to lambda lines: lines.
             mode (Mode, optional): combination mode. Defaults to Mode.ADD.
@@ -408,7 +411,7 @@ class ConstrainedLines(BaseCurveObject):
         Args:
             tangency_one
                 (tuple[Edge, Tangency] | Edge):
-                Geometric entity to be contacted/touched by the line(s).
+                Curve to which the line(s) must be tangent.
             tangency_two (VectorLike):
                 Fixed point through which the line(s) must pass.
             selector (Callable, optional): typically a lambda which chooses one or more of the
@@ -485,8 +488,6 @@ class EllipticalCenterArc(BaseEdgeObject):
         y_radius (float): y radius of the ellipse (along the y-axis of plane)
         start_angle (float, optional): arc start angle from x-axis.
             Defaults to 0.0
-        end_angle (float | None): arc end angle from x-axis.
-            Defaults to None
         arc_size (float | Shape | Axis | Location | Plane | VectorLike): angular size
             of arc (negative to change direction) or an arc limit.
 
@@ -497,12 +498,10 @@ class EllipticalCenterArc(BaseEdgeObject):
             Therefore, one can only generate arcs < 180° using a limit. If
             neither valid arc intersects the limit, a ValueError is raised.
         rotation (float, optional): angle to rotate arc. Defaults to 0.0
-        angular_direction (AngularDirection | None): arc direction.
-            Defaults to None.
         mode (Mode, optional): combination mode. Defaults to Mode.ADD
 
     """
-    def __init__(self, center: VectorLike, x_radius: float, y_radius: float, start_angle: float = 0.0, end_angle: float | None = None, *, arc_size: float | Shape | Axis | Location | Plane | VectorLike = 90.0, rotation: float = 0.0, angular_direction: AngularDirection | None = None, mode: Mode = ...) -> None: ...
+    def __init__(self, center: VectorLike, x_radius: float, y_radius: float, start_angle: float = 0.0, *, arc_size: float | Shape | Axis | Location | Plane | VectorLike = 90.0, rotation: float = 0.0, mode: Mode = ...) -> None: ...
 
 class EllipticalStartArc(BaseEdgeObject):
     """Line Object: EllipticalStartArc
@@ -536,8 +535,6 @@ class ParabolicCenterArc(BaseEdgeObject):
             vertex to focus along the x-axis of plane)
         start_angle (float, optional): arc start angle.
             Defaults to 0.0
-        end_angle (float | None, optional): arc end angle.
-            Defaults to None
         arc_size (float | Shape | Axis | Location | Plane | VectorLike): angular size
             of arc (negative to change direction) or an arc limit.
 
@@ -547,11 +544,9 @@ class ParabolicCenterArc(BaseEdgeObject):
             returns the one requiring the shortest travel from the start. If
             neither valid arc intersects the limit, a ValueError is raised.
         rotation (float, optional): angle to rotate arc. Defaults to 0.0
-        angular_direction (AngularDirection | None, optional): arc direction.
-            Defaults to None
         mode (Mode, optional): combination mode. Defaults to Mode.ADD
     """
-    def __init__(self, vertex: VectorLike, focal_length: float, start_angle: float = 0.0, end_angle: float | None = None, *, arc_size: float | Shape | Axis | Location | Plane | VectorLike = 90.0, rotation: float = 0.0, angular_direction: AngularDirection | None = None, mode: Mode = ...) -> None: ...
+    def __init__(self, vertex: VectorLike, focal_length: float, start_angle: float = 0.0, *, arc_size: float | Shape | Axis | Location | Plane | VectorLike = 90.0, rotation: float = 0.0, mode: Mode = ...) -> None: ...
 
 class HyperbolicCenterArc(BaseEdgeObject):
     """Line Object: Hyperbolic Center Arc
@@ -565,8 +560,6 @@ class HyperbolicCenterArc(BaseEdgeObject):
         y_radius (float): y radius of the ellipse (along the y-axis of plane)
         start_angle (float, optional): arc start angle from x-axis.
             Defaults to 0.0
-        end_angle (float | None, optional): arc end angle from x-axis.
-            Defaults to None
         arc_size (float | Shape | Axis | Location | Plane | VectorLike): angular size
             of arc (negative to change direction) or an arc limit.
 
@@ -576,11 +569,9 @@ class HyperbolicCenterArc(BaseEdgeObject):
             returns the one requiring the shortest travel from the start. If
             neither valid arc intersects the limit, a ValueError is raised.
         rotation (float, optional): angle to rotate arc. Defaults to 0.0
-        angular_direction (AngularDirection | None, optional): arc direction.
-            Defaults to None
         mode (Mode, optional): combination mode. Defaults to Mode.ADD
     """
-    def __init__(self, center: VectorLike, x_radius: float, y_radius: float, start_angle: float = 0.0, end_angle: float | None = None, *, arc_size: float | Shape | Axis | Location | Plane | VectorLike = 90.0, rotation: float = 0.0, angular_direction: AngularDirection | None = None, mode: Mode = ...) -> None: ...
+    def __init__(self, center: VectorLike, x_radius: float, y_radius: float, start_angle: float = 0.0, *, arc_size: float | Shape | Axis | Location | Plane | VectorLike = 90.0, rotation: float = 0.0, mode: Mode = ...) -> None: ...
 
 class Helix(BaseEdgeObject):
     """Line Object: Helix
@@ -807,78 +798,3 @@ class ThreePointArc(BaseEdgeObject):
         ValueError: Three points must be provided
     """
     def __init__(self, *pts: VectorLike | Iterable[VectorLike], mode: Mode = ...) -> None: ...
-
-class PointArcTangentLine(BaseEdgeObject):
-    """Line Object: Point Arc Tangent Line
-
-    Create a straight, tangent line from a point to a circular arc.
-
-    Args:
-        point (VectorLike): intersection point for tangent
-        arc (Curve | Edge | Wire): circular arc to tangent, must be GeomType.CIRCLE
-        side (Side, optional): side of arcs to place tangent arc center, LEFT or RIGHT.
-            Defaults to Side.LEFT
-        mode (Mode, optional): combination mode. Defaults to Mode.ADD
-    """
-    def __init__(self, point: VectorLike, arc: Curve | Edge | Wire, side: Side = ..., mode: Mode = ...) -> None: ...
-
-class PointArcTangentArc(BaseEdgeObject):
-    """Line Object: Point Arc Tangent Arc
-
-    Create an arc defined by a point/tangent pair and another line which the other end
-    is tangent to.
-
-    Args:
-        point (VectorLike): starting point of tangent arc
-        direction (VectorLike): direction at starting point of tangent arc
-        arc (Union[Curve, Edge, Wire]): ending arc, must be GeomType.CIRCLE
-        side (Side, optional): select which arc to keep Defaults to Side.LEFT
-        mode (Mode, optional): combination mode. Defaults to Mode.ADD
-
-    Raises:
-        ValueError: Arc must have GeomType.CIRCLE
-        ValueError: Point is already tangent to arc
-        RuntimeError: No tangent arc found
-    """
-    def __init__(self, point: VectorLike, direction: VectorLike, arc: Curve | Edge | Wire, side: Side = ..., mode: Mode = ...) -> None: ...
-
-class ArcArcTangentLine(BaseEdgeObject):
-    """Line Object: Arc Arc Tangent Line
-
-    Create a straight line tangent to two arcs.
-
-    Args:
-        start_arc (Curve | Edge | Wire): starting arc, must be GeomType.CIRCLE
-        end_arc (Curve | Edge | Wire): ending arc, must be GeomType.CIRCLE
-        side (Side): side of arcs to place tangent arc center, LEFT or RIGHT.
-            Defaults to Side.LEFT
-        keep (Keep): which tangent arc to keep, INSIDE or OUTSIDE.
-            Defaults to Keep.INSIDE
-        mode (Mode, optional): combination mode. Defaults to Mode.ADD
-    """
-    def __init__(self, start_arc: Curve | Edge | Wire, end_arc: Curve | Edge | Wire, side: Side = ..., keep: Keep = ..., mode: Mode = ...) -> None: ...
-
-class ArcArcTangentArc(BaseEdgeObject):
-    """Line Object: Arc Arc Tangent Arc
-
-    Create an arc tangent to two arcs and a radius.
-
-    keep specifies tangent arc position with a Keep pair: (placement, type)
-
-    - placement: start_arc is tangent INSIDE or OUTSIDE the tangent arc. BOTH is a
-      special case for overlapping arcs with type INSIDE
-    - type: tangent arc is INSIDE or OUTSIDE start_arc and end_arc
-
-    Args:
-        start_arc (Curve | Edge | Wire): starting arc, must be GeomType.CIRCLE
-        end_arc (Curve | Edge | Wire): ending arc, must be GeomType.CIRCLE
-        radius (float): radius of tangent arc
-        side (Side): side of arcs to place tangent arc center, LEFT or RIGHT.
-            Defaults to Side.LEFT
-        keep (Keep | tuple[Keep, Keep]): which tangent arc to keep, INSIDE or OUTSIDE.
-            Defaults to (Keep.INSIDE, Keep.INSIDE)
-        short_sagitta (bool): If True selects the short sagitta (height of arc from
-            chord), else the long sagitta crossing the center. Defaults to True
-        mode (Mode, optional): combination mode. Defaults to Mode.ADD
-    """
-    def __init__(self, start_arc: Curve | Edge | Wire, end_arc: Curve | Edge | Wire, radius: float, side: Side = ..., keep: Keep | tuple[Keep, Keep] = ..., short_sagitta: bool = True, mode: Mode = ...) -> None: ...

@@ -37,7 +37,7 @@
 //    and remapped via sys.modules; the rest import normally from /lib.
 
 import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
-import { bootstrapUpstreamB123d, PYTOPO_DEFAULT,
+import { bootstrapUpstreamB123d, ACTIVE_UPSTREAM_VENDOR,
   rewriteListConcatCoercion } from './UpstreamB123d.js';
 import { instantiateWasmSpec } from './WasmAssets.js';
 
@@ -308,7 +308,7 @@ let _bootedPySrc = null;
  *  - 'lite' (`?pysrc=lite` / localStorage cascade-py-src=lite): lite is the
  *    `build123d` package, like Brython/Pyodide.
  *  - 'upstream' (explicit `?pysrc=upstream`): lite registers as
- *    `build123d_lite` and UPSTREAM build123d 0.11.1 Level-A source layers on
+ *    `build123d_lite` and UPSTREAM build123d 0.13.0 source layers on
  *    top as `build123d` (see UpstreamB123d.js); a missing vendored payload
  *    is a hard error.
  *  - anything else ('auto', the no-flag default): upstream when the payload
@@ -535,7 +535,7 @@ async function _bootstrap(srcKind) {
   let effectiveSrc = srcKind === 'lite' ? 'lite' : 'upstream';
   if (effectiveSrc === 'upstream') {
     // UPSTREAM-source mode (the MicroPython default): lite becomes the seam
-    // library `build123d_lite`; the `build123d` package is upstream 0.11.1
+    // library `build123d_lite`; the `build123d` package is upstream 0.13.0
     // Level-A source layered on top by UpstreamB123d.js (fetched from
     // dist/upstream-b123d/).
     // Transient fetch failures (several parallel tabs booting at once can
@@ -547,7 +547,7 @@ async function _bootstrap(srcKind) {
       if (isBuilt) {
         url = new URL('./upstream-b123d/' + rel, import.meta.url).href;
       } else if (rel.indexOf('upstream/') === 0) {
-        url = new URL('../../vendor/build123d-0.11.1/' + rel.slice(9),
+        url = new URL('../../../../vendor/' + ACTIVE_UPSTREAM_VENDOR + '/' + rel.slice(9),
           import.meta.url).href;
       } else {
         url = new URL('../../upstream-py/' + rel, import.meta.url).href;
@@ -584,6 +584,20 @@ async function _bootstrap(srcKind) {
     let available = true;
     try {
       await fetchText('manifest.json');
+      await fetchText('ocp_shim/MANIFEST.json');
+      // upstream build123d needs interpreter metaclasses (AxisMeta,
+      // BaseObjectMeta): only the custom micropython-cs artifacts have them
+      try {
+        mp.runPython('class _CsMetaProbe(type):\n    pass\n'
+          + 'class _CsMetaProbed(metaclass=_CsMetaProbe):\n    pass\n'
+          + 'del _CsMetaProbe, _CsMetaProbed');
+      } catch (metaErr) {
+        const e = new Error('pysrc=upstream needs the custom micropython-cs '
+          + 'interpreter (custom metaclasses); the ' + artifactKind
+          + ' artifacts booted');
+        e._csPermanent = true;
+        throw e;
+      }
     } catch (probeErr) {
       if (srcKind === 'upstream') { throw probeErr; }
       available = false;
@@ -645,8 +659,7 @@ async function _bootstrap(srcKind) {
       self._pythonRuntimeKind = 'micropython';
       self._pythonSrcKind = effectiveSrc;
       self._b123dSceneDefined = false;
-      if (effectiveSrc === 'upstream' &&
-          (self._csPyTopo || PYTOPO_DEFAULT) === 'upstream') {
+      if (effectiveSrc === 'upstream') {
         // USER code runs verbatim over upstream ShapeLists; MicroPython's
         // list.__add__ refuses list subclasses on the right, so the same
         // line-preserving coercion the library sources get applies here

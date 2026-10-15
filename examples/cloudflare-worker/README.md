@@ -12,8 +12,8 @@ the two high-fidelity ones against Cloudflare's limits,
 | | build123d | corpus | live |
 |---|---|---|---|
 | default | **build123d-lite** (embedded) | 206/222 | `cascade-headless.makeshifted.workers.dev` |
-| `--env upstream` | **verbatim upstream 0.11.1** over the OCP shim | 216/222 | `cascade-headless-upstream.makeshifted.workers.dev` |
-| `--env real` | **the PyPI build123d 0.11.1 wheel + numpy** on Pyodide 314, same shim | 216/222 | not deployed (`npm run dev:real`) |
+| `--env upstream` | **verbatim upstream 0.13.0** over the OCP shim | 233/239 (0.13.0 reference; the live deployment predates the bump: 0.11.1, 216/222) | `cascade-headless-upstream.makeshifted.workers.dev` |
+| `--env real` | **the PyPI build123d 0.13.0 wheel + numpy** on Pyodide 314, same shim | 232/239 (0.13.0 reference) | not deployed (`npm run dev:real`) |
 
 ```bash
 cd examples/cloudflare-worker
@@ -370,7 +370,7 @@ boot — 0 KiB of script):
 | asset | raw | gzip | fetched by |
 |---|---|---:|---|
 | `fonts/FreeSans*.ttf` (4 faces) | 4.10 MB | 2.22 MB | both flavors, at boot |
-| `py/upstream-b123d.json` (158 modules) | 3.15 MB | 0.40 MB | `PY_SRC=upstream` only |
+| `py/upstream-b123d.json` (157 modules, build123d 0.13.0) | 3.25 MB | 0.42 MB | `PY_SRC=upstream` only |
 
 Before this split the script was **9909 KiB gz — 97% of the limit**, with the
 390 KiB gz upstream Python layer still to fit. Moving the fonts out bought
@@ -439,10 +439,11 @@ readers, the mesher, `Geom2dGcc`, …) is the only way under the free plan's
    un-poisoned kernel (see
    [Two ceilings that were real](#two-ceilings-that-were-real)).
 6. **`pySrc: 'lite'` by default.** The `upstream` source layer (verbatim
-   upstream build123d 0.11.1) needs 3.15 MB of Python text as a static asset
-   and ~0.6 s more library load; `real` (`--env real`) needs ~20 MB of
-   Pyodide module bindings and 1.75 s of cold boot. Lite is embedded in the
-   JS bundle.
+   upstream build123d 0.13.0) needs 3.25 MB of Python text (one 0.42 MB-gz
+   JSON static asset) and boots ~7x slower (868 ms vs 122 ms of library load
+   in Node; 0.11.1 was 642 ms) for identical basic-model memory; `real`
+   (`--env real`) needs ~20 MB of Pyodide module bindings and ~1.8 s of cold
+   boot. Lite is embedded in the JS bundle.
 7. **`keep_names = false`.** Wrangler re-bundles `src/` with esbuild, whose
    keepNames default gave each of the ~216k embind invoker closures the OCCT
    glue mints at boot its own property store — ~25 MB of the isolate's JS

@@ -94,18 +94,30 @@ if (fs.existsSync(pyodideSrc)) {
 
 // 3c. Copy the upstream-build123d layer (experimental `?pysrc=upstream` on
 // the MicroPython runtime): the committed seam adapters + stdlib shims from
-// upstream-py/, plus the VENDORED upstream 0.11.1 sources IF fetched
-// (`node packages/cascade-core/scripts/fetch-upstream-b123d.cjs`).
+// upstream-py/, plus the VENDORED upstream sources of the ACTIVE vendor
+// (vendor/<ACTIVE_UPSTREAM_VENDOR>/, committed).
 const upstreamPySrc = path.join(pkgRoot, 'upstream-py');
 if (fs.existsSync(upstreamPySrc)) {
   console.log('[cascade-core] Copying upstream-b123d layer...');
   const upstreamDist = path.join(distDir, 'upstream-b123d');
   fs.cpSync(upstreamPySrc, upstreamDist, { recursive: true });
-  const vendored = path.join(monoRoot, 'vendor', 'build123d-0.11.1');
+  // the ACTIVE vendored version is the single switch in UpstreamB123d.js
+  const upstreamLoaderSrc = fs.readFileSync(
+    path.join(pkgRoot, 'src', 'worker', 'UpstreamB123d.js'), 'utf8');
+  const activeVendor = (upstreamLoaderSrc.match(
+    /ACTIVE_UPSTREAM_VENDOR = '([^']+)'/) || [])[1];
+  if (!activeVendor) {
+    throw new Error('[cascade-core] could not read ACTIVE_UPSTREAM_VENDOR '
+      + 'from UpstreamB123d.js');
+  }
+  const vendored = path.join(monoRoot, 'vendor', activeVendor);
+  const upstreamOut = path.join(upstreamDist, 'upstream');
   if (fs.existsSync(vendored)) {
-    fs.cpSync(vendored, path.join(upstreamDist, 'upstream'), { recursive: true });
+    console.log('[cascade-core]   upstream source layer: ' + activeVendor);
+    fs.cpSync(vendored, upstreamOut, { recursive: true });
   } else {
-    console.log('[cascade-core]   (no vendor/build123d-0.11.1 — pysrc=upstream disabled)');
+    console.log('[cascade-core]   (no vendor/' + activeVendor
+      + ' — pysrc=upstream disabled)');
   }
 }
 

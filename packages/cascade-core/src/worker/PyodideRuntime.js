@@ -47,9 +47,10 @@ const PY_USER_MODULE = 'main';
  *  stdlib. Everything else in PY_SHIM_MODULES is a Brython gap filler and is
  *  replaced by the real CPython module. */
 const PYODIDE_SHIMS = ['logging', '_scipy_shim', 'scipy', 'scipy.optimize',
-  'scipy.spatial', 'pytest'];
+  'scipy.spatial', 'pytest', '_bd_materials_shim', 'bd_materials',
+  'bd_materials.core', 'bd_materials.finishes'];
 
-/** pysrc=real (REAL build123d 0.11.1 over the OCP shim) drops the logging
+/** pysrc=real (REAL build123d 0.13.0 over the OCP shim) drops the logging
  *  swallower: real CPython logging runs for real — build123d's module
  *  loggers write nothing without handlers, and stderr streams to the console
  *  as '[py-stderr]' lines instead of being replayed through console.error
@@ -63,7 +64,7 @@ let _runtimePromise = null;
 let _bootedPySrc = null;
 
 /** Lazily bootstrap Pyodide + build123d-lite (or, with pySrc === 'real',
- *  REAL build123d 0.11.1 over the OCP shim — see PyodideRealB123d.js).
+ *  REAL build123d 0.13.0 over the OCP shim — see PyodideRealB123d.js).
  *  Same contract as ensurePythonRuntime(): resolves to an object with
  *  `run(code)`. One worker session boots ONE source mode. */
 export function ensurePyodideRuntime(pySrc) {
@@ -363,7 +364,7 @@ async function _bootstrap(srcKind) {
     if (PY_SHIM_MODULES[name]) { registerModule(name, PY_SHIM_MODULES[name]); }
   }
   if (isReal) {
-    // REAL build123d 0.11.1 over the OCP shim (wheels + OCP proxies +
+    // REAL build123d 0.13.0 over the OCP shim (wheels + OCP proxies +
     // third-party stubs + worker glue) — see PyodideRealB123d.js.
     await bootstrapPyodideRealB123d(pyodide, registerModule, indexURL);
   } else {

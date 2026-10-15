@@ -488,9 +488,163 @@ function ForEachVertex(shape, callback) {
   }
 }
 
+// --- Operation history (build123d 0.12+ ShapeHistory: Select.LAST/NEW) ---
+//
+// build123d 0.12 answers Select.LAST / Select.NEW from the kernel's OWN
+// record of an operation (topology/history.py wraps BRepTools_History):
+// booleans hand over BRepAlgoAPI_*.History(), ShapeUpgrade_UnifySameDomain
+// hands over its History(), fillets/chamfers answer Modified()/Generated()
+// per input sub-shape, and the records chain with Merge. The primitives
+// below record the same way when called with their `history` argument set
+// (build123d-lite always does; JS mode's default path is untouched). The
+// record rides on the RESULT topo as `._csHist = {hist, args, tools}` with
+// the TopoDS inputs exactly as passed, so a CacheOp hit hands back the
+// record that belongs to that very result (same TShapes).
+
+/** The sub-shape kinds BRepTools_History tracks (upstream TRACKED_TYPES). */
+function _histTrackedTypes() {
+  const T = self.oc.TopAbs_ShapeEnum;
+  return [T.TopAbs_VERTEX, T.TopAbs_EDGE, T.TopAbs_FACE, T.TopAbs_SOLID];
+}
+
+/** Every distinct vertex/edge/face/solid of `shapes` (upstream
+ *  tracked_subshapes), as a TopTools_IndexedMapOfShape (IsSame keyed). */
+function _histTrackedMap(shapes) {
+  const map = new self.oc.TopTools_IndexedMapOfShape_1();
+  const types = _histTrackedTypes();
+  for (const shape of shapes) {
+    if (!shape || shape.IsNull()) { continue; }
+    for (const t of types) { self.oc.TopExp.MapShapes_1(shape, t, map); }
+  }
+  return map;
+}
+
+/** Drain a (by-value, copied) TopTools_ListOfShape into a JS array. */
+function _histListToArray(list) {
+  const out = [];
+  while (!list.IsEmpty()) { out.push(list.First()); list.RemoveFirst(); }
+  return out;
+}
+
+/** A NEW history: h1 followed by h2 (upstream ShapeHistory.merge, but never
+ *  mutating its inputs — they may be cached records). null-safe: a null
+ *  first record is an empty one. */
+function HistMerge(h1, h2) {
+  const merged = new self.oc.BRepTools_History();
+  if (h1) { merged.Merge_2(h1); }
+  if (h2) { merged.Merge_2(h2); }
+  return merged;
+}
+
+/** upstream ShapeHistory.from_algorithm: collect the per-sub-shape answers
+ *  of a BRepBuilderAPI_MakeShape (fillet/chamfer/...). A sub-shape neither
+ *  still present nor modified into something is recorded as removed. */
+function _historyFromAlgorithm(algo, inputs, result) {
+  const hist = new self.oc.BRepTools_History();
+  const present = _histTrackedMap([result]);
+  const subs = _histTrackedMap(inputs);
+  for (let i = 1; i <= subs.Extent(); i++) {
+    const sub = subs.FindKey_1(i);
+    let modified = [], generated = [];
+    try { modified = _histListToArray(algo.Modified(sub)); } catch (e) { modified = []; }
+    for (const m of modified) { hist.AddModified(sub, m); }
+    try { generated = _histListToArray(algo.Generated(sub)); } catch (e) { generated = []; }
+    for (const g of generated) {
+      if (self.oc.BRepTools_History.IsSupportedType(g)) { hist.AddGenerated(sub, g); }
+    }
+    if (modified.length === 0 && !present.Contains(sub)) { hist.Remove(sub); }
+  }
+  present.delete(); subs.delete();
+  return hist;
+}
+
+/** One history-recording boolean step (exactly OCJS.BooleanFuse/Cut/Common
+ *  — list-based BRepAlgoAPI op, NonDestructive — minus the fuzzy value,
+ *  which this binding cannot set on a BRepAlgoAPI op; upstream build123d
+ *  sets none either). `state.hist` accumulates the chained record. */
+function _boolOpH(kind, a, b, state) {
+  const op = kind === 'fuse' ? new self.oc.BRepAlgoAPI_Fuse_1()
+    : (kind === 'cut' ? new self.oc.BRepAlgoAPI_Cut_1() : new self.oc.BRepAlgoAPI_Common_1());
+  const args = new self.oc.TopTools_ListOfShape(); args.Append(a);
+  const tools = new self.oc.TopTools_ListOfShape(); tools.Append(b);
+  const range = new self.oc.Message_ProgressRange_1();
+  try {
+    op.SetArguments(args); op.SetTools(tools);
+    op.SetNonDestructive(true);
+    op.Build(range);
+    const shape = op.Shape();  // a copy: survives deleting the op
+    if (state && state.ok) {
+      const handle = op.History();
+      if (!handle.IsNull()) {
+        // chain into the state's OWN record, so the op (and its whole
+        // boolean data structure) can be released right away
+        if (!state.hist) { state.hist = new self.oc.BRepTools_History(); }
+        state.hist.Merge_2(handle.get());
+      }
+      handle.delete();
+    }
+    return shape;
+  } finally {
+    op.delete(); args.delete(); tools.delete(); range.delete();
+  }
+}
+
+/** Merge a ShapeUpgrade_UnifySameDomain's record into `state`. */
+function _histMergeUnify(state, fusor) {
+  if (!state || !state.ok) { return; }
+  try {
+    const handle = fusor.History_1();
+    if (!handle.IsNull()) {
+      if (!state.hist) { state.hist = new self.oc.BRepTools_History(); }
+      state.hist.Merge_2(handle.get());
+    }
+    handle.delete();
+  } catch (e) {
+    if (state.hist) { state.hist.delete(); }
+    state.ok = false; state.hist = null;
+  }
+}
+
+/** The record an operation left on its result: [hist|null, args, tools]
+ *  (hist null = an empty record), or null when the result carries none. */
+function HistRecord(topo) {
+  const rec = topo && topo._csHist;
+  if (!rec) { return null; }
+  return [rec.hist || null, rec.args || [], rec.tools || []];
+}
+
+/** upstream Trace + ShapeHistory.is_last/is_new over a batch of result
+ *  sub-shapes. Returns one int per candidate: bit 1 = LAST (descends from
+ *  something brought in, or from nothing at all), bit 2 = NEW (untouched or
+ *  modified from no input). */
+function HistClassify(hist, before, brought, candidates) {
+  const trace = (inputs) => {
+    const untouched = _histTrackedMap(inputs);
+    const modified = new self.oc.TopTools_IndexedMapOfShape_1();
+    if (hist) {
+      for (let i = 1; i <= untouched.Extent(); i++) {
+        for (const m of _histListToArray(hist.Modified(untouched.FindKey_1(i)))) {
+          modified.Add_1(m);
+        }
+      }
+    }
+    return { untouched, modified };
+  };
+  const tb = trace(before || []);
+  const tr = trace(brought || []);
+  const out = [];
+  for (const shape of candidates) {
+    const fromBrought = tr.untouched.Contains(shape) || tr.modified.Contains(shape);
+    const fromBefore = tb.untouched.Contains(shape) || tb.modified.Contains(shape);
+    out.push(((fromBrought || !fromBefore) ? 1 : 0) | ((!fromBrought && !fromBefore) ? 2 : 0));
+  }
+  tb.untouched.delete(); tb.modified.delete(); tr.untouched.delete(); tr.modified.delete();
+  return out;
+}
+
 // --- Edge/Face Operations ---
 
-function FilletEdges(shape, radius, edgeList, keepOriginal) {
+function FilletEdges(shape, radius, edgeList, keepOriginal, history) {
   if (!shape || shape.IsNull()) { console.error("FilletEdges: input shape is null!"); return shape; }
   if (!edgeList || edgeList.length === 0) { console.error("FilletEdges: edgeList is empty — no edges to fillet."); return shape; }
   let curFillet = self.CacheOp(arguments, "FilletEdges", () => {
@@ -504,14 +658,18 @@ function FilletEdges(shape, radius, edgeList, keepOriginal) {
       return shape;
     }
     mkFillet.Build(new self.oc.Message_ProgressRange_1());
-    return mkFillet.Shape();
+    let filleted = mkFillet.Shape();
+    if (history) {
+      filleted._csHist = { hist: _historyFromAlgorithm(mkFillet, [shape], filleted), args: [shape], tools: [] };
+    }
+    return filleted;
   });
   self.sceneShapes.push(curFillet);
   if (!keepOriginal) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
   return curFillet;
 }
 
-function ChamferEdges(shape, distance, edgeList, keepOriginal) {
+function ChamferEdges(shape, distance, edgeList, keepOriginal, history) {
   if (!shape || shape.IsNull()) { console.error("ChamferEdges: input shape is null!"); return shape; }
   if (!edgeList || edgeList.length === 0) { console.error("ChamferEdges: edgeList is empty — no edges to chamfer."); return shape; }
   let curChamfer = self.CacheOp(arguments, "ChamferEdges", () => {
@@ -525,7 +683,11 @@ function ChamferEdges(shape, distance, edgeList, keepOriginal) {
       return shape;
     }
     mkChamfer.Build(new self.oc.Message_ProgressRange_1());
-    return mkChamfer.Shape();
+    let chamfered = mkChamfer.Shape();
+    if (history) {
+      chamfered._csHist = { hist: _historyFromAlgorithm(mkChamfer, [shape], chamfered), args: [shape], tools: [] };
+    }
+    return chamfered;
   });
   self.sceneShapes.push(curChamfer);
   if (!keepOriginal) { self.sceneShapes = self.Remove(self.sceneShapes, shape); }
@@ -660,12 +822,17 @@ function _quickVolume(shape) {
   } catch (e) { return 0; }
 }
 
-function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
+function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges, history) {
   if (!fuzzValue) { fuzzValue = 1e-7; }
   let inputVolumes = objectsToJoin.map(o => _quickVolume(o));
   let totalInput = inputVolumes.reduce((a, b) => a + b, 0);
   let curUnion = self.CacheOp(arguments, "Union", () => {
     let combined = objectsToJoin[0];
+    // build123d-lite asks for the kernel's record (Select.LAST/NEW): the
+    // same fuse chain, through the history-recording op
+    const hstate = history ? { ok: true, hist: null } : null;
+    const fuse2 = (a, b) => hstate ? _boolOpH('fuse', a, b, hstate)
+      : self.oc.OCJS.BooleanFuse(a, b, fuzzValue);
     if (objectsToJoin.length > 1) {
       try {
         if (objectsToJoin.length <= 8) {
@@ -673,7 +840,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
           // 3-operand coincident-surface unions unmerged (volume doubles —
           // ppp0110's revolve+mirror), while the pairwise chain handles them.
           for (let i = 1; i < objectsToJoin.length; i++) {
-            combined = self.oc.OCJS.BooleanFuse(combined, objectsToJoin[i], fuzzValue);
+            combined = fuse2(combined, objectsToJoin[i]);
           }
         } else {
           // ONE fuse against a COMPOUND of the remaining operands for MANY
@@ -685,7 +852,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
           for (let i = 1; i < objectsToJoin.length; i += 8) {
             let batch = objectsToJoin.slice(i, i + 8);
             let tool = batch.length === 1 ? batch[0] : MakeCompound(batch);
-            combined = self.oc.OCJS.BooleanFuse(combined, tool, fuzzValue);
+            combined = fuse2(combined, tool);
           }
         }
       } catch (fuseErr) {
@@ -697,6 +864,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
         if (!rebuilt) { throw fuseErr; }
         console.log("Union: BRepAlgoAPI_Fuse raised on these operands (known OCCT 8.0.1 wasm fault family); rebuilt the union from the General-Fuse partition.");
         combined = rebuilt;
+        if (hstate) { if (hstate.hist) { hstate.hist.delete(); } hstate.ok = false; hstate.hist = null; }
       }
     }
 
@@ -709,6 +877,7 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
       if (rebuilt && _quickVolume(rebuilt) >= maxInput * 0.999 - 1e-9) {
         console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); rebuilt the union from the General-Fuse partition.");
         combined = rebuilt;
+        if (hstate) { if (hstate.hist) { hstate.hist.delete(); } hstate.ok = false; hstate.hist = null; }
       } else {
         // Third try: the LIST-based BRepAlgoAPI_Fuse takes a different
         // kernel route than the fork's OCJS.BooleanFuse and sometimes
@@ -726,6 +895,13 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
           if (_quickVolume(listFused) >= maxInput * 0.999 - 1e-9) {
             console.log("Union: BRepAlgoAPI_Fuse dropped an operand (known OCCT 8.0.1 wasm fault); recovered with the list-based fuse.");
             combined = listFused;
+            if (hstate) {
+              const handle = fuse.History();
+              if (hstate.hist) { hstate.hist.delete(); }
+              hstate.ok = true;
+              hstate.hist = handle.IsNull() ? null : HistMerge(handle.get());
+              handle.delete();
+            }
           }
         } catch (e) { /* keep the (guarded) original result */ }
       }
@@ -739,11 +915,17 @@ function Union(objectsToJoin, keepObjects, fuzzValue, keepEdges) {
       try {
         let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(combined, true, true, false); fusor.Build();
         combined = fusor.Shape();
+        _histMergeUnify(hstate, fusor);
+        fusor.delete();
       } catch (unifyErr) {
         console.log("Union: UnifySameDomain raised on this result (known OCCT 8.0.1 wasm fault family); keeping the un-unified fuse result.");
       }
     }
 
+    if (hstate && objectsToJoin.length > 1) {
+      combined._csHist = { hist: hstate.ok ? hstate.hist : null,
+        args: [objectsToJoin[0]], tools: objectsToJoin.slice(1) };
+    }
     return combined;
   });
   let resultVol = _quickVolume(curUnion);
@@ -781,28 +963,36 @@ function _rebuildFuseFromGF(shapes) {
   } catch (e) { return null; }
 }
 
-function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdges) {
+function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdges, history) {
   if (!fuzzValue) { fuzzValue = 1e-7; }
   let mainVol = _quickVolume(mainBody);
   let curDifference = self.CacheOp(arguments, "Difference", () => {
     if (!mainBody || mainBody.IsNull()) { console.error("Main Shape in Difference is null!"); }
 
+    const hstate = history ? { ok: true, hist: null } : null;
     let difference = mainBody;
     if (objectsToSubtract.length >= 1) {
       for (let i = 0; i < objectsToSubtract.length; i++) {
         if (!objectsToSubtract[i] || objectsToSubtract[i].IsNull()) { console.error("Tool in Difference is null!"); }
-        difference = self.oc.OCJS.BooleanCut(difference, objectsToSubtract[i], fuzzValue);
+        difference = hstate ? _boolOpH('cut', difference, objectsToSubtract[i], hstate)
+          : self.oc.OCJS.BooleanCut(difference, objectsToSubtract[i], fuzzValue);
       }
     }
 
     if (!keepEdges) {
       let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(difference, true, true, false); fusor.Build();
       difference = fusor.Shape();
+      _histMergeUnify(hstate, fusor);
+      fusor.delete();
     }
 
     difference.hash = self.ComputeHash(arguments);
     if (GetNumSolidsInCompound(difference) === 1) {
       difference = GetSolidFromCompound(difference, 0);
+    }
+    if (hstate) {
+      difference._csHist = { hist: hstate.ok ? hstate.hist : null,
+        args: [mainBody], tools: objectsToSubtract.slice() };
     }
 
     return difference;
@@ -828,16 +1018,18 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
   return curDifference;
 }
 
-function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
+function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges, history) {
   if (!fuzzValue) { fuzzValue = 1e-7; }
   let inputVolumes = objectsToIntersect.map(o => _quickVolume(o));
   let minInput = Math.min(...inputVolumes);
   let curIntersection = self.CacheOp(arguments, "Intersection", () => {
+    const hstate = history ? { ok: true, hist: null } : null;
     let intersected = objectsToIntersect[0];
     if (objectsToIntersect.length > 1) {
       for (let i = 0; i < objectsToIntersect.length; i++) {
         if (i > 0) {
-          intersected = self.oc.OCJS.BooleanCommon(intersected, objectsToIntersect[i], fuzzValue);
+          intersected = hstate ? _boolOpH('common', intersected, objectsToIntersect[i], hstate)
+            : self.oc.OCJS.BooleanCommon(intersected, objectsToIntersect[i], fuzzValue);
         }
       }
     }
@@ -845,8 +1037,14 @@ function Intersection(objectsToIntersect, keepObjects, fuzzValue, keepEdges) {
     if (!keepEdges) {
       let fusor = new self.oc.ShapeUpgrade_UnifySameDomain_2(intersected, true, true, false); fusor.Build();
       intersected = fusor.Shape();
+      _histMergeUnify(hstate, fusor);
+      fusor.delete();
     }
 
+    if (hstate && objectsToIntersect.length > 1) {
+      intersected._csHist = { hist: hstate.ok ? hstate.hist : null,
+        args: [objectsToIntersect[0]], tools: objectsToIntersect.slice(1) };
+    }
     return intersected;
   });
   let resultVol = _quickVolume(curIntersection);
@@ -1207,7 +1405,7 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
   return curExtrusion;
 }
 
-function Loft(wires, keepWires) {
+function Loft(wires, keepWires, ruled) {
   // Auto-extract wires from non-wire shapes (e.g. after Translate/Rotate).
   // Embind requires the exact TopoDS_Wire type for AddWire(), so we rebuild
   // wires through BRepBuilderAPI_MakeWire to ensure proper Embind typing.
@@ -1241,7 +1439,7 @@ function Loft(wires, keepWires) {
     }
   });
   let curLoft = self.CacheOp(arguments, "Loft", () => {
-    let pipe = new self.oc.BRepOffsetAPI_ThruSections(true, false, 1.0e-6);
+    let pipe = new self.oc.BRepOffsetAPI_ThruSections(true, !!ruled, 1.0e-6);
     resolvedWires.forEach((wire) => { pipe.AddWire(wire); });
     pipe.Build(new self.oc.Message_ProgressRange_1());
     return pipe.Shape();
@@ -1814,6 +2012,11 @@ function _edgeIsForward(edge) {
   return _asEdge(edge).Orientation_1() !== self.oc.TopAbs_Orientation.TopAbs_REVERSED;
 }
 
+/** Is the shape REVERSED-oriented (any shape type). */
+function _shapeIsReversed(shape) {
+  return shape.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED;
+}
+
 /** TopoDS_Shape::IsSame across the Brython boundary. */
 function _sameShape(a, b) {
   return a.IsSame(b);
@@ -1849,7 +2052,14 @@ function _obbIsOut(obb, p) {
 }
 
 function _vertexPoint(vertex) {
-  let p = self.oc.BRep_Tool.Pnt(vertex);
+  // a transformed vertex comes back as a generic TopoDS_Shape: downcast
+  let v = vertex.ShapeType().value === 7 ? self.oc.TopoDS_Cast.Vertex_1(vertex) : vertex;
+  if (v.ShapeType().value !== 7) {
+    let found = null;
+    ForEachVertex(v, (vx) => { if (!found) { found = vx; } });
+    if (found) { v = found; }
+  }
+  let p = self.oc.BRep_Tool.Pnt(v);
   return [p.X(), p.Y(), p.Z()];
 }
 
@@ -1897,7 +2107,7 @@ function _edgeTangentAt(edge, u) {
 /** 2D fillet of a planar face's corner vertices (BRepFilletAPI_MakeFillet2d).
  *  `points` selects vertices by position ([[x,y,z], ...], 1e-6 tolerance);
  *  pass null to fillet every corner. Returns the new face. */
-function FilletFace2D(face, radius, points, keepFace) {
+function FilletFace2D(face, radius, points, keepFace, history) {
   if (!face || face.IsNull()) { console.error("FilletFace2D: input face is null!"); return face; }
   let result = self.CacheOp(arguments, "FilletFace2D", () => {
     let f = face.ShapeType().value === 4 ? self.oc.TopoDS_Cast.Face_1(face) : face;
@@ -1923,7 +2133,15 @@ function FilletFace2D(face, radius, points, keepFace) {
       return face;
     }
     mkFillet.Build(new self.oc.Message_ProgressRange_1());
-    return mkFillet.Shape();
+    let filleted = mkFillet.Shape();
+    if (history) {
+      // upstream Face.fillet_2d: the edges' record + the face rebuilt into
+      // the filleted face (ShapeHistory.add_modified)
+      let hist = _historyFromAlgorithm(mkFillet, [f], filleted);
+      ForEachFace(filleted, (i, nf) => { hist.AddModified(f, nf); });
+      filleted._csHist = { hist: hist, args: [face], tools: [] };
+    }
+    return filleted;
   });
   if (!keepFace) { self.sceneShapes = self.Remove(self.sceneShapes, face); }
   self.sceneShapes.push(result);
@@ -2101,6 +2319,204 @@ function _faceCurvatureSign(face) {
   return -Math.sign(k) / Math.abs(k);
 }
 
+// --- Convexity (build123d 0.12 Convexity / topo_path classifiers) -------
+//
+// Ports of topology/one_d.py _dihedral_convexity, two_d.py Face.convexity
+// and zero_d.py Vertex.convexity. Results are the Convexity member NAMES.
+// Substitutions for bindings this wasm build lacks: principal curvatures
+// come from the surface's D2 and the fundamental forms (BRepLProp_SLProps is
+// unbound), and the vertex probe's point-in-face test is a distance check of
+// the probe's surface point to the face (IntTools_FClass2d is unbound).
+
+function _convexityOfKinds(kinds) {
+  const turning = kinds.filter((k) => k !== 'SMOOTH');
+  if (turning.length === 0) { return 'SMOOTH'; }
+  const distinct = turning.filter((k, i) => turning.indexOf(k) === i);
+  return distinct.length === 1 ? distinct[0] : 'SADDLE';
+}
+
+/** The parent's faces bounded by `edge` (upstream
+ *  topo_explore_connected_faces, IsSame-keyed), each with how many times the
+ *  edge occurs in its boundary (twice = a seam of that face). */
+function _facesAroundEdge(edge, parent) {
+  const faces = [], counts = [];
+  ForEachFace(parent, (i, f) => {
+    let n = 0;
+    for (let ex = new self.oc.TopExp_Explorer_2(f, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+      if (ex.Current().IsSame(edge)) { n++; }
+    }
+    if (n === 0) { return; }
+    for (let j = 0; j < faces.length; j++) { if (faces[j].IsSame(f)) { return; } }
+    faces.push(f); counts.push(n);
+  });
+  return [faces, counts];
+}
+
+function _edgeAsBoundedBy(face, edge) {
+  for (let ex = new self.oc.TopExp_Explorer_2(face, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+    if (ex.Current().IsSame(edge)) { return ex.Current(); }
+  }
+  throw new Error("edge is not on the face");
+}
+
+function _dihedralConvexity(edge, face1, face2) {
+  const E = _asEdge(edge);
+  const curve = new self.oc.BRepAdaptor_Curve_2(E);
+  const first = curve.FirstParameter(), last = curve.LastParameter();
+  const pc1 = self.oc.OCJS_Out.BRepTool_CurveOnSurface(E, face1).curve2d.get();
+  const pc2 = self.oc.OCJS_Out.BRepTool_CurveOnSurface(E, face2).curve2d.get();
+  const reversed2 = _edgeAsBoundedBy(face2, E).Orientation_1() ===
+    self.oc.TopAbs_Orientation.TopAbs_REVERSED;
+  const props1 = new self.oc.BRepGProp_Face_2(face1, false);
+  const props2 = new self.oc.BRepGProp_Face_2(face2, false);
+  const kinds = [];
+  const samples = 7;
+  for (let i = 0; i < samples; i++) {
+    const t = first + (last - first) * (i + 0.5) / samples;
+    const P = new self.oc.gp_Pnt_1(), T = new self.oc.gp_Vec_1();
+    curve.D1(t, P, T);
+    const uv1 = pc1.Value(t), uv2 = pc2.Value(t);
+    const n1 = new self.oc.gp_Vec_1(), n2 = new self.oc.gp_Vec_1();
+    const q1 = new self.oc.gp_Pnt_1(), q2 = new self.oc.gp_Pnt_1();
+    props1.Normal(uv1.X(), uv1.Y(), q1, n1);
+    props2.Normal(uv2.X(), uv2.Y(), q2, n2);
+    if (Math.min(T.Magnitude(), n1.Magnitude(), n2.Magnitude()) < 1e-12) { continue; }
+    T.Normalize(); n1.Normalize(); n2.Normalize();
+    if (n1.Crossed(n2).Magnitude() < 1e-4) { kinds.push('SMOOTH'); continue; }
+    if (reversed2) { T.Reverse(); }
+    const into2 = n2.Crossed(T);
+    kinds.push(into2.Dot(n1) < 0 ? 'CONVEX' : 'CONCAVE');
+  }
+  if (kinds.length === 0) { throw new Error("the faces are degenerate along this edge"); }
+  return _convexityOfKinds(kinds);
+}
+
+/** build123d Mixin1D.convexity relative to the shape the edge was selected
+ *  from: the dihedral crease between its two faces, sampled along it. */
+function EdgeConvexity(edge, parent) {
+  const pair = _facesAroundEdge(_asEdge(edge), parent);
+  const faces = pair[0], counts = pair[1];
+  if (faces.length === 1) {
+    if (counts[0] > 1) { return 'SMOOTH'; }
+    throw new Error("this edge lies on one face only, so there is no crease to " +
+      "classify - convexity needs an edge shared by two faces");
+  }
+  if (faces.length !== 2) {
+    throw new Error(faces.length + " faces meet at this edge - convexity needs exactly two");
+  }
+  return _dihedralConvexity(edge, faces[0], faces[1]);
+}
+
+/** build123d Face.convexity: the signs of the principal curvatures relative
+ *  to the outward normal, sampled on a 3x3 grid of the UV bounds. */
+function FaceConvexity(face) {
+  const f = _asFace(face);
+  const surf = new self.oc.BRepAdaptor_Surface_2(f, false);
+  const outward = new self.oc.BRepGProp_Face_2(f, false);
+  const b = _faceUVBounds(f);
+  const TOL = 1e-6;
+  const kinds = [];
+  const fr = [0.15, 0.5, 0.85];
+  for (const uf of fr) {
+    for (const vf of fr) {
+      const u = b[0] + (b[1] - b[0]) * uf, v = b[2] + (b[3] - b[2]) * vf;
+      const P = new self.oc.gp_Pnt_1();
+      const du = new self.oc.gp_Vec_1(), dv = new self.oc.gp_Vec_1();
+      const duu = new self.oc.gp_Vec_1(), dvv = new self.oc.gp_Vec_1(), duv = new self.oc.gp_Vec_1();
+      surf.D2(u, v, P, du, dv, duu, dvv, duv);
+      const np = du.Crossed(dv);
+      const npm = np.Magnitude();
+      if (npm < 1e-12) { continue; }
+      np.Divide(npm);
+      const N = new self.oc.gp_Vec_1(), Q = new self.oc.gp_Pnt_1();
+      outward.Normal(u, v, Q, N);
+      if (N.Magnitude() < 1e-12) { continue; }
+      const E = du.Dot(du), F = du.Dot(dv), G = dv.Dot(dv);
+      const L = duu.Dot(np), M = duv.Dot(np), Nn = dvv.Dot(np);
+      const det = E * G - F * F;
+      if (Math.abs(det) < 1e-24) { continue; }
+      const K = (L * Nn - M * M) / det;
+      const H = (E * Nn - 2 * F * M + G * L) / (2 * det);
+      const disc = Math.sqrt(Math.max(0, H * H - K));
+      const sign = np.Dot(N) > 0 ? 1 : -1;
+      const k1 = sign * (H - disc), k2 = sign * (H + disc);
+      const low = Math.min(k1, k2), high = Math.max(k1, k2);
+      const away = low < -TOL, into = high > TOL;
+      if (away && into) { return 'SADDLE'; }
+      kinds.push(away ? 'CONVEX' : (into ? 'CONCAVE' : 'SMOOTH'));
+    }
+  }
+  if (kinds.length === 0) { throw new Error("the surface is degenerate everywhere it was sampled"); }
+  return _convexityOfKinds(kinds);
+}
+
+/** build123d Vertex.convexity through a FACE: the two boundary edges'
+ *  directions at the vertex in UV, and whether their bisector leads into
+ *  the face. */
+function VertexConvexityOnFace(vertex, face) {
+  const f = _asFace(face);
+  const V = vertex.ShapeType().value === 7 ? self.oc.TopoDS_Cast.Vertex_1(vertex) : vertex;
+  const seen = [], dirs = [];
+  let here = null;
+  for (let ex = new self.oc.TopExp_Explorer_2(f, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+    const e = self.oc.TopoDS_Cast.Edge_1(ex.Current());
+    if (seen.some((x) => x.IsSame(e))) { continue; }
+    seen.push(e);
+    const v0 = self.oc.TopExp.FirstVertex(e, false), v1 = self.oc.TopExp.LastVertex(e, false);
+    const atFirst = v0.IsSame(V), atLast = v1.IsSame(V);
+    if (!atFirst && !atLast) { continue; }
+    const pc = self.oc.OCJS_Out.BRepTool_CurveOnSurface(e, f);
+    const c2 = pc.curve2d.get();
+    const ends = [];
+    if (atFirst) { ends.push([pc.first, 1]); }
+    if (atLast) { ends.push([pc.last, -1]); }
+    for (const [t, sgn] of ends) {
+      const p2 = new self.oc.gp_Pnt2d_1(), d2 = new self.oc.gp_Vec2d_1();
+      c2.D1(t, p2, d2);
+      const m = Math.hypot(d2.X(), d2.Y());
+      if (m < 1e-12) { continue; }
+      if (!here) { here = [p2.X(), p2.Y()]; }
+      dirs.push([sgn * d2.X() / m, sgn * d2.Y() / m]);
+    }
+  }
+  if (dirs.length !== 2) {
+    throw new Error(dirs.length + " edge end(s) meet this vertex on the face, expected 2");
+  }
+  const bx = dirs[0][0] + dirs[1][0], by = dirs[0][1] + dirs[1][1];
+  const bm = Math.hypot(bx, by);
+  if (bm < 1e-6) { return 'SMOOTH'; }
+  const ub = _faceUVBounds(f);
+  const diag = Math.hypot(ub[1] - ub[0], ub[3] - ub[2]);
+  const step = 1e-4 * diag / bm;
+  const pu = here[0] + bx * step, pv = here[1] + by * step;
+  const probe = _faceD1(f, pu, pv)[0];
+  const corner = _faceD1(f, here[0], here[1])[0];
+  const offset = Math.hypot(probe[0] - corner[0], probe[1] - corner[1], probe[2] - corner[2]);
+  const pv3 = new self.oc.BRepBuilderAPI_MakeVertex(new self.oc.gp_Pnt_3(probe[0], probe[1], probe[2])).Vertex();
+  const dres = _distShapeShape(pv3, f);
+  const d = dres ? dres[0] : Infinity;
+  return d <= 1e-9 + 1e-3 * offset ? 'CONVEX' : 'CONCAVE';
+}
+
+/** build123d Vertex.convexity of a vertex taken off a solid or shell: the
+ *  convexities of its incident edges (relative to the same parent). */
+function VertexConvexityCrease(vertex, parent) {
+  const V = vertex.ShapeType().value === 7 ? self.oc.TopoDS_Cast.Vertex_1(vertex) : vertex;
+  const kinds = [];
+  const seen = [];
+  let found = false;
+  ForEachEdge(parent, (i, e) => {
+    const v0 = self.oc.TopExp.FirstVertex(e, false), v1 = self.oc.TopExp.LastVertex(e, false);
+    if (!(v0.IsSame(V) || v1.IsSame(V))) { return; }
+    found = true;
+    if (seen.some((x) => x.IsSame(e))) { return; }
+    seen.push(e);
+    kinds.push(EdgeConvexity(e, parent));
+  });
+  if (!found) { throw new Error("this vertex is not part of its topo_parent"); }
+  return _convexityOfKinds(kinds);
+}
+
 /** 2-D corner fillet between two connected edges of an OPEN planar wire
  *  (build123d's `_solve_wire_fillet_corner_chfi2d`, the primary solver behind
  *  Wire.fillet_2d). `vertexPoint` is the shared corner. Returns
@@ -2217,7 +2633,10 @@ function _gccParamInTrim(arg, u) {
   let v = u;
   if (arg.adapt2d.IsPeriodic()) {
     let period = arg.adapt2d.Period();
-    v = ((u - arg.first) % period + period) % period + arg.first;
+    // build123d 0.12 _norm_on_period: a value within TOLERANCE of 'first'
+    // snaps to it instead of wrapping to first + period
+    v = Math.abs(u - arg.first) < 1e-6 ? arg.first
+      : ((u - arg.first) % period + period) % period + arg.first;
   }
   return v >= arg.first - _GCC_TOLERANCE && v <= arg.last + _GCC_TOLERANCE;
 }
@@ -3241,6 +3660,125 @@ function ExportSTL(shape, filename, linearDeflection, angularDeflection, asciiFo
   return text;
 }
 
+/** build123d 0.12 Shape.tessellate_with_uvs (and tessellate): mesh the
+ *  shape, then per face transform the nodes/normals by the face location,
+ *  flip normals and triangle winding on REVERSED faces, and normalize the
+ *  face's UV nodes to [0, 1] (U flipped on reversed faces). With atlas
+ *  packing the UV islands - sized by the arc lengths of the mid iso curves -
+ *  are packed into one [0, 1] atlas and inset by the gutter.
+ *  COMPROMISE(obj-atlas): islands are packed with CascadeStudio's potpack
+ *  rather than upstream's _pack2d shelf packer (same islands, other
+ *  positions). Returns {vertices, triangles, normals, uvs} as flat arrays. */
+function TessellateWithUVs(shape, tolerance, angularTolerance, atlasPacking, gutter) {
+  const oc = self.oc;
+  new oc.BRepMesh_IncrementalMesh_2(shape, tolerance, false, angularTolerance, false);
+  const vertices = [], normals = [], uvs = [], triangles = [];
+  const islands = [];
+  let offset = 0;
+  ForEachFace(shape, (fi, face) => {
+    const loc = new oc.TopLoc_Location_1();
+    const handle = oc.BRep_Tool.Triangulation(face, loc, 0);
+    if (handle.IsNull()) { return; }
+    const T = handle.get();
+    const trsf = loc.Transformation();
+    const reversed = face.Orientation_1() === oc.TopAbs_Orientation.TopAbs_REVERSED;
+    const n = T.NbNodes();
+    for (let i = 1; i <= n; i++) {
+      const p = T.Node(i).Transformed(trsf);
+      vertices.push(p.X(), p.Y(), p.Z());
+    }
+    if (!T.HasNormals()) { T.ComputeNormals(); }
+    for (let i = 1; i <= n; i++) {
+      const d = T.Normal_1(i).Transformed(trsf);
+      const k = reversed ? -1 : 1;
+      normals.push(k * d.X(), k * d.Y(), k * d.Z());
+    }
+    const start = uvs.length / 2;
+    let box = { w: 1, h: 1 };
+    if (T.HasUVNodes()) {
+      let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+      const raw = [];
+      for (let i = 1; i <= n; i++) {
+        const q = T.UVNode(i);
+        raw.push(q.X(), q.Y());
+        u0 = Math.min(u0, q.X()); u1 = Math.max(u1, q.X());
+        v0 = Math.min(v0, q.Y()); v1 = Math.max(v1, q.Y());
+      }
+      const du = (u1 - u0) > 1e-6 ? (u1 - u0) : 1, dv = (v1 - v0) > 1e-6 ? (v1 - v0) : 1;
+      for (let i = 0; i < n; i++) {
+        let x = (raw[2 * i] - u0) / du, y = (raw[2 * i + 1] - v0) / dv;
+        if (reversed) { x = 1 - x; }
+        uvs.push(x, y);
+      }
+      try {
+        const surface = oc.BRep_Tool.Surface_2(face).get();
+        const uIso = new oc.GeomAdaptor_Curve_2(surface.VIso(v0 + (v1 - v0) * 0.5));
+        const vIso = new oc.GeomAdaptor_Curve_2(surface.UIso(u0 + (u1 - u0) * 0.5));
+        const w = self.LengthOfCurve(uIso, u0, u1), h = self.LengthOfCurve(vIso, v0, v1);
+        box = { w: w > 1e-6 ? w : du, h: h > 1e-6 ? h : dv };
+      } catch (e) { box = { w: du, h: dv }; }
+    } else {
+      for (let i = 0; i < n; i++) { uvs.push(0, 0); }
+    }
+    islands.push({ w: box.w, h: box.h, start: start, count: n });
+    const nt = T.NbTriangles();
+    for (let t = 1; t <= nt; t++) {
+      const tri = T.Triangle(t);
+      let a = tri.Value(1), b = tri.Value(2), c = tri.Value(3);
+      if (reversed) { const tmp = a; a = b; b = tmp; }
+      triangles.push(offset + a - 1, offset + b - 1, offset + c - 1);
+    }
+    offset += n;
+  });
+  if (atlasPacking && islands.length) {
+    const boxes = islands.map((isl, i) => ({ w: isl.w, h: isl.h, i: i }));
+    const stats = self.potpack(boxes);
+    const scale = Math.max(stats.w, stats.h) || 1;
+    for (const b of boxes) {
+      const isl = islands[b.i];
+      const bw = b.w / scale, bh = b.h / scale;
+      const inset = Math.min(gutter || 0, bw / 2, bh / 2);
+      const ox = b.x / scale + inset, oy = b.y / scale + inset;
+      const sx = bw - 2 * inset, sy = bh - 2 * inset;
+      for (let k = isl.start; k < isl.start + isl.count; k++) {
+        uvs[2 * k] = ox + uvs[2 * k] * sx;
+        uvs[2 * k + 1] = oy + uvs[2 * k + 1] * sy;
+      }
+    }
+  }
+  return { vertices: vertices, triangles: triangles, normals: normals, uvs: uvs };
+}
+
+/** build123d 0.12 export_obj: a Wavefront OBJ (v / vt / vn / f a/a/a) of
+ *  the tessellation, written into the worker's MEMFS. */
+function ExportOBJ(shape, filename, linearDeflection, angularDeflection, includeUVs, atlasPacking, gutter) {
+  if (!shape || shape.IsNull()) { console.error("ExportOBJ: input shape is null!"); return null; }
+  const mesh = TessellateWithUVs(shape, linearDeflection || 1e-3, angularDeflection || 0.1,
+    includeUVs && atlasPacking, gutter || 0);
+  const g = (x) => Number(x.toPrecision(9)).toString();
+  const lines = ["# Wavefront OBJ exported by build123d"];
+  for (let i = 0; i < mesh.vertices.length; i += 3) {
+    lines.push("v " + g(mesh.vertices[i]) + " " + g(mesh.vertices[i + 1]) + " " + g(mesh.vertices[i + 2]));
+  }
+  if (includeUVs) {
+    for (let i = 0; i < mesh.uvs.length; i += 2) { lines.push("vt " + g(mesh.uvs[i]) + " " + g(mesh.uvs[i + 1])); }
+    for (let i = 0; i < mesh.normals.length; i += 3) {
+      lines.push("vn " + g(mesh.normals[i]) + " " + g(mesh.normals[i + 1]) + " " + g(mesh.normals[i + 2]));
+    }
+    for (let i = 0; i < mesh.triangles.length; i += 3) {
+      const a = mesh.triangles[i] + 1, b = mesh.triangles[i + 1] + 1, c = mesh.triangles[i + 2] + 1;
+      lines.push("f " + a + "/" + a + "/" + a + " " + b + "/" + b + "/" + b + " " + c + "/" + c + "/" + c);
+    }
+  } else {
+    for (let i = 0; i < mesh.triangles.length; i += 3) {
+      lines.push("f " + (mesh.triangles[i] + 1) + " " + (mesh.triangles[i + 1] + 1) + " " + (mesh.triangles[i + 2] + 1));
+    }
+  }
+  const text = lines.join("\n") + "\n";
+  self.oc.FS.writeFile("/" + filename, text);
+  return text;
+}
+
 /** Write the shape as a BREP file into the worker's Emscripten MEMFS and
  *  return the file's text content (BRepTools::Write) — the engine behind
  *  build123d-lite's export_brep. */
@@ -3365,6 +3903,14 @@ class EdgeSelector {
   }
 
   // --- Filtering ---
+
+  /** Drop degenerated edges (a sphere pole, a fillet's collapsed corner):
+   *  build123d's Shape.edges() never returns them. Indices are kept. */
+  nonDegenerate() {
+    let sel = this._clone();
+    sel._entries = sel._entries.filter(e => !self.oc.BRep_Tool.Degenerated(_asEdge(e.edge)));
+    return sel;
+  }
 
   ofType(type) {
     let sel = this._clone();
@@ -4263,6 +4809,34 @@ function ConvexHull3D(points) {
  *  ShapeFix_Solid::SolidFromShell (which also orients the shell outward).
  *  Returns a single solid, or a compound if the faces sew into multiple
  *  closed shells. */
+/** build123d Shell.volume: the volume a MANIFOLD shell encloses (every
+ *  edge shared by exactly two faces), else 0 - ShapeFix_Solid.SolidFromShell
+ *  on the sewn faces, like upstream. */
+function ShellEnclosedVolume(faces) {
+  if (!faces || faces.length === 0) { return 0; }
+  let sew = new self.oc.BRepBuilderAPI_Sewing(1.0e-6, true, true, true, false);
+  for (let i = 0; i < faces.length; i++) { sew.Add(faces[i]); }
+  sew.Perform(new self.oc.Message_ProgressRange_1());
+  let sewed = sew.SewedShape();
+  let shells = [];
+  ForEachShell(sewed, (i, shell) => { shells.push(shell); });
+  if (shells.length !== 1) { return 0; }
+  // manifold: every edge bounds exactly two faces of the shell
+  let counts = [];
+  ForEachFace(shells[0], (i, f) => {
+    for (let ex = new self.oc.TopExp_Explorer_2(f, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); ex.More(); ex.Next()) {
+      const e = ex.Current();
+      if (self.oc.BRep_Tool.Degenerated(self.oc.TopoDS_Cast.Edge_1(e))) { continue; }
+      let found = counts.find((c) => c.edge.IsSame(e));
+      if (found) { found.n++; } else { counts.push({ edge: e, n: 1 }); }
+    }
+  });
+  if (counts.some((c) => c.n !== 2)) { return 0; }
+  let solid = new self.oc.ShapeFix_Solid_1().SolidFromShell(shells[0]);
+  if (!solid || solid.IsNull()) { return 0; }
+  return Math.abs(_quickVolume(solid));
+}
+
 function SewSolidFromFaces(faces) {
   let curSolid = self.CacheOp(arguments, "SewSolidFromFaces", () => {
     let sew = new self.oc.BRepBuilderAPI_Sewing(1.0e-6, true, true, true, false);
@@ -4410,6 +4984,10 @@ class CascadeStudioStandardLibrary {
     self.Edges = Edges;
     self.Faces = Faces;
     self.NewEdges = NewEdges;
+    // Operation history (build123d 0.12+ Select.LAST/NEW)
+    self.HistRecord = HistRecord;
+    self.HistMerge = HistMerge;
+    self.HistClassify = HistClassify;
     self.EdgeSelector = EdgeSelector;
     self.FaceSelector = FaceSelector;
 
@@ -4464,6 +5042,8 @@ class CascadeStudioStandardLibrary {
     self.SurfaceFromPoints = SurfaceFromPoints;
     self.PipeShellSweep = PipeShellSweep;
     self.ExportSTL = ExportSTL;
+    self.TessellateWithUVs = TessellateWithUVs;
+    self.ExportOBJ = ExportOBJ;
     self.ExportBREP = ExportBREP;
     self.ExportSTEP = ExportSTEP;
     self.ImportBREP = ImportBREP;
@@ -4493,6 +5073,11 @@ class CascadeStudioStandardLibrary {
     self._shapeOBB = _shapeOBB;
     self._obbIsOut = _obbIsOut;
     self._edgeIsForward = _edgeIsForward;
+    self._shapeIsReversed = _shapeIsReversed;
+    self.EdgeConvexity = EdgeConvexity;
+    self.FaceConvexity = FaceConvexity;
+    self.VertexConvexityOnFace = VertexConvexityOnFace;
+    self.VertexConvexityCrease = VertexConvexityCrease;
     self._vertexPoint = _vertexPoint;
     self._edgePointAt = _edgePointAt;
     self._edgeTangentAt = _edgeTangentAt;
@@ -4505,6 +5090,7 @@ class CascadeStudioStandardLibrary {
     self.Section = Section;
     self.ConvexHull3D = ConvexHull3D;
     self.SewSolidFromFaces = SewSolidFromFaces;
+    self.ShellEnclosedVolume = ShellEnclosedVolume;
     self.IntersectLineShape = IntersectLineShape;
     self.PointVertex = PointVertex;
     self.ConstrainedArcs2D = ConstrainedArcs2D;

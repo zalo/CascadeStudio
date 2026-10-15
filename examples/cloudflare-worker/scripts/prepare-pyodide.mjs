@@ -131,7 +131,16 @@ walk(tmp);
 execFileSync('zip', ['-q', '-r', '-9', join(OUT, 'wheels', 'numpy-lite.zip'), '.'], { cwd: tmp });
 fs.rmSync(tmp, { recursive: true, force: true });
 
-const pure = fs.readdirSync(VENDOR).filter((f) => f.endsWith('.whl') && !f.startsWith('numpy-'));
+// The pure wheels are exactly cascade-core's REAL_WHEELS (PyodideRealB123d.js
+// is the one list; vendor/pyodide may also hold wheels of an older pin).
+const realSrc = fs.readFileSync(join(ROOT, 'packages', 'cascade-core', 'src', 'worker', 'PyodideRealB123d.js'), 'utf8');
+const pure = JSON.parse(realSrc.match(/export const REAL_WHEELS = (\[[^\]]*\])/)[1].replace(/'/g, '"').replace(/,\s*\]/, ']'));
+for (const w of pure) {
+  if (!fs.existsSync(join(VENDOR, w))) {
+    console.error('vendor/pyodide/' + w + ' is missing — re-run packages/cascade-core/scripts/fetch-pyodide.cjs');
+    process.exit(1);
+  }
+}
 for (const w of pure) { fs.copyFileSync(join(VENDOR, w), join(OUT, 'wheels', w)); }
 
 const size = (p) => fs.statSync(join(OUT, p)).size;

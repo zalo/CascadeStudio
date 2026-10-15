@@ -1,8 +1,8 @@
-from build123d.build_common import WorkplaneList as WorkplaneList, flatten_sequence as flatten_sequence, logger as logger, validate_inputs as validate_inputs
+from build123d.build_common import flatten_sequence as flatten_sequence, logger as logger, validate_inputs as validate_inputs
 from build123d.build_enums import GeomType as GeomType, Kind as Kind, Mode as Mode, Side as Side, Until as Until
 from build123d.build_part import BuildPart as BuildPart
 from build123d.geometry import Axis as Axis, Plane as Plane, Vector as Vector, VectorLike as VectorLike
-from build123d.topology import Compound as Compound, Curve as Curve, DraftAngleError as DraftAngleError, Edge as Edge, Face as Face, Part as Part, ShapeList as ShapeList, Shell as Shell, Sketch as Sketch, Solid as Solid, Vertex as Vertex, Wire as Wire
+from build123d.topology import Compound as Compound, Curve as Curve, DraftAngleError as DraftAngleError, Edge as Edge, Face as Face, Part as Part, ShapeHistory as ShapeHistory, ShapeList as ShapeList, Shell as Shell, Sketch as Sketch, Solid as Solid, Vertex as Vertex, Wire as Wire
 from collections.abc import Iterable
 
 def draft(faces: Face | Iterable[Face], neutral_plane: Plane, angle: float) -> Part:
@@ -42,6 +42,15 @@ def loft(sections: Face | Sketch | Iterable[Vertex | Face | Sketch] | None = Non
     """Part Operation: loft
 
     Loft the pending sketches/faces, across all workplanes, into a solid.
+
+    Faces may contain inner wires, which are lofted as holes and subtracted from
+    the outer loft. When a face has more than one inner wire, the wires in each
+    subsequent section are matched to the preceding section by choosing the
+    assignment with the smallest total distance between wire centers. This
+    makes the result independent of the order in which inner wires are
+    returned, but it is only a geometric heuristic: holes that are close
+    together, cross paths, or change position significantly may be matched
+    incorrectly. All sections must contain the same number of inner wires.
 
     Args:
         sections (Vertex, Face, Sketch): slices to loft into object. If not provided, pending_faces

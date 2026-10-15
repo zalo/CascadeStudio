@@ -1,4 +1,4 @@
-// PyodideRealB123d.js — run REAL, UNMODIFIED build123d 0.11.1 (the actual
+// PyodideRealB123d.js — run REAL, UNMODIFIED build123d 0.13.0 (the actual
 // PyPI wheel: real CPython semantics, real numpy, native metaclasses/typing,
 // ZERO source transforms, ZERO stdlib shims) on the Pyodide runtime, with
 // the OCP-over-embind shim (OcpShim.js + upstream-py/ocp_shim/) as the ONLY
@@ -12,10 +12,11 @@
 // and the MicroPython pytopo=upstream stack.
 //
 // What it installs, in order:
-//   1. wheels: numpy + typing_extensions (Pyodide CDN builds, vendored into
-//      vendor/pyodide/ by scripts/fetch-pyodide.cjs) and the PURE wheels
-//      build123d 0.11.1 / anytree / webcolors / trianglesolver (PyPI,
-//      vendored the same way). All served from dist — no network at runtime.
+//   1. wheels: numpy (Pyodide CDN build, vendored into vendor/pyodide/ by
+//      scripts/fetch-pyodide.cjs) and the PURE wheels build123d 0.13.0 /
+//      bd_materials / typing_extensions 4.16 (0.13 pins >=4.16; the lock
+//      ships 4.15) / anytree / webcolors / trianglesolver (PyPI, vendored
+//      the same way). All served from dist — no network at runtime.
 //   2. the OCP package: inert stubs for every module build123d imports
 //      (ocp_import_map.json — Standard/StdFail as real Exception classes),
 //      then the GENERATED proxy modules (ocp_shim/OCP/*.py + _registry.py)
@@ -37,7 +38,9 @@ import { BUILD123D_LITE_PY } from './Build123dLite.js';
 /** Pure wheels vendored into vendor/pyodide/ (fetch-pyodide.cjs pins the
  *  same versions). numpy/typing_extensions ride the pyodide-lock instead. */
 export const REAL_WHEELS = [
-  'build123d-0.11.1-py3-none-any.whl',
+  'build123d-0.13.0-py3-none-any.whl',
+  'bd_materials-0.2.4-py3-none-any.whl',
+  'typing_extensions-4.16.0-py3-none-any.whl',
   'anytree-2.13.0-py3-none-any.whl',
   'webcolors-24.8.0-py3-none-any.whl',
   'trianglesolver-1.2-py3-none-any.whl',
@@ -115,9 +118,9 @@ export async function bootstrapPyodideRealB123d(pyodide, registerModule, indexUR
   if (host && typeof host.installWheels === 'function') {
     // headless: the host installs the same wheels from its own bindings
     // (numpy's side modules arrive PRECOMPILED — workerd cannot compile wasm)
-    await host.installWheels(pyodide, ['numpy', 'typing-extensions', ...REAL_WHEELS]);
+    await host.installWheels(pyodide, ['numpy', ...REAL_WHEELS]);
   } else {
-    await pyodide.loadPackage(['numpy', 'typing-extensions'], quiet);
+    await pyodide.loadPackage(['numpy'], quiet);
     await pyodide.loadPackage(REAL_WHEELS.map((f) => indexURL + f), quiet);
   }
   const tWheels = performance.now();
@@ -127,6 +130,7 @@ export async function bootstrapPyodideRealB123d(pyodide, registerModule, indexUR
   pyodide.runPython(OCP_STUBS_PY);
   const shimManifest = JSON.parse(await fetchText('ocp_shim/MANIFEST.json'));
   installOcpShim(self, JSON.parse(await fetchText('ocp_shim/table.json')));
+  registerModule('ocp_glue', await fetchText('ocp_shim/ocp_glue.py'));
   registerModule('ocp_core', await fetchText('ocp_shim/ocp_core_pyodide.py'));
   registerModule('ocp_registry', await fetchText('ocp_shim/_registry.py'));
   for (const mod of shimManifest.modules) {
@@ -161,7 +165,7 @@ export async function bootstrapPyodideRealB123d(pyodide, registerModule, indexUR
   registerModule('real_glue', await fetchText('ocp_shim/real_glue.py'));
 
   const tDone = performance.now();
-  say('REAL build123d 0.11.1 ready: wheels '
+  say('REAL build123d 0.13.0 ready: wheels '
     + (tWheels - t0).toFixed(0) + ' ms, shim+stubs '
     + (tPrep - tWheels).toFixed(0) + ' ms, import build123d '
     + (tImport - tPrep).toFixed(0) + ' ms, glue '

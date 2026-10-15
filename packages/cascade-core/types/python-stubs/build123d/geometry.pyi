@@ -7,8 +7,8 @@ from OCP.TopoDS import TopoDS_Face, TopoDS_Shape
 from OCP.gp import gp_Ax1, gp_Ax2, gp_Ax3, gp_Dir, gp_GTrsf, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec, gp_XYZ
 from _typeshed import Incomplete
 from build123d.build_enums import Align as Align, Align2D as Align2D, Align3D as Align3D, Extrinsic as Extrinsic, Intrinsic as Intrinsic
-from collections.abc import Callable as Callable, Iterable, Sequence
-from typing import Any, TypeAlias, overload
+from collections.abc import Callable as Callable, Iterable, Iterator, Sequence
+from typing import Any, ClassVar, Protocol, TypeAlias, TypeVar, overload
 
 logger: Incomplete
 TOLERANCE: float
@@ -35,6 +35,7 @@ class Vector:
         wrapped (gp_Vec): the OCP vector object
 
     """
+    build123d_type: ClassVar[str]
     @overload
     def __init__(self, X: float, Y: float, Z: float) -> None: ...
     @overload
@@ -69,8 +70,6 @@ class Vector:
     @property
     def wrapped(self) -> gp_Vec:
         """OCCT object"""
-    def to_tuple(self) -> tuple[float, float, float]:
-        """Return tuple equivalent"""
     @property
     def length(self) -> float:
         """Vector length"""
@@ -242,6 +241,7 @@ class Axis(metaclass=AxisMeta):
         direction (Vector): the normalized direction vector
         wrapped (gp_Ax1): the OCP axis object
     """
+    build123d_type: ClassVar[str]
     @overload
     def __init__(self, gp_ax1: gp_Ax1) -> None:
         """Axis: point and direction"""
@@ -288,8 +288,6 @@ class Axis(metaclass=AxisMeta):
     def __eq__(self, other: object) -> bool: ...
     def located(self, new_location: Location):
         """relocates self to a new location possibly changing position and direction"""
-    def to_plane(self) -> Plane:
-        """Return self as Plane"""
     def is_coaxial(self, other: Axis, angular_tolerance: float = 1e-05, linear_tolerance: float = 1e-05) -> bool:
         """are axes coaxial
 
@@ -405,13 +403,32 @@ class Axis(metaclass=AxisMeta):
         """Find intersection of axis and shape"""
 
 class BoundBox:
-    """A BoundingBox for a Shape"""
+    """An axis-aligned bounding box for a shape.
+
+    In addition to its extents, a :class:`BoundBox` provides spatial
+    predicates. :meth:`covers` and :meth:`covered_by` test inclusive
+    enclosure; :meth:`contains` and :meth:`within` require enclosure with
+    relevant-dimensional interior; and :meth:`contains_properly` additionally
+    excludes boundary contact. :meth:`intersects` and :meth:`disjoint`
+    test whether the distance between boxes is within the given tolerance.
+    :meth:`touches` identifies contact without shared interior, while
+    :meth:`overlaps` identifies shared interior where neither box contains
+    the other.
+
+    Predicate comparisons account for degenerate bounding boxes. An axis that
+    is degenerate and coincident in both boxes is excluded from interior
+    comparisons, so coplanar bounding rectangles compare in two dimensions and
+    collinear bounding lines compare in one. Degenerate axes at different
+    coordinates remain distinct: for example, rectangles on parallel planes
+    do not have a shared interior. This behavior concerns bounding-box extents
+    only; it does not infer the topological dimension of the underlying shape.
+    """
     @overload
     def __init__(self, bounding_box: Bnd_Box) -> None:
         """Construct a bounding box from a Bnd_Box"""
     @overload
-    def __init__(self, shape: TopoDS_Shape, tolerance: float | None = None, optimal: bool = True) -> None:
-        """Construct a bounding box from a TopoDS_Shape"""
+    def __init__(self, shape: Shape | TopoDS_Shape, tolerance: float | None = None, optimal: bool = True) -> None:
+        """Construct a bounding box from a Shape or TopoDS_Shape"""
     @property
     def measure(self) -> float:
         """Return the overall Lebesgue measure of the bounding box.
@@ -450,9 +467,8 @@ class BoundBox:
         Compares bounding boxes. Returns none if neither is inside the other.
         Returns the outer one if either is outside the other.
 
-        BoundBox.is_inside works in 3d, but this is a 2d bounding box, so it
-        doesn't work correctly plus, there was all kinds of rounding error in
-        the built-in implementation i do not understand.
+        .. deprecated::
+            Use :meth:`contains` to identify the enclosing bounding box.
 
         Args:
           bb1: BoundBox:
@@ -473,24 +489,37 @@ class BoundBox:
         Returns:
 
         """
-    def is_inside(self, second_box: BoundBox) -> bool:
-        """Is the provided bounding box inside this one?
+    def covers(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether this bounding box includes every point of *other*.
 
-        Args:
-          b2: BoundBox:
-
-        Returns:
-
+        Boundary contact is included, so this predicate also applies to
+        degenerate bounding boxes such as those of vertices, edges, and faces.
         """
+    def covered_by(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether every point of this bounding box is in *other*."""
+    def contains(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether this bounding box contains *other*.
+
+        Boundary contact is permitted, but *other* must have an interior point
+        in this bounding box. Use :meth:`covers` for degenerate bounding boxes.
+        """
+    def contains_properly(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether *other* is contained without touching this box's boundary."""
+    def within(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether this bounding box is contained in *other*."""
+    def intersects(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether the distance between bounding boxes is within *tolerance*."""
+    def disjoint(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether these bounding boxes do not intersect."""
+    def touches(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether these bounding boxes meet without sharing positive volume."""
     def overlaps(self, other: BoundBox, tolerance: float = ...) -> bool:
-        """Check if this bounding box overlaps with another.
+        """Return whether these boxes overlap without either one containing the other."""
+    def is_inside(self, other: BoundBox, tolerance: float = ...) -> bool:
+        """Return whether this bounding box is inside *other*.
 
-        Args:
-            other: BoundBox to check overlap with
-            tolerance: Distance tolerance for overlap detection
-
-        Returns:
-            True if bounding boxes overlap (share any volume), False otherwise
+        .. deprecated::
+            Use :meth:`within` instead.
         """
     def to_align_offset(self, align: Align2D | Align3D) -> Vector:
         """Amount to move object to achieve the desired alignment"""
@@ -640,6 +669,7 @@ class Location:
         wrapped (TopLoc_Location): the OCP location object
 
     """
+    build123d_type: ClassVar[str]
     @overload
     def __init__(self) -> None:
         """Location with no position or orientation"""
@@ -725,13 +755,19 @@ class Location:
     @overload
     def __mul__(self, other: Location) -> Location: ...
     @overload
+    def __mul__(self, other: Plane) -> Plane: ...
+    @overload
     def __mul__(self, other: Iterable[Location]) -> list[Location]: ...
+    @overload
+    def __mul__(self, other: Iterable[Plane]) -> list[Plane]: ...
+    @overload
+    def __mul__(self, other: Iterable[_ShapeT]) -> list[_ShapeT]: ...
     def __pow__(self, exponent: int) -> Location: ...
     def __eq__(self, other: object) -> bool:
         """Compare Locations"""
     def __hash__(self) -> int:
         """Hash of Location"""
-    def __iter__(self): ...
+    def __iter__(self) -> Iterator[Vector]: ...
     def __neg__(self) -> Location:
         """Flip the orientation without changing the position operator -"""
     def __and__(self, other: Axis | Location | Plane | VectorLike | Shape) -> Vector | Location | None:
@@ -762,10 +798,6 @@ class Location:
         Returns:
             Location: A new mirrored Location that preserves right-handedness.
         """
-    def to_axis(self) -> Axis:
-        """Convert the location into an Axis"""
-    def to_tuple(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-        """Convert the location to a translation, rotation tuple."""
     def __format__(self, spec) -> str:
         """Format Location"""
     @overload
@@ -783,40 +815,6 @@ class Location:
     @overload
     def intersect(self, shape: Shape) -> Shape | None:
         """Find intersection of location and shape"""
-
-class LocationEncoder(json.JSONEncoder):
-    '''Custom JSON Encoder for Location values
-
-    Example:
-
-    .. code::
-
-        data_dict = {
-            "part1": {
-                "joint_one": Location((1, 2, 3), (4, 5, 6)),
-                "joint_two": Location((7, 8, 9), (10, 11, 12)),
-            },
-            "part2": {
-                "joint_one": Location((13, 14, 15), (16, 17, 18)),
-                "joint_two": Location((19, 20, 21), (22, 23, 24)),
-            },
-        }
-        json_object = json.dumps(data_dict, indent=4, cls=LocationEncoder)
-        with open("sample.json", "w") as outfile:
-            outfile.write(json_object)
-        with open("sample.json", "r") as infile:
-            copy_data_dict = json.load(infile, object_hook=LocationEncoder.location_hook)
-
-    '''
-    def default(self, o: Location) -> dict:
-        """Return a serializable object"""
-    @staticmethod
-    def location_hook(obj) -> dict:
-        """Convert Locations loaded from json to Location objects
-
-        Example:
-            read_json = json.load(infile, object_hook=LocationEncoder.location_hook)
-        """
 
 class OrientedBoundBox:
     """
@@ -966,13 +964,14 @@ class Rotation(Location):
 
     """
     @overload
-    def __init__(self, rotation: RotationLike, ordering: None) -> None:
-        """Subclass of Location used only for object rotation
-        ordering is for order of rotations in Intrinsic or Extrinsic enums"""
+    def __init__(self, rotation: RotationLike, ordering: Extrinsic | Intrinsic = ...) -> None:
+        """Rotation from other RotationLike object."""
     @overload
     def __init__(self, X: float = 0, Y: float = 0, Z: float = 0, ordering: Extrinsic | Intrinsic = ...) -> None:
-        """Subclass of Location used only for object rotation
-        ordering is for order of rotations in Intrinsic or Extrinsic enums"""
+        """Rotation from Euler angles and ordering (default: Intrinsic.XYZ)."""
+    @overload
+    def __init__(self, axis: Axis, angle: float) -> None:
+        """Rotation about an Axis by an angle in degrees."""
 Rot = Rotation
 RotationLike: TypeAlias = Rotation | tuple[float, float, float]
 
@@ -1139,6 +1138,7 @@ class Plane(metaclass=PlaneMeta):
         Plane: A plane
 
     '''
+    build123d_type: ClassVar[str]
     @staticmethod
     def get_topods_face_normal(face: TopoDS_Face) -> Vector:
         """Find the normal at the center of a TopoDS_Face"""
@@ -1352,3 +1352,26 @@ class NotAllLocationLikeError(TypeError):
 def all_location_like(items: Iterable[Any]) -> list[Location | Plane]:
     """Returns the items as a list unless any of them is not an instance of `Location | Plane`.
     Otherwise raises `NotAllLocationLikeError`."""
+
+class Movable(Protocol):
+    """Something that can be repositioned by a Location or a Plane."""
+    def moved(self, loc: Location | Plane) -> Any:
+        """Return a copy of self moved to a relative location"""
+MovableT = TypeVar('MovableT', bound=Movable)
+
+def apply_location_like(obj: MovableT, other: Location | Plane | Iterable[Location | Plane]) -> MovableT | list[MovableT]:
+    """Position obj by a Location or Plane, or once per item of an iterable.
+
+    Shared by the ``__rmul__`` of Plane and Shape so that ``Plane.XZ * shape``
+    and ``[Pos(1), Pos(2)] * shape`` behave identically for both.
+
+    Args:
+        obj (MovableT): object to reposition
+        other (Location | Plane | Iterable): where to put it
+
+    Raises:
+        TypeError: other is not location-like, or an iterable of location-like
+
+    Returns:
+        MovableT | list[MovableT]: the placed copy, or one per location
+    """

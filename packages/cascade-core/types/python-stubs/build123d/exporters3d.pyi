@@ -1,4 +1,4 @@
-from build123d.build_common import UNITS_PER_METER as UNITS_PER_METER
+from build123d.build_constants import UNITS_PER_METER as UNITS_PER_METER
 from build123d.build_enums import PrecisionMode as PrecisionMode, Unit as Unit
 from build123d.geometry import Location as Location
 from build123d.topology import Compound as Compound, Curve as Curve, Part as Part, Shape as Shape, Sketch as Sketch
@@ -30,6 +30,11 @@ def export_gltf(to_export: Shape, file_path: PathLike | str | bytes, unit: Unit 
     detailed 3D model data, including meshes (vertices, normals, textures, etc.),
     animations, materials, and scene hierarchy, among other aspects.
 
+    UV texture coordinates from the underlying surface parameterization are
+    included in the glTF output as ``TEXCOORD_0`` accessors. These UVs support
+    texture mapping, UV baking, and displacement-map workflows such as
+    `BumpMesh <https://bumpmesh.com/>`_.
+
     Args:
         to_export (Shape): object or assembly
         file_path (Union[PathLike, str, bytes]): glTF file path
@@ -53,9 +58,10 @@ def export_gltf(to_export: Shape, file_path: PathLike | str | bytes, unit: Unit 
 def export_step(to_export: Shape, file_path: PathLike | str | bytes | BytesIO | BinaryIO, unit: Unit = ..., write_pcurves: bool = True, precision_mode: PrecisionMode = ..., *, timestamp: str | datetime | None = None) -> bool:
     """export_step
 
-    WARNING (build123d-lite): a NO-OP in this environment — XCAF STEP writing
-    is unavailable in this wasm build; the call succeeds but writes nothing.
-    Use the app's Save STEP button instead.
+    NOTE (build123d-lite): written with STEPControl_Writer (no XCAF document,
+    so no names/colors/assembly structure) into the worker's in-memory
+    filesystem rather than to disk; unit= is honoured, write_pcurves /
+    precision_mode / timestamp are accepted and ignored — COMPROMISE(mesher).
 
     Export a build123d Shape or assembly with color and label attributes.
     Note that if the color of a node in an assembly isn't set, it will be
@@ -96,6 +102,45 @@ def export_stl(to_export: Shape, file_path: PathLike | str | bytes, tolerance: f
 
     Returns:
         bool: Success
+
+    Raises:
+        FileNotFoundError: The destination directory does not exist.
+    """
+def export_obj(to_export: Shape, file_path: PathLike | str | bytes | BytesIO | BinaryIO, linear_deflection: float = 0.001, angular_deflection: float = 0.1, include_uvs: bool = True, atlas_packing: bool = True, atlas_gutter: float = 0.0) -> bool:
+    """export_obj
+
+    NOTE (build123d-lite): written into the worker's in-memory filesystem;
+    the UV atlas packs the same per-face islands with a different packer —
+    COMPROMISE(obj-atlas).
+
+    Exports a shape to Wavefront OBJ format.  When *include_uvs* is True
+    (default), per-vertex UV texture coordinates are extracted from
+    OpenCASCADE's surface parameterization and written as ``vt`` records.
+    These UVs enable texture mapping, UV baking, and displacement-map
+    workflows such as `BumpMesh <https://bumpmesh.com/>`_ which can add
+    displacement heightmap tessellations to 3D-printable meshes.
+
+    When *atlas_packing* is True (default), all face UVs are packed into a
+    single texture atlas preserving each face's physical aspect ratio.
+
+    Args:
+        to_export (Shape): object or assembly
+        file_path (Union[PathLike, str, bytes, BytesIO, BinaryIO]): OBJ file
+            path or writable binary stream (for pyodide/WASM environments).
+        linear_deflection (float, optional): Tessellation linear deflection.
+            Defaults to 1e-3.
+        angular_deflection (float, optional): Tessellation angular deflection.
+            Defaults to 0.1.
+        include_uvs (bool, optional): Include UV texture coordinates.
+            Defaults to True.
+        atlas_packing (bool, optional): Pack per-face UVs into a single atlas.
+            Only used when *include_uvs* is True. Defaults to True.
+        atlas_gutter (float, optional): Normalized empty margin around each UV
+            island in a packed atlas. Only used when *atlas_packing* is True.
+            Defaults to 0.0.
+
+    Returns:
+        bool: success
     """
 def export_to_pcbway(to_export: Shape, unit: Unit = ..., write_pcurves: bool = True, precision_mode: PrecisionMode = ...) -> str:
     """Export a shape to PCBWay for quoting.

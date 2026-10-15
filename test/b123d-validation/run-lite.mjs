@@ -43,6 +43,22 @@ export function readAssets(entry) {
   return Object.keys(files).length > 0 ? files : null;
 }
 
+/** The environment for the launched browser. HEADLESS Chromium must NOT see
+ *  a DISPLAY it cannot open: with the desktop's DISPLAY=:0 inherited (this
+ *  user cannot authenticate against it) the GPU process fails to start and
+ *  the page gets NO WebGL context at all - the "headless Chromium has no
+ *  WebGL here" symptom (every script: "no measurement produced") that the
+ *  CS_TEST_HEADFUL=1 DISPLAY=:99 recipe worked around. Without DISPLAY,
+ *  headless SwiftShader WebGL works, so headless is the default again (and
+ *  Xvfb is no longer installed on this machine). Headful keeps the env. */
+export function headlessBrowserEnv(headless) {
+  if (!headless) { return process.env; }
+  const env = { ...process.env };
+  delete env.DISPLAY;
+  delete env.WAYLAND_DISPLAY;
+  return env;
+}
+
 const args = process.argv.slice(2);
 const argVal = (name, dflt) => {
   const i = args.indexOf(name);
@@ -232,6 +248,14 @@ async function workerIdle(page, timeout) {
 }
 
 async function main() {
+  // --report-from <results.json>: rewrite the report from saved results
+  // (e.g. after merging solo re-runs) without running anything
+  const REPORT_FROM = argVal('--report-from', null);
+  if (REPORT_FROM) {
+    writeReport(JSON.parse(readFileSync(REPORT_FROM, 'utf8')), REPORT);
+    console.log(`report  -> ${REPORT}`);
+    return;
+  }
   const manifest = JSON.parse(readFileSync(join(HERE, 'manifest.json'), 'utf8'))
     .filter((e) => !ONLY || e.id.includes(ONLY));
   const reference = JSON.parse(readFileSync(join(HERE, 'reference.json'), 'utf8'));
@@ -241,6 +265,7 @@ async function main() {
   const browser = await chromium.launch({
     headless,
     args: ['--use-gl=angle', '--use-angle=swiftshader'],
+    env: headlessBrowserEnv(headless),
   });
 
   const t0 = Date.now();
@@ -307,19 +332,43 @@ async function main() {
         continue;
       }
 
-      const pyErrors = out.errors.filter((e) => /error/i.test(e) || e.includes('Python'));
-      // A raw wasm kernel abort corrupts the OCCT heap — every following
-      // script on this page would fail with "memory access out of bounds".
-      // Classify this script honestly, then recycle the page.
-      const poisoned = out.errors.some((e) =>
+      const isPoisoned = (o) => o.errors.some((e) =>
         e.includes('memory access out of bounds') ||
         e.includes('table index is out of bounds') ||
         e.includes('(a raw wasm exception)') ||
         e.includes('RuntimeError: unreachable'));
+      // A raw wasm kernel abort corrupts the OCCT heap — every following
+      // script on this page would fail with "memory access out of bounds".
+      // Several OCCT 8.0.1 algorithms scribble over their own heap WITHOUT
+      // failing (COMPROMISE(kernel-heap-reset)), so the script that finally
+      // trips over the damage is usually not the one that caused it: retry
+      // a poisoned, unmeasured script ONCE on a fresh page and classify the
+      // fresh run (recorded as fresh_retry).
+      let freshRetry = false;
+      if (!out.measure && isPoisoned(out)) {
+        await freshPage();
+        freshRetry = true;
+        try {
+          out = await Promise.race([
+            runScript(page, entry.code + MEASURE_FOOTER, assets),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), SCRIPT_TIMEOUT)),
+          ]);
+          await workerIdle(page, 20000);
+        } catch (e) {
+          results[entry.id] = { status: 'TIMEOUT', fresh_retry: true };
+          done++;
+          console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} TIMEOUT (fresh retry) - recycling page ${wid}`);
+          await freshPage();
+          continue;
+        }
+      }
+      const pyErrors = out.errors.filter((e) => /error/i.test(e) || e.includes('Python'));
+      const poisoned = isPoisoned(out);
       done++;
       if (!out.measure) {
         const gap = classifyError(pyErrors.length ? pyErrors : out.errors.concat(['no measurement produced']));
         results[entry.id] = { status: 'ERROR', gap, errors: pyErrors.slice(0, 3) };
+        if (freshRetry) { results[entry.id].fresh_retry = true; }
         console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} ERROR  ${gap.split('\n')[0]}`);
         if (poisoned) { await freshPage(); }
         continue;
@@ -328,9 +377,11 @@ async function main() {
       const problems = compareShapes(ref.shapes, out.measure);
       if (problems.length === 0) {
         results[entry.id] = { status: 'PASS', shapes: Object.keys(ref.shapes).length };
+        if (freshRetry) { results[entry.id].fresh_retry = true; }
         console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} PASS   (${Object.keys(ref.shapes).length} shapes)`);
       } else {
         results[entry.id] = { status: 'MISMATCH', problems: problems.slice(0, 8) };
+        if (freshRetry) { results[entry.id].fresh_retry = true; }
         console.log(`[${done}/${manifest.length}] ${entry.id.padEnd(45)} MISMATCH ${problems[0]}`);
       }
     }

@@ -1,5 +1,7 @@
-// UpstreamB123d.js - run UPSTREAM build123d 0.11.1 Level-A source on the
-// MicroPython runtime, over build123d-lite's geometry/topology classes.
+// UpstreamB123d.js - run UPSTREAM build123d (the vendored release named by
+// ACTIVE_UPSTREAM_VENDOR — 0.13.0) on the MicroPython runtime: Level-A
+// (builders/objects/operations) always, and under the default pytopo=upstream
+// ALSO geometry.py + the whole topology package, verbatim over the OCP shim.
 //
 // Opt-in via `?pyruntime=micropython&pysrc=upstream` (localStorage
 // 'cascade-py-src'). NOTHING here loads in the default modes.
@@ -8,9 +10,9 @@
 //   manifest.json            - registration order
 //   shims/*.py               - stdlib shims (typing, enum, inspect, ...)
 //   build123d/*.py           - the seam adapters (geometry, topology, ...)
-//   upstream/*.py            - VENDORED upstream sources (vendor/build123d-
-//                              0.11.1/, fetched by scripts/fetch-upstream-
-//                              b123d.cjs; absent from a plain checkout)
+//   upstream/*.py            - VENDORED upstream sources (vendor/<ACTIVE_
+//                              UPSTREAM_VENDOR>/, committed; re-vendored by
+//                              scripts/fetch-upstream-b123d.cjs)
 //   ocp_import_map.json      - OCP names build123d imports (per module)
 //
 // The upstream sources are transformed at registration time with mechanical,
@@ -34,25 +36,52 @@
 import { installOcpShim } from './OcpShim.js';
 
 /** The TOPOLOGY layer under pysrc=upstream (Stage 3,
- *  experiments/upstream-topology-spike/STAGE3-STATE.md): 'upstream' boots
- *  the generated OCP-over-embind shim (upstream-py/ocp_shim/) and runs
- *  upstream 0.11.1's geometry.py + the WHOLE topology package VERBATIM,
- *  with ocp_shim/topo_glue.py as the worker glue. DEFAULT since the
- *  Stage-3 flip (harness 215/3/3/1 vs the seam's 205/10/5/2, full gates
- *  green); `?pytopo=lite` (localStorage 'cascade-py-topo') opts back into
- *  the seam-over-lite layer, and a missing ocp_shim payload warns and
- *  falls back to lite rather than failing the boot. */
+ *  experiments/upstream-topology-spike/STAGE3-STATE.md): the generated
+ *  OCP-over-embind shim (upstream-py/ocp_shim/) runs upstream's own
+ *  geometry.py + the WHOLE topology package VERBATIM, with
+ *  ocp_shim/topo_glue.py as the worker glue. The ONLY topology layer since
+ *  the build123d 0.13 bump: `?pytopo=lite` (upstream Level-A over a seam of
+ *  lite's classes) was retired — 0.13's builders read the kernel's own
+ *  operation record (topology/history.py ShapeHistory for Select.LAST/NEW)
+ *  and publish through the BuildScope firewall, which lite's topology does
+ *  not model. The flag still parses; it warns and runs upstream. For
+ *  build123d-lite use `pysrc=lite`. */
 export const PYTOPO_DEFAULT = 'upstream';
 
-/** Upstream Level-A modules, in dependency order. objects_part/objects_curve
- *  are the object layers over the builders; joints/pack/operations_sketch are
- *  stretch (registered when present, failures logged but non-fatal). */
-export const UPSTREAM_LEVEL_A = [
-  'build_enums', 'build_common', 'build_line', 'build_part', 'build_sketch',
-  'objects_part', 'objects_curve',
-];
-export const UPSTREAM_STRETCH = ['objects_sketch', 'operations_generic',
-  'operations_part', 'operations_sketch', 'joints', 'pack'];
+/** Which vendored upstream source tree is ACTIVE. This is the single
+ *  version-bump switch: the build copies vendor/<this>/ into
+ *  dist/upstream-b123d/upstream/, the unbuilt dev path fetches from it, and
+ *  the module lists below are keyed by it. (0.11.1 was retired with the
+ *  0.13.0 bump: its topology imports the OCP 7.x collection names the
+ *  regenerated OCP-8 shim no longer serves, and the validation corpus moved
+ *  to the 0.13.0 native reference — see
+ *  experiments/upstream-on-micropython/BUMP-LEDGER-0.13.md.) */
+export const ACTIVE_UPSTREAM_VENDOR = 'build123d-0.13.0';
+
+/** Upstream modules per vendored version, in dependency order.
+ *  preTopo: Level-A leaf modules the TOPOLOGY layer imports at module level
+ *    (0.13 shape_core imports build_constants + pack_utils), registered right
+ *    after build_enums;
+ *  topo: the topology package, bottom-up (pytopo=upstream only);
+ *  levelA: the object layers over the builders;
+ *  stretch: registered when present, failures logged but non-fatal. */
+const VENDOR_MODULES = {
+  'build123d-0.13.0': {
+    preTopo: ['build_constants', 'pack_utils'],
+    topo: ['kernel', 'history', 'shape_core', 'utils', 'zero_d',
+      'constrained_lines', 'one_d', 'two_d', 'three_d', 'composite'],
+    levelA: ['build_common', 'build_line', 'build_part', 'build_sketch',
+      'objects_part', 'objects_curve'],
+    stretch: ['objects_sketch', 'operations_generic', 'operations_part',
+      'operations_sketch', 'joints', 'pack', 'drafting'],
+  },
+};
+const ACTIVE_MODULES = VENDOR_MODULES[ACTIVE_UPSTREAM_VENDOR];
+export const UPSTREAM_PRE_TOPO = ACTIVE_MODULES.preTopo;
+export const UPSTREAM_TOPOLOGY = ACTIVE_MODULES.topo;
+export const UPSTREAM_LEVEL_A = ['build_enums', ...ACTIVE_MODULES.preTopo,
+  ...ACTIVE_MODULES.levelA];
+export const UPSTREAM_STRETCH = ACTIVE_MODULES.stretch;
 
 // --------------------------------------------------------------------- //
 // Source transforms                                                      //
@@ -188,6 +217,35 @@ export function rewriteMatchStatements(src, name) {
   return lines.join('\n');
 }
 
+/** The collections.abc shim exposes Iterable/Iterator/... as type TUPLES on
+ *  the metaclass-free (stock) interpreter. CPython's isinstance flattens
+ *  NESTED classinfo tuples; STOCK MicroPython does not (it silently returns
+ *  False — the custom micropython-cs build fixes this natively), so there
+ *  `isinstance(x, (list, set, Iterator))` must become
+ *  `isinstance(x, (list, set) + Iterator)`. Single-line, mechanical. */
+const SHIM_TYPE_TUPLES = ['Iterable', 'Iterator', 'Sequence', 'Collection',
+  'Sized', 'Mapping', 'MutableMapping', 'MutableSequence', 'MutableSet'];
+export function rewriteNestedTypeTuples(src) {
+  return src.replace(/isinstance\(([^,()]+(?:\([^()]*\))?[^,()]*), \(([^()]+)\)\)/g,
+    (m, expr, inner) => {
+      const parts = inner.split(',').map((t) => t.trim()).filter(Boolean);
+      const shims = parts.filter((t) => SHIM_TYPE_TUPLES.includes(t));
+      if (!shims.length) { return m; }
+      const plain = parts.filter((t) => !SHIM_TYPE_TUPLES.includes(t));
+      const head = plain.length ? '(' + plain.join(', ') + ',)' : '()';
+      return 'isinstance(' + expr + ', ' + head + ' + '
+        + shims.join(' + ') + ')';
+    });
+}
+
+/** PEP 570 `/` markers in def signatures (MicroPython rejects them; 0.13's
+ *  topology/history.py Protocol stubs and objects_curve's `_localize`
+ *  overload carry them). The positional-only ENFORCEMENT is lost, which
+ *  build123d never relies on. Line-count preserving. */
+export function stripPositionalOnlyMarkers(src) {
+  return src.replace(/^(\s*def [^\n]*?), \/([),])/gm, '$1$2');
+}
+
 export function rewriteListSplats(src) {
   // PEP 448 splats in LIST displays (MicroPython has none): `[a, *b, c]`
   // becomes `([a] + list(b) + [c])`. Bracket-balanced scan over the whole
@@ -278,6 +336,10 @@ export function rewriteDataclassFields(src) {
       if (line.trim() === '') { continue; }
       const ind = line.match(/^\s*/)[0].length;
       if (ind <= classIndent) { break; } // class body ended
+      // fields precede methods in a dataclass body; stop at the first
+      // def/decorator/nested class so METHOD SIGNATURE lines (annotated
+      // keyword params, e.g. 0.13's BuildScope.derive) are never rewritten
+      if (/^\s*(def |@|class )/.test(line)) { break; }
       const m = line.match(/^(\s+)(\w+):\s*[^=]+?\s*=\s*(.+)$/);
       if (!m) { continue; }
       if (first) {
@@ -345,6 +407,11 @@ export function transformUpstreamSource(name, src, opts) {
   }
   out = rewriteMatchStatements(out, name);
   out = rewriteDataclassFields(out);
+  if (!(opts && opts.metaclasses)) {
+    // the custom interpreter flattens nested classinfo tuples natively
+    out = rewriteNestedTypeTuples(out);
+  }
+  out = stripPositionalOnlyMarkers(out);
   out = rewriteListSplats(out);
   out = rewriteListConcatCoercion(out);
   // MicroPython classes have no bound __new__ attribute; the one corpus
@@ -392,6 +459,15 @@ export function transformUpstreamSource(name, src, opts) {
     /isinstance\((\w+), ([A-Za-z_][\w.]*(?:\s*\|\s*[A-Za-z_][\w.]*)+)\)/g,
     (m2, v, union) => 'isinstance(' + v + ', (' +
       union.split('|').map((s) => s.trim()).join(', ') + '))');
+  // MicroPython classes have no __mro__ (0.13 Shape.as_shape walks
+  // type(obj).__mro__ to pick a geometry constructor): a C3 linearization
+  // builtin computes it from __bases__
+  out = out.replace(/\b(type\([\w.]+\)|[\w.]+)\.__mro__/g, '_cs_mro($1)');
+  // MicroPython numbers have no is_integer() (and integral JS doubles cross
+  // the FFI as ints, e.g. the math shim's log2(64)): drafting's
+  // Draft.__post_init__ validates fractional_precision with it
+  out = out.replace(/([\w.]+\([^()\n]*\)|[\w.]+)\.is_integer\(\)/g,
+    '_cs_is_integer($1)');
   // this MicroPython build has no sys.exc_info and sys is read-only; the
   // loader installs a builtins._cs_exc_info that reports "not handling an
   // exception" (build123d only uses it to soften errors during unwinding)
@@ -449,21 +525,18 @@ if _cs_os_shim is not None and not hasattr(_cs_os_shim, 'fspath'):
  *  @param fetchText async (relativePath) => string  — reads dist/upstream-b123d files
  */
 export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
-  let pytopo = pytopoOpt || self._csPyTopo || PYTOPO_DEFAULT;
-  if (pytopo === 'upstream') {
-    // the upstream-topology payload (generated OCP shim + glue) rides in
-    // dist/upstream-b123d/ocp_shim/; when a checkout lacks it, warn and
-    // fall back to the seam-over-lite layer rather than failing the boot
-    try {
-      await fetchText('ocp_shim/MANIFEST.json');
-    } catch (probeErr) {
-      console.warn('[pytopo] upstream-topology payload unavailable — '
-        + 'falling back to pytopo=lite ('
-        + String((probeErr && probeErr.message) || probeErr).split('\n')[0]
-        + ')');
-      pytopo = 'lite';
-    }
+  const requested = pytopoOpt || self._csPyTopo || PYTOPO_DEFAULT;
+  if (requested === 'lite') {
+    console.warn('[pytopo] pytopo=lite was retired with the build123d 0.13 '
+      + 'bump (0.13\'s builders need upstream\'s own topology: ShapeHistory '
+      + 'records, BuildScope publication) — running pytopo=upstream. For '
+      + 'build123d-lite use pysrc=lite.');
   }
+  const pytopo = 'upstream';
+  // the upstream-topology payload (generated OCP shim + glue) rides in
+  // dist/upstream-b123d/ocp_shim/ and is REQUIRED (the runtime probes it
+  // before calling here and falls back to pysrc=lite when it is absent)
+  await fetchText('ocp_shim/MANIFEST.json');
   self._csPyTopoEffective = pytopo;
   const manifest = JSON.parse(await fetchText('manifest.json'));
 
@@ -488,6 +561,15 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     hasMetaclasses = false;
   }
   self._csMpHasMetaclasses = hasMetaclasses;
+  if (!hasMetaclasses) {
+    // upstream geometry (AxisMeta/PlaneMeta) and 0.12+'s BaseObjectMeta
+    // construction firewall are metaclasses; the runtime pre-probes this
+    // and keeps metaclass-free interpreters on pysrc=lite
+    throw new Error('pysrc=upstream (build123d '
+      + ACTIVE_UPSTREAM_VENDOR.replace(/^build123d-/, '') + ') needs an '
+      + 'interpreter with custom metaclasses (the vendored micropython-cs '
+      + 'artifacts); the stock fallback pair can only run pysrc=lite');
+  }
   const transformOpts = { metaclasses: hasMetaclasses,
     upstreamGeometry: pytopo === 'upstream' };
 
@@ -507,6 +589,33 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
   runPy(LOGGING_PATCH_PY);
   runPy('import builtins as _cs_bi\n'
     + '_cs_bi._cs_exc_info = lambda: (None, None, None)\n'
+    // cls.__mro__ stand-in: C3 linearization over __bases__ (CPython's own
+    // algorithm, so the order matches type.__mro__ exactly)
+    + 'def _cs_mro(cls):\n'
+    + "    m = getattr(cls, '__mro__', None)\n"
+    + '    if m is not None:\n'
+    + '        return m\n'
+    + "    bases = list(getattr(cls, '__bases__', ()) or ())\n"
+    + '    seqs = [list(_cs_mro(b)) for b in bases] + [bases]\n'
+    + '    res = [cls]\n'
+    + '    while True:\n'
+    + '        seqs = [q for q in seqs if q]\n'
+    + '        if not seqs:\n'
+    + '            break\n'
+    + '        for q in seqs:\n'
+    + '            head = q[0]\n'
+    + '            if not any(head in t[1:] for t in seqs):\n'
+    + '                break\n'
+    + '        else:\n'
+    + "            raise TypeError('cannot linearize ' + cls.__name__)\n"
+    + '        res.append(head)\n'
+    + '        seqs = [t[1:] if t[0] is head else t for t in seqs]\n'
+    + '    if object not in res:\n'
+    + '        res.append(object)\n'
+    + '    return tuple(res)\n'
+    + '_cs_bi._cs_mro = _cs_mro\n'
+    // x.is_integer() stand-in (see transformUpstreamSource)
+    + '_cs_bi._cs_is_integer = lambda x: isinstance(x, int) or float(x) == int(x)\n'
     // the match-statement rewrite's sequence-pattern helper (tuple-of-names
     // capture patterns in geometry.py's Color)
     + '_cs_bi._cs_match_seq = lambda v, n: isinstance(v, (tuple, list)) and len(v) == n');
@@ -577,6 +686,7 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
   if (pytopo === 'upstream') {
     const shimManifest = JSON.parse(await fetchText('ocp_shim/MANIFEST.json'));
     installOcpShim(self, JSON.parse(await fetchText('ocp_shim/table.json')));
+    registerAlias('ocp_glue', await fetchText('ocp_shim/ocp_glue.py'));
     registerAlias('ocp_core', await fetchText('ocp_shim/ocp_core.py'));
     registerAlias('ocp_registry', await fetchText('ocp_shim/_registry.py'));
     for (const mod of shimManifest.modules) {
@@ -608,21 +718,16 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       "_cs_enum._finalize_enums(_cs_sys.modules['build123d.build_enums'])",
     ].join('\n'));
   }
+  // 5b. the Level-A leaves the topology layer imports at module level
+  //     (0.13: shape_core -> build_constants, pack_utils)
+  for (const name of UPSTREAM_PRE_TOPO) {
+    await regUpstream(name);
+  }
 
-  // 6. the geometry/topology bottom layer.
-  //    pytopo=lite (the default): the SEAM adapter modules re-export lite's
-  //    classes. pytopo=upstream (Stage 3): upstream geometry.py + the WHOLE
+  // 6. the geometry/topology bottom layer: upstream geometry.py + the WHOLE
   //    topology package run VERBATIM over the OCP shim, and lite reduces to
   //    the JS op layer + the worker glue (ocp_shim/topo_glue.py).
-  if (pytopo !== 'upstream') {
-    br._cs_register_module('build123d.geometry', await fetchText('build123d/geometry.py'), false);
-    br._cs_register_module('build123d.topology', await fetchText('build123d/topology/__init__.py'), true);
-    const seamSubs = ['shape_core', 'composite', 'three_d', 'two_d', 'one_d', 'zero_d'];
-    for (const sub of seamSubs) {
-      br._cs_register_module('build123d.topology.' + sub,
-        await fetchText('build123d/topology/' + sub + '.py'), false);
-    }
-  } else {
+  {
     registerAlias('anytree', await fetchText('ocp_shim/anytree.py'));
     br._cs_register_module('IPython', 'pass\n', true);
     br._cs_register_module('IPython.lib', 'pass\n', true);
@@ -665,7 +770,24 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       '                if d[name] is prop:',
       '                    return getattr(obj, name)',
       "        stack.extend(getattr(k, '__bases__', ()))",
+      // not on obj's own chain (e.g. `parts.sort_by(Solid.volume)` over Box
+      // PARTS — a Part is a Compound, not a Solid): CPython would run the
+      // foreign property's getter on obj, which MicroPython cannot express.
+      // Find the property's NAME on its owner class and read obj's own
+      // same-named property instead (build123d's measurement properties —
+      // volume/area/length/radius — are uniform across the Shape classes).
+      "    for _m in list(_cs_sys_mods.values()):",
+      "        if not getattr(_m, '__name__', '').startswith('build123d'):",
+      '            continue',
+      '        for _cls in list(_m.__dict__.values()):',
+      "            d = getattr(_cls, '__dict__', None) if isinstance(_cls, type) else None",
+      '            if d:',
+      '                for name in d:',
+      '                    if d[name] is prop and hasattr(type(obj), name):',
+      '                        return getattr(obj, name)',
       "    raise AttributeError('property not found on ' + type(obj).__name__)",
+      'import sys as _cs_sys_for_prop',
+      '_cs_sys_mods = _cs_sys_for_prop.modules',
       '_cs_bi2._cs_prop_get = _cs_prop_get',
       // MicroPython has no builtin format() (geometry hex-color paths;
       // Vector.__str__ calls format(self, '.6g') — dispatch to __format__)
@@ -758,9 +880,7 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
     // the real upstream __init__.py replaces it and the package is reloaded
     // (its relative imports resolve against the already-imported submodules).
     br._cs_register_module('build123d.topology', 'pass\n', true);
-    const TOPO_ORDER = ['shape_core', 'utils', 'zero_d', 'constrained_lines',
-      'one_d', 'two_d', 'three_d', 'composite'];
-    for (const sub of TOPO_ORDER) {
+    for (const sub of UPSTREAM_TOPOLOGY) {
       br._cs_register_module('build123d.topology.' + sub,
         topoTransform(sub, await fetchText('upstream/topology/' + sub + '.py')), false);
     }
@@ -785,7 +905,7 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
 
   // 7. the upstream Level-A modules
   for (const name of UPSTREAM_LEVEL_A) {
-    if (name === 'build_enums') { continue; }
+    if (name === 'build_enums' || UPSTREAM_PRE_TOPO.includes(name)) { continue; }
     await regUpstream(name);
   }
   const stretchLoaded = [];
@@ -803,6 +923,11 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
   //    the topology layer via build123d._cs_pytopo)
   mp.globals.set('_CS_PYTOPO', pytopo);
   runPy("import sys as _cs_sys\nsetattr(_cs_sys.modules['build123d'], '_cs_pytopo', _CS_PYTOPO)");
+  // build123d.__version__ (upstream reads it from setuptools-scm metadata,
+  // which a vendored tree does not carry): the active vendor's version
+  mp.globals.set('_CS_B123D_VERSION',
+    ACTIVE_UPSTREAM_VENDOR.replace(/^build123d-/, ''));
+  runPy("import sys as _cs_sys\nsetattr(_cs_sys.modules['build123d'], '__version__', _CS_B123D_VERSION)");
   br._cs_register_module('build123d._finalize', await fetchText('build123d/_finalize.py'), false);
 
   console.log('[pysrc=upstream] upstream build123d Level-A registered'
