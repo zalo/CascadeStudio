@@ -31,10 +31,15 @@ Not part of the default playwright suite — run it manually when extending
    statement-wise (a multi-line `write_svg(...)` goes as a whole); SVG/DXF
    export machinery is left in place, since lite ships a no-op `ExportSVG` and
    the reference run gets a scratch `assets/` directory. Output:
-   `manifest-all.json` (382 candidates, code inlined).
+   `.. code:: python` / bare `.. code::` blocks get their own `cNN` ids (plus
+   a cumulative `call`) and `.. doctest::` blocks `dNN`, so the `bNN`
+   numbering stays comparable across versions; the README example
+   (`docs/assets/readme/readme.py`) is collected as `docs-readme/readme`.
+   Output: `manifest-all.json` (425 candidates at v0.13.0, code inlined).
 2. **`reference.py`** runs each candidate under the reference venv
-   (`B123D_REF_PY`, default `~/Desktop/ocjs-deps/b123d-ref-venv/bin/python`,
-   build123d 0.11.1) in a guarded subprocess (60s timeout, scratch cwd with
+   (`B123D_REF_PY`, default `~/Desktop/ocjs-deps/b123d-013-venv/bin/python`,
+   build123d 0.13.0 on OCP 8.0.1) in a guarded subprocess (60s timeout,
+   pinned fonts — see below, scratch cwd with
    `__file__` set and the script's non-`.py` siblings symlinked in) and
    records, for every module-level shape result — `Shape` instances,
    `Builder._obj` results and lists of Shapes, keyed by VARIABLE NAME —
@@ -46,7 +51,21 @@ Not part of the default playwright suite — run it manually when extending
    `reference.json`: real scripts are always kept (a native failure becomes a
    SKIP), while `.rst` fragments that produced no geometry natively — `...`
    placeholders, prose pseudo-code, snippets that only print — are dropped,
-   because they were never runnable code. 382 candidates → **232 scripts**.
+   because they were never runnable code. 425 candidates → **247 scripts**.
+
+   **Fonts are part of the reference environment.** Native `Text()` resolves
+   "Arial" through OCCT's `Font_FontMgr`, i.e. through the host's fonts (on
+   this machine an icon font won and every `Text()` came back empty).
+   reference.py registers a pinned set first — `B123D_REF_FONTS`, default
+   `~/Desktop/ocjs-deps/fonts-ref` = Ubuntu's `fonts-freefont-ttf`
+   20211204+svn4273-2, whose FreeSans files are byte-identical to the ones
+   lite bundles (recreate it from the .deb: see `FONTS_DIR` in reference.py).
+   With it, 0.11.1 reproduces the committed 0.11.1 reference exactly.
+
+   **Builder variables** are measured by the PLACED `.part` / `.line` and the
+   LOCAL `.sketch_local` — 0.11.1's meaning of `_obj`, held fixed. Since
+   0.12's unified BuildScope `_obj` is the local construction product; where
+   it differs the reference also records `local_bbox` (informational).
 3. **`run-lite.mjs`** (playwright) serves the built app, switches to Python
    mode and runs every script with a measurement footer appended. A script that
    imports a CAD file from its own directory (manifest `assets`, recorded by
@@ -76,16 +95,18 @@ Not part of the default playwright suite — run it manually when extending
 # everything (collect -> reference -> build + lite run):
 test/b123d-validation/run.sh
 
-# on this machine (headless chromium cannot create a WebGL context):
-CS_TEST_HEADFUL=1 DISPLAY=:99 test/b123d-validation/run.sh
+# headless works: run-lite.mjs/probe.mjs strip DISPLAY for headless Chromium
+# (the inherited, unauthorized DISPLAY=:0 is what used to kill its WebGL);
+# CS_TEST_HEADFUL=1 DISPLAY=<xvfb> still works where an X server exists
+# (Xvfb is no longer installed on this machine)
 
 # individual stages:
 test/b123d-validation/run.sh collect
 test/b123d-validation/run.sh reference
-CS_TEST_HEADFUL=1 DISPLAY=:99 test/b123d-validation/run.sh lite
+test/b123d-validation/run.sh lite
 
 # single script while debugging:
-CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/run-lite.mjs \
+node test/b123d-validation/run-lite.mjs \
   --only general_examples_algebra/ex07
 ```
 
@@ -168,6 +189,29 @@ default suite), including a section loop asserted against hand-computed values.
 ## Current coverage
 
 <!-- COVERAGE:BEGIN (updated by hand from report.md) -->
+**Against the build123d 0.13.0 reference** (OCP 8.0.1; regenerated 2026-10-15
+— 425 candidates → **247 scripts**, 239 scored, 8 native SKIPs), the
+UNMODIFIED code base (`feat/headless-core` @ 74eb7a6) — the "before" numbers
+of the 0.13 port (`baseline-013-*.json`; full analysis, incl. what changed
+NATIVELY between 0.11.1 and 0.13.0, in
+[`native-0.11.1-vs-0.13.0.md`](native-0.11.1-vs-0.13.0.md)):
+
+| leg | PASS | MISMATCH | ERROR | TIMEOUT | SKIP |
+|---|---|---|---|---|---|
+| Brython + lite (default) | 191 | 13 | 34 | 1 | 8 |
+| MicroPython + pysrc=upstream (vendored 0.11.1) | 198 | 7 | 33 | 1 | 8 |
+| Pyodide + pysrc=real (real 0.11.1 wheel) | 201 | 7 | 30 | 1 | 8 |
+
+The #1 ERROR on both is `NameError: insert` (~20 scripts: 0.12 renamed the
+builder op `add()` → `insert()` and the docs moved with it). Native
+OCP 7.9.3 → 8.0.1 changed nothing measurable; the real native changes are
+0.12 semantics (Locations positions builders, BuildLine-local variables,
+`sweep(path=<BuildLine>)`, `project()` pending planes). `docs-rst/tips/b04`
+is natively nondeterministic. The previous corpus and reference are kept as
+`manifest-0.11.1[-all].json` / `reference-0.11.1[-all].json`; the
+same-code cross-version native runs are in `native-runs/`.
+
+**Previously, against the build123d 0.11.1 reference:**
 382 candidates → **232 scripts** in the scored corpus, 222 scored (10 excluded —
 real build123d fails on them natively). On the OCCT 8.0.1 wasm build:
 
@@ -252,10 +296,12 @@ its 3MF write).
 
 </details>
 
-Full harness pass: ~150 s (4 pages, 232 scripts) / ~5 min single-page; a full
-`reference.py` sweep of the 382 candidates is ~90 s with `--jobs 12`. ALWAYS run
-the lite stage with CS_TEST_HEADFUL=1 DISPLAY=:99 (headless Chromium has no
-WebGL here — it manifests as every script reporting "no measurement produced").
+Full harness pass: ~150 s (4 pages, 232 scripts) / ~5 min single-page (4.5-7 min
+at 2 pages on a contended machine); a full `reference.py` sweep of the 425
+candidates is a few minutes with `--jobs 4`. Headless runs need no X server
+any more (run-lite.mjs drops DISPLAY for headless Chromium) — the old
+"every script reports no measurement produced" symptom was the inherited
+DISPLAY=:0, not headless itself.
 <!-- COVERAGE:END -->
 
 ## Notes / caveats
@@ -271,7 +317,7 @@ WebGL here — it manifests as every script reporting "no measurement produced")
   grep-able `COMPROMISE(<topic>)` comment (see CLAUDE.md's "Known
   compromises" list for the index).
 - Debug a single script with
-  `CS_TEST_HEADFUL=1 DISPLAY=:99 node test/b123d-validation/probe.mjs
+  `node test/b123d-validation/probe.mjs
   [--id <manifest id> | /path/to/snippet.py]` — prints the raw measurement
   JSON, worker errors and the last console lines.
 - After a raw wasm kernel abort ("memory access out of bounds") the OCCT
