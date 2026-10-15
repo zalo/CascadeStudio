@@ -345,18 +345,18 @@ class CascadeStudioWorker {
     // simply absent from self.loadedFonts.
     const assets = this.options.assets;
     if (assets && (assets.fonts || assets.loadAsset)) {
+      // The BYTES are resolved here (an asset may be a URL or an async thunk,
+      // and I/O belongs at boot), but each face is PARSED on first use — see
+      // _defineLazyFont. Eagerly parsing the four FreeSans faces cost ~115 ms
+      // of boot CPU and ~100 MB of live JS heap in Node (~50 MB / ~150 ms in
+      // workerd), for a feature most scripts never touch.
       for (const name of CascadeStudioWorker.FONT_NAMES) {
         let buf = null;
         try {
           buf = await assetToArrayBuffer(assets, 'fonts', name, 'fonts/' + name + '.ttf');
         } catch (e) { buf = null; }
         if (!buf) { continue; }
-        try {
-          self.loadedFonts[name] = opentype.parse(buf);
-          self.fontKernPairs[name] = CascadeStudioWorker._parseKernTable(buf);
-        } catch (e) {
-          console.log('Failed to parse font ' + name + ': ' + (e && e.message));
-        }
+        CascadeStudioWorker._defineLazyFont(name, buf, opentype);
       }
       return;
     }
@@ -377,6 +377,37 @@ class CascadeStudioWorker {
         }).catch(() => resolve());
       }, { isUrl: true });
     })));
+  }
+
+  /** Headless fonts: `self.loadedFonts[name]` / `self.fontKernPairs[name]`
+   *  become getters that parse the TTF the first time either is read, then
+   *  cache the result for the life of the realm. Readers are unchanged
+   *  (`_opentypeTextFace`, `Text2D`, `_kernValue`); a face whose parse fails
+   *  reads as `undefined`, exactly like a face that was never supplied.
+   *  (The "which faces exist" error path in StandardLibrary enumerates the
+   *  property descriptors, so it does not force a parse of every face.) */
+  static _defineLazyFont(name, buf, opentype) {
+    let parsed;   // undefined: not yet; null: the parse failed
+    const parse = () => {
+      if (parsed === undefined) {
+        try {
+          parsed = { font: opentype.parse(buf),
+            kern: CascadeStudioWorker._parseKernTable(buf) };
+        } catch (e) {
+          console.log('Failed to parse font ' + name + ': ' + (e && e.message));
+          parsed = null;
+        }
+      }
+      return parsed;
+    };
+    Object.defineProperty(self.loadedFonts, name, {
+      enumerable: true, configurable: true,
+      get() { const p = parse(); return p ? p.font : undefined; },
+    });
+    Object.defineProperty(self.fontKernPairs, name, {
+      enumerable: true, configurable: true,
+      get() { const p = parse(); return p ? p.kern : undefined; },
+    });
   }
 
   /** Parse every format-0 'kern' subtable of a TTF into a Map keyed by
