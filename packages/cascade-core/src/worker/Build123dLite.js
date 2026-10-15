@@ -2556,6 +2556,37 @@ class Shape:
         ss = self.solids()
         return ss[0] if len(ss) > 0 else None
 
+    # --- tessellation (build123d 0.12 tessellate_with_uvs) ---
+    def _tessellation(self, tolerance, angular_tolerance, atlas_packing,
+                      atlas_gutter):
+        if self.topo is None:
+            raise ValueError('Cannot tessellate an empty shape')
+        m = w.TessellateWithUVs(self.topo, tolerance, angular_tolerance,
+                                bool(atlas_packing), float(atlas_gutter))
+        v = list(m.vertices)
+        n = list(m.normals)
+        uv = list(m.uvs)
+        t = list(m.triangles)
+        verts = [Vector(v[i], v[i + 1], v[i + 2]) for i in range(0, len(v), 3)]
+        norms = [Vector(n[i], n[i + 1], n[i + 2]) for i in range(0, len(n), 3)]
+        uvs = [(uv[i], uv[i + 1]) for i in range(0, len(uv), 2)]
+        tris = [(int(t[i]), int(t[i + 1]), int(t[i + 2]))
+                for i in range(0, len(t), 3)]
+        return verts, tris, norms, uvs
+
+    def tessellate(self, tolerance, angular_tolerance=0.1):
+        verts, tris, _n, _uv = self._tessellation(tolerance,
+                                                  angular_tolerance, False,
+                                                  0.0)
+        return verts, tris
+
+    def tessellate_with_uvs(self, tolerance, angular_tolerance=0.1,
+                            atlas_packing=True, atlas_gutter=0.0):
+        """(vertices, triangles, normals, uvs): the tessellation with
+        per-face [0, 1] UVs, optionally packed into one atlas (0.12)."""
+        return self._tessellation(tolerance, angular_tolerance,
+                                  atlas_packing, atlas_gutter)
+
     # --- materials and mass (build123d 0.12) ---
     @property
     def material(self):
@@ -11021,6 +11052,19 @@ def export_stl(to_export, file_path, tolerance=1e-3, angular_tolerance=0.1,
     workers have no filesystem access); ascii_format is always True."""
     text = w.ExportSTL(_topo(to_export), str(file_path).replace('/', '_'),
                        tolerance, angular_tolerance)
+    return text is not None
+
+
+def export_obj(to_export, file_path, linear_deflection=0.001,
+               angular_deflection=0.1, include_uvs=True, atlas_packing=True,
+               atlas_gutter=0.0):
+    """Export the shape's tessellation as a Wavefront OBJ with UVs and
+    normals (build123d 0.12 export_obj). COMPROMISE(mesher): written into
+    the worker's MEMFS like export_stl."""
+    text = w.ExportOBJ(_topo(to_export), str(file_path).replace('/', '_'),
+                       linear_deflection, angular_deflection,
+                       bool(include_uvs), bool(atlas_packing),
+                       float(atlas_gutter))
     return text is not None
 
 

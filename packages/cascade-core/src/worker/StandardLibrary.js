@@ -3634,6 +3634,125 @@ function ExportSTL(shape, filename, linearDeflection, angularDeflection, asciiFo
   return text;
 }
 
+/** build123d 0.12 Shape.tessellate_with_uvs (and tessellate): mesh the
+ *  shape, then per face transform the nodes/normals by the face location,
+ *  flip normals and triangle winding on REVERSED faces, and normalize the
+ *  face's UV nodes to [0, 1] (U flipped on reversed faces). With atlas
+ *  packing the UV islands - sized by the arc lengths of the mid iso curves -
+ *  are packed into one [0, 1] atlas and inset by the gutter.
+ *  COMPROMISE(obj-atlas): islands are packed with CascadeStudio's potpack
+ *  rather than upstream's _pack2d shelf packer (same islands, other
+ *  positions). Returns {vertices, triangles, normals, uvs} as flat arrays. */
+function TessellateWithUVs(shape, tolerance, angularTolerance, atlasPacking, gutter) {
+  const oc = self.oc;
+  new oc.BRepMesh_IncrementalMesh_2(shape, tolerance, false, angularTolerance, false);
+  const vertices = [], normals = [], uvs = [], triangles = [];
+  const islands = [];
+  let offset = 0;
+  ForEachFace(shape, (fi, face) => {
+    const loc = new oc.TopLoc_Location_1();
+    const handle = oc.BRep_Tool.Triangulation(face, loc, 0);
+    if (handle.IsNull()) { return; }
+    const T = handle.get();
+    const trsf = loc.Transformation();
+    const reversed = face.Orientation_1() === oc.TopAbs_Orientation.TopAbs_REVERSED;
+    const n = T.NbNodes();
+    for (let i = 1; i <= n; i++) {
+      const p = T.Node(i).Transformed(trsf);
+      vertices.push(p.X(), p.Y(), p.Z());
+    }
+    if (!T.HasNormals()) { T.ComputeNormals(); }
+    for (let i = 1; i <= n; i++) {
+      const d = T.Normal_1(i).Transformed(trsf);
+      const k = reversed ? -1 : 1;
+      normals.push(k * d.X(), k * d.Y(), k * d.Z());
+    }
+    const start = uvs.length / 2;
+    let box = { w: 1, h: 1 };
+    if (T.HasUVNodes()) {
+      let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+      const raw = [];
+      for (let i = 1; i <= n; i++) {
+        const q = T.UVNode(i);
+        raw.push(q.X(), q.Y());
+        u0 = Math.min(u0, q.X()); u1 = Math.max(u1, q.X());
+        v0 = Math.min(v0, q.Y()); v1 = Math.max(v1, q.Y());
+      }
+      const du = (u1 - u0) > 1e-6 ? (u1 - u0) : 1, dv = (v1 - v0) > 1e-6 ? (v1 - v0) : 1;
+      for (let i = 0; i < n; i++) {
+        let x = (raw[2 * i] - u0) / du, y = (raw[2 * i + 1] - v0) / dv;
+        if (reversed) { x = 1 - x; }
+        uvs.push(x, y);
+      }
+      try {
+        const surface = oc.BRep_Tool.Surface_2(face).get();
+        const uIso = new oc.GeomAdaptor_Curve_2(surface.VIso(v0 + (v1 - v0) * 0.5));
+        const vIso = new oc.GeomAdaptor_Curve_2(surface.UIso(u0 + (u1 - u0) * 0.5));
+        const w = self.LengthOfCurve(uIso, u0, u1), h = self.LengthOfCurve(vIso, v0, v1);
+        box = { w: w > 1e-6 ? w : du, h: h > 1e-6 ? h : dv };
+      } catch (e) { box = { w: du, h: dv }; }
+    } else {
+      for (let i = 0; i < n; i++) { uvs.push(0, 0); }
+    }
+    islands.push({ w: box.w, h: box.h, start: start, count: n });
+    const nt = T.NbTriangles();
+    for (let t = 1; t <= nt; t++) {
+      const tri = T.Triangle(t);
+      let a = tri.Value(1), b = tri.Value(2), c = tri.Value(3);
+      if (reversed) { const tmp = a; a = b; b = tmp; }
+      triangles.push(offset + a - 1, offset + b - 1, offset + c - 1);
+    }
+    offset += n;
+  });
+  if (atlasPacking && islands.length) {
+    const boxes = islands.map((isl, i) => ({ w: isl.w, h: isl.h, i: i }));
+    const stats = self.potpack(boxes);
+    const scale = Math.max(stats.w, stats.h) || 1;
+    for (const b of boxes) {
+      const isl = islands[b.i];
+      const bw = b.w / scale, bh = b.h / scale;
+      const inset = Math.min(gutter || 0, bw / 2, bh / 2);
+      const ox = b.x / scale + inset, oy = b.y / scale + inset;
+      const sx = bw - 2 * inset, sy = bh - 2 * inset;
+      for (let k = isl.start; k < isl.start + isl.count; k++) {
+        uvs[2 * k] = ox + uvs[2 * k] * sx;
+        uvs[2 * k + 1] = oy + uvs[2 * k + 1] * sy;
+      }
+    }
+  }
+  return { vertices: vertices, triangles: triangles, normals: normals, uvs: uvs };
+}
+
+/** build123d 0.12 export_obj: a Wavefront OBJ (v / vt / vn / f a/a/a) of
+ *  the tessellation, written into the worker's MEMFS. */
+function ExportOBJ(shape, filename, linearDeflection, angularDeflection, includeUVs, atlasPacking, gutter) {
+  if (!shape || shape.IsNull()) { console.error("ExportOBJ: input shape is null!"); return null; }
+  const mesh = TessellateWithUVs(shape, linearDeflection || 1e-3, angularDeflection || 0.1,
+    includeUVs && atlasPacking, gutter || 0);
+  const g = (x) => Number(x.toPrecision(9)).toString();
+  const lines = ["# Wavefront OBJ exported by build123d"];
+  for (let i = 0; i < mesh.vertices.length; i += 3) {
+    lines.push("v " + g(mesh.vertices[i]) + " " + g(mesh.vertices[i + 1]) + " " + g(mesh.vertices[i + 2]));
+  }
+  if (includeUVs) {
+    for (let i = 0; i < mesh.uvs.length; i += 2) { lines.push("vt " + g(mesh.uvs[i]) + " " + g(mesh.uvs[i + 1])); }
+    for (let i = 0; i < mesh.normals.length; i += 3) {
+      lines.push("vn " + g(mesh.normals[i]) + " " + g(mesh.normals[i + 1]) + " " + g(mesh.normals[i + 2]));
+    }
+    for (let i = 0; i < mesh.triangles.length; i += 3) {
+      const a = mesh.triangles[i] + 1, b = mesh.triangles[i + 1] + 1, c = mesh.triangles[i + 2] + 1;
+      lines.push("f " + a + "/" + a + "/" + a + " " + b + "/" + b + "/" + b + " " + c + "/" + c + "/" + c);
+    }
+  } else {
+    for (let i = 0; i < mesh.triangles.length; i += 3) {
+      lines.push("f " + (mesh.triangles[i] + 1) + " " + (mesh.triangles[i + 1] + 1) + " " + (mesh.triangles[i + 2] + 1));
+    }
+  }
+  const text = lines.join("\n") + "\n";
+  self.oc.FS.writeFile("/" + filename, text);
+  return text;
+}
+
 /** Write the shape as a BREP file into the worker's Emscripten MEMFS and
  *  return the file's text content (BRepTools::Write) — the engine behind
  *  build123d-lite's export_brep. */
@@ -4897,6 +5016,8 @@ class CascadeStudioStandardLibrary {
     self.SurfaceFromPoints = SurfaceFromPoints;
     self.PipeShellSweep = PipeShellSweep;
     self.ExportSTL = ExportSTL;
+    self.TessellateWithUVs = TessellateWithUVs;
+    self.ExportOBJ = ExportOBJ;
     self.ExportBREP = ExportBREP;
     self.ExportSTEP = ExportSTEP;
     self.ImportBREP = ImportBREP;
