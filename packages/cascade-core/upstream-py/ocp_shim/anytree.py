@@ -84,6 +84,39 @@ class NodeMixin:
         return d
 
     @property
+    def path(self):
+        """Root-to-self tuple (anytree semantics; 0.13 Shape.global_location
+        composes the locations along it)."""
+        nodes = [self]
+        p = getattr(self, '_NodeMixin__parent', None)
+        while p is not None:
+            nodes.append(p)
+            p = getattr(p, '_NodeMixin__parent', None)
+        nodes.reverse()
+        return tuple(nodes)
+
+    @property
+    def ancestors(self):
+        return self.path[:-1]
+
+    @property
+    def root(self):
+        return self.path[0]
+
+    @property
+    def siblings(self):
+        p = getattr(self, '_NodeMixin__parent', None)
+        if p is None:
+            return ()
+        return tuple(c for c in getattr(p, '_NodeMixin__children', ())
+                     if c is not self)
+
+    @property
+    def leaves(self):
+        return tuple(n for n in PreOrderIter(self)
+                     if not getattr(n, '_NodeMixin__children', ()))
+
+    @property
     def descendants(self):
         out = []
 

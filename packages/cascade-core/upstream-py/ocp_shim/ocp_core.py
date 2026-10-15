@@ -76,7 +76,12 @@ def _fail(msg, cls=None):
             raise Standard_ConstructionError(msg)
         except ImportError:
             pass
-    if 'TopoDS::' in msg:
+    if cls == 'TopoDS_Cast' or 'TopoDS::' in msg:
+        # TopoDS::Vertex/Edge/.../Solid raise ONLY Standard_TypeMismatch, so
+        # classify by SITE too: after OCCT has scribbled on its own heap
+        # (COMPROMISE(kernel-heap-reset): fillet/ThruSections faults) the
+        # failure message can be undecodable, and upstream excepts EXACTLY
+        # this type (extrude_linear_with_rotation's compound fallback)
         # a failed TopoDS_Cast downcast raises Standard_TypeMismatch with
         # the cast's name as message (upstream excepts EXACTLY that type:
         # extrude_linear_with_rotation's compound-unwrap fallback)
@@ -309,13 +314,13 @@ class _Static:
             if not deep:
                 r = _OCP_STATIC_V(self._cls, self._name, *conv)
                 if r is _ERRMARK:
-                    _fail(str(_rawjs._csLastErr))
+                    _fail(str(_rawjs._csLastErr), self._cls)
                 return wrap(r)
         try:
             r = w._csOcpStatic(self._cls, self._name,
                                [_unwrap(a) for a in args], _unwrap_kw(kwargs))
         except _CsWorkerError as e:
-            _fail(str(e))
+            _fail(str(e), self._cls)
         return wrap(r)
 
 
@@ -371,3 +376,41 @@ def pending_fork_binding(what):
     def _raise(*a, **k):
         raise NotImplementedError('PENDING_FORK_BINDING: ' + what)
     return _raise
+
+
+# ---- build123d 0.13 / OCP 8 glue classes ------------------------------ #
+# The shape Map/DataMap glue is runtime-neutral (hash + IsSame only) and
+# shared with ocp_core_pyodide.py: see ocp_glue.py.
+from ocp_glue import CsShapeMap, CsShapeDataMap, CsSLProps  # noqa: E402,F401
+
+
+def cs_brep_adaptor_curve2d(edge, face):
+    """BRepAdaptor_Curve2d(E, F) — unbound in the fork. OCCT's
+    BRepAdaptor_Curve2d::Initialize IS `Load(BRep_Tool::CurveOnSurface(E, F,
+    first, last), first, last)` on its Geom2dAdaptor_Curve base, which is
+    exactly what the JS glue builds (bound Geom2dAdaptor_Curve over the
+    OCJS_Out pcurve helper) — so every Geom2dAdaptor_Curve query
+    (FirstParameter/LastParameter/Value/D0/D1/...) is EXACT. Construction-only
+    stand-in: build123d never isinstance-checks it."""
+    try:
+        r = w._csBRepAdaptorCurve2d(_unwrap(edge), _unwrap(face))
+    except _CsWorkerError as e:
+        _fail(str(e))
+    return wrap(r)
+
+
+def cs_brep_lprop_slprops(surface, u, v, order=2, resolution=1e-7):
+    """BRepLProp_SLProps glue — see ocp_glue.CsSLProps / OcpShim.js
+    _csSLProps (LProp_SLProps' computation on the bound Adaptor3d_Surface
+    D2)."""
+    try:
+        rec = w._csSLProps(_unwrap(surface), float(u), float(v),
+                              float(resolution))
+    except _CsWorkerError as e:
+        _fail(str(e))
+    rec = wrap(rec)
+
+    def _make_dir(x, y, z):
+        from OCP.gp import gp_Dir
+        return gp_Dir(x, y, z)
+    return CsSLProps(rec, _make_dir)

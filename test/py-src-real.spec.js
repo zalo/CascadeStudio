@@ -1,6 +1,6 @@
 // @ts-check
 // The final crossover leg: `?pyruntime=pyodide&pysrc=real` runs REAL,
-// UNMODIFIED build123d 0.11.1 (the actual PyPI wheel — real CPython
+// UNMODIFIED build123d 0.13.0 (the actual PyPI wheel — real CPython
 // semantics, real numpy, native metaclasses/typing, zero source transforms,
 // zero stdlib shims) with the OCP-over-embind shim as the ONLY substitution
 // (see packages/cascade-core/src/worker/PyodideRealB123d.js). Frozen here:
@@ -21,7 +21,7 @@ async function realAvailable(page) {
   return page.evaluate(async () => {
     try {
       const core = await fetch('pyodide/pyodide.mjs', { method: 'HEAD' });
-      const wheel = await fetch('pyodide/build123d-0.11.1-py3-none-any.whl',
+      const wheel = await fetch('pyodide/build123d-0.13.0-py3-none-any.whl',
         { method: 'HEAD' });
       return core.ok && wheel.ok;
     } catch (e) { return false; }
@@ -36,7 +36,7 @@ async function waitForLog(page, prefix) {
   return logs.find((l) => l.startsWith(prefix));
 }
 
-test('pysrc=real runs REAL build123d 0.11.1 on Pyodide over the OCP shim', async ({ page }) => {
+test('pysrc=real runs REAL build123d 0.13.0 on Pyodide over the OCP shim', async ({ page }) => {
   await gotoAndReady(page, '?pyruntime=pyodide&pysrc=real');
   test.skip(!(await realAvailable(page)),
     'vendor/pyodide (+ wheels) not fetched — pysrc=real disabled');
@@ -57,7 +57,7 @@ test('pysrc=real runs REAL build123d 0.11.1 on Pyodide over the OCP shim', async
     '      getattr(build123d, "_cs_pysrc", None))',
   ].join('\n'));
   expect(r1.errors).toEqual([]);
-  expect(await waitForLog(page, 'REAL1 ')).toBe('REAL1 0.11.1 True True True real');
+  expect(await waitForLog(page, 'REAL1 ')).toBe('REAL1 0.13.0 True True True real');
 
   // Goal 2: a BuildPart Box through the REAL builders + the OCP shim
   const r2 = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
@@ -74,6 +74,28 @@ test('pysrc=real runs REAL build123d 0.11.1 on Pyodide over the OCP shim', async
   // 125 - 4 vertical fillets of (1 - pi/4) * 5 = 120.707963
   expect(await waitForLog(page, 'REAL2 ')).toBe(
     'REAL2 120.707963 (-2.5, -2.5, -2.5) (2.5, 2.5, 2.5)');
+
+  // Goal 3 (0.13): REAL bd_materials behind Shape.material / mass(); values
+  // are the native build123d 0.13.0 results. The three.js PBR look is not
+  // bundled: COMPROMISE(material-look) keeps the material, .pbr raises.
+  const r3 = await page.evaluate((code) => window.CascadeAPI.runCode(code), [
+    'from build123d import *',
+    'from bd_materials import metals',
+    'b = Box(10, 20, 30)',
+    'b.material = "aluminum"',
+    'c = Cylinder(5, 10)',
+    'c.material = metals.brass()',
+    'try:',
+    '    b.material.pbr',
+    '    look = "look"',
+    'except NotImplementedError:',
+    '    look = "no-look"',
+    'print("REAL3", round(b.mass(), 4), b.material.name,',
+    '      round(c.mass(Unit.LB, Unit.IN), 4), look)',
+  ].join('\n'));
+  expect(r3.errors).toEqual([]);
+  expect(await waitForLog(page, 'REAL3 ')).toBe(
+    'REAL3 16.2 Alu_G6061_T6 241.1816 no-look');
 });
 
 test('REAL drafting (Draft/DimensionLine) works on the real leg', async ({ page }) => {

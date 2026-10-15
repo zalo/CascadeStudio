@@ -1,5 +1,15 @@
 # STAGE 3 — upstream geometry.py + topology/*.py VERBATIM (pytopo=upstream)
 
+> **2026-10-15 — build123d 0.13.0 (OCP 8.0.1).** The vendored release is now
+> 0.13.0 (`vendor/build123d-0.13.0`, incl. topology/history.py + kernel.py);
+> the OCP bill/dump/generator were re-run against OCP 8.0.1 (OCP.collections
+> aliasing, glue for the unbound Map/DataMap/Curve2d/SLProps surface, no fork
+> rebuild); pytopo=lite was RETIRED (0.13's builders need ShapeHistory +
+> BuildScope publication). Default-leg harness vs the 0.13.0 reference:
+> **233 / 2 / 3 / 1** of 239. Ledger:
+> `experiments/upstream-on-micropython/BUMP-LEDGER-0.13.md`. The text below
+> is the 0.11.1-era history.
+
 **State: FLIPPED. `pytopo=upstream` is the DEFAULT** (PYTOPO_DEFAULT +
 resolvePyTopo; `?pytopo=lite` opts out; missing ocp_shim payload
 warns-and-falls-back). Post-flip default-leg harness: **216 PASS /

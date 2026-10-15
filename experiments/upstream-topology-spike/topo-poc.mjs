@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const B123D_SRC = process.env.B123D_SRC ||
-  join(process.env.HOME, 'Desktop', 'ocjs-deps', 'b123d-ref-venv', 'lib', 'python3.12', 'site-packages', 'build123d');
+  join(ROOT, 'vendor', 'build123d-0.13.0');
 
 globalThis.self = globalThis;
 self.postMessage = () => {};
@@ -21,7 +21,10 @@ self.postMessage = () => {};
 // ---- real OCCT wasm --------------------------------------------------- //
 const t0 = Date.now();
 const ocMod = await import(join(ROOT, 'node_modules', 'opencascade.js', 'dist', 'cascadestudio.js'));
-self.oc = await ocMod.default();
+self.oc = await ocMod.default({
+  // the fork glue is -sENVIRONMENT=web (no node file reader): hand it bytes
+  wasmBinary: fs.readFileSync(join(ROOT, 'node_modules', 'opencascade.js', 'dist', 'cascadestudio.wasm')),
+});
 console.log('[poc] OCCT wasm up in ' + (Date.now() - t0) + ' ms');
 
 // ---- real worker StandardLibrary (lite backend) ----------------------- //
@@ -218,29 +221,13 @@ assert proj.NbPoints() >= 1
 u = proj.Parameter(1)
 assert abs(u - 3.0) < 1e-9, 'Parameter(1) = ' + str(u)
 
-# FilletAlgo.Result mutates the two passed TopoDS_Edge proxies
+# (0.13 dropped ChFi2d_FilletAlgo — Wire.fillet_2d rides
+# BRepFilletAPI_MakeFillet2d now — so the GLUE_MUT Result check that lived
+# here has no billed caller any more; ChFi2d is not in the generated shim)
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
-from OCP.ChFi2d import ChFi2d_FilletAlgo
-from OCP.TopoDS import TopoDS_Edge
 from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
-e1 = BRepBuilderAPI_MakeEdge(gp_Pnt(10, 0, 0), gp_Pnt(0, 0, 0)).Edge()
-e2 = BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(0, 10, 0)).Edge()
-algo = ChFi2d_FilletAlgo()
-algo.Init(e1, e2, gp_Pln(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)))
-assert algo.Perform(2.0), 'fillet Perform failed'
-corner = gp_Pnt(0, 0, 0)
-assert algo.NbResults(corner) >= 1
-t0, t1 = TopoDS_Edge(), TopoDS_Edge()
-fe = algo.Result(corner, t0, t1)
-props = GProp_GProps()
-BRepGProp.LinearProperties_s(t0, props)
-l0 = props.Mass()
-assert abs(l0 - 8.0) < 1e-6, 'trimmed edge0 length ' + str(l0)
-props2 = GProp_GProps()
-BRepGProp.LinearProperties_s(fe, props2)
 import math
-assert abs(props2.Mass() - 2.0 * math.pi / 2 * 1.0) < 0.5, 'fillet arc length ' + str(props2.Mass())
 
 # the one still-pending hook (unbilled ParOnEdgeS1) raises with the marker;
 # everything else the fork 05d088d round closed is exercised in t8
@@ -443,7 +430,7 @@ assert abs(u1 - 2.0) < 1e-9 and abs(u2 + 5.0) < 1e-9, 'ECC params ' + str((u1, u
 
 # TopTools_HSequenceOfShape + ShapeAnalysis_FreeBounds.ConnectEdgesToWires
 # (the binding COMPROMISE(edges-to-wires) waited for)
-from OCP.TopTools import TopTools_HSequenceOfShape
+from OCP.collections import HSequence_TopoDS_Shape as TopTools_HSequenceOfShape
 from OCP.ShapeAnalysis import ShapeAnalysis_FreeBounds
 seq = TopTools_HSequenceOfShape()
 seq.Append(BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(1, 0, 0)).Edge())
@@ -457,8 +444,8 @@ BRepGProp.LinearProperties_s(w0, wprops)
 assert abs(wprops.Mass() - 2.0) < 1e-9, 'joined wire length'
 
 # HArray2 pair (Face.make_bezier_surface inputs)
-from OCP.TColgp import TColgp_HArray2OfPnt
-from OCP.TColStd import TColStd_HArray2OfReal
+from OCP.collections import HArray2_gp_Pnt as TColgp_HArray2OfPnt
+from OCP.collections import HArray2_double as TColStd_HArray2OfReal
 pts = TColgp_HArray2OfPnt(1, 2, 1, 2)
 for r in (1, 2):
     for c in (1, 2):
@@ -470,7 +457,8 @@ ws.SetValue(1, 1, 2.5)
 assert abs(ws.Value(1, 1) - 2.5) < 1e-12
 
 # TopTools_SequenceOfShape + IndexedMapOfShape (topo_explore_connected_faces)
-from OCP.TopTools import TopTools_SequenceOfShape, TopTools_IndexedMapOfShape
+from OCP.collections import Sequence_TopoDS_Shape as TopTools_SequenceOfShape
+from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as TopTools_IndexedMapOfShape
 sq = TopTools_SequenceOfShape()
 sq.Append(box)
 assert sq.Length() == 1
@@ -479,11 +467,11 @@ from OCP.TopExp import TopExp
 TopExp.MapShapes_s(box, TopAbs_ShapeEnum.TopAbs_FACE, imap)
 assert imap.Extent() == 6, 'IndexedMap faces ' + str(imap.Extent())
 
-# NCollection_Utf8String stays a PERMANENT-SKIP (deliberate)
-from OCP.NCollection import NCollection_Utf8String
+# kernel text (0.13: NCollection_String) stays a PERMANENT-SKIP (deliberate)
+from OCP.NCollection import NCollection_String
 try:
-    NCollection_Utf8String()
-    raise AssertionError('Utf8String should raise')
+    NCollection_String()
+    raise AssertionError('NCollection_String should raise')
 except NotImplementedError as e:
     assert 'PERMANENT-SKIP' in str(e), str(e)
 print('T8 OK fork 05d088d: Range/UVBounds/CurveOnSurface/StaticMoments/'

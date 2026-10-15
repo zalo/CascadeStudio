@@ -47,7 +47,7 @@ export function ensurePythonRuntime(kind, pySrc) {
   }
   if (pySrc === 'real' && kind !== 'pyodide') {
     return Promise.reject(new Error(
-      'pysrc=real (REAL build123d 0.11.1 over the OCP shim) requires '
+      'pysrc=real (REAL build123d 0.13.0 over the OCP shim) requires '
       + '?pyruntime=pyodide — it runs on real CPython only'));
   }
   if (kind === 'pyodide') { return ensurePyodideRuntime(pySrc); }

@@ -130,10 +130,12 @@ const EXTRA = {
   TColStd_Array1OfInteger: { methods: ARR1, ctors: [[], ['int', 'int']] },
   TColgp_HArray1OfPnt: { methods: ['SetValue', 'Value', 'Lower', 'Upper'], ctors: [['int', 'int']] },
   TColStd_HArray1OfBoolean: { methods: ['SetValue', 'Value'], ctors: [['int', 'int']] },
+  TColStd_HArray1OfReal: { methods: ['SetValue', 'Value'], ctors: [['int', 'int']] },
+  TColStd_HArray1OfInteger: { methods: ['SetValue', 'Value'], ctors: [['int', 'int']] },
   TColgp_Array2OfPnt: { methods: ['SetValue', 'Value', 'NbRows', 'NbColumns'], ctors: [['int', 'int', 'int', 'int']] },
   math_Matrix: { methods: ['Value', 'SetValue', 'LowerRow', 'UpperRow', 'LowerCol', 'UpperCol'], ctors: [['int', 'int', 'int', 'int']] },
   BRepAlgoAPI_Algo: { parent: 'BRepBuilderAPI_MakeShape', methods: ['Shape', 'Clear', 'ClearWarnings', 'SetFuzzyValue', 'FuzzyValue', 'HasErrors', 'HasWarnings', 'SetRunParallel', 'RunParallel', 'SetUseOBB'] },
-  BRepAlgoAPI_BuilderAlgo: { parent: 'BRepAlgoAPI_Algo', methods: ['SetArguments', 'SetNonDestructive', 'NonDestructive'] },
+  BRepAlgoAPI_BuilderAlgo: { parent: 'BRepAlgoAPI_Algo', methods: ['SetArguments', 'SetNonDestructive', 'NonDestructive', 'SetGlue', 'SetToFillHistory', 'HasHistory', 'History'] },
   BRepMesh_IncrementalMesh: { parent: 'BRepMesh_DiscretRoot', ctors: [['TopoDS_Shape', 'double', 'bool', 'double', 'bool']] },
 };
 for (const [name, d] of Object.entries(EXTRA)) {
@@ -284,6 +286,12 @@ const coarseOf = (t) => {
   if (!ts || ts === 'any' || ts === 'GLvoid') { return '?'; }
   if (/^(Standard_Boolean|bool|boolean)$/.test(ts)) { return 'b'; }
   if (/^(Standard_(Real|Integer|ShortReal|Size|Byte|ExtCharacter|Utf32Char)|int|double|float|number)$/.test(ts)) { return 'n'; }
+  // numeric TYPEDEFS the d.ts names but never declares (embind passes them
+  // as plain numbers): Poly_MeshPurpose is `typedef unsigned int` (OCCT 8
+  // BRep_Tool::Triangulation(F, L, purpose) — upstream tessellate). NOT
+  // size_t: its _1/_2 twins (ReSize/FindKey over size_t AND int) would turn
+  // into statically-inseparable pairs.
+  if (ts === 'Poly_MeshPurpose') { return 'n'; }
   if (/^(string|Standard_CString|Standard_Character|NCollection_String|XCAFDoc_PartId)$/.test(ts)) { return 's'; }
   if (dtsEnums[ts]) { return 'e:' + ts; }
   if (dts[ts] && !/_\d+$/.test(ts)) { return 'c:' + ts; }
@@ -516,9 +524,59 @@ lines.push('');
 const FORK_ASK_CLASSES = {
   NCollection_Utf8String: 'PERMANENT-SKIP — kernel text deliberately not '
     + 'bound; make_text routes to lite opentype.js (fork 05d088d note)',
+  // build123d 0.13 (OCP 8) renamed the kernel-text string class
+  NCollection_String: 'PERMANENT-SKIP — kernel text deliberately not '
+    + 'bound; make_text routes to lite opentype.js (fork 05d088d note)',
+  // build123d 0.13 Vertex.convexity (corner of a face): no exact 2-D
+  // point-in-face classifier is bound (BRepClass_FaceClassifier /
+  // BRepTopAdaptor_FClass2d are absent too); a 3-D distance stand-in would
+  // misclassify across periodic seams, so it raises (FORK-ASKS.md 0.13)
+  IntTools_FClass2d: 'PENDING_FORK_BINDING — 2-D point-in-face '
+    + 'classification for Vertex.convexity (FORK-ASKS.md, 0.13 addendum)',
+};
+// OCP 8 moved the NCollection instantiations into OCP.collections under
+// template-derived names; the embind binding keeps the OCCT typedef names.
+// OCP/collections.py is therefore an ALIAS module: bound typedefs re-export
+// the generated proxy class; the two shape maps the fork never bound
+// (NCollection_Map / NCollection_DataMap over TopoDS_Shape) are served by
+// exact-semantics Python glue in ocp_core (TopTools_ShapeMapHasher keys:
+// IsSame equality, OCCT HashCode buckets).
+const COLLECTION_ALIASES = bill.collection_aliases || {};
+// Classes the fork never bound, served by Python glue in ocp_core (each
+// documented there with its exactness argument). Keyed by the embind/OCCT
+// name; collections reach them through COLLECTION_ALIASES.
+const CLASS_GLUE = {
+  TopTools_MapOfShape: 'CsShapeMap',
+  TopTools_DataMapOfShapeShape: 'CsShapeDataMap',
+  BRepAdaptor_Curve2d: 'cs_brep_adaptor_curve2d',
+  BRepLProp_SLProps: 'cs_brep_lprop_slprops',
 };
 const moduleFiles = {};
 for (const [mod, names] of Object.entries(importMap)) {
+  if (mod === 'collections') {
+    const src = ['# GENERATED OCP.collections — OCP 8 collection names aliased onto '
+      + 'the embind typedef proxies (gen-ocp-shim.mjs)'];
+    const stubbed = [];
+    for (const n of names) {
+      const target = COLLECTION_ALIASES[n];
+      if (target && closure.has(target)) {
+        src.push(`from ocp_registry import ${target} as ${n}  # noqa: F401`);
+      } else if (target && CLASS_GLUE[target]) {
+        src.push(`from ocp_core import ${CLASS_GLUE[target]} as ${n}  # noqa: F401`);
+      } else {
+        stubbed.push(n);
+      }
+    }
+    if (stubbed.length) {
+      src.push('class _Any:');
+      src.push('    def __init__(self, *a, **k):');
+      src.push('        raise NotImplementedError(');
+      src.push("            'OCP.collections.' + self.__class__.__name__ + ' is not in the generated shim')");
+      for (const n of stubbed) { src.push(`class ${n}(_Any):`); src.push('    pass'); }
+    }
+    moduleFiles[mod] = src.join('\n') + '\n';
+    continue;
+  }
   // Standard/StdFail names appear in `except` clauses: they must stay the
   // loader's real-Exception stubs, and ocp_core raises through them.
   if (mod === 'Standard' || mod === 'StdFail') { continue; }
@@ -530,18 +588,22 @@ for (const [mod, names] of Object.entries(importMap)) {
   // MEMBERS build123d imports (GccEnt: upstream passes them into shim
   // ctors, which need the real embind values — the loader's int stubs
   // only serve the lite seam, which translates Tangency members by NAME)
-  if (!have.length && !names.some((n) => FORK_ASK_CLASSES[n])
+  if (!have.length && !names.some((n) => FORK_ASK_CLASSES[n] || CLASS_GLUE[n])
       && !modEnums.length) { continue; }
   const enumMemberNames = new Set(
     [...neededEnums].filter((e) => e.startsWith(mod + '_'))
       .flatMap((e) => dtsEnums[e]));
+  const glued = names.filter((n) => !closure.has(n) && CLASS_GLUE[n]);
   const missing = names.filter((n) => !closure.has(n) && !neededEnums.has(n)
-    && !enumMemberNames.has(n));
+    && !enumMemberNames.has(n) && !CLASS_GLUE[n]);
   const src = [
     `# GENERATED OCP.${mod} — proxies over the embind binding (gen-ocp-shim.mjs)`,
   ];
   if (have.length) {
     src.push(`from ocp_registry import ${have.join(', ')}  # noqa: F401`);
+  }
+  for (const n of glued) {
+    src.push(`from ocp_core import ${CLASS_GLUE[n]} as ${n}  # noqa: F401  (glue)`);
   }
   if (mod === 'TopoDS') {
     // OCP exposes the TopoDS *utility* class whose statics are our
@@ -589,6 +651,13 @@ for (const [mod, names] of Object.entries(importMap)) {
 // 7. Write everything                                                    //
 // --------------------------------------------------------------------- //
 fs.mkdirSync(join(OUT, 'OCP'), { recursive: true });
+// drop module files a previous (other-version) generation left behind: the
+// loader installs only MANIFEST modules, but stale files would still ship
+for (const f of fs.readdirSync(join(OUT, 'OCP'))) {
+  if (f.endsWith('.py') && !moduleFiles[f.slice(0, -3)]) {
+    fs.unlinkSync(join(OUT, 'OCP', f));
+  }
+}
 fs.writeFileSync(join(OUT, 'table.json'), JSON.stringify(table));
 fs.writeFileSync(join(OUT, '_registry.py'), lines.join('\n'));
 for (const [mod, src] of Object.entries(moduleFiles)) {

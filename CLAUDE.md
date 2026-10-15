@@ -13,7 +13,7 @@ npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
 npx playwright test    # 110 tests (incl. 50 frozen build123d example scripts)
 node test/headless-node.mjs   # browser-free engine (Node, no Chromium)
-CS_PY_SRC=upstream node test/headless-node.mjs   # …on verbatim build123d 0.11.1
+CS_PY_SRC=upstream node test/headless-node.mjs   # …on verbatim build123d 0.13.0
 ```
 
 ## Architecture (Monorepo)
@@ -285,69 +285,83 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   when missing (MicroPython needs its native STRING `__path__`).
 - **On MicroPython the DEFAULT SOURCE LAYER is upstream** (`pysrc` resolution,
   localStorage `cascade-py-src`): `?pyruntime=micropython` runs UPSTREAM
-  build123d 0.11.1 Level-A source (builders, build_common, objects_*,
-  operations_*, joints, pack — VENDORED and COMMITTED in
-  `vendor/build123d-0.11.1/` with upstream's Apache-2.0 LICENSE;
-  `node packages/cascade-core/scripts/fetch-upstream-b123d.cjs` is the
-  version-bump tool; transformed at load by
-  `packages/cascade-core/src/worker/UpstreamB123d.js`) as the `build123d`
-  package, over lite's classes re-exported as
-  `build123d.geometry`/`build123d.topology[.*]` (seam in
-  `packages/cascade-core/upstream-py/` — since the class-DAG unification it
-  is genuine re-exports + S-sized method fills + the enum bridge); lite
-  registers as `build123d_lite`. `&pysrc=lite` opts back into lite; if the
-  upstream payload is missing at runtime the no-flag default falls back to
-  lite with a console warning (explicit `pysrc=upstream` stays a hard
-  error, and non-MicroPython runtimes reject it loudly). Frozen by
-  `test/py-src-upstream.spec.js`; `CS_PY_SRC=lite|upstream` switches
-  run-lite.mjs/probe.mjs (and when harness results look implausibly clean,
-  run with `CS_DEBUG_PYSRC=1` and check the '[debug] page booted pySrc='
-  lines — a stale http-server on the harness port once masked the whole
-  upstream leg). Harness (2026-08-20, 32MB kernel, post grind round):
-  micropython+upstream classifies **205 PASS / 10 MISMATCH / 5 ERROR /
-  2 TIMEOUT** of the 222 scored scripts — effectively LITE PARITY (lite:
-  206/10/5/1; the failure sets overlap but differ: upstream additionally
-  PASSES sort_axis, toy_truck and ttt-ppp0110, and additionally fails
-  bicycle_tire (+0.84%, thicken band), ex08_algebra (face-winding
-  orientation family), Buffer_Stand (fuse-drop kernel fault on ITS
-  construction), sm_hanger as ERROR instead of MISMATCH, and
-  heat_exchanger flaps TIMEOUT under 4-page contention; both LITE
-  baselines stay per-script IDENTICAL to the committed 206/10/5/1). The
-  honest shortfall list (per-script, with causes) lives in
-  `experiments/upstream-on-micropython/INVENTORY.md` §H; the A-section
-  (class-DAG) is CLOSED by the unification and the 2026-08-20 grind round
-  closed the seam-method and semantics gaps. Compare against lite with
-  `experiments/upstream-on-micropython/compare-examples.mjs`.
-- **The TOPOLOGY layer under pysrc=upstream is UPSTREAM'S OWN (Stage 3,
-  the DEFAULT — `PYTOPO_DEFAULT='upstream'`; `?pytopo=lite` / localStorage
-  `cascade-py-topo` opt back into the seam; `CS_PY_TOPO=lite|upstream` for
-  run-lite.mjs; a missing ocp_shim payload warns-and-falls-back to lite)**:
-  upstream 0.11.1's **geometry.py + the WHOLE topology package run
-  VERBATIM** over the hardened OCP-over-embind shim
-  (`upstream-py/ocp_shim/`, OcpShim.js) — the seam adapter modules load
-  only under pytopo=lite, and lite reduces to the JS op layer + the worker
-  glue `ocp_shim/topo_glue.py` (show()/sceneShapes raw-TopoDS unwrap,
-  implicit post-run scene, `_measure_globals_json`, export/import, text ->
-  lite opentype (COMPROMISE(text)), gordon -> GordonSurface.js,
-  Compound(joints=) reparenting — embind casts COPY where pybind shares).
-  History rides the SHIM (recordExternalOp at BRepPrimAPI/BRepAlgoAPI/...-
-  family granularity + TopoDS `producingLine` tagging, so pick->line
-  resolves); the kernel-guard fuse-drop recovery is ported to the shim's
-  SetArguments/SetTools/Build/Shape path. Post-flip default-leg harness
-  (2026-08-21): **216 PASS / 2 MISMATCH / 3 ERROR / 1 TIMEOUT** of 222 —
-  beyond every previous configuration: upstream traversal RESOLVES lite's
-  residual COMPROMISE(edge-orientation)/(traversal-order) set (joints x2,
-  projection x2, sort_axis, filter_all_edges_circle, sm_hanger, toy_truck,
-  ttt-ppp0110), and the whole non-PASS set is the documented honest gaps
-  (objects_1d, tips/b04 flap; dual_color_3mf lib3mf, objects_2d drafting,
-  curved_support sympy; spitfire gordon TIMEOUT). Perf: the bridge's
-  variadic no-proxy fast path (see runtime-comparison.md §10) cleared the
-  hot-loop TIMEOUTs (b01 148->18 s, bicycle_tire 250->29 s); full harness
-  wall 158 s. State/history:
-  `experiments/upstream-topology-spike/STAGE3-STATE.md`; fork asks:
-  FORK-ASKS.md Stage-3 addendum; interpreter patches 9-10 (jsffi
-  out-of-int32 integral doubles — 1e100 crossed as 0 — and JSFLAGS_EXTRA)
-  live as real micropython-cs commits, artifacts re-vendored.
+  **build123d 0.13.0** (PyPI 2026-09-21 — 0.12's BuildScope/BaseObjectMeta
+  builders plus the OCP/OCCT 8.0.1 port) — Level-A builders/objects/
+  operations, drafting, geometry.py and the WHOLE topology package —
+  VENDORED and COMMITTED in `vendor/build123d-0.13.0/` (Apache-2.0
+  LICENSE/NOTICE; wheel-identical). The single version switch is
+  `ACTIVE_UPSTREAM_VENDOR` in `packages/cascade-core/src/worker/UpstreamB123d.js`
+  (per-vendor module lists next to it); `node
+  packages/cascade-core/scripts/fetch-upstream-b123d.cjs --src <tree>
+  --version X` is the bump tool, and the bump is PRICED in
+  `experiments/upstream-on-micropython/BUMP-LEDGER-0.13.md` (0.11.1 -> 0.13.0
+  took ~2 h of active work; 0.11.1 was retired, not kept selectable).
+  Sources are transformed at load by UpstreamB123d.js (line-preserving:
+  TypeAlias, runtime generics, match, PEP 570/604/448, dataclass fields,
+  and builtins for `__mro__` (C3), `is_integer`, property `__get__`,
+  ordered dedup, `__format__`) and registered as the `build123d` package;
+  lite registers as `build123d_lite` (the glue's kernel-op library). It
+  NEEDS the custom interpreter's metaclasses (upstream AxisMeta/PlaneMeta
+  and 0.12+'s `BaseObjectMeta` construction firewall run NATIVELY — no
+  emulation; the abc shim's ABCMeta derives from the typing shim's
+  `_GenericMeta` so `BasePartObject(Part, BaseObject)` resolves its
+  metaclass like CPython). The runtime probes the payload AND metaclasses
+  first: the no-flag default falls back to lite with a console warning when
+  either is missing (stock artifacts), explicit `pysrc=upstream` stays a
+  hard error, and non-MicroPython runtimes reject it loudly. `&pysrc=lite`
+  opts back into lite. Shims new for 0.13: contextlib, itertools,
+  dataclasses default_factory/`__post_init__`, StrEnum members that ARE
+  their str (`Unit.MM == "mm"`), tempfile, and an honest `bd_materials` stub
+  (materials are a pysrc=real feature; `.material` stays None and `mass()`
+  raises upstream's own "density is missing"). Frozen by
+  `test/py-src-upstream.spec.js` (incl. a 0.13 test: native BaseObjectMeta,
+  kernel-record Select.LAST/NEW, StrEnum, drafting, Face.convexity,
+  export_obj); `CS_PY_SRC=lite|upstream` switches run-lite.mjs/probe.mjs
+  (when results look implausibly clean, run with `CS_DEBUG_PYSRC=1` and
+  check the '[debug] page booted pySrc=' lines — a stale http-server on the
+  harness port once masked the whole upstream leg).
+- **The TOPOLOGY layer is UPSTREAM'S OWN (Stage 3)**: upstream 0.13.0's
+  **geometry.py + the WHOLE topology package run VERBATIM** — incl. 0.13's
+  `topology/history.py` (the kernel's own `BRepTools_History` record behind
+  `Select.LAST/NEW`) and `kernel.py` — over the OCP-over-embind shim
+  (`upstream-py/ocp_shim/`, OcpShim.js). The shim is GENERATED
+  (`experiments/upstream-topology-spike/gen-ocp-shim.mjs`) from the OCP bill
+  (`extract_ocp_bill.py`: 878 unique items / 2,448 call sites for 0.13.0)
+  with pybind signatures/defaults dumped from the **OCP 8.0.1** reference
+  venv; OCP 8's `OCP.collections` names (`List_TopoDS_Shape`, ...) alias
+  onto the embind typedef classes (`OCP/collections.py`). Glue for the
+  unbound OCP-8 surface: shape Map/DataMap (exact, `ocp_glue.py`),
+  `ListOfShape.Assign`, `BRepAdaptor_Curve2d` (exact), `BRepLProp_SLProps`
+  (LProp's own computation on the bound D2), `Poly_Triangulation.Triangles`;
+  `IntTools_FClass2d` (Vertex.convexity on a face corner) is
+  PENDING_FORK_BINDING — **no fork rebuild was needed** (FORK-ASKS.md 0.13
+  addendum). `?pytopo=lite` (Level-A over a seam of lite's classes) was
+  RETIRED with 0.13 — its builders need ShapeHistory records and BuildScope
+  publication; the flag warns and runs upstream. lite reduces to the JS op
+  layer + the worker glue `ocp_shim/topo_glue.py` (show()/sceneShapes
+  raw-TopoDS unwrap, implicit post-run scene, `_measure_globals_json`,
+  export/import incl. export_obj and 0.13's import result shape, text ->
+  lite opentype (COMPROMISE(text)) + `Compound.resolve_font`, gordon ->
+  GordonSurface.js, Compound(joints=) reparenting — embind casts COPY where
+  pybind shares). History rides the SHIM (recordExternalOp + TopoDS
+  `producingLine` tagging, so pick->line resolves); the kernel-guard
+  fuse-drop recovery lives on the shim's Fuse path. MEASUREMENT contract
+  (matches test/b123d-validation/reference.py): builders by their PLACED
+  `.part`/`.line` and LOCAL `.sketch_local` (since 0.12 `_obj` is the local
+  product), volume by upstream's own `Shape.volume` (0.12+ Compound.volume
+  sums DIRECT children). Harness vs the **0.13.0 native reference**
+  (2026-10-15, 239 scored + 8 native SKIP, headless, `--pages 2`, 299 s):
+  **233 PASS / 2 MISMATCH / 3 ERROR / 1 TIMEOUT** (the unchanged 0.11.1
+  vendor scored 198/7/33/1; +35, nothing regressed;
+  `test/b123d-validation/results-013-upstream.json`). Every non-PASS is
+  documented: objects_1d (DoubleTangentArc picks the other root on the
+  scipy Nelder-Mead shim + COMPROMISE(triad-labels)), objects_2d (a 25 µm
+  opentype.js-vs-FreeType text metric — upstream DRAFTING now RUNS on
+  MicroPython), dual_color_3mf (no lib3mf), curved_support (sympy),
+  topology_selection/b10 (Mesher.read needs lib3mf), spitfire (gordon
+  TIMEOUT); tips/b04 is a complete sort tie that is non-deterministic
+  natively in every version and flaps. State/history:
+  `experiments/upstream-topology-spike/STAGE3-STATE.md`.
   2026-08-19): `Wire` is a real class (distinct from `Edge` and `Curve`;
   all three subclass `Mixin1D`, lite's "any 1-D shape" isinstance target,
   which carries the shared behaviors + `_specs` bookkeeping);
@@ -362,34 +376,35 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   TShape identity across selector calls; hash = rounded-bbox key).
   Bookkeeping that MEANS identity (parent/children links, sceneShapes)
   uses explicit `is` scans — keep it that way when touching those paths.
-- **`?pyruntime=pyodide&pysrc=real` — REAL, UNMODIFIED build123d 0.11.1 on
+- **`?pyruntime=pyodide&pysrc=real` — REAL, UNMODIFIED build123d 0.13.0 on
   Pyodide (the reference/crossover leg, default-OFF)**: the actual PyPI
-  wheel (real CPython 3.14 semantics, real numpy 2.4.3, native
-  metaclasses/typing — ZERO source transforms, ZERO stdlib shims) runs with
+  wheel (real CPython 3.14 semantics, real numpy 2.4.3 — satisfies 0.13's
+  numpy>=2,<3 — native metaclasses/typing, ZERO source transforms) runs with
   the OCP-over-embind shim as the ONLY substitution.
   `packages/cascade-core/src/worker/PyodideRealB123d.js` boots it (vendored
-  wheels — `fetch-pyodide.cjs` now fetches numpy/typing_extensions from the
-  Pyodide CDN and build123d/anytree/webcolors/trianglesolver from PyPI —
-  inert OCP stubs + the SHARED generated proxies over
+  wheels via `fetch-pyodide.cjs`: numpy from the Pyodide CDN; build123d
+  0.13.0, **bd_materials 0.2.4 (REAL — `Shape.material`/`mass()` match
+  native exactly)**, typing_extensions 4.16.0 (0.13 pins >=4.16; the lock
+  ships 4.15), anytree/webcolors/trianglesolver from PyPI — inert OCP stubs
+  + the SHARED generated proxies over
   `upstream-py/ocp_shim/ocp_core_pyodide.py`, import stubs in
   `upstream-py/real-deps/` for ezdxf/svgpathtools/ocpsvg/fontTools/lib3mf/
-  sklearn/requests, lite as `build123d_lite`, then `import build123d` +
-  `real_glue.py`/`real_preglue.py` worker glue). Pyodide FFI landmine: its
-  JsProxy is UNHASHABLE and freshly minted per conversion — embind enum
-  members are interned `OcpEnumMember` wrappers (hash/eq by js_id), show()
-  membership compares js_id. Harness **216 PASS / 3 MISMATCH / 2 ERROR /
-  1 TIMEOUT** (148 s wall) — PASS-parity with the Stage-3 default and
-  **REAL drafting (Draft/DimensionLine) RUNS on this leg** (objects_2d is a
-  25 µm font-metric MISMATCH here instead of an ERROR); interpreter
-  semantics finding: a clean NULL (no divergence vs the transformed
-  MicroPython stack anywhere in the corpus). Costs vs pyodide+lite:
-  +3.4 MB wheels (18.6 MB assets total), boot 2.1 s vs 1.3 s
-  (`import build123d` is 0.52 s of it), interpreter heap 51.9 vs 43.2 MB;
-  warm evals identical, 54-hole grid 461 ms (faster than
-  micropython+upstream's 792 ms). Frozen by `test/py-src-real.spec.js`;
-  `CS_PY_SRC=real` switches run-lite.mjs/probe.mjs/bench-runtime.mjs
-  (`--pysrc real`); ledger/benchmarks/state in
-  `experiments/pyodide-real/STATE.md` + runtime-comparison.md §11.
+  sklearn/requests/threejs_materials, lite as `build123d_lite`, then
+  `import build123d` + `real_glue.py`/`real_preglue.py`).
+  COMPROMISE(material-look): threejs_materials (Pillow + pygltflib + ~86 MB
+  of textures) is a stub, so the material setter keeps the material and
+  skips only the color derived from its PBR look; `.pbr` raises. Pyodide
+  FFI landmine: its JsProxy is UNHASHABLE and freshly minted per conversion
+  — embind enum members are interned `OcpEnumMember` wrappers (hash/eq by
+  js_id), show() membership compares js_id. Harness vs the 0.13.0
+  reference (2026-10-15, 284 s): **232 PASS / 3 MISMATCH / 3 ERROR /
+  1 TIMEOUT** (unchanged 0.11.1 wheel: 201/7/30/1;
+  `test/b123d-validation/results-013-real.json`) — the same documented set
+  as MicroPython (tips/b04 flapped to MISMATCH here); objects_1d shares the
+  scipy shim. Frozen by `test/py-src-real.spec.js` (incl. REAL bd_materials
+  mass); `CS_PY_SRC=real` switches run-lite.mjs/probe.mjs/bench-runtime.mjs
+  (`--pysrc real`); history in `experiments/pyodide-real/STATE.md` +
+  runtime-comparison.md §11.
 - **Heavy-model memory (2026-08-21, runtime-comparison.md §12)**: the OCP
   shim now frees kernel objects DETERMINISTICALLY on the Pyodide legs —
   every embind object returned to Python is retained (`_csPy`);
@@ -789,11 +804,12 @@ Two consequences of "nuclear" that the upstream source flavor forced out:
   `test/headless-node.mjs`.
 
 **`pySrc` default is `lite`** headless (switchable). `upstream` — build123d
-0.11.1's OWN Python over the OCP shim, 216/222 on the validation corpus
-against lite's 206 — is deployed alongside it (see the Cloudflare section)
-and needs `upstreamPy(rel)`, a loader for the 3.5 MB vendored tree. It costs
-~5x the library boot (642 ms vs 122 ms in Node) and the SAME memory for a
-basic model (51.5 MB, byte-identical), but heavy models are a different
+0.13.0's OWN Python over the OCP shim, 233/239 on the 0.13.0 validation
+corpus — is deployed alongside it (see the Cloudflare section; the LIVE
+deployment predates the 0.13 bump) and needs `upstreamPy(rel)`, a loader
+for the vendored tree. It costs ~7x the library boot (868 ms vs 122 ms in
+Node; 642 ms for 0.11.1) and the SAME memory for a basic model (51.5 MB,
+byte-identical), but heavy models are a different
 story: upstream topology puts every boolean, selector and glyph through the
 OCP shim, each dispatch retains ~32-230 B in the interpreter for the run, and
 MicroPython's GC arena grows by doubling and never shrinks — `examples/clock`
@@ -856,7 +872,7 @@ memory budget. Measured on this machine:
   **9909 -> 8417 KiB gz** of the 10240 KiB limit, 1823 KiB of headroom, the
   SAME script for both flavors. The `.wasm` files cannot follow: workerd
   will not compile WebAssembly at runtime. The upstream Python ships as ONE
-  relative-path -> text JSON (158 modules, 0.40 MB gz) because the loader
+  relative-path -> text JSON (157 modules, 0.42 MB gz for 0.13.0) because the loader
   asks for ~120 modules and every `env.ASSETS.fetch()` is a subrequest.
 - **Two flavors, two wrangler environments.** Default `PY_SRC=lite`
   (`cascade-headless`), `--env upstream` -> `PY_SRC=upstream`

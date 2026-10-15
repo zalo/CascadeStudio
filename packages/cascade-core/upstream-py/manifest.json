@@ -7,6 +7,8 @@
     { "name": "abc", "file": "shims/abc.py" },
     { "name": "warnings", "file": "shims/warnings.py" },
     { "name": "contextvars", "file": "shims/contextvars.py" },
+    { "name": "contextlib", "file": "shims/contextlib.py" },
+    { "name": "itertools", "file": "shims/itertools.py" },
     { "name": "inspect", "file": "shims/inspect.py" },
     { "name": "dataclasses", "file": "shims/dataclasses.py" },
     { "name": "enum", "file": "shims/enum.py" },
@@ -15,6 +17,8 @@
     { "name": "colorsys", "file": "shims/colorsys.py" },
     { "name": "webcolors", "file": "shims/webcolors.py" },
     { "name": "ocp_gordon", "file": "shims/ocp_gordon.py" },
+    { "name": "bd_materials", "file": "shims/bd_materials.py" },
+    { "name": "tempfile", "file": "shims/tempfile.py" },
     { "name": "numpy", "file": "shims/numpy.py" },
     { "name": "sympy", "file": "shims/sympy.py" }
   ]
