@@ -5,18 +5,22 @@ Worker — OpenCascade 8.0.1 (wasm) + MicroPython 1.28 (wasm) + build123d,
 all in one 128 MB isolate. No browser, no DOM, no Three.js, no mesher unless
 STL is asked for.
 
-Two deployments, one codebase — see [Source flavors](#source-flavors):
+Three flavors, one codebase — see [Source flavors](#source-flavors) and, for
+the two high-fidelity ones against Cloudflare's limits,
+[FIDELITY-ON-WORKERS.md](FIDELITY-ON-WORKERS.md):
 
 | | build123d | corpus | live |
 |---|---|---|---|
 | default | **build123d-lite** (embedded) | 206/222 | `cascade-headless.makeshifted.workers.dev` |
 | `--env upstream` | **verbatim upstream 0.11.1** over the OCP shim | 216/222 | `cascade-headless-upstream.makeshifted.workers.dev` |
+| `--env real` | **the PyPI build123d 0.11.1 wheel + numpy** on Pyodide 314, same shim | 216/222 | not deployed (`npm run dev:real`) |
 
 ```bash
 cd examples/cloudflare-worker
 npm install                 # wrangler (a devDependency of THIS example only)
 npm run dev                 # prepare-assets + wrangler dev  -> :8787   (lite)
 npm run dev:upstream        # the same, PY_SRC=upstream
+npm run dev:real            # PY_SRC=real (needs vendor/pyodide: fetch-pyodide.cjs)
 node scripts/smoke.mjs      # drives the same scripts as test/headless-node.mjs
 ```
 
@@ -115,24 +119,20 @@ wrangler environment, not a query parameter.
 | cold first request | **3.0 s** | **5.6 s** |
 | warm trivial model | **44-57 ms** | **61-89 ms** |
 | static assets fetched at boot | 4.31 MB (fonts) | 7.61 MB (fonts + 3.15 MB Python) |
-| `Box`/starter isolate memory | **51.5 MB** | **51.5 MB** — identical, because the shapes live in OCCT's heap either way |
-| heavy models | clock 65.0 MB, heat_exchanger 86.6 MB | clock and heat_exchanger exceed 128 MB |
+| `Box`/starter isolate memory | **38.0 MB** wasm (was 51.5) | **38.0 MB** wasm (was 51.5) — identical, because the shapes live in OCCT's heap either way |
+| heavy models (wasm, Node) | clock 48.7, heat_exchanger 53.1, bicycle_tire 94.3 MB | clock 40.4, heat_exchanger 63.5, bicycle_tire 40.4 MB (were 418-3010 MB) |
 | script size | 8417 KiB gz | 8417 KiB gz (the same script) |
 
-The **memory** row is the whole trade. Upstream topology runs every boolean,
-every selector and every glyph through the OCP shim, and each dispatch
-retains ~32-230 B in the interpreter for the duration of the run. That is
-run-scoped — the next run reports ~1.1 MB live — but MicroPython's GC arena
-grows by doubling and NEVER shrinks, so a model that makes millions of FFI
-calls ratchets the isolate past 128 MB and does not give it back.
-`examples/clock` alone takes MicroPython from 19.5 MB to 386 MB in Node.
-Bounding it needs an interpreter patch; see the
-`NOTE(heavy-model memory round)` in
-`packages/cascade-core/upstream-py/ocp_shim/ocp_core.py`.
-
-So: **lite for throughput and heavy models, upstream for fidelity.** If a
-script is in the 10-model delta (or uses an API lite does not have), deploy
-it against `--env upstream` and keep it under the memory line.
+The **memory** row USED to be the whole trade: the stock MicroPython
+interpreter never garbage-collects inside a run, so upstream's millions of
+FFI calls ratcheted it to hundreds of MB (`examples/clock` 19.5 -> 386 MB).
+Since 2026-10-15 (micropython-cs patches 11-12, the JsProxy-driven embind
+lifetime and a shim fix — FIDELITY-ON-WORKERS.md §1) the interpreter heap
+tracks live data and **upstream fits 220 of 221 corpus models under 128 MB
+of wasm** (lite: 221/221). The trade is now boot time (~0.6 s more library
+load) — lite for throughput, upstream for fidelity. `bracelet` (Gordon
+surfaces) and, once the JS heap is counted, `projection` remain over on
+upstream.
 
 ```bash
 npx wrangler deploy                  # lite   -> cascade-headless
@@ -326,7 +326,8 @@ needed any more.
 |---|---|---|
 | isolate limit | **128 MB** | **128 MB** |
 | after boot (OCCT only) | 32.0 MB | 32.0 MB |
-| after any Python run (OCCT + MicroPython) | **51.5 MB** | **51.5 MB** |
+| after any Python run (OCCT + MicroPython) | **38.0 MB** (was 51.5) | **38.0 MB** (was 51.5) |
+| V8 live heap after the starter (inspector, local workerd) | see FIDELITY-ON-WORKERS.md | **18.9 MB** (was 71 MB) |
 | engine boot (`/health`, `bootMs`) | ~150-360 ms | ~170-580 ms |
 | static-asset fetch on a cold isolate (`assetMs`) | 0.36-1.15 s / 4.31 MB | 0.20-0.68 s / 7.61 MB |
 | Python library registration (first Python request) | ~130 ms | **~640 ms** |
@@ -337,13 +338,19 @@ needed any more.
 `/health` reports `pySrc`, `bootMs`, `assetMs`, `assetBytes` and `cold`, so
 the cost of the static-assets split is measurable from outside.
 
-51.5 MB of 128 MB for a basic model on EITHER flavor, with the remaining
-headroom for the model itself. Where they part company is heavy models — see
+38.0 MB of wasm (plus ~19 MB of JS heap) of 128 MB for a basic model on
+EITHER flavor, with the remaining headroom for the model itself. Where they part company is heavy models — see
 [Source flavors](#source-flavors).
 
-## Bundle size — the real constraint
+## Bundle size
 
-Cloudflare's compressed Worker **script** limit is **10 MiB (10240 KiB)** on
+*Update 2026-10: Cloudflare's limit is now **64 MiB UNCOMPRESSED** on Free
+and Paid, with no compressed cap (limits page, last updated 2026-10-12). The
+lite/upstream script is 28,342 KiB uncompressed; the `--env real` script
+48,745 KiB (FIDELITY-ON-WORKERS.md §3). The figures below are the history
+under the old compressed cap.*
+
+Cloudflare's compressed Worker **script** limit was **10 MiB (10240 KiB)** on
 paid plans and 3 MB on the free plan. Static assets do not count against it.
 
 **Worker script** (`assets/`, module bindings — `wrangler deploy` reports the
@@ -431,16 +438,26 @@ readers, the mesher, `Geom2dGcc`, …) is the only way under the free plan's
    next request gets a pristine allocator (no heap ratcheting) AND an
    un-poisoned kernel (see
    [Two ceilings that were real](#two-ceilings-that-were-real)).
-6. **`pySrc: 'lite'`.** The `upstream` source layer (verbatim upstream
-   build123d 0.11.1) also works headless, but needs 3.5 MB of extra Python
-   text bundled and boots ~5x slower (642 ms vs 122 ms of library load) for
-   identical memory. Lite is embedded in the JS bundle.
+6. **`pySrc: 'lite'` by default.** The `upstream` source layer (verbatim
+   upstream build123d 0.11.1) needs 3.15 MB of Python text as a static asset
+   and ~0.6 s more library load; `real` (`--env real`) needs ~20 MB of
+   Pyodide module bindings and 1.75 s of cold boot. Lite is embedded in the
+   JS bundle.
+7. **`keep_names = false`.** Wrangler re-bundles `src/` with esbuild, whose
+   keepNames default gave each of the ~216k embind invoker closures the OCCT
+   glue mints at boot its own property store — ~25 MB of the isolate's JS
+   heap (inspector-measured).
 
 ## Files
 
 ```
 wrangler.toml                 module rules, [assets], [env.upstream], why nodejs_compat is off
 src/index.js                  the Worker: POST /render (+ ?stream=1), GET /health
+src/real.js                   entry of --env real: Pyodide bindings + the host seam, then index.js
+src/boot-pyodide.mjs          boots Pyodide 314 from module bindings (no fetch/import()/wasm compile)
+scripts/prepare-pyodide.mjs   vendor/pyodide -> assets/pyodide (3 glue patches, precompiled numpy .so)
+scripts/pyodide-sigs.json     addFunction signatures to precompile (record-sigs.mjs in experiments/)
+FIDELITY-ON-WORKERS.md        the upstream + real flavors against the 64 MiB / 128 MB / 1 s limits
 src/node-module-stub.js       resolves the glues' dead node-only imports
 scripts/prepare-assets.cjs    cascade-core/dist -> assets/ (script) + public/ (static)
 scripts/smoke.mjs             curl-equivalent end-to-end checks, incl. the SSE stream

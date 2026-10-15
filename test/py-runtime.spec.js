@@ -75,8 +75,9 @@ show(part)
   expect(stats.bootTiming.artifact).toBe('custom');
   expect(stats.bootTiming.getframe).toBe(true);
   // The whole interpreter (GC heap included) stays a fraction of Pyodide's:
-  // ~20 MB wasm heap vs Pyodide's ~45 MB (and Brython's JS-heap footprint).
-  expect(stats.pythonWasm).toBeGreaterThan(8 * 1024 * 1024);
+  // 6 MiB of wasm memory (micropython-cs patch 12; 4 MiB initial GC heap that
+  // grows on demand) vs Pyodide's ~45-52 MB (and Brython's JS-heap footprint).
+  expect(stats.pythonWasm).toBeGreaterThan(4 * 1024 * 1024);
   expect(stats.pythonWasm).toBeLessThan(32 * 1024 * 1024);
 
   // History steps carry user line numbers (the frame hooks — sys._getframe

@@ -214,11 +214,12 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   see the next bullet) swaps the interpreter for MicroPython 1.28 wasm
   (`packages/cascade-core/src/worker/MicroPythonRuntime.js`, ~237 KB gz,
   copied to dist by the cascade-core build) — the smallest and lowest-memory
-  runtime: ~150 ms boot, ~20 MB interpreter wasm heap after the starter (vs
-  Pyodide's ~45 MB), aimed at memory-budgeted headless execution.
+  runtime: ~150 ms boot, **6 MiB** interpreter wasm memory after the starter
+  (vs Pyodide's ~52 MB; was ~20 MB before micropython-cs patches 11-12),
+  aimed at memory-budgeted headless execution.
   **The interpreter is a CUSTOM-PATCHED build (micropython-cs)**: vendored +
   committed in `packages/cascade-core/vendor/micropython-cs/` (PROVENANCE.md:
-  base v1.28.0 tag e0e9fbb, eight patch SHAs, build command), copied to dist
+  base v1.28.0 tag e0e9fbb, twelve patch SHAs, build command), copied to dist
   as `micropython-cs.mjs/.wasm` and PREFERRED at boot; the stock npm settrace
   pair remains the feature-detected fallback (everything works on both —
   `_pythonBootTiming.artifact/getframe` says which booted, frozen in
@@ -403,10 +404,22 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   cached shapes therefore remesh on re-evaluation). heat_exchanger OCCT
   high-water: lite legs 165.6 → **138 MB**, pysrc=real 286.3 → **238.5 MB**
   (alive embind objects 265,598 → ~5.6k, eval time unchanged);
-  mp+upstream stays 286.3 (MicroPython has no `__del__`; its 556-612 MB GC
-  arena is a port-level grow-on-burst ratchet — gc.threshold is compiled
-  out, explicit collects verified ineffective; needs a micropython-cs
-  patch). **`?lowmem=1`** (or localStorage `cascade-low-memory`='1'): the
+  mp+upstream stayed 286.3 then — RESOLVED 2026-10-15 (see
+  `examples/cloudflare-worker/FIDELITY-ON-WORKERS.md` §1): the "556-612 MB
+  GC arena ratchet" was the stock pyscript port NEVER collecting inside a
+  top-level call (`gc_collect()` only set a pending flag — which is also why
+  gc.collect()/gc.threshold looked ineffective). micropython-cs patch 11
+  (`MICROPY_GC_SCAN_SPILLED_STACK`: Binaryen
+  `--flatten,--coalesce-locals,--spill-pointers` + a conservative C-stack
+  scan) collects at any depth, and MicroPython's JsProxy finalisers now
+  free embind objects (`installProxyFreeHook` -> OcpShim `_csOcpRelease`;
+  one JsProxy per JS object, so its death means Python reaches the object
+  no more). Also fixed then: `canDelete()`'s name guard `/^Geom/` had
+  kept every `GeomAPI_*` value object alive on ALL shim legs (upstream
+  bicycle_tire 2.3 GB of OCCT); the guard now only applies to classes the
+  binding table has no chain for. MicroPython's initial GC heap is 4 MB
+  with gc.threshold(4 MB) (a collection is what frees the OCCT objects, so
+  heap size = OCCT lag), and patch 12 starts its linear memory at 6 MiB. **`?lowmem=1`** (or localStorage `cascade-low-memory`='1'): the
   worker keeps history step METADATA but drops the per-step shape refs
   (timeline scrubbing logs a console note instead) and deletes pruned
   argCache entries' kernel objects at end-of-evaluation — bounds retention
@@ -748,17 +761,22 @@ Two consequences of "nuclear" that the upstream source flavor forced out:
 0.11.1's OWN Python over the OCP shim, 216/222 on the validation corpus
 against lite's 206 — is deployed alongside it (see the Cloudflare section)
 and needs `upstreamPy(rel)`, a loader for the 3.5 MB vendored tree. It costs
-~5x the library boot (642 ms vs 122 ms in Node) and the SAME memory for a
-basic model (51.5 MB, byte-identical), but heavy models are a different
-story: upstream topology puts every boolean, selector and glyph through the
-OCP shim, each dispatch retains ~32-230 B in the interpreter for the run, and
-MicroPython's GC arena grows by doubling and never shrinks — `examples/clock`
-alone takes it from 19.5 MB to 386 MB. The retention is run-scoped (~1.1 MB
-live afterwards); the ARENA is not. Bounding it needs an interpreter patch —
-`NOTE(heavy-model memory round)` in
-`packages/cascade-core/upstream-py/ocp_shim/ocp_core.py`. Both flavors are
-gated: `node test/headless-node.mjs` and `CS_PY_SRC=upstream node
-test/headless-node.mjs`.
+~4x the library boot (575-822 ms vs ~130 ms in Node; precompiled .mpy would
+halve it — measured, not shipped, FIDELITY-ON-WORKERS.md §5) and the SAME
+memory for a basic model (38.0 MB: 32.0 occt + 6.0 python). Heavy models used
+to ratchet the MicroPython heap to hundreds of MB (clock 386-462 MB); since
+micropython-cs patches 11-12 + the shim lifetime fixes (see the heavy-model
+memory bullet above) the upstream flavor fits 220/221 corpus models under
+128 MB of wasm (was 210/221), lite 221/221 (peak 99.4 MB, was 150.9), with
+per-script-identical classification — numbers and method in
+`examples/cloudflare-worker/FIDELITY-ON-WORKERS.md`. A THIRD flavor,
+`pySrc: 'real'` (`runtime: 'pyodide'`, the PyPI wheel + numpy), runs headless
+through a host seam: `createHeadlessCascade({runtime: 'pyodide', pyodide:
+{boot, installWheels}, upstreamPy})` — the host brings Pyodide up from its own
+assets (the Worker's `--env real` does it from module bindings only). Both
+MicroPython flavors are gated: `node test/headless-node.mjs` and
+`CS_PY_SRC=upstream node test/headless-node.mjs` (one 96 MB ceiling for both,
+plus a bounded-interpreter-heap check after examples/clock).
 
 **Build**: `packages/cascade-core/scripts/build-headless.cjs` emits
 `packages/cascade-core/dist/cascade-headless.mjs` (esbuild, wasm external) next
@@ -774,13 +792,24 @@ memory budget. Measured on this machine:
 |---|---|
 | engine boot (OCCT) | 279 ms, 32.0 MB |
 | MicroPython + build123d-lite boot | 124 ms |
-| after any Python run | **51.5 MB** (32.0 occt + 19.5 python) |
+| after any Python run | **38.0 MB** (32.0 occt + 6.0 python) |
 | starter model eval | 299 ms (292 ms before `-sDYNAMIC_EXECUTION=0`) |
 
 **Cloudflare specifics** — full write-up + measured numbers in
 `examples/cloudflare-worker/README.md` (`npm run dev`, then
 `node scripts/smoke.mjs`; verified against the real workerd via `wrangler dev`):
-- 128 MB isolate; the engine sits at 51.5 MB for the starter model.
+- 128 MB isolate, counting the JS heap too. Wasm for the starter: 38.0 MB
+  (lite/upstream), 83.9 MB (real). V8 live heap (inspector, after GC) after
+  the starter on upstream: **18.9 MB** — it was 71 MB before `keep_names =
+  false` in wrangler.toml (wrangler re-bundles with esbuild keepNames ON by
+  default; ~216k embind closures each got a property store), lazy font
+  parsing in the headless asset path, and dropping the Python source map
+  after boot. Per-model wasm + heap tables (fresh and same-isolate
+  sequences) are in FIDELITY-ON-WORKERS.md.
+- Script size: Cloudflare now limits the UNCOMPRESSED Worker to **64 MiB**
+  (no compressed cap, Free and Paid). lite/upstream script 28,342 KiB; the
+  `--env real` script (Pyodide + numpy side modules as CompiledWasm bindings)
+  48,745 KiB.
 - Wasm **only** as compiled module bindings (`[[rules]] type = "CompiledWasm"`);
   `WebAssembly.compile` is forbidden. No dynamic `import()` of a URL.
 - **No runtime code generation at all** — which embind violates by default: it
@@ -814,9 +843,18 @@ memory budget. Measured on this machine:
   will not compile WebAssembly at runtime. The upstream Python ships as ONE
   relative-path -> text JSON (158 modules, 0.40 MB gz) because the loader
   asks for ~120 modules and every `env.ASSETS.fetch()` is a subrequest.
-- **Two flavors, two wrangler environments.** Default `PY_SRC=lite`
+- **Three flavors, three wrangler environments.** Default `PY_SRC=lite`
   (`cascade-headless`), `--env upstream` -> `PY_SRC=upstream`
-  (`cascade-headless-upstream`). One isolate serves one flavor: the engine
+  (`cascade-headless-upstream`), `--env real` -> `PY_SRC=real`
+  (`cascade-headless-real`, NOT deployed — separate entry `src/real.js` so
+  only it carries Pyodide; `scripts/prepare-pyodide.mjs` patches Pyodide
+  314's glue in three places so nothing is compiled at runtime: numpy's 13
+  side modules and CPython's call trampoline become CompiledWasm bindings,
+  and `addFunction`'s per-signature wrapper modules are precompiled — 28
+  signatures in `scripts/pyodide-sigs.json`; local smoke all green, cold
+  first render 1.85 s). Cloudflare's own Python Workers are NOT a host for
+  this stack: a Python Worker reaches no bundled JS/wasm module and cannot
+  compile wasm or eval (probed, `experiments/cf-fidelity/python-worker/`). One isolate serves one flavor: the engine
   keeps its state on the worker global and a runtime registers ONE library.
   Cold first `/render` 3.0 s (lite) / 5.6 s (upstream); warm trivial model
   44-57 / 61-89 ms; basic-model isolate memory identical at 51.5 MB. The
@@ -824,9 +862,10 @@ memory budget. Measured on this machine:
   `ttt-ppp0110` is a lite 422 ("Union produced near-zero volume") and an
   upstream 200 at the native 207159.364; `docs-selectors/sort_axis` is 200 on
   BOTH and only the volume differs (lite 8533.385, upstream 9353.444 =
-  native). `examples/toy_truck` is the counter-example: upstream builds what
-  lite's fillet cannot, but needs 168.7 MB, so the edge trades a 422 for an
-  `exceededMemory` 503.
+  native). `examples/toy_truck` WAS the counter-example (upstream needed
+  168.7 MB, an `exceededMemory` 503 on 2026-08-23); after the 2026-10-15
+  memory round it is 38.0 MB of wasm (57.5 MB with the V8 heap, local
+  workerd).
 - **All four FreeSans faces ship now** (2.22 MB gz, out of the script), so
   `FontStyle.ITALIC`/`BOLDITALIC` resolve; a face that is genuinely absent
   still raises an error that NAMES it — that missing face was the whole of
@@ -851,8 +890,10 @@ memory budget. Measured on this machine:
   counts — COMPROMISE(kernel-heap-reset) with no BREP carrier, and 163.3 MB
   against the 128 MB isolate. On **upstream** 6 of 9 do: `clock`,
   `heat_exchanger` and `bicycle_tire` all 503 with `exceededMemory` (confirmed
-  via `wrangler tail --env upstream`), which is the arena ratchet above, not a
-  CPU limit.
+  via `wrangler tail --env upstream`), which was the arena ratchet above, not a
+  CPU limit. (That ladder predates the 2026-10-15 memory round and has not
+  been re-run on the edge: locally all three now fit on a fresh isolate —
+  see FIDELITY-ON-WORKERS.md.)
 
 ## Playwright Testing
 

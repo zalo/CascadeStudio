@@ -104,12 +104,20 @@ const npWheel = fs.readdirSync(VENDOR).find((f) => f.startsWith('numpy-') && f.e
 const tmp = fs.mkdtempSync('/tmp/cs-np-');
 execFileSync('unzip', ['-q', join(VENDOR, npWheel), '-d', tmp]);
 const dynlibs = [];
+// Unpacked wheels live in MEMFS, i.e. in JS ArrayBuffers that count against
+// the isolate's 128 MB: drop what `import numpy` (and build123d) never reads
+// — 2.4 of numpy's 5.5 MB of Python-side files.
+const PRUNE_DIRS = new Set(['numpy/f2py', 'numpy/_core/include', 'numpy/_core/lib',
+  'numpy/random/lib', 'numpy/_pyinstaller', 'numpy/doc', 'numpy/testing']);
+const PRUNE_EXT = /\.(pyi|pxd|pyx|c|h|md|txt)$/;
 const walk = (d) => {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = join(d, e.name);
     if (e.isDirectory()) {
-      if (e.name === 'tests') { fs.rmSync(p, { recursive: true, force: true }); continue; }
+      if (e.name === 'tests' || PRUNE_DIRS.has(p.slice(tmp.length + 1))) { fs.rmSync(p, { recursive: true, force: true }); continue; }
       walk(p);
+    } else if (PRUNE_EXT.test(e.name) && !p.includes('.dist-info')) {
+      fs.rmSync(p);                       // typing stubs, C headers/sources, docs
     } else if (e.name.endsWith('.so')) {
       const name = e.name;
       if (dynlibs.some((x) => x.name === name)) { throw new Error('duplicate .so basename ' + name); }
