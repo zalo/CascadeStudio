@@ -1989,6 +1989,11 @@ function _edgeIsForward(edge) {
   return _asEdge(edge).Orientation_1() !== self.oc.TopAbs_Orientation.TopAbs_REVERSED;
 }
 
+/** Is the shape REVERSED-oriented (any shape type). */
+function _shapeIsReversed(shape) {
+  return shape.Orientation_1() === self.oc.TopAbs_Orientation.TopAbs_REVERSED;
+}
+
 /** TopoDS_Shape::IsSame across the Brython boundary. */
 function _sameShape(a, b) {
   return a.IsSame(b);
@@ -2024,7 +2029,14 @@ function _obbIsOut(obb, p) {
 }
 
 function _vertexPoint(vertex) {
-  let p = self.oc.BRep_Tool.Pnt(vertex);
+  // a transformed vertex comes back as a generic TopoDS_Shape: downcast
+  let v = vertex.ShapeType().value === 7 ? self.oc.TopoDS_Cast.Vertex_1(vertex) : vertex;
+  if (v.ShapeType().value !== 7) {
+    let found = null;
+    ForEachVertex(v, (vx) => { if (!found) { found = vx; } });
+    if (found) { v = found; }
+  }
+  let p = self.oc.BRep_Tool.Pnt(v);
   return [p.X(), p.Y(), p.Z()];
 }
 
@@ -4680,6 +4692,7 @@ class CascadeStudioStandardLibrary {
     self._shapeOBB = _shapeOBB;
     self._obbIsOut = _obbIsOut;
     self._edgeIsForward = _edgeIsForward;
+    self._shapeIsReversed = _shapeIsReversed;
     self._vertexPoint = _vertexPoint;
     self._edgePointAt = _edgePointAt;
     self._edgeTangentAt = _edgeTangentAt;

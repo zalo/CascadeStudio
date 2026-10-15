@@ -1144,8 +1144,21 @@ class Location:
                     # TOPO is still exact, only spec-level chaining is lost
                     moved._specs = []
             return moved
-        if isinstance(other, (list, tuple, ShapeList)):
-            return ShapeList([self * s for s in other])
+        if isinstance(other, (str, Vector)):
+            return NotImplemented
+        # build123d 0.12: an iterable (list, generator, map...) is consumed
+        # once and applied element-wise - all Locations compose, all movable
+        # objects (Shapes, Planes) move
+        try:
+            items = list(other)
+        except TypeError:
+            return NotImplemented
+        if all(isinstance(i, Location) for i in items):
+            return [self * i for i in items]
+        if all(isinstance(i, Plane) for i in items):
+            return [self * i for i in items]
+        if all(isinstance(i, (Shape, Plane)) for i in items):
+            return ShapeList([self * i for i in items])
         return NotImplemented
 
     def __neg__(self):
@@ -1173,14 +1186,113 @@ class Pos(Location):
             Location.__init__(self, (x, y, z))
 
 
+def _is_ordering(value):
+    for cls in (Intrinsic, Extrinsic):
+        for name in ('XYZ', 'XZY', 'YZX', 'YXZ', 'ZXY', 'ZYX', 'XYX', 'XZX',
+                     'YZY', 'YXY', 'ZXZ', 'ZYZ'):
+            if getattr(cls, name) == value:
+                return True
+    return False
+
+
 class Rotation(Location):
-    def __init__(self, X=0, Y=0, Z=0, **kwargs):
-        if len(kwargs) > 0:
-            X = kwargs.get('X', X)
-            Y = kwargs.get('Y', Y)
-            Z = kwargs.get('Z', Z)
+    """A pure rotation (build123d 0.12 Rotation overloads): Euler angles
+    Rotation(X, Y, Z, ordering=Intrinsic.XYZ), a RotationLike
+    Rotation((x, y, z) | Vector | Rotation, ordering), or - new in 0.12 -
+    Rotation(Axis, angle): a rotation about the axis LINE (an axis off the
+    origin carries a translation, like gp_Trsf.SetRotation)."""
+
+    def __init__(self, *args, **kwargs):
+        rotation_like = kwargs.pop('rotation', None)
+        x_angle = kwargs.pop('X', None)
+        y_angle = kwargs.pop('Y', None)
+        z_angle = kwargs.pop('Z', None)
+        ordering = kwargs.pop('ordering', None)
+        axis = kwargs.pop('axis', None)
+        axis_angle = kwargs.pop('angle', None)
+        if kwargs:
+            raise TypeError('Unexpected keyword arguments: ' +
+                            ', '.join(kwargs))
+        if args:
+            first = args[0]
+            if isinstance(first, Axis):
+                axis = first if axis is None else axis
+                if len(args) > 1 and axis_angle is None:
+                    axis_angle = args[1]
+                if len(args) > 2:
+                    raise TypeError('Too many arguments for axis-angle '
+                                    'Rotation')
+            elif isinstance(first, (Rotation, Vector, tuple)):
+                rotation_like = first if rotation_like is None \
+                    else rotation_like
+                if len(args) > 1 and ordering is None:
+                    ordering = args[1]
+                if len(args) > 2:
+                    raise TypeError('Too many arguments for RotationLike '
+                                    'Rotation')
+            elif isinstance(first, (int, float)):
+                if x_angle is None:
+                    x_angle = first
+                if len(args) > 1 and y_angle is None:
+                    y_angle = args[1]
+                if len(args) > 2 and z_angle is None:
+                    z_angle = args[2]
+                if len(args) > 3 and ordering is None:
+                    ordering = args[3]
+                if len(args) > 4:
+                    raise TypeError('Too many arguments for Euler-angle '
+                                    'Rotation')
+            else:
+                raise TypeError('Invalid positional arguments: ' + repr(args))
+        has_axis_angle = axis is not None or axis_angle is not None
+        has_euler = x_angle is not None or y_angle is not None or \
+            z_angle is not None
         Location.__init__(self)
-        self._R = _rot_mat(X, Y, Z)
+        if has_axis_angle:
+            if axis is None or axis_angle is None:
+                raise TypeError('Both an Axis and angle must be provided')
+            if rotation_like is not None or has_euler or ordering is not None:
+                raise TypeError('Unsupported or ambiguous Rotation arguments')
+            if not isinstance(axis, Axis):
+                raise TypeError('Axis must be an Axis, not ' +
+                                type(axis).__name__)
+            if not isinstance(axis_angle, (int, float)):
+                raise TypeError('Angle must be an int or float, not ' +
+                                type(axis_angle).__name__)
+            if axis_angle != 0.0:
+                R = _axis_angle_mat(tuple(axis.direction), axis_angle)
+                p = tuple(axis.position)
+                q = _mat_vec(R, p)
+                self._R = R
+                self._t = (p[0] - q[0], p[1] - q[1], p[2] - q[2])
+            return
+        if ordering is not None and not _is_ordering(ordering):
+            raise TypeError('ordering must be an Extrinsic or Intrinsic value')
+        if rotation_like is not None:
+            if has_euler:
+                raise TypeError('Unsupported or ambiguous Rotation arguments')
+            if isinstance(rotation_like, Rotation):
+                self._R, self._t = rotation_like._R, rotation_like._t
+                return
+            if not isinstance(rotation_like, (Vector, tuple)):
+                raise TypeError('rotation must be a Rotation, Vector, or '
+                                'tuple of Euler angles')
+            angles = list(rotation_like)[:3]
+            angles.extend([0.0] * (3 - len(angles)))
+        else:
+            angles = [x_angle if x_angle is not None else 0.0,
+                      y_angle if y_angle is not None else 0.0,
+                      z_angle if z_angle is not None else 0.0]
+        for a in angles:
+            if not isinstance(a, (int, float)):
+                raise TypeError('Euler angles must be int or float values')
+        if ordering is None or ordering == Intrinsic.XYZ:
+            self._R = _rot_mat(angles[0], angles[1], angles[2])
+        else:
+            intrinsic = not ordering.startswith('x')
+            self._R = _euler_mat(tuple(angles),
+                                 ordering if intrinsic else ordering[1:],
+                                 intrinsic)
 
 
 Rot = Rotation
@@ -2017,7 +2129,7 @@ class Shape:
     def area(self):
         if self.topo is None:
             return 0.0
-        return w.SurfaceArea(self.topo)
+        return float(w.SurfaceArea(self.topo))
 
     @property
     def length(self):
@@ -2072,8 +2184,8 @@ class Shape:
         (build123d Shape.closest_points)."""
         return self.distance_to_with_closest_points(other)[1:3]
 
-    def bounding_box(self, tolerance=None):
-        return BoundBox(list(w.BoundingBox(self.topo)))
+    def bounding_box(self, tolerance=None, optimal=True):
+        return BoundBox(self)
 
     # --- placement ---
     def moved(self, loc):
@@ -3528,6 +3640,29 @@ class Edge(Mixin1D):
         return _reverse_1d(edge) if cw and partial else edge
 
     @classmethod
+    def make_ellipse(cls, x_radius, y_radius, plane=None, start_angle=360.0,
+                     end_angle=360.0, angular_direction=None):
+        """Full ellipse or elliptical arc edge (build123d
+        Edge.make_ellipse): a full ellipse by default (start == end); a
+        CLOCKWISE arc is the CCW arc over the same span traversed backwards."""
+        if plane is None:
+            plane = Plane.XY
+        cw = getattr(angular_direction, 'name',
+                     angular_direction) == 'CLOCKWISE'
+        a0, a1 = float(start_angle), float(end_angle)
+        if (a0 % 360.0) == (a1 % 360.0):
+            a0, a1 = 0.0, 360.0
+        elif cw:
+            a0, a1 = a1, a0
+        if a1 <= a0:
+            a1 += 360.0
+        spec = _ellipse_arc_spec((0.0, 0.0, 0.0), x_radius, y_radius, a0, a1,
+                                 0.0)
+        local = Curve(w.WireFromSegments(_chain_segments([spec])), [spec])
+        edge = cls(_single_edge_of(plane.location * local).topo)
+        return _reverse_1d(edge) if cw else edge
+
+    @classmethod
     def make_three_point_arc(cls, p1, p2, p3):
         """Circular arc through three points (build123d
         Edge.make_three_point_arc / GC_MakeArcOfCircle)."""
@@ -3749,7 +3884,7 @@ class Face(Shape):
 
     @property
     def area(self):
-        return w._faceArea(self.topo)
+        return float(w._faceArea(self.topo))
 
     def center(self, center_of=CenterOf.GEOMETRY):
         if center_of == CenterOf.BOUNDING_BOX:
@@ -3815,6 +3950,9 @@ class Face(Shape):
         origin = Vector(tuple(d[0]))
         du, dv = Vector(tuple(d[1])), Vector(tuple(d[2]))
         z_dir = du.cross(dv).normalized()
+        # build123d 0.12: a REVERSED face's location z matches normal_at
+        if w._shapeIsReversed(self.topo):
+            z_dir = -z_dir
         x_dir = Vector(user_x_dir) if user_x_dir is not None else du
         return Location(Plane(origin=origin, x_dir=x_dir, z_dir=z_dir))
 
@@ -4167,7 +4305,11 @@ class Face(Shape):
         pts = [[list(_v3(p)) for p in row] for row in points]
         # [] = no smoothing (None does not survive CacheOp's JSON hashing)
         smooth = list(smoothing) if smoothing is not None else []
-        topo = w.SurfaceFromPoints(pts, tol, min_deg, max_deg, smooth)
+        # build123d 0.12: the smoothing (variational) branch needs degree >= 6
+        # in OCCT 8 for C2 (PLib_JacobiPolynomial); upstream passes
+        # DegMax=max(max_deg, 6) there
+        degmax = max(max_deg, 6) if smoothing is not None else max_deg
+        topo = w.SurfaceFromPoints(pts, tol, min_deg, degmax, smooth)
         if topo is None:
             raise ValueError('B-spline surface approximation failed')
         return cls(topo)
@@ -4350,9 +4492,53 @@ class Vertex(Shape):
 
 
 class BoundBox:
-    def __init__(self, six):
+    """An axis-aligned bounding box (build123d BoundBox). Since 0.12 it can
+    be built straight from a Shape (BoundBox(shape)) and carries upstream's
+    full predicate set - covers/covered_by, contains/within (enclosure WITH
+    relevant-dimensional interior), contains_properly, intersects/disjoint
+    (distance within tolerance), touches and overlaps (shared interior,
+    neither containing the other) - with degenerate axes coincident in both
+    boxes dropped from interior comparisons (coplanar rectangles compare in
+    2-D). A void box (empty shape) has wrapped None and answers False."""
+
+    def __init__(self, *args, **kwargs):
+        shape = kwargs.pop('shape', None)
+        kwargs.pop('tolerance', None)
+        kwargs.pop('optimal', None)
+        six = kwargs.pop('bounding_box', None)
+        if kwargs:
+            raise TypeError('Unexpected keyword arguments: ' +
+                            ', '.join(kwargs))
+        void = False
+        if args:
+            a = args[0]
+            if isinstance(a, BoundBox):
+                six = None if a.wrapped is None else \
+                    list(tuple(a.min)) + list(tuple(a.max))
+                void = a.wrapped is None
+            elif isinstance(a, (Shape, Builder)) or hasattr(a, 'ShapeType'):
+                shape = a
+            elif a is None:
+                void = True
+            elif _is_nested_seq(a) or isinstance(a, (list, tuple)):
+                six = list(a)
+            else:
+                raise TypeError('Invalid positional arguments: ' + repr(args))
+        if shape is not None:
+            topo = shape.topo if isinstance(shape, Shape) else \
+                (_topo(shape) if isinstance(shape, Builder) else shape)
+            if topo is None:
+                void = True
+            else:
+                bb = w.BoundingBox(topo)
+                if bb:
+                    six = list(bb)
+                else:
+                    void = True
         if six is None:
+            void = True
             six = [0.0] * 6
+        self.wrapped = None if void else True
         self.min = Vector(six[0], six[1], six[2])
         self.max = Vector(six[3], six[4], six[5])
 
@@ -4360,15 +4546,145 @@ class BoundBox:
     def size(self):
         return self.max - self.min
 
+    @property
+    def measure(self):
+        """The bounding box's Lebesgue measure: length, area or volume over
+        its non-degenerate axes."""
+        result = 1.0
+        for x in self.size:
+            if x > _TOL_1E6:
+                result *= x
+        return result
+
     def center(self):
         return (self.min + self.max) * 0.5
 
     @property
     def diagonal(self):
+        if self.wrapped is None:
+            return 0.0
         return (self.max - self.min).length
 
+    def add(self, obj, tol=None):
+        """A copy expanded to enclose a point or another box (upstream adds
+        a Bnd_Box gap of tol, default TOL = 1e-2, on every side)."""
+        tol = 1e-2 if tol is None else tol
+        pts = []
+        if self.wrapped is not None:
+            pts.extend([tuple(self.min), tuple(self.max)])
+        if isinstance(obj, BoundBox):
+            if obj.wrapped is not None:
+                pts.extend([tuple(obj.min), tuple(obj.max)])
+        else:
+            pts.append(tuple(Vector(obj)))
+        if not pts:
+            return BoundBox(None)
+        lo = [min(p[i] for p in pts) - tol for i in range(3)]
+        hi = [max(p[i] for p in pts) + tol for i in range(3)]
+        return BoundBox(lo + hi)
+
+    @staticmethod
+    def find_outside_box_2d(bb1, bb2):
+        """Deprecated since build123d 0.12: use BoundBox.contains()."""
+        _warn('Use BoundBox.contains() to identify the bounding box that '
+              'encloses the other.', 'DeprecationWarning')
+        if (bb1.min.X < bb2.min.X and bb1.max.X > bb2.max.X and
+                bb1.min.Y < bb2.min.Y and bb1.max.Y > bb2.max.Y):
+            return bb1
+        if (bb2.min.X < bb1.min.X and bb2.max.X > bb1.max.X and
+                bb2.min.Y < bb1.min.Y and bb2.max.Y > bb1.max.Y):
+            return bb2
+        return None
+
+    def _axes(self, other):
+        return list(zip(tuple(self.min), tuple(self.max),
+                        tuple(other.min), tuple(other.max)))
+
+    def _interior_axes(self, other, tolerance):
+        axes = []
+        for s0, s1, o0, o1 in self._axes(other):
+            if s1 - s0 <= tolerance and o1 - o0 <= tolerance:
+                if abs((s0 + s1) / 2 - (o0 + o1) / 2) > tolerance:
+                    return None
+            else:
+                axes.append((s0, s1, o0, o1))
+        return axes
+
+    def _has_interior_overlap(self, other, tolerance):
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        axes = self._interior_axes(other, tolerance)
+        if axes is None:
+            return False
+        for s0, s1, o0, o1 in axes:
+            if not (max(s0, o0) < min(s1, o1) - tolerance):
+                return False
+        return True
+
+    def covers(self, other, tolerance=_TOL_1E6):
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        for s0, s1, o0, o1 in self._axes(other):
+            if not (s0 <= o0 + tolerance and o1 <= s1 + tolerance):
+                return False
+        return True
+
+    def covered_by(self, other, tolerance=_TOL_1E6):
+        return other.covers(self, tolerance)
+
+    def contains(self, other, tolerance=_TOL_1E6):
+        return self.covers(other, tolerance) and \
+            self._has_interior_overlap(other, tolerance)
+
+    def contains_properly(self, other, tolerance=_TOL_1E6):
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        axes = self._interior_axes(other, tolerance)
+        if not axes:
+            return False
+        for s0, s1, o0, o1 in axes:
+            if not (s0 + tolerance < o0 and o1 < s1 - tolerance):
+                return False
+        return True
+
+    def within(self, other, tolerance=_TOL_1E6):
+        return other.contains(self, tolerance)
+
+    def intersects(self, other, tolerance=_TOL_1E6):
+        if self.wrapped is None or other.wrapped is None:
+            return False
+        dist2 = 0.0
+        for s0, s1, o0, o1 in self._axes(other):
+            gap = max(0.0, o0 - s1, s0 - o1)
+            dist2 += gap * gap
+        return dist2 ** 0.5 <= tolerance
+
+    def disjoint(self, other, tolerance=_TOL_1E6):
+        return not self.intersects(other, tolerance)
+
+    def touches(self, other, tolerance=_TOL_1E6):
+        return self.intersects(other, tolerance) and \
+            not self._has_interior_overlap(other, tolerance)
+
+    def overlaps(self, other, tolerance=_TOL_1E6):
+        return self._has_interior_overlap(other, tolerance) and \
+            not self.contains(other, tolerance) and \
+            not other.contains(self, tolerance)
+
+    def is_inside(self, other, tolerance=_TOL_1E6):
+        """Deprecated since build123d 0.12: use within()."""
+        _warn('Use BoundBox.within() instead.', 'DeprecationWarning')
+        return self.within(other, tolerance)
+
+    def to_align_offset(self, align):
+        """Amount to move the object to achieve the desired alignment."""
+        a = _norm_align(align, 3)
+        return Vector(_align_shift(a, tuple(self.min), tuple(self.max)))
+
     def __repr__(self):
-        return 'BoundBox(' + repr(tuple(self.min)) + ', ' + repr(tuple(self.max)) + ')'
+        return ('bbox: ' + repr(self.min.X) + ' <= x <= ' + repr(self.max.X) +
+                ', ' + repr(self.min.Y) + ' <= y <= ' + repr(self.max.Y) +
+                ', ' + repr(self.min.Z) + ' <= z <= ' + repr(self.max.Z))
 
 
 class OrientedBoundBox:
@@ -4990,6 +5306,16 @@ class GroupBy:
         if self.key_f is None:
             raise KeyError(shape)
         return self.group(self.key_f(shape))
+
+
+# build123d 0.12's build123d_type class variable (an external-application
+# type tag on the geometry, topology and builder classes)
+for _cls in (Vector, Axis, Location, Plane, Shape, Vertex, Edge, Wire, Face,
+             Shell, Solid, Compound, Curve, Sketch, Part, ShapeList):
+    _cls.build123d_type = _cls.__name__
+Pos.build123d_type = 'Location'
+Rotation.build123d_type = 'Location'
+del _cls
 
 
 # ------------------------------------------------------------- builders ---
@@ -5761,7 +6087,7 @@ class _BaseObjectMeta(type):
         scope = _ObjectScope()
         _builders.append(scope)
         try:
-            instance = type.__call__(cls, *args, **kwargs)
+            instance = super().__call__(*args, **kwargs)
         finally:
             for i in range(len(_builders) - 1, -1, -1):
                 if _builders[i] is scope:
@@ -5886,10 +6212,33 @@ class LocationList:
         return NotImplemented
 
 
+def _flatten_points(items):
+    """build123d flatten_sequence for Locations: lists, sets, non-point
+    tuples and iterators (generators, map, zip...) are flattened; a tuple of
+    numbers is a point, and Vector/Vertex/Location/Plane/Axis/Face stay
+    whole."""
+    out = []
+    for item in items:
+        if isinstance(item, (Location, Vector, Vertex, Plane, Axis, Shape,
+                             str, int, float)):
+            out.append(item)
+        elif isinstance(item, tuple) and \
+                all(isinstance(v, (int, float)) for v in item):
+            out.append(item)
+        else:
+            try:
+                nested = list(item)
+            except TypeError:
+                out.append(item)
+                continue
+            out.extend(_flatten_points(nested))
+    return out
+
+
 class Locations(LocationList):
     def __init__(self, *pts):
         locs = []
-        for p in pts:
+        for p in _flatten_points(pts):
             if isinstance(p, Location):
                 locs.append(p)
             elif isinstance(p, Plane):
@@ -5930,35 +6279,70 @@ def _grid_offset(a, extent):
 
 
 class HexLocations(LocationList):
-    """Hex-packed circle centers (touching circles of the given radius):
-    columns 2*apothem apart, rows 2*radius apart, odd columns offset by
-    radius; the whole grid is centered like build123d."""
+    """Hexagon-array locations (build123d HexLocations, ported verbatim):
+    radius is the major radius (centre to vertex) with major_radius=True,
+    otherwise the apothem; the array is aligned on its own bounding box."""
 
-    def __init__(self, radius, x_count, y_count, align=(Align.CENTER, Align.CENTER)):
+    def __init__(self, radius, x_count, y_count, major_radius=False,
+                 align=(Align.CENTER, Align.CENTER)):
         x_count, y_count = int(x_count), int(y_count)
-        apothem = radius * math.cos(math.radians(30))
-        pts = []
-        for i in range(x_count):
-            for k in range(y_count):
-                x = (i - (x_count - 1) / 2.0) * 2.0 * apothem
-                y = (k - (y_count - 1) / 2.0) * 2.0 * radius + \
-                    (i % 2) * radius - radius / 2.0
-                pts.append((x, y))
-        # center the grid (build123d aligns on the bounding box)
-        align = _norm_align(align, 2)
-        xs = [p[0] for p in pts]
-        ys = [p[1] for p in pts]
-        sh = _align_shift(align, (min(xs), min(ys), 0), (max(xs), max(ys), 0))
-        LocationList.__init__(self, [Pos(p[0] + sh[0], p[1] + sh[1], 0)
-                                     for p in pts])
+        if major_radius:
+            diagonal = 2 * radius
+            apothem = radius * math.cos(math.pi / 6)
+        else:
+            diagonal = 4 * radius / math.sqrt(3)
+            apothem = radius
+        x_spacing = 3 * diagonal / 4
+        y_spacing = diagonal * math.sqrt(3) / 2
+        if x_spacing <= 0 or y_spacing <= 0 or x_count < 1 or y_count < 1:
+            raise ValueError('Spacing and count must be > 0 ')
+        self.radius = radius
+        self.apothem = apothem
+        self.diagonal = diagonal
+        self.x_count = x_count
+        self.y_count = y_count
+        self.major_radius = major_radius
+        self.align = _norm_align(align, 2)
+        points = []
+        for x_val in range(0, x_count, 2):
+            for y_val in range(y_count):
+                points.append((x_spacing * x_val,
+                               y_spacing * y_val + y_spacing / 2))
+        for x_val in range(1, x_count, 2):
+            for y_val in range(y_count):
+                points.append((x_spacing * x_val, y_spacing * y_val + y_spacing))
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        size = (max(xs) - min(xs), max(ys) - min(ys))
+        al = self.align
+        offset = []
+        for i in range(2):
+            if al[i] == Align.MIN:
+                offset.append(0.0)
+            elif al[i] == Align.MAX:
+                offset.append(-size[i])
+            elif al[i] == Align.CENTER:
+                offset.append(-size[i] / 2)
+            else:
+                offset.append(0.0)
+        min_x, min_y = min(xs), min(ys)
+        LocationList.__init__(self, [Pos(p[0] + offset[0] - min_x,
+                                         p[1] + offset[1] - min_y, 0)
+                                     for p in points])
 
 
 class PolarLocations(LocationList):
     def __init__(self, radius, count, start_angle=0.0, angular_range=360.0,
-                 rotate=True):
+                 rotate=True, endpoint=False):
         count = int(count)
+        if count < 1:
+            raise ValueError('At least 1 elements required, requested ' +
+                             str(count))
+        if count == 1:
+            step = 0.0
+        else:
+            step = angular_range / (count - int(endpoint))
         locs = []
-        step = angular_range / count
         for i in range(count):
             a = start_angle + i * step
             loc = Pos(radius * math.cos(math.radians(a)),
@@ -6403,6 +6787,46 @@ def SlotCenterPoint(center, point, height, rotation=0,
                        mode=Mode.PRIVATE)
     placed = Pos(c.X, c.Y, c.Z) * slot
     return _combine(_active_builder(BuildSketch), placed, mode)
+
+
+class Superellipse(BaseSketchObject):
+    """Sketch object: a superellipse ("squircle") of the given width, height
+    and order (build123d 0.12 Superellipse): the top-right quadrant is a line
+    (order 1), an elliptical arc (order 2) or an interpolating spline through
+    point_count-2 points of |x/a|^n + |y/b|^n = 1, mirrored into the other
+    three quadrants."""
+
+    def __init__(self, width, height, order=4, point_count=16, rotation=0,
+                 align=(Align.CENTER, Align.CENTER), mode=Mode.ADD):
+        if order <= 0:
+            raise ValueError('Order must be greater than zero.')
+        self.width = width
+        self.height_ = height
+        self.order = order
+        self.point_count = point_count
+        self.align = _norm_align(align, 2)
+        if order == 1:
+            top_right = Edge.make_line((width / 2, 0), (0, height / 2))
+        elif order == 2:
+            top_right = Edge.make_ellipse(width / 2, height / 2,
+                                          start_angle=0, end_angle=90)
+        else:
+            points = [Vector(width / 2, 0.0)]
+            for i in range(1, point_count - 1):
+                t = i * math.pi / point_count / 2
+                cos_t, sin_t = math.cos(t), math.sin(t)
+                x = abs(cos_t) ** (2 / order) * width * \
+                    math.copysign(1, cos_t) / 2
+                y = abs(sin_t) ** (2 / order) * height * \
+                    math.copysign(1, sin_t) / 2
+                points.append(Vector(x, y))
+            points.append(Vector(0.0, height / 2))
+            top_right = Edge.make_spline(points)
+        top_left = _single_edge_of(top_right.mirror(Plane.YZ)).reversed()
+        bottom_left = _single_edge_of(top_left.mirror(Plane.XZ)).reversed()
+        bottom_right = _single_edge_of(top_right.mirror(Plane.XZ)).reversed()
+        face = Face(Wire([top_right, top_left, bottom_left, bottom_right]))
+        BaseSketchObject.__init__(self, face, rotation, align, mode)
 
 
 def Trapezoid(width, height, left_side_angle, right_side_angle=None,
@@ -7489,19 +7913,8 @@ def Spline(*pts, tangents=None, tangent_scalars=None, periodic=False,
                         mode)
 
 
-def EllipticalCenterArc(center, x_radius, y_radius, start_angle=0.0,
-                        arc_size=90.0, rotation=0.0, angular_direction=None,
-                        mode=Mode.ADD):
-    if not isinstance(arc_size, (int, float)):
-        raise NotImplementedError('EllipticalCenterArc arc limits (Shape/'
-                                  'Axis/...) are not supported in build123d-lite')
-    c = _v3(center)
-    if arc_size >= 0:
-        end_angle = start_angle + arc_size
-    else:
-        # negative size sweeps clockwise: same point set as the CCW arc
-        # from (start + arc_size) to start
-        start_angle, end_angle = start_angle + arc_size, start_angle
+def _ellipse_arc_spec(c, x_radius, y_radius, start_angle, end_angle,
+                      rotation):
     rot = math.radians(rotation)
     xd = (math.cos(rot), math.sin(rot), 0.0)
 
@@ -7517,9 +7930,33 @@ def EllipticalCenterArc(center, x_radius, y_radius, start_angle=0.0,
         major, minor = y_radius, x_radius
         a0, a1 = start_angle - 90.0, end_angle - 90.0
         xdir = [-xd[1], xd[0], 0.0]
-    spec = ('earc', [at(start_angle), at(end_angle)],
+    return ('earc', [at(start_angle), at(end_angle)],
             [list(c), xdir, [0.0, 0.0, 1.0], major, minor, a0, a1])
-    return _line_object([spec], mode)
+
+
+def EllipticalCenterArc(center, x_radius, y_radius, start_angle=0.0, *,
+                        arc_size=90.0, rotation=0.0, mode=Mode.ADD):
+    """Elliptical arc about a center (build123d 0.12 EllipticalCenterArc:
+    end_angle/angular_direction gave way to arc_size - a signed angle, or a
+    limit shape the full ellipse is trimmed to, both ways, keeping the
+    shorter piece)."""
+    c = _v3(center)
+    if isinstance(arc_size, (int, float)):
+        if arc_size >= 0:
+            end_angle = start_angle + arc_size
+            a0 = start_angle
+        else:
+            # negative size sweeps clockwise: same point set as the CCW arc
+            # from (start + arc_size) to start
+            a0, end_angle = start_angle + arc_size, start_angle
+        spec = _ellipse_arc_spec(c, x_radius, y_radius, a0, end_angle,
+                                 rotation)
+        return _line_object([spec], mode)
+    if isinstance(arc_size, (tuple, list)):
+        arc_size = Vector(arc_size)
+    spec = _ellipse_arc_spec(c, x_radius, y_radius, 0.0, 360.0, rotation)
+    trimmed = _arc_limit_curve([spec], arc_size)
+    return _line_object(_specs_from_topo_edges(trimmed), mode)
 
 
 # ----------------------------------------------- conic & spline 1-D objects
@@ -7584,43 +8021,36 @@ def _arc_limit_curve(specs, arc_limit):
     return candidates.sort_by(Edge.length)[0]
 
 
-def ParabolicCenterArc(vertex, focal_length, start_angle=0.0, end_angle=None,
-                       arc_size=90.0, rotation=0.0, angular_direction=None,
-                       mode=Mode.ADD):
+def ParabolicCenterArc(vertex, focal_length, start_angle=0.0, *,
+                       arc_size=90.0, rotation=0.0, mode=Mode.ADD):
     """Parabolic arc about a vertex point (build123d ParabolicCenterArc):
     gp_Parab(plane, focal_length) trimmed by GC_MakeArcOfParabola between the
     two given "angles" (upstream converts them to radians and passes them as
-    the curve parameters)."""
+    the curve parameters). 0.12 replaced end_angle/angular_direction with
+    arc_size (signed, or a limit shape)."""
     c = _v3(vertex)
     xdir = _rot_z([1.0, 0.0, 0.0], rotation)
     normal = [0.0, 0.0, 1.0]
-    if end_angle is not None or angular_direction is not None:
-        if not isinstance(arc_size, (int, float)):
-            raise ValueError('ParabolicCenterArc limit arc_size cannot be '
-                             'combined with end_angle / angular_direction')
-        end_a = end_angle if end_angle is not None else start_angle + arc_size
-        sense = angular_direction != AngularDirection.CLOCKWISE
-        spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
-                               start_angle, end_a, sense)
-        return _line_object([spec], mode)
     if isinstance(arc_size, (int, float)):
         spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
                                start_angle, start_angle + arc_size,
                                arc_size >= 0)
         return _line_object([spec], mode)
+    if isinstance(arc_size, (tuple, list)):
+        arc_size = Vector(arc_size)
     spec = _conic_arc_spec('parab', c, xdir, normal, float(focal_length),
                            start_angle, start_angle + 180.0, True)
     trimmed = _arc_limit_curve([spec], arc_size)
     return _line_object(_specs_from_topo_edges(trimmed), mode)
 
 
-def HyperbolicCenterArc(center, x_radius, y_radius, start_angle=0.0,
-                        end_angle=None, arc_size=90.0, rotation=0.0,
-                        angular_direction=None, mode=Mode.ADD):
+def HyperbolicCenterArc(center, x_radius, y_radius, start_angle=0.0, *,
+                        arc_size=90.0, rotation=0.0, mode=Mode.ADD):
     """Hyperbolic arc about a center point (build123d HyperbolicCenterArc):
     gp_Hypr trimmed by GC_MakeArcOfHyperbola. gp_Hypr needs major >= minor, so
     a taller-than-wide hyperbola is built rotated by 90 degrees with its angle
-    range shifted to match, exactly like Edge.make_hyperbola."""
+    range shifted to match, exactly like Edge.make_hyperbola. 0.12 replaced
+    end_angle/angular_direction with arc_size (signed, or a limit shape)."""
     c = _v3(center)
     normal = [0.0, 0.0, 1.0]
     if y_radius > x_radius:
@@ -7629,22 +8059,14 @@ def HyperbolicCenterArc(center, x_radius, y_radius, start_angle=0.0,
         major, minor, correction = x_radius, y_radius, 0.0
     xdir = _rot_z([1.0, 0.0, 0.0], rotation + correction)
     sizes = [float(major), float(minor)]
-    if end_angle is not None or angular_direction is not None:
-        if not isinstance(arc_size, (int, float)):
-            raise ValueError('HyperbolicCenterArc limit arc_size cannot be '
-                             'combined with end_angle / angular_direction')
-        end_a = end_angle if end_angle is not None else start_angle + arc_size
-        sense = angular_direction != AngularDirection.CLOCKWISE
-        spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
-                               start_angle - correction, end_a - correction,
-                               sense)
-        return _line_object([spec], mode)
     if isinstance(arc_size, (int, float)):
         spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
                                start_angle - correction,
                                start_angle + arc_size - correction,
                                arc_size >= 0)
         return _line_object([spec], mode)
+    if isinstance(arc_size, (tuple, list)):
+        arc_size = Vector(arc_size)
     spec = _conic_arc_spec('hypr', c, xdir, normal, sizes,
                            start_angle - correction,
                            start_angle + 180.0 - correction, True)
@@ -10165,14 +10587,36 @@ def _json_num(x):
     return repr(x)
 
 
-def _shape_result_of(obj):
-    """obj._obj when it is a Shape with geometry (an upstream-source builder;
-    guarded because attribute access on module stubs like the numpy shim
-    RAISES rather than returning AttributeError defaults)."""
+def _builder_product(obj):
+    """The builder result a variable is measured by — test/b123d-validation
+    reference.py's rule, 0.11.1's meaning of _obj held fixed: the PLACED
+    product for BuildPart/BuildLine (.part/.line) and the LOCAL one for
+    BuildSketch (.sketch_local). Since 0.12 _obj is the local construction
+    product of every builder."""
+    cls = type(obj)
     try:
-        cand = getattr(obj, '_obj', None)
+        if hasattr(cls, 'sketch_local'):
+            return obj.sketch_local
+        for attr in ('part', 'line'):
+            if hasattr(cls, attr):
+                return getattr(obj, attr)
+        return getattr(obj, '_obj', None)
     except Exception:
         return None
+
+
+def _shape_result_of(obj):
+    """The measured builder product when it is a Shape with geometry (an
+    upstream-source builder; guarded because attribute access on module
+    stubs like the numpy shim RAISES rather than returning AttributeError
+    defaults)."""
+    try:
+        if getattr(obj, '_obj', None) is None and \
+                not hasattr(type(obj), 'sketch_local'):
+            return None
+    except Exception:
+        return None
+    cand = _builder_product(obj)
     if isinstance(cand, Shape) and cand.topo is not None:
         return cand
     return None
@@ -10211,8 +10655,9 @@ def _measure_globals_json(g):
         if name.startswith('_') or name in ('show', 'show_object', 'show_all'):
             continue
         if isinstance(obj, Builder):
-            if obj._obj is not None and obj._obj.topo is not None:
-                measure(name, obj._obj)
+            product = _builder_product(obj)
+            if product is not None and product.topo is not None:
+                measure(name, product)
         elif not isinstance(obj, Shape) and _shape_result_of(obj) is not None:
             # An upstream-source builder (pysrc=upstream) is not a lite
             # Builder, but its result IS a lite-class shape - measure it so
