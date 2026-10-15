@@ -248,6 +248,14 @@ async function workerIdle(page, timeout) {
 }
 
 async function main() {
+  // --report-from <results.json>: rewrite the report from saved results
+  // (e.g. after merging solo re-runs) without running anything
+  const REPORT_FROM = argVal('--report-from', null);
+  if (REPORT_FROM) {
+    writeReport(JSON.parse(readFileSync(REPORT_FROM, 'utf8')), REPORT);
+    console.log(`report  -> ${REPORT}`);
+    return;
+  }
   const manifest = JSON.parse(readFileSync(join(HERE, 'manifest.json'), 'utf8'))
     .filter((e) => !ONLY || e.id.includes(ONLY));
   const reference = JSON.parse(readFileSync(join(HERE, 'reference.json'), 'utf8'));
