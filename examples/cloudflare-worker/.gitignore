@@ -1,7 +1,8 @@
-# Copied build artifacts (scripts/prepare-assets.cjs) — cascadestudio.wasm
-# alone is 27 MB.
+# Copied build artifacts (scripts/prepare-assets.cjs) — every module the
+# Worker script imports; cascadestudio.wasm alone is 27 MB.
 assets/
 .wrangler/
 
-# Static assets tree (scripts/prepare-assets.cjs) — 7 MB of fonts + Python.
+# The retired static-assets tree (fonts + upstream Python used to live here;
+# prepare-assets.cjs deletes it).
 public/

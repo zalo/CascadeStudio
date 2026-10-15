@@ -6,34 +6,29 @@ compatibility_date = "2025-08-01"
 # Two deployments of the same code, one per build123d SOURCE FLAVOR. The
 # engine keeps all of its state on the worker global and a Python runtime
 # boots ONE library, so one isolate serves exactly one flavor — this is a
-# wrangler environment, not a query parameter.
+# wrangler environment (with its own entry module), not a query parameter.
 #
-#   (default)      PY_SRC=lite      cascade-headless
-#   --env upstream PY_SRC=upstream  cascade-headless-upstream
+#   (default)      src/index.js           build123d-lite      cascade-headless
+#   --env upstream src/index-upstream.js  upstream 0.11.1     cascade-headless-upstream
+#   --env warm     src/index.js, BOOT=warm (see below)        cascade-headless-warm
 #
-# See README "Source flavors" for what the difference buys.
+# EVERY asset is a module of the Worker script — wasm, the MicroPython glue,
+# the four FreeSans faces and (upstream only) the Python layer. Cloudflare
+# has had no compressed-size limit since 2026-09-04: a Worker may be 64 MiB
+# UNCOMPRESSED on Free and Paid alike (`Total Upload` in `wrangler deploy
+# --dry-run`), and this is ~31 MiB (lite) / ~34 MiB (upstream). The fonts and
+# the upstream Python used to be Workers Static Assets fetched through
+# `env.ASSETS` to squeeze under the old 10 MiB-gzip cap; that cost a
+# subrequest round trip on every cold isolate (0.2-1.15 s on the edge) and
+# forced the boot into a fetch handler. See SIZE-INVESTIGATION.md.
 # --------------------------------------------------------------------------
-[vars]
-PY_SRC = "lite"
 
-# --------------------------------------------------------------------------
-# Workers Static Assets. Everything the engine can fetch at boot instead of
-# carrying in the script lives here: the four FreeSans faces (2.22 MB gz) and
-# the verbatim-upstream build123d Python layer (0.40 MB gz, one JSON map).
-# scripts/prepare-assets.cjs builds ./public; src/index.js reads it through
-# `env.ASSETS.fetch()`.
-#
-# The .wasm files CANNOT move here — workerd will not compile WebAssembly at
-# runtime, so they have to stay module bindings (see the rules below).
-#
-# `run_worker_first = true`: this Worker owns every route (/, /health,
-# /render and the usage page for anything else). The binding still reaches
-# the Asset Worker directly, so nothing about the public surface changes.
-# --------------------------------------------------------------------------
-[assets]
-directory = "./public"
-binding = "ASSETS"
-run_worker_first = true
+# When the engine boots — request (default) | startup | warm. See BOOT_MODES
+# in src/app.js. `warm` runs the whole boot plus a Box -> STEP warm-up at
+# global scope (~0.3 s of CPU locally for lite, against Cloudflare's 1 s
+# startup limit), after which a trivial request costs single-digit ms of CPU.
+[vars]
+BOOT = "request"
 
 # --------------------------------------------------------------------------
 # Module rules. Cloudflare Workers cannot compile WebAssembly at runtime
@@ -50,6 +45,15 @@ fallthrough = false
 [[rules]]
 type = "Data"
 globs = ["**/*.ttf"]
+fallthrough = false
+
+# The upstream build123d Python layer: ONE relative-path -> source map, as a
+# Text module (a string; JSON.parse'd once at engine boot) rather than
+# esbuild's JSON loader, which would turn 3 MB of source into a JS object
+# literal parsed with the script.
+[[rules]]
+type = "Text"
+globs = ["**/upstream-b123d.json"]
 fallthrough = false
 
 # --------------------------------------------------------------------------
@@ -84,26 +88,40 @@ cpu_ms = 300000
 enabled = true
 
 # --------------------------------------------------------------------------
-# The verbatim-upstream flavor. Same script, same wasm, same static assets —
-# the only difference is which Python library boots (PY_SRC), which the fetch
-# handler reads to pick `pySrc` and whether to fetch py/upstream-b123d.json.
-#
-# Non-inheritable keys (vars, assets) are repeated deliberately: wrangler does
-# NOT inherit them into an environment.
+# The verbatim-upstream flavor: its own entry module (it adds the upstream
+# Python layer as a Text module; the lite isolate never holds it). `vars` are
+# not inheritable, so BOOT is repeated. BOOT=warm is refused by the entry —
+# the upstream library boot alone (~1.1 s of CPU) is over the 1 s startup
+# limit.
 # --------------------------------------------------------------------------
 [env.upstream]
 name = "cascade-headless-upstream"
+main = "src/index-upstream.js"
 
 [env.upstream.vars]
-PY_SRC = "upstream"
-
-[env.upstream.assets]
-directory = "./public"
-binding = "ASSETS"
-run_worker_first = true
+BOOT = "request"
 
 [env.upstream.limits]
 cpu_ms = 300000
 
 [env.upstream.observability]
+enabled = true
+
+# --------------------------------------------------------------------------
+# build123d-lite with the engine booted AND warmed at global scope. This is
+# the configuration the Free plan's 10 ms of CPU per request would need (and
+# it is still only enough for trivial models — see SIZE-INVESTIGATION.md).
+# Not deployed; `npx wrangler dev --env warm` exercises it locally, and a
+# `wrangler deploy --env warm` would report its real "Worker Startup Time".
+# --------------------------------------------------------------------------
+[env.warm]
+name = "cascade-headless-warm"
+
+[env.warm.vars]
+BOOT = "warm"
+
+[env.warm.limits]
+cpu_ms = 300000
+
+[env.warm.observability]
 enabled = true
