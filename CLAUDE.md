@@ -772,15 +772,39 @@ memory budget. Measured on this machine:
 
 | | |
 |---|---|
-| engine boot (OCCT) | 279 ms, 32.0 MB |
-| MicroPython + build123d-lite boot | 124 ms |
+| engine boot (OCCT) | ~70-110 ms, 32.0 MB (279 ms before fonts became lazy) |
+| MicroPython + build123d-lite boot | ~120-135 ms |
 | after any Python run | **51.5 MB** (32.0 occt + 19.5 python) |
-| starter model eval | 299 ms (292 ms before `-sDYNAMIC_EXECUTION=0`) |
+| starter model eval | ~230-300 ms (loaded machine: up to ~430) |
+
+**Headless fonts are parsed on first use.** `_loadFonts` (headless asset
+path only — the browser's `opentype.load` path is unchanged) resolves each
+face's BYTES at boot but makes `self.loadedFonts[name]` /
+`self.fontKernPairs[name]` getters that `opentype.parse` on first read and
+cache. Eagerly parsing four FreeSans faces was ~115 ms of boot CPU and
+~100 MB of live JS heap in Node (~150 ms / ~50 MB in workerd). The
+"which faces exist" error path enumerates property descriptors so it does
+not force a parse.
+
+**Kernel throws:** `self.isOCCTThrow(e)` (StandardUtils) is the one test
+for "a C++ exception out of OCCT" — a raw pointer NUMBER under the shipping
+JS-emulated exceptions, a `WebAssembly.Exception` under native wasm EH
+(decoded through the module's optional `getExceptionMessage`, which a
+`-sEXPORT_EXCEPTION_HANDLING_HELPERS` link provides; read by bracket so
+generate-occt-symbols does not demand it). Never test `typeof e ===
+'number'` directly.
 
 **Cloudflare specifics** — full write-up + measured numbers in
-`examples/cloudflare-worker/README.md` (`npm run dev`, then
+`examples/cloudflare-worker/README.md` and
+`examples/cloudflare-worker/SIZE-INVESTIGATION.md` (`npm run dev`, then
 `node scripts/smoke.mjs`; verified against the real workerd via `wrangler dev`):
-- 128 MB isolate; the engine sits at 51.5 MB for the starter model.
+- **Limits (re-checked 2026-10-15):** Worker size **64 MiB UNCOMPRESSED on
+  Free and Paid**, no compressed limit since 2026-09-04 (`Total Upload` in
+  `wrangler deploy --dry-run --outdir` is what counts); 128 MB per isolate
+  (JS heap + wasm); 1 s of startup CPU (global scope); CPU per request 10 ms
+  Free, 30 s default / 5 min max Paid.
+- 128 MB isolate; the engine sits at 51.5 MB of wasm for the starter model
+  (+ ~18 MB of V8 heap for lite after a few renders, workerd inspector).
 - Wasm **only** as compiled module bindings (`[[rules]] type = "CompiledWasm"`);
   `WebAssembly.compile` is forbidden. No dynamic `import()` of a URL.
 - **No runtime code generation at all** — which embind violates by default: it
@@ -805,21 +829,36 @@ memory budget. Measured on this machine:
   flag stays off and its dead node specifiers (`module`/`fs`/`path`/`url`) are
   still aliased to a stub in `wrangler.toml` (verified: deleting the `[alias]`
   block fails the build with four "Could not resolve" errors).
-- **Static assets carry the Python and the fonts.** `[assets] binding =
-  "ASSETS", run_worker_first = true` over `./public`, fetched at engine boot
-  through `env.ASSETS.fetch()` (which is why boot must stay lazy and
-  per-request — the binding only exists on a fetch handler's `env`). Script
-  **9909 -> 8417 KiB gz** of the 10240 KiB limit, 1823 KiB of headroom, the
-  SAME script for both flavors. The `.wasm` files cannot follow: workerd
-  will not compile WebAssembly at runtime. The upstream Python ships as ONE
-  relative-path -> text JSON (158 modules, 0.40 MB gz) because the loader
-  asks for ~120 modules and every `env.ASSETS.fetch()` is a subrequest.
-- **Two flavors, two wrangler environments.** Default `PY_SRC=lite`
-  (`cascade-headless`), `--env upstream` -> `PY_SRC=upstream`
-  (`cascade-headless-upstream`). One isolate serves one flavor: the engine
+- **Every asset is a module of the script.** Wasm as CompiledWasm, the
+  four FreeSans faces as Data modules, the upstream Python as ONE
+  relative-path -> text JSON imported as a Text module (rule glob
+  `**/upstream-b123d.json`). Total Upload **31.7 MiB lite / 34.9 MiB
+  upstream** of 64 MiB. The old static-assets split (`env.ASSETS`, built to
+  fit the retired 10 MiB-gzip cap) cost a subrequest per cold isolate
+  (0.2-1.15 s on the edge) and forced the boot into a fetch handler; it is
+  gone (`public/` is deleted by prepare-assets).
+- **`BOOT` var = request (default) | startup | warm.** With every asset a
+  module, `createHeadlessCascade` settles through microtasks alone, so the
+  entry can top-level-await it: `startup` boots OCCT at global scope
+  (~80-120 ms), `warm` also boots Python and runs a Box -> BREP + STEP
+  warm-up (~0.29-0.35 s of the 1 s startup budget for lite; afterwards a
+  trivial request is single-digit ms). Upstream's library boot alone is
+  ~1 s, so `index-upstream.js` downgrades `warm` to `startup`. GOTCHAS:
+  workerd's `Date.now()` is 0 at global scope (a startup `exportSTEP`
+  throws `Quantity_Date::Quantity_Date invalid parameters` — OCCT rejects
+  years < 1979; the warm-up lends it a clock), and a top-level await on
+  real I/O fails with "Top-level await in module is unsettled".
+  `scripts/startup-bench.mjs` measures it by driving `src/app.js` from Node.
+- **Two flavors, two wrangler environments, two entry modules.**
+  `src/index.js` (lite, `cascade-headless`) and `src/index-upstream.js`
+  (`--env upstream`, `cascade-headless-upstream`, adds the Python map so a
+  lite isolate never holds it); routes in `src/app.js`; `--env warm` is
+  lite with `BOOT=warm`. One isolate serves one flavor: the engine
   keeps its state on the worker global and a runtime registers ONE library.
-  Cold first `/render` 3.0 s (lite) / 5.6 s (upstream); warm trivial model
-  44-57 / 61-89 ms; basic-model isolate memory identical at 51.5 MB. The
+  Edge (2026-08, static-assets layout, last deploy): cold first `/render`
+  3.0 s (lite) / 5.6 s (upstream); warm trivial model 44-57 / 61-89 ms;
+  basic-model wasm identical at 51.5 MB. Local workerd now: first
+  `/render` into a fresh lite isolate 228-252 ms, 56 ms with `BOOT=warm`. The
   fidelity delta is real and visible — `edge-bench.mjs --fidelity`:
   `ttt-ppp0110` is a lite 422 ("Union produced near-zero volume") and an
   upstream 200 at the native 207159.364; `docs-selectors/sort_axis` is 200 on
@@ -827,7 +866,7 @@ memory budget. Measured on this machine:
   native). `examples/toy_truck` is the counter-example: upstream builds what
   lite's fillet cannot, but needs 168.7 MB, so the edge trades a 422 for an
   `exceededMemory` 503.
-- **All four FreeSans faces ship now** (2.22 MB gz, out of the script), so
+- **All four FreeSans faces ship** (Data modules, parsed on first use), so
   `FontStyle.ITALIC`/`BOLDITALIC` resolve; a face that is genuinely absent
   still raises an error that NAMES it — that missing face was the whole of
   the `examples/clock` failure ("Cannot set properties of undefined (setting
@@ -835,10 +874,23 @@ memory budget. Measured on this machine:
   ends are fixed: the font lookup distinguishes "nothing loaded yet" (the
   browser's async-startup retry) from "not this face" (permanent, named), and
   `CacheOp` names the operation when a cacheMiss produces nothing.
-- CPU: free plan's 10 ms cannot even boot the kernel; the paid DEFAULT of 30 s
-  is a real ceiling here (heat_exchanger 503'd at ~37 s), so `wrangler.toml`
-  asks for the paid maximum `[limits] cpu_ms = 300000`. Starter model ≈ 450 ms
-  CPU including the one-time interpreter boot; heat_exchanger 72 s on the edge.
+- CPU: **the Free plan is a demo tier, Paid is the answer.** Even with the
+  whole boot at global scope (`BOOT=warm`), per-request CPU in Node is
+  Box -> BREP ~5 ms, Box -> STEP 7-10 ms, a 4-hole plate 26-39 ms, the
+  starter 130-290 ms — only a bare primitive fits 10 ms. The paid DEFAULT
+  of 30 s is a real ceiling (heat_exchanger 503'd at ~37 s on the edge), so
+  `wrangler.toml` asks for `[limits] cpu_ms = 300000`.
+- **The big remaining lever is a fork rebuild with native wasm exceptions**
+  (`-fwasm-exceptions -sEXPORT_EXCEPTION_HANDLING_HELPERS`, legacy
+  encoding): 27,021,699 -> 19,659,264 B (−27%), 10-73% less CPU per model
+  (heat_exchanger 34 s -> 9 s in Node), geometry identical on 27 corpus
+  scripts + heat_exchanger + clock, both headless gates + workerd smoke +
+  the Playwright suite green. Emscripten's JS-emulated EH puts 191k
+  `invoke_*` wasm->JS->wasm call sites in the kernel; embind glue itself is
+  only 4.6% of the code. `-Oz` is a trap (−4% size, +50-100% CPU); exnref
+  is bigger than legacy and needs Chrome 137/Safari 18.4. Recipe, variant
+  table and the fork branch (`cf-size-experiments`, `OCJS_EXCEPTIONS=wasm`)
+  in SIZE-INVESTIGATION.md §3.
 - **`POST /render?stream=1`** streams `text/event-stream` phase events
   (`booting`/`evaluating`/`evaluated`/`exporting` + a terminal `done`/`error`
   carrying the JSON endpoint's payload plus the per-op `progressOps`
