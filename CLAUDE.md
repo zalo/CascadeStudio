@@ -11,7 +11,7 @@ compiled to WebAssembly via Emscripten. The 3D viewport uses Three.js with a mat
 ```bash
 npm run build          # builds cascade-core then cascade-studio
 npx http-server ./packages/cascade-studio/dist -p 8080 -c-1 --silent
-npx playwright test    # 102 tests (incl. 50 frozen build123d example scripts)
+npx playwright test    # 110 tests (incl. 50 frozen build123d example scripts)
 node test/headless-node.mjs   # browser-free engine (Node, no Chromium)
 CS_PY_SRC=upstream node test/headless-node.mjs   # …on verbatim build123d 0.11.1
 ```
@@ -412,18 +412,29 @@ see `test/b123d-validation/runtime-comparison.md`)**:
   argCache entries' kernel objects at end-of-evaluation — bounds retention
   for iterative editing; single-run numbers are unchanged.
 
-**build123d-lite coverage** (vs real build123d 0.11.1 — validated by running
-EVERY runnable script in the upstream `examples/` and `docs/` trees through both,
-see `test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
+**build123d-lite coverage** (vs real build123d **0.13.0** on OCP/OCCT 8.0.1 —
+the same OCCT version as the wasm kernel — validated by running EVERY runnable
+script in the upstream `examples/` and `docs/` trees through both, see
+`test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
 Too Tall Toby challenge parts (mass asserts kept) and every docs `.rst`
-code-block; currently **205/222 scripts PASS** (volume within 0.5%, bbox within
-1e-3/axis), 10 MISMATCH, 5 ERROR, 2 TIMEOUT, 10 SKIP (real build123d fails
-natively) — full breakdown with per-script reasons AND a hand-maintained
+code-block; currently **223/239 scripts PASS** (volume within 0.5%, bbox within
+1e-3/axis), 9 MISMATCH, 6 ERROR, 1 TIMEOUT, 8 SKIP (real build123d fails
+natively), **identically on the Brython and the MicroPython lite legs**
+(`results-013-lite.json`, `results-013-lite-micropython.json`; the unmodified
+pre-0.13 lite scored 191/13/34/1/8 on both — `baseline-013-lite*.json`) —
+full breakdown with per-script reasons AND a hand-maintained
 root-cause/defaults audit of every non-PASS in the committed
-`test/b123d-validation/report.md`. A full 232-script harness pass takes ~150 s
-with `--pages 4` (~5 min single-page); the harness MUST run with
-`CS_TEST_HEADFUL=1 DISPLAY=:99` on this machine (headless Chromium has no WebGL,
-which manifests as every script reporting "no measurement produced"). Debug a
+`test/b123d-validation/report.md` (`defaults-audit.md`; rewrite the report from
+saved, solo-rerun-merged results with `run-lite.mjs --report-from <json>`).
+What changed natively between 0.11.1 and 0.13.0 is in
+`test/b123d-validation/native-0.11.1-vs-0.13.0.md`. A full 247-script harness
+pass takes ~5 min with `--pages 2` (the RAM budget on this machine; with both
+legs running at once 2-4 heavy scripts flap to TIMEOUT and must be re-run solo
+with `--only <id>` before merging into the committed results); Xvfb is
+no longer installed here, so run it HEADLESS with DISPLAY unset
+(`env -u DISPLAY node test/b123d-validation/run-lite.mjs --pages 2`;
+`CS_PY_RUNTIME=micropython CS_PY_SRC=lite` for the MicroPython leg). If every
+script reports "no measurement produced", the page has no WebGL. Debug a
 single script with `test/b123d-validation/probe.mjs` (prints raw measurements +
 errors). Since the GeomAPI-array binding round: Spline/Helix interpolate EXACTLY
 (GeomAPI_Interpolate, incl. tangents=/tangent_scalars=/per-point tangents/periodic),
@@ -496,13 +507,34 @@ newly: `MC`/`UNITS_PER_METER`, the seven remaining enums, `polar`/`delta`/
 `topo_explore_common_vertex`/`topo_explore_connected_edges`, singular
 `Builder.vertex/edge/wire/face/solid` + module-level getters, `Matrix`
 (pure-Python affine), `OrientedBoundBox` (real `Bnd_OBB`),
-`GeomEncoder`/`LocationEncoder` (on a pure-Python `json` shim — Brython's
-json can't load in a module worker), `DraftAngleError`, `BaseLineObject`,
-the four deprecated tangent objects (`PointArcTangentLine`/`Arc`,
-`ArcArcTangentLine`/`Arc` — native-parity to 6 decimals),
-`project_workplane`, `import_brep`/`export_brep` (BRepTools via MEMFS), and
-an honest `FontManager`/`available_fonts` (bundled FreeSans family only);
-frozen in `test/python-mode-upstream-exports.spec.js`:
+`GeomEncoder` (on a pure-Python `json` shim — Brython's json can't load in
+a module worker), `DraftAngleError`, `BaseLineObject`, `project_workplane`,
+`import_brep`/`export_brep` (BRepTools via MEMFS), and an honest
+`FontManager`/`available_fonts` (bundled FreeSans family only). **Since the
+0.13.0 round** (build123d 0.12's API + 0.13's OCCT 8.0.1 port): lite exposes
+191 of upstream 0.13.0's 203-name `__all__` (absent: the 12 deliberate skips —
+`Arrow`/`Draft`/`DimensionLine`/`ExtensionLine`/`TechnicalDrawing`,
+`Export2D`/`DotLength`, `import_dxf`, `import_svg_as_buildline_code`,
+`detect_primitives`, `export_to_pcbway`, `trace`), and 0.12's removals are
+gone exactly like upstream (the four tangent objects, `LocationEncoder`,
+`Workplanes`, `to_tuple()` — `Location`/`Vector` iterate instead —
+`end_angle`/`angular_direction`). New: the unified **BuildScope** (local
+construction + publication, `part_local`/`sketch_local`/`line_local`,
+`insert()` with `add()` as its deprecated wrapper, the BaseObject firewall),
+**`Select.LAST`/`NEW` from the kernel's `BRepTools_History`** (StandardLibrary
+`HistRecord`/`HistMerge`/`HistClassify`; `Shape.edges(Select.NEW)` works on
+algebra results too), `Convexity` on edges/faces/vertices, `topo_path`/
+`topo_owner`, `material=`/`mass`/`compute_mass` over an embedded bd_materials
+catalogue (`import bd_materials` works), the `Unit` StrEnum, `BoundBox`
+predicates, `Rotation(Axis, angle)` and the other 0.12 overloads,
+`Location * <iterable>`, `Superellipse`, `Edge.make_ellipse`, keyword-only
+conic `arc_size`, multi-hole `loft`/ruled `Solid.make_loft`,
+`RevoluteJoint(angle_reference=)`, `Compound(label, color, material, joints,
+parent, children)` assemblies with `global_location` and upstream's assembly
+`volume`, `project()`'s per-face pending-plane orientation, `export_obj`/
+`tessellate_with_uvs`, and real `export_step` unit names. Frozen in
+`test/python-mode-upstream-exports.spec.js` and
+`test/python-mode-b123d-013.spec.js` (native 0.13.0 values):
 
 | Area | Supported | Not supported |
 |---|---|---|
@@ -530,33 +562,39 @@ lines whose accuracy rides entirely on `Compound.make_text` glyph metrics,
 since `Text(...).bounding_box().size.X` feeds every arrow position and
 `DimensionLine`'s 3-candidate label placement), `sympy`, 3MF export (no lib3mf
 in this wasm build — dual_color_3mf builds all six of its shapes correctly and
-then fails on `Mesher.write`), `fix_degenerate_edges`/`offset(min_edge_length=)`
-and `split(Keep.BOTH)`.
+then fails on `Mesher.write`), `Mesher.read` (the STL round trip through
+`pathlib`/`tempfile` in docs-rst/topology_selection/b10 — no mesh reader, and
+its measured faces are individual BRepMesh triangles),
+`fix_degenerate_edges`/`offset(min_edge_length=)` and `split(Keep.BOTH)`.
 `docs/spitfire_wing_gordon` is a TIMEOUT, not a gap: it runs (real
 `pytest.approx` shim) and spends ~390 s building the wing's Gordon surface
 before returning a null surface — the cost/robustness of
 COMPROMISE(gordon-surface-realization) at that scale. `examples/heat_exchanger`
 sits right at the 60 s harness budget (~55 s on an idle machine) and times out
-when the four harness pages contend; it passes on its own.
-Two scripts die on KNOWN OCCT 8.0.1 wasm kernel faults with byte-identical
-defaults to upstream: the truck-body `FilletEdges` (toy_truck) and the
-coplanar-BSpline fuse operand drop that even the General-Fuse rebuild cannot
-recover (ttt-ppp0110). NOTE for the record: the OTHER "kernel fillet fault",
+when harness pages contend; it passes on its own.
+Two scripts die in the kernel with byte-identical defaults to upstream: the
+truck-body `FilletEdges` (toy_truck) and the coplanar-BSpline fuse operand
+drop that even the General-Fuse rebuild cannot recover (ttt-ppp0110). Native
+build123d 0.13.0 runs both on OCCT 8.0.1 itself, so these are faults of THIS
+wasm build (or, for toy_truck, possibly lite's bumper topology), not of OCCT
+8.0.1. NOTE for the record: the OTHER "kernel fillet fault",
 cast_bearing_unit, turned out to be a LITE bug — a simplified convex hull
 handing hundreds of micro-edges to BRepFilletAPI — and now passes, together
 with docs-rst/tips/b01.
 The remaining MISMATCHes are traversal/orientation history plus two
 single-shape residuals: COMPROMISE(edge-orientation) for joints x2, projection
 x2 and docs-selectors/sort_axis (sub-edge FORWARD/REVERSED flags and hence
-`Axis(edge)` differ from OCP 7.x over identical curve geometry),
-COMPROMISE(traversal-order) for docs-selectors/filter_all_edges_circle (the
-script keeps the LAST of a mirror-symmetric face pair) and docs-rst/tips/b04 (a
-`sort_by(Axis.Z)` over local sketch vertices that is a COMPLETE tie, so the
-kernel's enumeration decides), COMPROMISE(triad-labels) for docs/objects_1d,
-`m6_screw` alone in docs/tutorial_joints (a `CylindricalJoint` hole frame), and
-`l1`/`l2` alone in ttt-23-02-02-sm_hanger (a BuildLine on a non-XY workplane
-leaves its module-level line variables in LOCAL coordinates in lite, and the
-harness compares the last binding of a reused name). Canonical free edges
+`Axis(edge)` differ from upstream's over identical curve geometry — native
+OCP 7.9.3 and 8.0.1 give byte-identical answers, so this is lite's
+construction history, not the kernel version), COMPROMISE(traversal-order)
+for docs-selectors/filter_all_edges_circle (the script keeps the LAST of a
+mirror-symmetric face pair), docs-rst/tips/b04 (a `sort_by(Axis.Z)` over
+local sketch vertices that is a COMPLETE tie — NATIVELY nondeterministic, the
+same 0.13.0 install flips between runs, so it counts for no one),
+COMPROMISE(triad-labels) for docs/objects_1d (`scene` only — 0.12's
+BuildLine-local variables retired its `l1`/`l3`/`l4` residuals, and
+sm_hanger's), and `m6_screw` alone in docs/tutorial_joints (a
+`CylindricalJoint` hole frame). Canonical free edges
 (below) shrank two of joints' three residuals (pin_arm 8.16 -> 2.69 mm,
 slider_arm 11.80 -> 9.11 mm) without changing any classification; closing the
 rest needs the examples to opt into `sort_by(..., tie_break=True)` /
@@ -570,7 +608,6 @@ authoritative list):
 - `mesher` — STL only, written into the worker's in-memory Emscripten FS (no lib3mf, no disk).
 - `double-tangent-arc` — scan+bisection root solve over a sampled/refined curve distance; trims the over-extended target segment where upstream relies on wire fixing.
 - `kernel-guard` — fuse results smaller than the largest input are rebuilt from the (correct) General-Fuse partition; the partition keeps internal contact faces, so selectors see the contact topology.
-- `sweep` — trihedron/transition calls match upstream exactly; residual MakePipeShell numeric differences are kernel-version.
 - `helix` — exact interpolation through dense samples with analytic tangents (no surface-curve segment type).
 - `edge-orientation` — sub-edge FORWARD/REVERSED can differ from upstream's over identical curve geometry; Axis(edge)-based measuring lands at the other end (joints x2, sort_axis) and closed intersection-curve paths traverse the opposite way (projection x2). The cause is lite's OWN construction history, not the kernel version: native build123d gives byte-identical answers on OCP 7.9.3 (0.11.1/0.12.0) and OCP 8.0.1 (0.13.0), and upstream's topology on this same wasm kernel matches them (test/b123d-validation/native-0.11.1-vs-0.13.0.md §4).
 - `traversal-order` — where a script keeps whichever of two SYMMETRIC results the kernel enumerated last (filter_all_edges_circle), the answer follows OCCT's traversal of lite's construction, not of upstream's (again not a kernel-version effect). `docs-rst/tips/b04` (a completely TIED `sort_by`) is natively nondeterministic in every build123d version and does not count either way. `sort_by(..., tie_break=True)` makes ties deterministic, and is opt-in upstream too.
@@ -641,11 +678,14 @@ CascadeStudio JS mode)"; `ToolManager.activate('sketch')` refuses with a console
 See `test/python-mode.spec.js`.
 
 **Validation against real build123d**: `test/b123d-validation/` (see its README)
-runs the upstream build123d examples through BOTH real build123d 0.11.1 (native
-venv) and Python mode, comparing per-variable volume/bbox. Re-run it whenever
-Build123dLite.js changes. FIFTY representative passing scripts are frozen
-as regression tests in `test/python-mode-examples.spec.js` (part of the default
-suite) with volumes/bboxes hardcoded from the native run — the newest five cover
+runs the upstream build123d examples through BOTH real build123d 0.13.0 (native
+venv `~/Desktop/ocjs-deps/b123d-013-venv`) and Python mode, comparing
+per-variable volume/bbox. Re-run it (Brython AND MicroPython lite legs)
+whenever Build123dLite.js changes. FIFTY representative passing scripts are
+frozen as regression tests in `test/python-mode-examples.spec.js` (part of the
+default suite) with volumes/bboxes hardcoded from the native run (refreshed to
+0.13.0: key_concepts_builder/b13, maker_coin and ttt-ppp0102 changed natively
+with 0.12's BuildScope/`project()` semantics) — the newest five cover
 `Wedge`/`ConvexPolyhedron`, `Triangle`, the parabolic/hyperbolic arcs,
 slide_latch (sketch-face alignment + `Select.LAST` vertices) and
 group_properties_with_keys (builder copy snapshots + the exact convex hull +
