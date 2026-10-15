@@ -1405,7 +1405,7 @@ function RotatedExtrude(wire, height, rotation, keepWire) {
   return curExtrusion;
 }
 
-function Loft(wires, keepWires) {
+function Loft(wires, keepWires, ruled) {
   // Auto-extract wires from non-wire shapes (e.g. after Translate/Rotate).
   // Embind requires the exact TopoDS_Wire type for AddWire(), so we rebuild
   // wires through BRepBuilderAPI_MakeWire to ensure proper Embind typing.
@@ -1439,7 +1439,7 @@ function Loft(wires, keepWires) {
     }
   });
   let curLoft = self.CacheOp(arguments, "Loft", () => {
-    let pipe = new self.oc.BRepOffsetAPI_ThruSections(true, false, 1.0e-6);
+    let pipe = new self.oc.BRepOffsetAPI_ThruSections(true, !!ruled, 1.0e-6);
     resolvedWires.forEach((wire) => { pipe.AddWire(wire); });
     pipe.Build(new self.oc.Message_ProgressRange_1());
     return pipe.Shape();

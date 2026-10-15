@@ -3356,6 +3356,8 @@ class Solid(Shape):
             t = _topo(o)
             wires.append(t if t.ShapeType().value == 5
                          else w.GetWire(t, 0, True))
+        if ruled:
+            return cls(w.Loft(wires, False, True))
         return cls(w.Loft(wires))
 
     @classmethod
@@ -9720,17 +9722,58 @@ def make_brake_formed(thickness, station_widths, line=None, side=Side.LEFT,
     return _combine(builder, Part(solid.topo), mode)
 
 
+def _permutations(items):
+    """itertools.permutations order (lexicographic over positions)."""
+    if len(items) <= 1:
+        return [tuple(items)]
+    out = []
+    for i in range(len(items)):
+        rest = items[:i] + items[i + 1:]
+        for tail in _permutations(rest):
+            out.append((items[i],) + tail)
+    return out
+
+
 def loft(sections=None, ruled=False, clean=True, mode=Mode.ADD):
-    if ruled:
-        raise NotImplementedError('loft(ruled=True) is not supported in '
-                                  'build123d-lite')
+    """Loft through the sections (build123d loft): the outer wires make the
+    solid; since 0.12 faces with ANY number of inner wires are supported -
+    the holes are matched section to section by the permutation minimising
+    the summed centre distance, lofted separately and cut out."""
     builder = _active_builder(BuildPart)
-    profs = _pending_or_given(sections)
-    wires = []
-    for (face, plane) in profs:
-        wires.append(w.GetWire(face))
-    solid = w.Loft(wires)
-    return _combine(builder, Part(solid), mode)
+    if sections is None:
+        profs = _pending_or_given(None)
+        faces = [Face(t) for t, _pl in profs]
+    else:
+        faces = []
+        for s in _tolist(sections):
+            faces.extend(s.faces())
+    outer = [f.outer_wire() for f in faces]
+    hole_counts = [len(f.inner_wires()) for f in faces]
+    if any(hole_counts) and len(set(hole_counts)) != 1:
+        raise ValueError('All sections must have the same number of inner '
+                         'wires')
+    hole_sections = []
+    if hole_counts and hole_counts[0]:
+        hole_sections = [[wire] for wire in faces[0].inner_wires()]
+        n = len(hole_sections)
+        for face in faces[1:]:
+            holes = face.inner_wires()
+            best = None
+            for perm in _permutations(list(range(n))):
+                grouping = list(zip(range(n), perm))
+                quality = sum((hole_sections[j][-1].center() -
+                               holes[k].center()).length
+                              for j, k in grouping)
+                cand = (quality, grouping)
+                if best is None or cand < best:
+                    best = cand
+            for j, k in best[1]:
+                hole_sections[j].append(holes[k])
+    solid = Solid.make_loft(outer, ruled)
+    if hole_sections:
+        solid = Part(solid.topo) - [Solid.make_loft(h, ruled)
+                                    for h in hole_sections]
+    return _combine(builder, Part(_topo(solid)), mode)
 
 
 def sweep(sections=None, path=None, multisection=False, is_frenet=False,
