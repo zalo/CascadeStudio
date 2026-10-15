@@ -413,7 +413,7 @@ Everything is therefore a module of the script (`assets/`, built by
 | `micropython-cs.wasm` | 0.62 MB | CompiledWasm | the patched interpreter (patches 11/12) |
 | `micropython-cs.mjs` | 0.10 MB | bundled JS | Emscripten glue; workerd forbids `import()` of a URL |
 | `fonts/FreeSans*.ttf` (4 faces) | 4.11 MB | Data | parsed on first use |
-| `upstream-b123d.json` (build123d 0.13.0 + shim + glue) | 3.41 MB | Text | upstream and real entries; parsed once at boot, the parse dropped after |
+| `upstream-b123d.json` (build123d 0.13.0 + shim + glue) | 3.41 MB | Data | upstream and real entries; decoded once at boot, then the buffer is detached (`transfer(0)`) so its backing store is freed |
 | `pyodide/*` (`prepare-pyodide.mjs`) | ~20 MB | CompiledWasm / Data / JS | real entry only: interpreter, 13 numpy side modules, 28 precompiled signatures, stdlib, wheels |
 
 `wrangler deploy --dry-run --outdir` with the native-EH artifacts (the gates'

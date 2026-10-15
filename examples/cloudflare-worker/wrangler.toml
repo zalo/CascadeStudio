@@ -24,7 +24,8 @@ keep_names = false
 # the four FreeSans faces and (upstream only) the Python layer. Cloudflare
 # has had no compressed-size limit since 2026-09-04: a Worker may be 64 MiB
 # UNCOMPRESSED on Free and Paid alike (`Total Upload` in `wrangler deploy
-# --dry-run`), and this is ~31 MiB (lite) / ~34 MiB (upstream). The fonts and
+# --dry-run`), and this is ~25 MiB (lite) / ~28 MiB (upstream) / ~48 MiB
+# (real) with the native-EH OCCT build (+~7 MiB each on the JS-EH pin). The fonts and
 # the upstream Python used to be Workers Static Assets fetched through
 # `env.ASSETS` to squeeze under the old 10 MiB-gzip cap; that cost a
 # subrequest round trip on every cold isolate (0.2-1.15 s on the edge) and
