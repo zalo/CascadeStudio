@@ -3034,6 +3034,25 @@ class Compound(Shape):
     Compound subclasses; builder transfers classify through Compound and
     extract base objects with get_type)."""
 
+    @property
+    def volume(self):
+        """build123d Compound.volume: the solids/shells one level down
+        (Compound.get_type reads the DIRECT children of the compound and of
+        its direct child compounds). For an ASSEMBLY that means each plain
+        child counts and a nested sub-assembly does not (its parts sit two
+        levels down) - assemblies.rst: assembly3.volume == 1. Lite flattens
+        single-child layers, so a non-assembly compound keeps the per-solid
+        sum (COMPROMISE(volume-measure))."""
+        if self.topo is None:
+            return 0.0
+        if self.children:
+            total = 0.0
+            for child in self.children:
+                if isinstance(child, Shape) and not child.children:
+                    total += child.volume
+            return total
+        return w.SolidsVolume(self.topo)
+
     def mass(self, mass_unit=None, length_unit=None):
         """build123d 0.12 Compound.mass: an assembly sums its children's
         masses (each with its own material); otherwise every solid and shell
@@ -11331,6 +11350,17 @@ def _shape_result_of(obj):
     return None
 
 
+def _override_volume(entries, name, volume):
+    prefix = '"' + name + '":{"volume":'
+    for i in range(len(entries)):
+        e = entries[i]
+        if e.startswith(prefix):
+            rest = e[len(prefix):]
+            comma = rest.find(',')
+            entries[i] = prefix + _json_num(abs(volume)) + rest[comma:]
+            return
+
+
 def _measure_globals_json(g):
     """Measure every module-level Shape / builder result in the given globals
     dict via the worker's MeasureShape hook; returns a JSON object string
@@ -11375,6 +11405,11 @@ def _measure_globals_json(g):
         elif isinstance(obj, Shape):
             if obj.topo is not None:
                 measure(name, obj)
+                if isinstance(obj, Compound) and obj.children:
+                    # an assembly's volume is upstream's Compound.volume (its
+                    # plain children), which reference.py records via
+                    # obj.volume - not the per-solid sum of the whole tree
+                    _override_volume(entries, name, obj.volume)
         elif isinstance(obj, (list, tuple)) and len(obj) > 0 and \
                 all(isinstance(x, Shape) for x in obj):
             # Skip face-less elements (edge/vertex selector lists) and sort
