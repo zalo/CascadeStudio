@@ -112,7 +112,6 @@ if (fs.existsSync(upstreamPySrc)) {
   }
   const vendored = path.join(monoRoot, 'vendor', activeVendor);
   const upstreamOut = path.join(upstreamDist, 'upstream');
-  fs.rmSync(upstreamOut, { recursive: true, force: true });
   if (fs.existsSync(vendored)) {
     console.log('[cascade-core]   upstream source layer: ' + activeVendor);
     fs.cpSync(vendored, upstreamOut, { recursive: true });

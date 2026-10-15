@@ -101,15 +101,32 @@ def _from_raw(topo, cls=None):
     return by_code.get(code, Compound)(p)
 
 
-def _builder_shape(obj):
-    """obj._obj when obj is a BUILDER holding a shape with geometry."""
+def _builder_shape(obj, measure=False):
+    """The product of a BUILDER holding a shape with geometry (None for
+    anything else). Since 0.12's unified BuildScope a builder constructs
+    LOCALLY and publishes through its placement: `_obj` is the local
+    construction product, `.part`/`.sketch`/`.line` what the user sees —
+    shown in the viewport. measure=True follows the validation reference's
+    rule (test/b123d-validation/reference.py builder_product, 0.11.1's `_obj`
+    meaning held fixed): the PLACED .part/.line, the LOCAL .sketch_local."""
     try:
         cand = getattr(obj, '_obj', None)
     except Exception:
         return None
-    if isinstance(cand, Shape) and cand.wrapped is not None:
-        return cand
-    return None
+    if not (isinstance(cand, Shape) and cand.wrapped is not None):
+        return None
+    cls = type(obj)
+    attrs = (('sketch_local',) if measure else ('sketch',)) + ('part', 'line')
+    for attr in attrs:
+        if hasattr(cls, attr):
+            try:
+                prod = getattr(obj, attr)
+            except Exception:
+                break
+            if isinstance(prod, Shape) and prod.wrapped is not None:
+                return prod
+            break
+    return cand
 
 
 # ------------------------------------------------------------- scene ----- #
@@ -220,8 +237,19 @@ def _measure_globals_json(g):
         mb = m.bbox
         if mb is not None and int(mb.length) == 6:
             bbox = '[' + ','.join([_json_num(v) for v in mb]) + ']'
+        # volume by upstream's OWN definition, exactly as the reference
+        # (test/b123d-validation/reference.py: abs(obj.volume)) measures it:
+        # since 0.12 Compound.volume sums its DIRECT Solid/Shell children
+        # (an assembly's nested compounds are not double-counted), which a
+        # raw whole-shape kernel measurement cannot know
+        vol = m.volume
+        if isinstance(obj, Shape):
+            try:
+                vol = abs(float(obj.volume))
+            except Exception:  # noqa: BLE001 - keep the kernel figure
+                pass
         entries.append('"' + name + '":{' +
-                       '"volume":' + _json_num(m.volume) +
+                       '"volume":' + _json_num(vol) +
                        ',"area":' + _json_num(m.area) +
                        ',"faces":' + str(int(m.faces)) +
                        ',"edges":' + str(int(m.edges)) +
@@ -230,7 +258,7 @@ def _measure_globals_json(g):
     for name, obj in list(g.items()):
         if name.startswith('_') or name in ('show', 'show_object', 'show_all'):
             continue
-        b = _builder_shape(obj)
+        b = _builder_shape(obj, measure=True)
         if b is not None:
             measure(name, b)
         elif isinstance(obj, Shape):

@@ -521,6 +521,12 @@ const FORK_ASK_CLASSES = {
   // build123d 0.13 (OCP 8) renamed the kernel-text string class
   NCollection_String: 'PERMANENT-SKIP — kernel text deliberately not '
     + 'bound; make_text routes to lite opentype.js (fork 05d088d note)',
+  // build123d 0.13 Vertex.convexity (corner of a face): no exact 2-D
+  // point-in-face classifier is bound (BRepClass_FaceClassifier /
+  // BRepTopAdaptor_FClass2d are absent too); a 3-D distance stand-in would
+  // misclassify across periodic seams, so it raises (FORK-ASKS.md 0.13)
+  IntTools_FClass2d: 'PENDING_FORK_BINDING — 2-D point-in-face '
+    + 'classification for Vertex.convexity (FORK-ASKS.md, 0.13 addendum)',
 };
 // OCP 8 moved the NCollection instantiations into OCP.collections under
 // template-derived names; the embind binding keeps the OCCT typedef names.

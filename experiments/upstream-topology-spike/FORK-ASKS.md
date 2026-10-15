@@ -75,3 +75,30 @@ these are quality-of-life bindings, not blockers:
 | `ShapeAnalysis_FreeBounds::ConnectEdgesToWires` 4-arg out-HANDLE form semantics | `Wire.combine` / `edges_to_wires` (the out-handle is REASSIGNED in C++; embind passes a copy) | GLUE routes the returning overload and Appends into the caller's sequence |
 | `gp_Quaternion::GetEulerAngles` OCJS_Out helper | `Location.orientation` / `to_tuple` | JS matrix extraction (Intrinsic_XYZ only; SetEulerAngles round-trips exact) |
 | `TopTools_ListOfShape` per-index access or iterator | pybind iterates lists (`FindFromKey` results) | destructive First/RemoveFirst read with append-back restore |
+
+## build123d 0.13.0 / OCP 8.0.1 addendum (2026-10-15)
+
+Re-billing 0.13.0's geometry.py + topology/*.py (now incl. topology/
+history.py + kernel.py) with pybind introspection against OCP 8.0.1:
+878 unique items (803 for 0.11.1): +87 / -12, and two former MISSING items
+(`BRepAlgoAPI_Common.History`, `BRepAlgoAPI_Fuse.SetGlue`) are EXACT since
+fork 05d088d. OCP 8 moved every NCollection instantiation into
+`OCP.collections` (`List_TopoDS_Shape`, `IndexedMap_TopoDS_Shape_
+TopTools_ShapeMapHasher`, ...); the shim aliases those onto the bound
+typedef classes (`OCP/collections.py`, generated). What is NOT bound, and
+how it is served — **no fork rebuild was needed for the 0.13 corpus**:
+
+| Ask | 0.13 feature | Current service |
+|---|---|---|
+| `NCollection_Map<TopoDS_Shape, TopTools_ShapeMapHasher>` (Add/Contains) and `NCollection_DataMap<TopoDS_Shape, TopoDS_Shape, ...>` (Bind/IsBound/Find) as classes | topology/history.py — the `Select.LAST/NEW` kernel record (ShapeHistory/Trace) | EXACT Python glue (`ocp_glue.CsShapeMap/CsShapeDataMap`: std::hash<TopoDS_Shape> buckets + IsSame — the hasher's own semantics; build123d never hands these maps to the kernel) |
+| `TopTools_ListOfShape::Assign` | topology/kernel.list_shapes | EXACT JS glue (drain/restore copy) |
+| `BRepAdaptor_Curve2d` | Vertex.convexity (`_face_tangents`) | EXACT glue: Geom2dAdaptor_Curve over `OCJS_Out.BRepTool_CurveOnSurface` (what Initialize does) |
+| `BRepLProp_SLProps` | Face.convexity | glue: LProp_SLProps' own computation on the bound `Adaptor3d_Surface::D2` (normal D1U^D1V, fundamental forms, principal curvatures); singular points report "undefined" instead of OCCT's higher-order normal search (build123d samples interior UV fractions only) |
+| **`IntTools_FClass2d`** (ctor(face, tol), Perform(gp_Pnt2d) -> TopAbs_State) | Vertex.convexity on a face corner | **PENDING_FORK_BINDING** (raises by name). No exact 2-D point-in-face classifier is bound (`BRepClass_FaceClassifier`, `BRepTopAdaptor_FClass2d` are absent too); a 3-D distance stand-in misclassifies across periodic seams. No corpus script reaches it. |
+| `NCollection_String` | kernel text | PERMANENT-SKIP (as `NCollection_Utf8String` before: make_text routes to opentype.js) |
+
+Bundle these three generated bindings (`IntTools_FClass2d`,
+`BRepLProp_SLProps`, `BRepAdaptor_Curve2d`) plus the two shape-map
+instantiations into the next fork round that is rebuilt for another
+reason; on their own they do not justify an LTO relink (no corpus script
+is blocked).

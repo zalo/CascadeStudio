@@ -770,7 +770,24 @@ export async function bootstrapUpstreamB123d(mp, br, fetchText, pytopoOpt) {
       '                if d[name] is prop:',
       '                    return getattr(obj, name)',
       "        stack.extend(getattr(k, '__bases__', ()))",
+      // not on obj's own chain (e.g. `parts.sort_by(Solid.volume)` over Box
+      // PARTS — a Part is a Compound, not a Solid): CPython would run the
+      // foreign property's getter on obj, which MicroPython cannot express.
+      // Find the property's NAME on its owner class and read obj's own
+      // same-named property instead (build123d's measurement properties —
+      // volume/area/length/radius — are uniform across the Shape classes).
+      "    for _m in list(_cs_sys_mods.values()):",
+      "        if not getattr(_m, '__name__', '').startswith('build123d'):",
+      '            continue',
+      '        for _cls in list(_m.__dict__.values()):',
+      "            d = getattr(_cls, '__dict__', None) if isinstance(_cls, type) else None",
+      '            if d:',
+      '                for name in d:',
+      '                    if d[name] is prop and hasattr(type(obj), name):',
+      '                        return getattr(obj, name)',
       "    raise AttributeError('property not found on ' + type(obj).__name__)",
+      'import sys as _cs_sys_for_prop',
+      '_cs_sys_mods = _cs_sys_for_prop.modules',
       '_cs_bi2._cs_prop_get = _cs_prop_get',
       // MicroPython has no builtin format() (geometry hex-color paths;
       // Vector.__str__ calls format(self, '.6g') — dispatch to __format__)
