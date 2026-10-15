@@ -1,6 +1,12 @@
 name = "cascade-headless"
 main = "src/index.js"
 compatibility_date = "2025-08-01"
+# Wrangler re-bundles src/ with esbuild, and its default keep_names wraps every
+# named function in a __name() defineProperty. The embind glue mints its
+# invoker closures PER BOUND METHOD at engine boot (~216k), so that one
+# default costs ~30 MB of V8 heap in the isolate (measured through the
+# inspector: see FIDELITY-ON-WORKERS.md) for names nothing reads.
+keep_names = false
 
 # --------------------------------------------------------------------------
 # Two deployments of the same code, one per build123d SOURCE FLAVOR. The

@@ -77,13 +77,21 @@ function engine(env, request) {
       assetMs = 0;
       assetBytes = 0;
       let upstreamPy;
+      let releaseTree = null;
       if (pySrc === 'upstream' || pySrc === 'real') {
         // ONE fetch for the whole layer. The loader asks for ~120 modules by
         // relative path; 120 subrequests would cost far more than a single
         // 3.15 MB / 0.40 MB gz map plus a parse.
-        const tree = JSON.parse(new TextDecoder().decode(
+        let tree = JSON.parse(new TextDecoder().decode(
           await get('/py/upstream-b123d.json')));
+        // The library reads the map ONCE, while it registers on the first
+        // Python request; afterwards ~3 MB of source strings would sit in
+        // the isolate's JS heap for its whole life. Drop them when the
+        // library reports itself booted (the hook the kernel-image recapture
+        // also rides — COMPROMISE(kernel-heap-reset)).
+        releaseTree = () => { tree = null; };
         upstreamPy = async (rel) => {
+          if (!tree) { throw new Error('upstream-b123d: the module map was released after boot: ' + rel); }
           const text = tree[String(rel).replace(/^\.?\//, '')];
           if (text === undefined) {
             throw new Error('upstream-b123d: no such module in the asset map: ' + rel);
@@ -97,7 +105,7 @@ function engine(env, request) {
         // for is never fetched.
         fonts[face] = () => get('/fonts/' + face + '.ttf');
       }
-      return createHeadlessCascade({
+      const e = await createHeadlessCascade({
         // 'real' runs REAL build123d on Pyodide (src/real.js supplies the
         // host); the other two flavors run on MicroPython.
         runtime: pySrc === 'real' ? 'pyodide' : 'micropython',
@@ -115,6 +123,14 @@ function engine(env, request) {
         fonts,
         upstreamPy,
       });
+      if (releaseTree) {
+        const booted = globalThis.self._csPyLibBooted;
+        globalThis.self._csPyLibBooted = () => {
+          if (booted) { booted(); }
+          releaseTree();
+        };
+      }
+      return e;
     })().catch((e) => { enginePromise = null; throw e; });
   }
   return enginePromise;

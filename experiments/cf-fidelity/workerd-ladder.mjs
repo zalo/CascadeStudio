@@ -74,38 +74,46 @@ function stopDev() {
   try { execSync(`pkill -f "[w]orkerd serve.*entry=127.0.0.1:${PORT}"`); } catch (e) { /* none */ }
 }
 
-async function heap() {
-  const ws = new WS(`ws://127.0.0.1:${INSPECTOR}/ws`, { headers: { Origin: `http://127.0.0.1:${INSPECTOR}` } });
-  const scripts = [];
+function cdp(onOpen, onMessage, timeoutMs) {
+  const ws = new WS(`ws://127.0.0.1:${INSPECTOR}/ws`,
+    { headers: { Origin: `http://127.0.0.1:${INSPECTOR}` }, maxPayload: 1 << 30 });
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { ws.close(); reject(new Error('inspector timeout')); }, 60000);
-    ws.on('message', (d) => {
-      const m = JSON.parse(String(d));
-      if (m.method === 'Debugger.scriptParsed' && m.params.url) { scripts.push(m.params.url); }
-      if (m.id === 3) {
-        before = m.result;
-        ws.send(JSON.stringify({ id: 4, method: 'HeapProfiler.enable' }));
-        ws.send(JSON.stringify({ id: 5, method: 'HeapProfiler.collectGarbage' }));
-      }
-      if (m.id === 5) {
-        ws.send(JSON.stringify({ id: 6, method: 'Runtime.getHeapUsage' }));
-      }
-      if (m.id === 6) {
-        clearTimeout(timer);
-        ws.close();
-        const mine = scripts.some((u) => u.includes('cloudflare-worker'));
-        resolve({ used: before.usedSize, total: before.totalSize,
-          gcUsed: m.result.usedSize, gcTotal: m.result.totalSize, mine, scripts: scripts.length });
-      }
-    });
-    let before = null;
-    ws.on('open', () => {
-      ws.send(JSON.stringify({ id: 1, method: 'Runtime.enable' }));
-      ws.send(JSON.stringify({ id: 2, method: 'Debugger.enable' }));
-      setTimeout(() => ws.send(JSON.stringify({ id: 3, method: 'Runtime.getHeapUsage' })), 300);
-    });
+    const timer = setTimeout(() => { ws.close(); reject(new Error('inspector timeout')); }, timeoutMs);
+    const send = (id, method, params) => ws.send(JSON.stringify({ id, method, params: params || {} }));
+    const done = (v) => { clearTimeout(timer); ws.close(); resolve(v); };
+    ws.on('message', (d) => onMessage(JSON.parse(String(d)), send, done));
+    ws.on('open', () => onOpen(send));
     ws.on('error', (e) => { clearTimeout(timer); reject(e); });
   });
+}
+
+/** Is the inspector target THIS worker? (its scripts come from our tree) */
+async function inspectorIsMine() {
+  const scripts = [];
+  return cdp((send) => { send(1, 'Debugger.enable'); setTimeout(() => send(2, 'Debugger.disable'), 1500); },
+    (m, send, done) => {
+      if (m.method === 'Debugger.scriptParsed' && m.params.url) { scripts.push(m.params.url); }
+      if (m.id === 2) { done(scripts.some((u) => u.includes('cloudflare-worker'))); }
+    }, 30000);
+}
+
+async function heap() {
+  // usedSize/totalSize as the request left them, then again after a full GC.
+  // workerd's inspector never answers HeapProfiler.collectGarbage, but a heap
+  // snapshot forces a full GC first — take one and throw the chunks away.
+  let before = null;
+  const h = await cdp((send) => { send(1, 'Runtime.getHeapUsage'); },
+    (m, send, done) => {
+      // (wrangler's proxy echoes some replies WITH a method field: match ids)
+      if (m.id === 1) { before = m.result; send(2, 'HeapProfiler.enable'); send(3, 'HeapProfiler.takeHeapSnapshot', { reportProgress: false }); }
+      if (m.id === 3) { send(4, 'Runtime.getHeapUsage'); }
+      if (m.id === 4) {
+        done({ used: before.usedSize, total: before.totalSize, gcUsed: m.result.usedSize,
+          gcTotal: m.result.totalSize, backing: m.result.backingStorageSize });
+      }
+    }, 300000);
+  h.mine = await inspectorIsMine();
+  return h;
 }
 
 async function render(code) {
@@ -135,7 +143,7 @@ try {
       vol: r.body && r.body.measurement ? +r.body.measurement.volume.toFixed(3) : null,
       occtMB: mb(mem.occtWasm || 0), pyMB: mb(mem.pythonWasm || 0),
       heapUsedMB: mb(h.used), heapTotalMB: mb(h.total),
-      heapGcUsedMB: mb(h.gcUsed), heapGcTotalMB: mb(h.gcTotal),
+      heapGcUsedMB: mb(h.gcUsed), heapGcTotalMB: mb(h.gcTotal), backingMB: mb(h.backing || 0),
       combinedUsedMB: mb(wasm + h.used), combinedTotalMB: mb(wasm + h.total),
       combinedGcUsedMB: mb(wasm + h.gcUsed), combinedGcTotalMB: mb(wasm + h.gcTotal),
       inspectorIsThisWorker: h.mine,

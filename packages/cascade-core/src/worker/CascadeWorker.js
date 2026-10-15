@@ -351,12 +351,20 @@ class CascadeStudioWorker {
           buf = await assetToArrayBuffer(assets, 'fonts', name, 'fonts/' + name + '.ttf');
         } catch (e) { buf = null; }
         if (!buf) { continue; }
-        try {
-          self.loadedFonts[name] = opentype.parse(buf);
-          self.fontKernPairs[name] = CascadeStudioWorker._parseKernTable(buf);
-        } catch (e) {
-          console.log('Failed to parse font ' + name + ': ' + (e && e.message));
-        }
+        // Parsed on FIRST USE, not here: four parsed FreeSans faces (glyph
+        // objects + kern maps) are ~7 MB of JS heap that a model without
+        // Text() never touches — and a Cloudflare isolate's 128 MB counts
+        // the JS heap. Lookups stay synchronous (the bytes are already
+        // here); the getter replaces itself with the parsed value.
+        CascadeStudioWorker._lazyProp(self.loadedFonts, name, () => {
+          try { return opentype.parse(buf); }
+          catch (e) {
+            console.log('Failed to parse font ' + name + ': ' + (e && e.message));
+            return undefined;
+          }
+        });
+        CascadeStudioWorker._lazyProp(self.fontKernPairs, name,
+          () => CascadeStudioWorker._parseKernTable(buf));
       }
       return;
     }
@@ -381,6 +389,20 @@ class CascadeStudioWorker {
 
   /** Parse every format-0 'kern' subtable of a TTF into a Map keyed by
    *  "leftGid,rightGid" -> kern value in font units. */
+  /** Define obj[name] as a value computed on first read (then a plain data
+   *  property; assigning first also just stores the value). */
+  static _lazyProp(obj, name, make) {
+    const settle = (v) => {
+      Object.defineProperty(obj, name, { value: v, writable: true, configurable: true, enumerable: true });
+      return v;
+    };
+    Object.defineProperty(obj, name, {
+      configurable: true, enumerable: true,
+      get() { return settle(make()); },
+      set(v) { settle(v); },
+    });
+  }
+
   static _parseKernTable(buf) {
     const pairs = new Map();
     try {
