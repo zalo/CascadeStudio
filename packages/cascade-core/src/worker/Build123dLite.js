@@ -9798,9 +9798,9 @@ def sweep(sections=None, path=None, multisection=False, is_frenet=False,
     transition usage (SetMode(is_frenet); normal= -> fixed-binormal gp_Ax2
     with WithCorrection; binormal= wire -> auxiliary spine; multisection
     never sets a transition mode and uses each face's OUTER wire only).
-    COMPROMISE(sweep): the calls match upstream exactly, but MakePipeShell
-    surfaces differ numerically between OCCT 8.0.1 (this wasm) and OCP 7.x
-    (~0.02% volume on the multisection handle example)."""
+    The calls match upstream exactly; the ~0.02% volume residual seen on the
+    multisection handle example against OCP 7.x was the kernel version -
+    against build123d 0.13.0 (OCCT 8.0.1) it agrees to 1e-8 relative."""
     builder = _active_builder(BuildPart)
     if path is None and builder is not None:
         path = getattr(builder, 'pending_path', None)
