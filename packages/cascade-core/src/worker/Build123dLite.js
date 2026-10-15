@@ -11418,6 +11418,8 @@ def _pack2d(objects, width_fn, length_fn):
             self.down = None
             self.right = None
 
+    if not objects:
+        raise ValueError('no objects to pack')
     sizes = _stable_sorted(((o, width_fn(o), length_fn(o)) for o in objects),
                    key=lambda t: min(t[1], t[2]), reverse=True)
     sizes = _stable_sorted(sizes, key=lambda t: max(t[1], t[2]), reverse=True)
@@ -11478,6 +11480,8 @@ def _pack2d(objects, width_fn, length_fn):
     for (o, ww, hh) in sizes:
         node = find_node(root, ww, hh)
         node = split_node(node, ww, hh) if node else grow_node(ww, hh)
+        if node is None:
+            raise RuntimeError('Failed to grow the packing area')
         placements[id(o)] = (node.x, node.y)
     return [placements[id(o)] for o in objects]
 
