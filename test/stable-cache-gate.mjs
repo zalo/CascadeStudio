@@ -41,7 +41,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 const D = join(ROOT, 'packages', 'cascade-core', 'dist');
 const V = join(HERE, 'b123d-validation');
-const B123D_SRC = process.env.B123D_SRC || '/tmp/b123d';
+const B123D_SRC = process.env.B123D_SRC
+  || join(process.env.HOME || '', 'Desktop/ocjs-deps/src/build123d-v0.13.0');
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => {

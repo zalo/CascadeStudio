@@ -83,12 +83,13 @@ class CascadeStudioMesher {
         continue;
       }
       if (bucket) { bucket.push(edge); } else { buckets[edgeHash] = [edge]; }
-      kept.push(edge);
+      // TopoDS_Cast hands back a handle on `cur` itself, so both stay alive
+      // until the bucket comparisons are over
+      kept.push(edge, cur);
       if (!edgeHashes.hasOwnProperty(edgeHash)) { edgeHashes[edgeHash] = edgeIndex; }
       callback(edgeIndex++, edge);
-      CascadeStudioMesher._del(cur);
     }
-    for (const e of kept) { CascadeStudioMesher._del(e); }
+    for (const o of kept) { CascadeStudioMesher._del(o); }
     CascadeStudioMesher._del(anExplorer);
     return edgeHashes;
   }
