@@ -23,6 +23,7 @@ Four entries, one codebase — see [Source flavors](#source-flavors):
 | `--env warm` | lite, engine booted + warmed at global scope (`BOOT=warm`) | as lite | `cascade-headless-warm.makeshifted.workers.dev` |
 | `--env upstream` | **verbatim upstream 0.13.0** over the OCP shim | 233/239 (0.13.0 reference) | `cascade-headless-upstream.makeshifted.workers.dev` |
 | `--env real` | **the PyPI build123d 0.13.0 wheel + numpy** on Pyodide 314, same shim | 232/239 (0.13.0 reference) | `cascade-headless-real.makeshifted.workers.dev` |
+| `--env session` | lite in **one Durable Object per editing session**: warm engine, cross-run op cache, cached working set persisted as binary BREP — see [EDIT-SESSIONS.md](EDIT-SESSIONS.md) | as lite | not deployed (branch `feat/do-edit-session`) |
 
 All four were deployed from `feat/build123d-0.13` on 2026-10-15; the edge
 ladder and startup times are in
@@ -35,6 +36,7 @@ npm run dev                 # prepare-assets + wrangler dev  -> :8787   (lite)
 npm run dev:upstream        # the same, verbatim upstream build123d
 npm run dev:real            # the real build123d wheel on Pyodide (needs vendor/pyodide: fetch-pyodide.cjs)
 npm run dev:warm            # lite, engine booted + warmed at global scope (BOOT=warm)
+npm run dev:session         # editing sessions on Durable Objects (EDIT-SESSIONS.md)
 node scripts/smoke.mjs      # drives the same scripts as test/headless-node.mjs
 ```
 
@@ -527,6 +529,10 @@ src/app.js                    the routes: POST /render (+ ?stream=1), GET /healt
 src/index.js                  lite entry: imports the modules, boots per BOOT
 src/index-upstream.js         upstream entry: the same + the upstream Python map
 src/real.js                   real entry: the same + the Pyodide bindings and the host seam
+src/index-session.js          session entry: lite with the stable op cache + the EditSession class
+src/session.js                the editing session Durable Object (cache, snapshot, compaction, keep-warm)
+scripts/session-bench.mjs     an edit sequence through a session vs the stateless /render
+EDIT-SESSIONS.md              editing sessions: design, correctness gate, measurements, limits
 src/boot-pyodide.mjs          boots Pyodide 314 from module bindings (no fetch/import()/wasm compile)
 scripts/prepare-pyodide.mjs   vendor/pyodide -> assets/pyodide (3 glue patches, precompiled numpy .so)
 scripts/pyodide-sigs.json     addFunction signatures to precompile (record-sigs.mjs in experiments/)

@@ -127,6 +127,36 @@ the last render the session holds a timer and re-arms a storage alarm every
 ≈ $0.0058 per hour). `KEEP_WARM_MS=0` turns it off; persistence makes a cold
 return cost a boot plus a restore instead of a full evaluation.
 
+## Measured locally (`wrangler dev`, 2026-10-17)
+
+`scripts/session-bench.mjs`, BREP output, client wall time; the stateless
+column is the `/render` Worker on a warm isolate (median of 4, full
+evaluation per edit). Local workerd runs roughly 3× faster than the edge
+for the same code; the ratios are what carry over.
+
+| model | stateless edit | session cold | re-run | edit 1 | edit 2 | restored after evict | snapshot (gz) |
+|---|---|---|---|---|---|---|---|
+| mount | 78 ms | 512 ms (incl. boot) | 38 ms | **29 ms** | 83 ms | 35 ms (restore 4 ms) | 16 KB |
+| plate16 | 1.24 s | 1.35 s | 221 ms | **594 ms** | 640 ms | 600 ms (16 ms) | 109 KB |
+| maker_coin | 3.8 s | 4.3 s | 1.9 s | **3.1 s** | 3.7 s | 3.1 s (7 ms) | 392 KB |
+| heat_exchanger | 3.9 s | 4.0 s | 1.2 s | **1.9 s** | 3.1 s | 1.8 s (31 ms) | 321 KB |
+
+Edits: mount — the final fillet radius / the bolt-hole diameter; plate16 —
+the fillet over all 256 holes (the expensive op itself, so edit ≈ that op);
+maker_coin — the label text / the detent fillet; heat_exchanger — the tube
+weld fillet / the tube extension (which touches every tube).
+
+- A restored session is as fast as a warm one: the restore is 4–31 ms and
+  the following run hits exactly what the warm run hit.
+- maker_coin and heat_exchanger compact after every render (OCCT heap 54 MB
+  ≥ `COMPACT_AT_MB`); compaction runs after the response.
+- **Where a 100%-hit re-run still spends time** (maker_coin, Node, 2.2 s):
+  `project()` 1.3 s, the SUBTRACT `extrude`'s selection bookkeeping 0.6 s,
+  `DoubleTangentArc`'s pure-Python optimizer 0.3 s — library work outside
+  `CacheOp`. `project` rides on `ProjectWireOnShape`, which touches the
+  scene list, so it cannot be cached generically; converting such functions
+  to `CacheOp` one by one is the next step.
+
 ## Correctness
 
 `test/stable-cache-gate.mjs` runs every corpus script that passes on lite
@@ -162,8 +192,9 @@ Getting there found four real problems:
   upstream session would only get the warm engine (its boot is the bigger
   share there: ~1.1 s of CPU).
 - **Re-runs still interpret Python.** A 100%-hit re-run costs the script's
-  Python plus the kernel queries lite makes outside `CacheOp` (bounding
-  boxes, selectors): summed over the corpus, re-runs take 57% of cold time.
+  Python plus the library work lite does outside `CacheOp` (projection,
+  selection bookkeeping, bounding boxes): summed over the corpus, re-runs
+  take 57% of cold time (see the maker_coin breakdown above).
 - **The in-memory cache holds the last run's working set only** (the
   end-of-run sweep is unchanged), so reverting an edit two steps back misses
   the ops in between.
