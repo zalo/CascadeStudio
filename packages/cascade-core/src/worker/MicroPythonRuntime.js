@@ -654,7 +654,12 @@ async function _bootstrap(srcKind) {
      *  Brython runtime: throws a JS Error whose message is the Python
      *  summary + traceback with user editor line numbers). */
     run(code) {
-      for (const k in self.argCache) { delete self.argCache[k]; }
+      // Emptied per run unless the host opted into the stable cross-run
+      // cache, whose keys cannot collide across evaluations (StandardUtils
+      // _stableHash) — see the Brython runtime for why it is emptied.
+      if (!self._csStableCache) {
+        for (const k in self.argCache) { delete self.argCache[k]; }
+      }
       self.getPythonUserLine = getMpUserLine;
       self._pythonRuntimeKind = 'micropython';
       self._pythonSrcKind = effectiveSrc;

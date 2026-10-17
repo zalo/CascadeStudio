@@ -528,6 +528,8 @@ class CascadeStudioWorker {
     // Reset cache counters and modeling history for this evaluation
     this.standardLibrary.utils.cacheHits = 0;
     this.standardLibrary.utils.cacheMisses = 0;
+    this.standardLibrary.utils.volatileOps = 0;
+    this.standardLibrary.utils.volatileReasons = {};
     self.cacheHits = 0;
     self.cacheMisses = 0;
     self.modelHistory = [];
@@ -605,6 +607,7 @@ class CascadeStudioWorker {
       }
     }
     for (let key in usedHashes) { delete usedHashes[key]; }
+    if (self._csStableCache) { this.standardLibrary.utils.pruneStableIndex(false); }
     // End-of-evaluation safe point for the shim's queued frees.
     if (self._csOcpFlushFrees) { self._csOcpFlushFrees(); }
     CascadeStudioWorker._memMark('eval-end');

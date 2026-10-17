@@ -63,7 +63,10 @@ const WARMUP_CODE = 'from build123d import *\nshow(Box(10, 10, 10))\n';
  *         backing store can be collected, and the parsed map is dropped once
  *         the library has registered. Nothing of it stays in the isolate.
  *  @param {object} [o.pyodide]  real flavor: the host that boots Pyodide from
- *         module bindings ({boot, installWheels}; src/real.js) */
+ *         module bindings ({boot, installWheels}; src/real.js)
+ *  @param {boolean} [o.stableCache]  keep the op cache across runs with
+ *         content-derived keys (the Durable Object editing session,
+ *         src/session.js). Such an engine must not be reset per request. */
 export function createWorker(o) {
   /** One engine per isolate, reused across requests (all of the engine's
    *  state lives on the worker global). */
@@ -138,6 +141,7 @@ export function createWorker(o) {
           // Bytes, not thunks: cascade-core parses each face on first use.
           fonts: o.fonts,
           upstreamPy,
+          stableCache: !!o.stableCache,
         });
         if (releaseTree) {
           // Chain onto the hook the kernel-image recapture also rides
@@ -237,7 +241,7 @@ GET  /health            boot + memory
    *
    *  Returns the same object the JSON endpoint has always returned, plus the
    *  additive `progressOps` timeline. */
-  async function runRender(e, req, onPhase) {
+  async function runRender(e, req, onPhase, { reset = true } = {}) {
     const t0 = Date.now();
     await onPhase('evaluating', { language: req.language, formats: req.formats });
 
@@ -298,11 +302,13 @@ GET  /health            boot + memory
 
     out.memory = e.memoryStats();
     out.timings = Object.assign({ totalMs: Date.now() - t0 }, result.timings);
+    out.cache = result.cache;
     // Rewind the kernel so the next request in this isolate starts from a
     // pristine OCCT heap — cascade-core's reset() restores the boot image,
     // which is also what stops one corrupting model (maker_coin's fillet)
-    // from poisoning every later export in the isolate.
-    e.reset();
+    // from poisoning every later export in the isolate. The editing session
+    // (src/session.js) keeps its working set instead and compacts it itself.
+    if (reset) { e.reset(); }
     return out;
   }
 
@@ -409,5 +415,8 @@ GET  /health            boot + memory
     });
   }
 
-  return { fetch, bootAtStartup };
+  return { fetch, bootAtStartup,
+    // for the editing session (src/session.js)
+    engine, runRender, parseRenderBody, json,
+    isBooted: () => enginePromise !== null };
 }

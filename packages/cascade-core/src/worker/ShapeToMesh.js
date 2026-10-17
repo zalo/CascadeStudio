@@ -64,6 +64,11 @@ class CascadeStudioMesher {
   /** Iterate over all the UNIQUE indices and edges in this shape, calling `callback` on each one. */
   static forEachEdge(shape, callback) {
     let edgeHashes = {};
+    // Same enumeration as StandardLibrary's ForEachEdge (the indices the
+    // hover tooltip shows ARE FilletEdges' indices): a hash repeat is only
+    // a repeat edge if it IsSame()s one already seen in its bucket.
+    let buckets = {};
+    const kept = [];
     let edgeIndex = 0;
     let anExplorer = new self.oc.TopExp_Explorer_2(shape,
       self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
@@ -72,12 +77,18 @@ class CascadeStudioMesher {
       const cur = anExplorer.Current();
       let edge = self.oc.TopoDS_Cast.Edge_1(cur);
       let edgeHash = self.oc.OCJS.HashCode(edge, 100000000);
-      if (!edgeHashes.hasOwnProperty(edgeHash)) {
-        edgeHashes[edgeHash] = edgeIndex;
-        callback(edgeIndex++, edge);
+      const bucket = buckets[edgeHash];
+      if (bucket && bucket.some((e) => e.IsSame(edge))) {
+        CascadeStudioMesher._del(edge, cur);
+        continue;
       }
-      CascadeStudioMesher._del(edge, cur);
+      if (bucket) { bucket.push(edge); } else { buckets[edgeHash] = [edge]; }
+      kept.push(edge);
+      if (!edgeHashes.hasOwnProperty(edgeHash)) { edgeHashes[edgeHash] = edgeIndex; }
+      callback(edgeIndex++, edge);
+      CascadeStudioMesher._del(cur);
     }
+    for (const e of kept) { CascadeStudioMesher._del(e); }
     CascadeStudioMesher._del(anExplorer);
     return edgeHashes;
   }

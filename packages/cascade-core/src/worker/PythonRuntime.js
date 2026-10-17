@@ -172,8 +172,12 @@ async function _bootstrap() {
       // `with BuildPart():` block without unwinding. The op cache is also
       // cleared: rare hash collisions between shapes from DIFFERENT
       // evaluations have produced observably wrong booleans, and a stale
-      // cache buys little in Python mode (scripts are re-run whole).
-      for (const k in self.argCache) { delete self.argCache[k]; }
+      // cache buys little in Python mode (scripts are re-run whole) — unless
+      // the host opted into the stable cross-run cache (StandardUtils
+      // _stableHash), whose keys carry no kernel addresses.
+      if (!self._csStableCache) {
+        for (const k in self.argCache) { delete self.argCache[k]; }
+      }
       // Own the shared hooks (a worker that also booted Pyodide this session
       // would otherwise leave ITS frame walker installed).
       self.getPythonUserLine = getBrythonUserLine;

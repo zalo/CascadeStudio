@@ -351,6 +351,7 @@ function ForEachSolid(shape, callback) {
     let solid = self.oc.TopoDS_Cast.Solid_1(anExplorer.Current());
     // sub-shapes need a stable hash for CacheOp (see EdgeSelector)
     if (solid.hash === undefined) { solid.hash = self.oc.OCJS.HashCode(solid, 100000000); }
+    self.deriveStableKey(solid, 'ForEachSolid', [shape, solid_index]);
     callback(solid_index++, solid);
   }
 }
@@ -384,7 +385,9 @@ function ForEachShell(shape, callback) {
   let shell_index = 0;
   let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SHELL, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
   for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_SHELL, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-    callback(shell_index++, self.oc.TopoDS_Cast.Shell_1(anExplorer.Current()));
+    const shell = self.oc.TopoDS_Cast.Shell_1(anExplorer.Current());
+    self.deriveStableKey(shell, 'ForEachShell', [shape, shell_index]);
+    callback(shell_index++, shell);
   }
 }
 
@@ -392,7 +395,10 @@ function ForEachFace(shape, callback) {
   let face_index = 0;
   let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_FACE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
   for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_FACE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-    callback(face_index++, self.oc.TopoDS_Cast.Face_1(anExplorer.Current()));
+    const face = self.oc.TopoDS_Cast.Face_1(anExplorer.Current());
+    // the stable cross-run cache keys a sub-shape by (parent key, index)
+    self.deriveStableKey(face, 'ForEachFace', [shape, face_index]);
+    callback(face_index++, face);
   }
 }
 
@@ -400,7 +406,9 @@ function ForEachWire(shape, callback) {
   let wire_index = 0;
   let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_WIRE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
   for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_WIRE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-    callback(wire_index++, self.oc.TopoDS_Cast.Wire_1(anExplorer.Current()));
+    const wire = self.oc.TopoDS_Cast.Wire_1(anExplorer.Current());
+    self.deriveStableKey(wire, 'ForEachWire', [shape, wire_index]);
+    callback(wire_index++, wire);
   }
 }
 
@@ -430,6 +438,7 @@ function DirectChildren(shape) {
     // CacheOp — without one, JSON-hashing strips the ptr and every child
     // hashes IDENTICALLY, so ops on sibling children all cache-hit the first
     if (child.hash === undefined) { child.hash = oc.OCJS.HashCode(child, 100000000); }
+    self.deriveStableKey(child, 'DirectChildren', [shape, out.length]);
     out.push(child);
   }
   return out;
@@ -473,23 +482,34 @@ function GetWire(shape, index, keepOriginal) {
 
 function ForEachEdge(shape, callback) {
   let edgeHashes = {};
+  // HashCode is an address hash folded into 1e8 buckets: two DISTINCT edges
+  // can share one (din_rail_algebra: 1 of 528), and deduplicating on the
+  // hash alone silently dropped the second edge and shifted every later
+  // index — which edge FilletEdges([i]) meant depended on heap layout. A
+  // repeat is only a repeat if it IsSame()s an edge already in its bucket.
+  let buckets = {};
   let edgeIndex = 0;
   let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
   for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_EDGE, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
     let edge = self.oc.TopoDS_Cast.Edge_1(anExplorer.Current());
     let edgeHash = self.oc.OCJS.HashCode(edge, 100000000);
-    if(!edgeHashes.hasOwnProperty(edgeHash)){
-      edgeHashes[edgeHash] = edgeIndex;
-      callback(edgeIndex++, edge);
-    }
+    const bucket = buckets[edgeHash];
+    if (bucket && bucket.some((e) => e.IsSame(edge))) { continue; }
+    if (bucket) { bucket.push(edge); } else { buckets[edgeHash] = [edge]; }
+    if (!edgeHashes.hasOwnProperty(edgeHash)) { edgeHashes[edgeHash] = edgeIndex; }
+    self.deriveStableKey(edge, 'ForEachEdge', [shape, edgeIndex]);
+    callback(edgeIndex++, edge);
   }
   return edgeHashes;
 }
 
 function ForEachVertex(shape, callback) {
+  let vertex_index = 0;
   let anExplorer = new self.oc.TopExp_Explorer_2(shape, self.oc.TopAbs_ShapeEnum.TopAbs_VERTEX, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
   for (anExplorer.Init(shape, self.oc.TopAbs_ShapeEnum.TopAbs_VERTEX, self.oc.TopAbs_ShapeEnum.TopAbs_SHAPE); anExplorer.More(); anExplorer.Next()) {
-    callback(self.oc.TopoDS_Cast.Vertex_1(anExplorer.Current()));
+    const vertex = self.oc.TopoDS_Cast.Vertex_1(anExplorer.Current());
+    self.deriveStableKey(vertex, 'ForEachVertex', [shape, vertex_index++]);
+    callback(vertex);
   }
 }
 
@@ -3879,6 +3899,9 @@ function MakeCompound(shapes, keepInputs) {
   for (let i = 0; i < shapes.length; i++) { builder.Add(compound, shapes[i]); }
   // not CacheOp'd — give the result a stable identity for downstream CacheOps
   compound.hash = self.oc.OCJS.HashCode(compound, 100000000);
+  // (the address above only identifies it within this run; the stable
+  // cross-run cache derives a content key from the children instead)
+  self.deriveStableKey(compound, 'MakeCompound', [shapes]);
   if (!keepInputs) {
     for (let i = 0; i < shapes.length; i++) { self.sceneShapes = self.Remove(self.sceneShapes, shapes[i]); }
   }
@@ -4563,10 +4586,18 @@ function ThickenSolid(surface, depth) {
       return null;
     }
 
+    // BRepOffsetAPI_MakeThickSolid edits its input IN PLACE (SameParameter /
+    // tolerance updates on the face's edges): bicycle_tire's tread faces
+    // measured 28.300134 after thicken against native build123d's 28.299963
+    // — and with a cross-run op cache the edited face is the CACHED one, so
+    // the next run started from it. Work on a copy; the caller's face stays
+    // what it was.
+    const work = new self.oc.BRepBuilderAPI_Copy_2(surface, true, false).Shape();
+
     // 1) the offset surface (pure offset of the input, no walls)
     let closingFaces = new self.oc.TopTools_ListOfShape();
     let mkThick = new self.oc.BRepOffsetAPI_MakeThickSolid();
-    mkThick.MakeThickSolidByJoin(surface, closingFaces, depth, 1.0e-5,
+    mkThick.MakeThickSolidByJoin(work, closingFaces, depth, 1.0e-5,
       self.oc.BRepOffset_Mode.BRepOffset_Skin, true, false,
       self.oc.GeomAbs_JoinType.GeomAbs_Intersection, true,
       new self.oc.Message_ProgressRange_1());
@@ -4588,7 +4619,7 @@ function ThickenSolid(surface, depth) {
       let p = props.CentreOfMass();
       return [p.X(), p.Y(), p.Z()];
     };
-    let baseWires = wiresOf(surface);
+    let baseWires = wiresOf(work);
     let offWires = wiresOf(offsetShell);
     if (baseWires.length === 0 || offWires.length === 0 ||
         baseWires.length !== offWires.length) {
@@ -4600,7 +4631,7 @@ function ThickenSolid(surface, depth) {
 
     // 3) ruled walls per wire pair + 4) sew everything into a solid
     let facesToSew = [];
-    ForEachFace(surface, (i, f) => { facesToSew.push(f); });
+    ForEachFace(work, (i, f) => { facesToSew.push(f); });
     ForEachFace(offsetShell, (i, f) => { facesToSew.push(f); });
     for (let i = 0; i < baseWires.length; i++) {
       let c = wireCenter(baseWires[i]);
@@ -4945,6 +4976,7 @@ class CascadeStudioStandardLibrary {
     };
 
     // Assign all CAD API functions to self for eval() access
+    const before = new Set(Object.keys(self));
     self.Box = Box;
     self.Sphere = Sphere;
     self.PartialSphere = PartialSphere;
@@ -5107,6 +5139,48 @@ class CascadeStudioStandardLibrary {
     self.PointVertex = PointVertex;
     self.ConstrainedArcs2D = ConstrainedArcs2D;
     self.ConstrainedLines2D = ConstrainedLines2D;
+
+    if (self._csStableCache) {
+      this._deriveKeysOnExports(Object.keys(self).filter((k) => !before.has(k))
+        .concat(['GordonSurfaceFace']));
+    }
+  }
+
+  /** Stable cross-run cache (StandardUtils _stableHash; headless hosts opt
+   *  in): a shape handed out by a library function that does NOT go
+   *  through CacheOp — a sub-shape picker (OrderedEdges), a cheap builder
+   *  (ReverseFace, WireFromEdgesFixed, ThickenSolid) — is a pure function
+   *  of that call's arguments, so it gets a key derived from them (lazily:
+   *  computed only if the shape is ever an op argument). Without this,
+   *  every op downstream of such a shape is volatile (bicycle_tire: 1,074
+   *  Rotates of a ThickenSolid). Functions with hidden inputs (files, GUI
+   *  state), classes and callbacks are excluded. */
+  _deriveKeysOnExports(names) {
+    const HIDDEN_INPUTS = new Set(['ImportBREP', 'SaveFile', 'Slider', 'Button',
+      'Checkbox', 'TextInput', 'Dropdown', 'TessellateWithUVs', 'ExportSTL',
+      'ExportOBJ', 'ExportBREP', 'ExportSTEP', 'HistRecord', 'HistMerge',
+      'HistClassify', 'ForEachSolid', 'ForEachShell', 'ForEachFace',
+      'ForEachWire', 'ForEachEdge', 'ForEachVertex', 'Edges', 'Faces']);
+    const utils = this.utils;
+    const isShape = (v) => !!v && typeof v === 'object' && v.$$ !== undefined
+      && typeof v.ShapeType === 'function';
+    for (const name of names) {
+      const fn = self[name];
+      if (typeof fn !== 'function' || HIDDEN_INPUTS.has(name)) { continue; }
+      if (/^class\b/.test(Function.prototype.toString.call(fn))) { continue; }
+      self[name] = function () {
+        const result = fn.apply(this, arguments);
+        if (isShape(result)) {
+          utils.deriveStableKey(result, name, Array.from(arguments));
+        } else if (Array.isArray(result)) {
+          const args = Array.from(arguments);
+          for (let i = 0; i < result.length; i++) {
+            if (isShape(result[i])) { utils.deriveStableKey(result[i], name + '#' + i, args); }
+          }
+        }
+        return result;
+      };
+    }
   }
 }
 
