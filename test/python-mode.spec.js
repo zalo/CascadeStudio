@@ -148,7 +148,8 @@ test.describe('Python (build123d) mode', () => {
     const logs = await waitForConsole(page, 'logs', 'items.some(l => l.startsWith("described"))');
     expect(logs).toContain('top_z 3.0');
     expect(logs.some((l) => /^find_edges: 2 edge\(s\) matched, radii \[3(\.0)?\]/.test(l))).toBe(true);
-    const d = JSON.parse(logs.find((l) => l.startsWith('described')).slice('described '.length));
+    // the console log keeps quotes backslash-escaped
+    const d = JSON.parse(logs.find((l) => l.startsWith('described')).slice('described '.length).replace(/\\"/g, '"'));
     expect(d.geom_type).toBe('CYLINDER');
     expect(d.radius).toBe(3);
   });
