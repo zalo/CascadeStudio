@@ -138,7 +138,8 @@ export const TOOLS = [
     title: 'Compare two objects',
     description: 'kind "fit": how two shown objects sit: clearance (surface distance), status apart / touching / '
       + 'containing / interpenetrating, containment, the intersection volume and each one\'s volume outside the '
-      + 'other. kind "align": two objects along one axis (mode flush = the max extremes, center = the box '
+      + 'other. kind "align": two objects along one axis (mode flush = the max extremes as delta, plus delta_min for '
+      + 'the min side, center = the box '
       + 'centres, clearance = the nearest faces; negative = overlap). kind "shape": volume, topology, bbox and '
       + 'centre deltas plus the exact volume added and removed from a to b. kind "snapshot": snapshot a against '
       + 'the current session (or snapshot b), per object.',

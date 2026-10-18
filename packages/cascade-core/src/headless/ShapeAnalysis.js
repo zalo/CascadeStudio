@@ -226,11 +226,18 @@ export function alignCheck(boxA, boxB, axis = 'Z', mode = 'flush', nameA = 'A', 
   const g = (v) => +v.toPrecision(4);
   let delta;
   let interp;
+  let extra = {};
   if (mode === 'flush') {
+    // upstream compares the max extremes; the min side is reported too
+    // (bottoms flush is as common a question as tops flush)
     delta = r6(aMax - bMax);
-    interp = Math.abs(delta) < 1e-4 ? nameA + ' and ' + nameB + ' are flush on ' + axis
-      : (delta > 0 ? nameA : nameB) + ' extends ' + g(Math.abs(delta)) + ' mm further than '
-        + (delta > 0 ? nameB : nameA) + ' on ' + axis;
+    const dMin = r6(aMin - bMin);
+    interp = (Math.abs(delta) < 1e-4 ? 'max side: ' + nameA + ' and ' + nameB + ' are flush on ' + axis
+      : 'max side: ' + (delta > 0 ? nameA : nameB) + ' extends ' + g(Math.abs(delta)) + ' mm further than '
+        + (delta > 0 ? nameB : nameA) + ' on +' + axis)
+      + (Math.abs(dMin) < 1e-4 ? '; min side: flush' : '; min side: ' + (dMin < 0 ? nameA : nameB) + ' extends '
+        + g(Math.abs(dMin)) + ' mm further on -' + axis);
+    extra = { delta_max: delta, delta_min: dMin };
   } else if (mode === 'center') {
     delta = r6((aMin + aMax) / 2 - (bMin + bMax) / 2);
     interp = Math.abs(delta) < 1e-4 ? 'the centres of ' + nameA + ' and ' + nameB + ' are aligned on ' + axis
@@ -243,7 +250,7 @@ export function alignCheck(boxA, boxB, axis = 'Z', mode = 'flush', nameA = 'A', 
       : delta < -1e-4 ? nameA + ' and ' + nameB + ' overlap by ' + g(-delta) + ' mm on ' + axis
         : nameA + ' and ' + nameB + ' are touching on ' + axis;
   }
-  return { delta, axis, mode, object_a: nameA, object_b: nameB, interpretation: interp };
+  return { delta, ...extra, axis, mode, object_a: nameA, object_b: nameB, interpretation: interp };
 }
 
 const ANALYTIC = new Set(['Plane', 'Cylinder', 'Cone', 'Sphere', 'Torus']);
