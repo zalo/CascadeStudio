@@ -253,15 +253,20 @@ function withResultShow(code) {
 
 /** Scene indices for object references: an index, a show() name, a named
  *  list ("cubes" = cubes[0], cubes[1], ...), an array of those, or names
- *  separated by commas. null/undefined/'' = every shape. */
+ *  separated by commas. null/undefined/'' = every shape. A list sent as
+ *  JSON text ('["plate", "lid"]', '"plate"') counts as the list. */
 function resolveObjects(names, ref) {
+  if (typeof ref === 'string' && /^\s*["[]/.test(ref)) {
+    try { ref = JSON.parse(ref); } catch (err) { ref = ref.trim().replace(/^\[|\]$/g, ''); }
+  }
   if (ref === undefined || ref === null || ref === '' || (Array.isArray(ref) && !ref.length)) {
     return names.map((n, i) => i);
   }
   const refs = Array.isArray(ref) ? ref : (typeof ref === 'string' && ref.includes(',') ? ref.split(',') : [ref]);
   const out = [];
   for (const r0 of refs) {
-    const r = typeof r0 === 'string' ? r0.trim() : r0;
+    // bare or quoted, from a comma list like [plate, 'lid']
+    const r = typeof r0 === 'string' ? r0.trim().replace(/^(["'])(.*)\1$/, '$2') : r0;
     let hits = [];
     if (Number.isInteger(r) || /^\d+$/.test(String(r))) {
       const i = Number(r);

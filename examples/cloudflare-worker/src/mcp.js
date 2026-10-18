@@ -14,7 +14,7 @@
 // prompts, resources. test/mcp-session.mjs drives it with the official SDK
 // client.
 
-import { SERVER_INFO, TOOLS, INSTRUCTIONS, WORKFLOW, QUICKREF, SELECTORS, STARTER, PROMPTS, RESOURCES,
+import { SERVER_INFO, TOOLS, coerceArgs, INSTRUCTIONS, WORKFLOW, QUICKREF, SELECTORS, STARTER, PROMPTS, RESOURCES,
   promptMessages } from './mcp-tools.js';
 import { repairHints } from './repair-hints.js';
 import { UPSTREAM_SKILLS } from './skills-upstream.js';
@@ -46,12 +46,12 @@ const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)),
  *  @param {(env, name, args, meta) => Promise<object>} o.callSessionTool
  *         runs a tool in a session object; returns an MCP tool result */
 export function createMcpHandler(o) {
-  const toolNames = new Set(TOOLS.map((t) => t.name));
+  const toolsByName = new Map(TOOLS.map((t) => [t.name, t]));
 
   async function callTool(params, env, origin) {
     const name = params && params.name;
-    const args = (params && params.arguments) || {};
-    if (!toolNames.has(name)) { return textResult('unknown tool: ' + name, true); }
+    if (!toolsByName.has(name)) { return textResult('unknown tool: ' + name, true); }
+    const args = coerceArgs(toolsByName.get(name), (params && params.arguments) || {});
     if (name === 'workflow_hints') { return textResult(WORKFLOW); }
     if (name === 'search_library') {
       const parts = searchParts(args.query || '');

@@ -406,6 +406,37 @@ export const TOOLS = [
   },
 ];
 
+/** Arguments as the tool's schema types them. Model clients sometimes send
+ *  an array or object as its JSON text ('["plate", "lid"]'), or a number or
+ *  boolean as a string ("800", "true"); a top-level argument whose schema
+ *  does not take that string as it is gets the value it encodes. Anything
+ *  that doesn't parse to an allowed type is passed on unchanged, for the
+ *  tool's own validation. */
+export function coerceArgs(tool, args) {
+  const props = (tool && tool.inputSchema && tool.inputSchema.properties) || {};
+  if (!args || typeof args !== 'object' || Array.isArray(args)) { return args; }
+  const out = Object.assign({}, args);
+  for (const [key, v] of Object.entries(args)) {
+    const schema = props[key];
+    if (!schema || !schema.type || typeof v !== 'string') { continue; }
+    const types = [].concat(schema.type);
+    const t = v.trim();
+    if ((types.includes('array') && t.startsWith('[')) || (types.includes('object') && t.startsWith('{'))) {
+      try {
+        const j = JSON.parse(t);
+        if (types.includes(Array.isArray(j) ? 'array' : (j && typeof j === 'object' ? 'object' : '-'))) { out[key] = j; continue; }
+      } catch (err) { /* not JSON: leave it */ }
+    }
+    if (types.includes('string')) { continue; }
+    if ((types.includes('integer') || types.includes('number')) && /^-?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(t)) {
+      const n = Number(t);
+      if (types.includes('number') || Number.isInteger(n)) { out[key] = n; continue; }
+    }
+    if (types.includes('boolean') && (t === 'true' || t === 'false')) { out[key] = t === 'true'; }
+  }
+  return out;
+}
+
 export const INSTRUCTIONS = `Remote build123d CAD: build123d (the "lite" port) on OpenCascade, evaluated in a server-side session, so no local Python is needed.
 
 Loop: execute (or set_script) -> render_view (look, from two views) -> measure / validate -> fix -> export -> open_in_editor to hand the model to a person.

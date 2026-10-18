@@ -185,6 +185,11 @@ r = await call('compare', { session: sid, a: 'two', kind: 'snapshot' });
 check('compare snapshot: the pin changed, the base did not', /~ \[1\] "pin"/.test(text(r)) && /= \[0\] "base"/.test(text(r)), text(r));
 r = await call('render_view', { session: sid, objects: 'pin', highlight: ['pin'] });
 check('render_view objects by name', /1 object\(s\): \[1\] "pin"/.test(text(r)), text(r));
+// clients sometimes send a list (or a number) as its JSON text
+r = await call('render_view', { session: sid, objects: '["base", "pin"]', width: '400', height: '300' });
+check('render_view objects and width as JSON text', !r.isError && /2 object\(s\)/.test(text(r)), text(r).split('\n')[0]);
+r = await call('measure', { session: sid, object_name: '["base", "pin"]' });
+check('measure object_name as a JSON list', !r.isError && JSON.parse(text(r)).shapes.map((x) => x.name).join() === 'base,pin', text(r).slice(0, 160));
 
 // ---- the validity gate ----
 r = await call('set_script', { session: sid, code: 'from build123d import *\npair = Compound([Box(10, 10, 10), Pos(5, 0, 0) * Box(10, 10, 10)])\n'

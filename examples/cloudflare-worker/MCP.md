@@ -70,6 +70,7 @@ The skill below shows both.
 - **The protocol (`src/mcp.js`).** Streamable HTTP, stateless, answered with
   plain JSON: `initialize`, `ping`, `tools/*`, `prompts/*`, `resources/*`.
   - **Why stateless:** Cloudflare recommends it for remote MCP servers (`McpAgent` is deprecated), and MCP session ids don't survive between Claude API requests. The CAD state is addressed by the `session` argument instead, which the model carries through the conversation.
+  - **Loose arguments:** model clients sometimes send an array or object as its JSON text (`objects: '["plate", "lid"]'`), or a number or boolean as a string. `coerceArgs` (`src/mcp-tools.js`) turns such a top-level argument into the type its schema asks for, and object references (`object_name`, `a`/`b`) also accept a JSON list.
   - **Why hand-written:** the TypeScript SDK needs `nodejs_compat`, which this Worker can't turn on (wrangler.toml). The server side of the protocol is small. `scripts/mcp-test.mjs` drives it with the official SDK client.
 - **The tools (`src/session.js`, `mcpTool()`).** They run inside the session's Durable Object over RPC, under the same engine lock as the editor's renders.
   - **Script:** `meta.script` holds the script, its revision and who changed it last. Editor renders save into it too.
