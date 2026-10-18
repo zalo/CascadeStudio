@@ -124,6 +124,43 @@ re-run of the cached script.
 1.95 s. Gzip adds about 0.15 s on the big meshes, which pays for itself on
 any real network link.
 
+### On the edge
+
+`cascade-headless-session.makeshifted.workers.dev`, deployed 2026-10-18 from
+`feat/do-editor`. Client wall time from this machine, one run each
+(placement varies about 1.6×, EDIT-SESSIONS.md). The first render includes
+booting a fresh isolate:
+
+| model | first render | re-run (all hits) | edit 1 | edit 2 | timeline step | Save STEP |
+|---|---|---|---|---|---|---|
+| mount | 4.0 s | 516 ms | 361 ms | 504 ms | 80 ms | 276 ms |
+| plate16 | 22.2 s | 10.4 s | 13.3 s | 14.4 s | 1.1 s | 2.2 s |
+| maker_coin | 18.1 s | 7.4 s | 10.9 s | 12.6 s | 4.4 s² | 0.6 s |
+| heat_exchanger | 24.2 s | 11.6 s | 14.9 s | 18.2 s | 3.8 s² | 1.4 s |
+
+Against the same session without a mesh, measured last round (JSON path,
+EDIT-SESSIONS.md), on a re-run and on edit 1:
+
+| model | session, no mesh | session, editor path | stateless `/render`, no mesh |
+|---|---|---|---|
+| mount | 187 ms / 177 ms | 516 ms / 361 ms | — / 553 ms |
+| plate16 | 1.0 s / 3.4 s | 10.4 s / 13.3 s | — / 4.5 s |
+| heat_exchanger | 2.9 s / 5.4 s | 11.6 s / 14.9 s | — / 25.1 s |
+
+**The edge's CPU makes meshing the bottleneck there.** Frame arrival times
+(`PHASE evaluating` → `PHASE evaluated` → result frames) put a plate16
+re-run at about 9.5 s inside evaluate-and-mesh, against about 1 s for
+evaluation alone. Packing, gzip and transfer take about 0.45 s. That makes
+meshing about 8.5 s on the edge, against 1.35 s locally. This is the same
+4-6× gap the evaluation itself shows between this workstation and the edge
+(plate16 edit: 0.6 s local, 3.4 s edge), not a separate fault:
+- **Not memory:** constraining V8's heap locally does not reproduce it.
+- **Not the transfer:** the gzipped payload arrives in under half a second.
+
+Models with small meshes stay interactive: a mount edit comes back in under
+half a second. Large ones pay their mesh on every edit, which is what the
+first item under *Limits* is about.
+
 ## Limits
 
 - **build123d (lite) only.** CascadeStudio JS and OpenSCAD run in the local
@@ -131,12 +168,18 @@ any real network link.
   cache's correctness gate covers Python only.
 - **No imports yet.** The STEP/IGES/STL import button and `import_step()`
   assets need an upload route.
-- **Every render re-meshes the whole scene.** The mesher strips its
+- **Every render re-meshes the whole scene**, and on the edge that costs more
+  than the evaluation for large models (above). The mesher strips its
   triangulations after each pass. Keeping them on cached shapes would let
   BRepMesh skip unchanged faces, but they would leak into later runs: OCCT's
   bounding boxes prefer a triangulation when one is present, which is why the
   session clears them. The way forward is a JS-side cache of each scene
-  shape's mesh, keyed by its stable cache key.
+  shape's extracted mesh, keyed by its stable cache key. That makes re-runs,
+  timeline steps and multi-shape scenes nearly free; for example, a GUI-tool
+  commit adds one shape and leaves the others unchanged. An edit to a
+  single-solid model still re-meshes that solid. OCCT's
+  `IMeshTools_Parameters` (e.g. turning off surface-deflection control) is not
+  bound in this build.
 - **The timeline after a compaction re-runs the script.** Compaction (OCCT
   heap ≥ `COMPACT_AT_MB`, which the big models reach on every render) rewinds
   the kernel, and the history steps go with it.
