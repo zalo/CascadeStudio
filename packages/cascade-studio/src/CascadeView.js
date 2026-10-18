@@ -169,6 +169,7 @@ class CascadeEnvironment {
     const { faces: facelist, edges: edgelist } = meshData;
     window.workerWorking = false;
     if (!facelist) { return; }
+    this.clearPartialMesh();
     if (!sceneOptions) { sceneOptions = {}; }
     this._lastSceneOptions = sceneOptions;
     this._shapeLines = meshData.shapeLines || [];
@@ -227,6 +228,35 @@ class CascadeEnvironment {
     }
     this.environment.viewDirty = true;
     console.log("Generation Complete!");
+  }
+
+  /** A streamed mesh (a remote session's, RemoteCascadeEngine 'meshBatch'):
+   *  draw one batch of faces as it lands. The previous model is hidden on
+   *  the first batch; renderMeshData() replaces the batches with the whole
+   *  mesh (with its pick metadata) when the stream is complete. */
+  renderPartialMesh(faces, edges) {
+    if (!(faces && faces.length) && !(edges && edges.length)) { return; }
+    if (!this._partialGroup) {
+      this._partialGroup = new THREE.Group();
+      this._partialGroup.name = "streaming";
+      this.environment.scene.add(this._partialGroup);
+      if (this.mainObject) { this.mainObject.visible = false; }
+    }
+    this._partialGroup.add(this._buildObjectFromMesh(faces || [], edges || []));
+    this.environment.viewDirty = true;
+  }
+
+  /** Drop the streamed batches (and show the previous model again). */
+  clearPartialMesh() {
+    if (!this._partialGroup) { return; }
+    this.environment.scene.remove(this._partialGroup);
+    this._partialGroup.traverse((o) => {
+      if (o.geometry) { o.geometry.dispose(); }
+      if (o.material && o.material !== this.matcapMaterial) { o.material.dispose(); }
+    });
+    this._partialGroup = null;
+    if (this.mainObject) { this.mainObject.visible = true; }
+    this.environment.viewDirty = true;
   }
 
   /** Set history steps metadata. Replaces the old "modelHistory" handler. */
@@ -333,8 +363,12 @@ class CascadeEnvironment {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs, 2));
+    // a remote session's mesh carries no UVs (the matcap material does not
+    // read them; see IncrementalMesher.js)
+    if (uvs.length) {
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs, 2));
+    }
     geometry.computeBoundingSphere();
     geometry.computeBoundingBox();
     let model = new THREE.Mesh(geometry, this.matcapMaterial);

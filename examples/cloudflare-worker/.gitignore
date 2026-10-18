@@ -6,3 +6,7 @@ assets/
 # The retired static-assets tree (fonts + upstream Python used to live here;
 # prepare-assets.cjs deletes it).
 public/
+
+# The editor served by the session Worker (scripts/prepare-editor.cjs: the
+# CascadeStudio build, remote-session mode, minus the local engine).
+editor/

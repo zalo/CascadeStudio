@@ -167,6 +167,18 @@ body {
   cursor: pointer;
 }
 
+/* Remote-session mode (RemoteCascadeEngine): the evaluator is a server */
+.topnav-remote {
+  color: var(--cs-accent);
+  border: 1px solid var(--cs-accent);
+  border-radius: var(--cs-radius);
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: var(--cs-font-ui);
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
 /* ============================================================
    App Body (Dockview container)
    ============================================================ */

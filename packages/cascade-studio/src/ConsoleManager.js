@@ -27,36 +27,46 @@ class ConsoleManager {
       this._setupConsoleOverrides();
 
       window.onerror = (err, url, line, colno, errorObj) => {
-        let errorText = JSON.stringify(err, ConsoleManager._circularReplacer());
-        if (errorText.startsWith('"')) { errorText = errorText.slice(1, -1); }
-
-        this.errors.push("Line " + line + ": " + errorText);
-
-        let newline = document.createElement("div");
-        newline.style.color = "red";
-        newline.style.fontFamily = "monospace";
-        newline.style.fontSize = "1.2em";
-        newline.textContent = "Line " + line + ": " + errorText;
-        this._consoleContainer.appendChild(newline);
-        this._consoleContainer.parentElement.scrollTop = this._consoleContainer.parentElement.scrollHeight;
-
-        if (!errorObj || !(errorObj.stack.includes("wasm-function"))) {
-          const editor = this._app.editor.editor;
-          if (editor) {
-            monaco.editor.setModelMarkers(editor.getModel(), 'test', [{
-              startLineNumber: line,
-              startColumn: colno,
-              endLineNumber: line,
-              endColumn: 1000,
-              message: JSON.stringify(err, ConsoleManager._circularReplacer()),
-              severity: monaco.MarkerSeverity.Error
-            }]);
-          }
-        }
+        this.reportError(err, line, colno,
+          !errorObj || !(errorObj.stack.includes("wasm-function")));
       };
 
       console.log("Welcome to Cascade Studio!");
       console.log("Loading CAD Kernel...");
+    }
+  }
+
+  /** Show an evaluation error in the console (and, with `mark`, as an
+   *  editor marker on `line`). window.onerror lands here; so do the remote
+   *  session's errors (`raw`: a plain string, traceback lines kept), which
+   *  only carry a line when a traceback had one. */
+  reportError(err, line, colno = 1, mark = true, raw = false) {
+    let errorText = raw ? String(err) : JSON.stringify(err, ConsoleManager._circularReplacer());
+    if (!raw && errorText.startsWith('"')) { errorText = errorText.slice(1, -1); }
+    const text = (line ? "Line " + line + ": " : "") + errorText;
+    this.errors.push(text);
+
+    let newline = document.createElement("div");
+    newline.style.color = "red";
+    newline.style.fontFamily = "monospace";
+    newline.style.fontSize = "1.2em";
+    if (raw) { newline.style.whiteSpace = "pre-wrap"; }
+    newline.textContent = text;
+    this._consoleContainer.appendChild(newline);
+    this._consoleContainer.parentElement.scrollTop = this._consoleContainer.parentElement.scrollHeight;
+
+    if (mark && line) {
+      const editor = this._app.editor.editor;
+      if (editor) {
+        monaco.editor.setModelMarkers(editor.getModel(), 'test', [{
+          startLineNumber: line,
+          startColumn: colno || 1,
+          endLineNumber: line,
+          endColumn: 1000,
+          message: raw ? String(err) : JSON.stringify(err, ConsoleManager._circularReplacer()),
+          severity: monaco.MarkerSeverity.Error
+        }]);
+      }
     }
   }
 

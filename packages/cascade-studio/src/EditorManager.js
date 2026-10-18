@@ -103,6 +103,26 @@ export function resolveOcpLifetime() {
   return 'free';
 }
 
+/** Remote-session evaluation: build123d runs in a Durable Object editing
+ *  session (examples/cloudflare-worker, `--env session`) instead of the
+ *  local Web Worker, which is then never started. On when the page was
+ *  built for it — `window.CASCADE_REMOTE = {endpoint}`, written into
+ *  index.html when the session Worker serves the editor — or with
+ *  `?engine=remote&server=<session Worker URL>`. `?session=<id>` joins a
+ *  given session (default: one per browser tab). Returns
+ *  {endpoint, sessionId} or null. */
+export function resolveRemote() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const cfg = window.CASCADE_REMOTE || null;
+    if (!cfg && params.get('engine') !== 'remote') { return null; }
+    return {
+      endpoint: params.get('server') || (cfg && cfg.endpoint) || '',
+      sessionId: params.get('session') || undefined,
+    };
+  } catch (e) { return null; }
+}
+
 /** Manages the Monaco code editor instance, mode switching, and code evaluation. */
 class EditorManager {
   constructor(app) {
@@ -306,6 +326,8 @@ class EditorManager {
     }).then((result) => {
       if (this._app.viewport && result.meshData) {
         this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);
+      } else if (this._app.viewport) {
+        this._app.viewport.clearPartialMesh();
       }
     }).catch((err) => {
       console.error("Evaluation error: " + err.message);
@@ -320,11 +342,20 @@ class EditorManager {
       // `mode` is a plain, human-readable param so the language travels with
       // the code. Links without it predate mode serialization and load as
       // CascadeStudio JS (see CascadeStudioApp.initialize).
+      // A remote-session editor keeps its engine/server/session params, or
+      // the saved link would reopen in local mode or another session.
+      let remoteParams = "";
+      if (this._app.remote) {
+        const current = new URLSearchParams(location.search);
+        for (const key of ['engine', 'server', 'session']) {
+          if (current.has(key)) { remoteParams += "&" + key + "=" + encodeURIComponent(current.get(key)); }
+        }
+      }
       window.history.replaceState({}, 'Cascade Studio',
         new URL(
           location.pathname + "?code=" + AppClass.encode(newCode) +
           "&gui=" + AppClass.encode(JSON.stringify(this._app.gui.state)) +
-          "&mode=" + encodeURIComponent(this.mode),
+          "&mode=" + encodeURIComponent(this.mode) + remoteParams,
           location.href
         ).href
       );

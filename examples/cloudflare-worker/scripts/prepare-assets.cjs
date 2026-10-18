@@ -133,6 +133,24 @@ if (fs.existsSync(UP)) {
     + '(the lite flavor still deploys; `--env upstream` will not build)');
 }
 
+// ------------------------------------------------------------------ //
+// 4. Build id (the editing session salts its persisted cache with it:  //
+//    keys written by one engine build mean nothing to another).        //
+// ------------------------------------------------------------------ //
+{
+  const crypto = require('crypto');
+  const h = crypto.createHash('sha256');
+  for (const name of ['cascade-headless.mjs', 'cascadestudio.wasm', 'micropython-cs.wasm']) {
+    h.update(fs.readFileSync(path.join(OUT, name)));
+  }
+  if (fs.existsSync(path.join(OUT, 'upstream-b123d.json'))) {
+    h.update(fs.readFileSync(path.join(OUT, 'upstream-b123d.json')));
+  }
+  const bundleId = h.digest('hex').slice(0, 16);
+  fs.writeFileSync(path.join(OUT, 'bundle-id.json'), JSON.stringify({ bundleId }) + '\n');
+  console.log('  bundle-id.json             ' + bundleId);
+}
+
 const pct = (n) => (100 * n / LIMIT).toFixed(0) + '% of 64 MiB';
 console.log('\n  lite script      ' + mb(scriptRaw).padStart(9) + '   ' + mb(scriptGz).padStart(9)
   + ' gz   ' + pct(scriptRaw) + '  (raw sum; `wrangler deploy --dry-run` reports Total Upload)');

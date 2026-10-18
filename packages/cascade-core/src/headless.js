@@ -34,6 +34,7 @@
 // MUST be first: aliases `self` before any worker module is evaluated.
 import './worker/GlobalSelf.js';
 import { CascadeStudioWorker } from './worker/CascadeWorker.js';
+import { IncrementalMesher } from './worker/IncrementalMesher.js';
 import { toArrayBuffer } from './worker/WasmAssets.js';
 
 /** Message types that carry a GUI widget registration. The widget functions
@@ -49,6 +50,9 @@ const GUI_WIDGET_TYPES = {
 const DEFAULT_STEP_NAME = 'cascade-headless.step';
 const DEFAULT_BREP_NAME = 'cascade-headless.brep';
 const DEFAULT_STL_NAME = 'cascade-headless.stl';
+const SNAPSHOT_NAME = '__cs-cache-snapshot.bin';
+/** Bumped whenever the snapshot layout or the key derivation changes. */
+export const CACHE_SNAPSHOT_FORMAT = 2;
 
 /** Boot a headless CAD engine.
  *
@@ -84,7 +88,19 @@ const DEFAULT_STL_NAME = 'cascade-headless.stl';
  *                 a fraction of the time.
  *    - `pyTopo`   passed through to the upstream-topology layer
  *    - `cache`    seed for GUIState['Cache?'] (default true)
+ *    - `stableCache` keep the op cache ACROSS runs with content-derived keys
+ *                 (StandardUtils _stableHash) instead of emptying it before
+ *                 every Python run. For long-lived hosts that re-run edited
+ *                 scripts (a Durable Object editing session); such a host
+ *                 must NOT reset() between jobs, and can persist the cached
+ *                 working set with snapshotCache()/restoreCache().
  *    - `gui`      initial GUIState values (what a Slider() would return)
+ *    - `meshCacheBytes` cap on meshScene()'s geometry-keyed face-mesh cache
+ *                 (default 12 MB of typed arrays)
+ *    - `meshPerFace` (default true) triangulate one face per BRepMesh call
+ *                 (run({mesh: true})): the mesher's transient scales with the
+ *                 faces in one call — 77-94 MB on 500-1200-face solids — and
+ *                 a Worker has 128 MB in all. See ShapeToMesh.js.
  */
 let _engine = null;
 
@@ -106,7 +122,10 @@ export async function createHeadlessCascade(options = {}) {
     runtime: 'micropython',
     pySrc: 'lite',
     cache: true,
+    stableCache: false,
   }, options);
+  globalThis.self._csStableCache = !!opts.stableCache;
+  globalThis.self._csMeshPerFace = opts.meshPerFace !== false;
 
   const state = {
     logs: [],
@@ -119,7 +138,11 @@ export async function createHeadlessCascade(options = {}) {
     booted: false,
     externalFiles: null,
     kernelResets: 0,
+    // the last run's scene, kept for meshScene() (run({keepScene: true}))
+    scene: null,
   };
+  /** Geometry-keyed face meshes, kept across runs AND kernel resets. */
+  const mesher = new IncrementalMesher({ maxBytes: opts.meshCacheBytes });
 
   /** Cap on the retained per-op Progress timeline. heat_exchanger emits over
    *  a thousand ops; the timeline is a diagnostic, not a transcript. */
@@ -242,7 +265,12 @@ export async function createHeadlessCascade(options = {}) {
     if (!worker.hasKernelImage()) { return false; }
     globalThis.self.currentShape = null;
     globalThis.self.sceneShapes = [];
+    // the last run's history steps and scene hold shapes in the heap being
+    // discarded (the mesh cache does not: it is geometry, in JS)
+    globalThis.self.modelHistory = [];
+    state.scene = null;
     for (const k in globalThis.self.argCache) { delete globalThis.self.argCache[k]; }
+    worker.standardLibrary.utils.pruneStableIndex(true);
     globalThis.self.externalShapes = {};
     const ok = worker.restoreKernelImage();
     if (ok) { state.kernelResets++; }
@@ -310,19 +338,29 @@ export async function createHeadlessCascade(options = {}) {
      *  library) — OpenSCAD must be transpiled first (OpenSCADTranspiler).
      *  `opts.mesh`: false (default) builds only the exact BREP compound —
      *  meshing is the memory-expensive stage and STEP/BREP do not need it.
-     *  true also triangulates and returns the viewport mesh payload. */
+     *  true also triangulates and returns the viewport mesh payload
+     *  (`mesh` = [faces, edges], `shapeLines` = each scene shape's producing
+     *  source line), at `opts.maxDeviation` (default 0.1).
+     *  `opts.keepScene` keeps the scene shapes for meshScene() (the
+     *  incremental, streamable mesher) instead of meshing here.
+     *  `opts.gui` merges into the engine's GUI state; `opts.guiState`
+     *  REPLACES it for this run (a host serving several clients from one
+     *  engine must not let one client's widget values reach another). */
     async run(code, runOpts = {}) {
       const language = runOpts.language || 'python';
       state.logs = [];
       state.errors = [];
       state.historySteps = [];
       state.progressOps = [];
+      state.guiWidgets = {};
       const t0 = now();
 
       worker.evaluate({
         code,
         language,
-        GUIState: Object.assign({}, state.guiState, runOpts.gui || {}),
+        GUIState: runOpts.guiState
+          ? Object.assign({ 'Cache?': !!opts.cache }, runOpts.guiState)
+          : Object.assign({}, state.guiState, runOpts.gui || {}),
         pyRuntime: opts.runtime,
         pySrc: opts.pySrc,
         pyTopo: opts.pyTopo,
@@ -340,24 +378,42 @@ export async function createHeadlessCascade(options = {}) {
       const evalMs = now() - t0;
 
       const sceneShapeCount = (globalThis.self.sceneShapes || []).length;
+      state.scene = runOpts.keepScene ? (globalThis.self.sceneShapes || []).slice() : null;
       let mesh = null;
+      let shapeLines = null;
       let shapeCount = 0;
       const tMesh = now();
-      if (runOpts.mesh) {
+      if (runOpts.mesh && sceneShapeCount === 0) {
+        // nothing to mesh — and the mesher would report the empty scene as
+        // a console.error, which the worker turns into a fake kernel error
+        shapeCount = worker.combineShapes();
+      } else if (runOpts.mesh) {
         const result = worker.combineAndRenderShapes({
           maxDeviation: runOpts.maxDeviation || 0.1,
         });
         mesh = result ? result[0] : null;
+        shapeLines = result ? (result[2] || []) : null;
         shapeCount = sceneShapeCount;
       } else {
         shapeCount = worker.combineShapes();
       }
 
+      const utils = worker.standardLibrary.utils;
       return {
         ok: state.errors.length === 0,
         errors: state.errors.slice(),
         logs: state.logs.slice(),
         shapeCount,
+        // op-cache outcome of THIS run (volatile ops: stable mode only —
+        // computed and never cached; see StandardUtils _stableHash)
+        cache: {
+          hits: utils.cacheHits || 0,
+          misses: utils.cacheMisses || 0,
+          volatile: utils.volatileOps || 0,
+          volatileReasons: Object.entries(utils.volatileReasons || {})
+            .sort((a, b) => b[1] - a[1]).slice(0, 8),
+          entries: Object.keys(globalThis.self.argCache || {}).length,
+        },
         historySteps: state.historySteps.slice(),
         // Per-op timeline collected from the worker's Progress messages
         // ({n, op}). It is a RECORD, not live progress: the evaluation is
@@ -366,9 +422,49 @@ export async function createHeadlessCascade(options = {}) {
         progressOps: state.progressOps.slice(),
         guiWidgets: Object.assign({}, state.guiWidgets),
         mesh,
+        shapeLines,
         timings: { evalMs: round1(evalMs), combineMs: round1(now() - tMesh) },
       };
     },
+
+    /** Triangulate one step of the last run's modeling history (the
+     *  editor's timeline) -> [faces, edges], or null when the step has no
+     *  shapes. Valid until the next run() or kernel reset. */
+    meshHistoryStep(stepIndex, maxDeviation = 0.1) {
+      return worker.meshHistoryStep({ stepIndex, maxDeviation }) || null;
+    },
+
+    /** Mesh the scene the last run({keepScene: true}) built, incrementally:
+     *  a generator of batches {faces, edges} (IncrementalMesher.js) — faces
+     *  whose geometry was meshed before come back from the mesh cache, the
+     *  rest are triangulated a batch at a time, so a host can stream them.
+     *  Returns {shapeLines, batches} or null when there is no kept scene. */
+    meshScene(o = {}) {
+      if (!state.scene) { return null; }
+      const shapes = state.scene;
+      return {
+        shapeLines: shapes.map((s) => (s && s.producingLine) || -1),
+        batches: mesher.mesh(shapes, o.maxDeviation || 0.1, { batchNodes: o.batchNodes }),
+      };
+    },
+
+    /** The same, for one step of the last run's modeling history. */
+    meshHistoryStepIncremental(stepIndex, o = {}) {
+      const step = (globalThis.self.modelHistory || [])[stepIndex];
+      if (!step || !step.shapes || step.shapes.length === 0) { return null; }
+      return { shapeLines: [], batches: mesher.mesh(step.shapes, o.maxDeviation || 0.1,
+        { batchNodes: o.batchNodes }) };
+    },
+
+    /** The incremental mesher's cache: {clear(), stats(), liveIds()}. */
+    meshCache: mesher,
+
+    /** How many times the kernel has been rewound to its boot image (by
+     *  reset()/resetKernel(), or by an export healing a damaged heap). */
+    get kernelResets() { return state.kernelResets; },
+
+    /** Steps in the last run's modeling history (0 after a kernel reset). */
+    get historyLength() { return (globalThis.self.modelHistory || []).length; },
 
     /** STEP (ISO-10303-21) text for the shape built by the last run().
      *
@@ -495,6 +591,237 @@ export async function createHeadlessCascade(options = {}) {
     /** Rewind OCCT to its boot image, dropping every shape. Returns false
      *  when the engine was created with `kernelImage: false`. */
     resetKernel() { return resetKernel(); },
+
+    /** Serialize the op cache's working set (stable mode): every cached
+     *  result with a content-derived key, as ONE compound in OCCT's BINARY
+     *  BREP format (BinTools) plus an index. Returns null when there is
+     *  nothing to save.
+     *
+     *  One compound rather than a file per entry because BREP keeps shared
+     *  sub-shapes shared WITHIN a file — results that share topology (an
+     *  op's input and output) still share it after restoreCache(), which is
+     *  what IsSame-based bookkeeping depends on.
+     *
+     *  Binary, not the text format, because the round trip has to be
+     *  BIT-EXACT: a restored result feeds the arguments of later ops (an
+     *  edge's tangent becomes a JernArc's start direction), and the keys of
+     *  those ops are hashes of the exact doubles. Measured on maker_coin's
+     *  52 cached results (55,408 sampled vertex/edge values): BinTools 0
+     *  differ; BRepTools text 21,331 differ (max relative 5e-8), which
+     *  turned 7 hits of the next edit into misses. Binary is also ~5x
+     *  faster to write and half the size. */
+    snapshotCache() {
+      if (!globalThis.self._csStableCache) {
+        throw new Error('snapshotCache: needs createHeadlessCascade({stableCache: true})');
+      }
+      const SKIP = {};
+      const o = oc();
+      const shapes = [];
+      // dedupe on IsEqual (same TShape, location, orientation): history
+      // records name the SAME sub-shapes many times over
+      const byHash = new Map();
+      const shapeRef = (v) => {
+        if (!v || v.$$ === undefined || typeof v.ShapeType !== 'function' || v.IsNull()) {
+          throw SKIP;
+        }
+        const hc = o.OCJS.HashCode(v, 2147483647);
+        let bucket = byHash.get(hc);
+        if (!bucket) { bucket = []; byHash.set(hc, bucket); }
+        for (const i of bucket) { if (shapes[i] === v || shapes[i].IsEqual(v)) { return i; } }
+        bucket.push(shapes.length);
+        shapes.push(v);
+        return shapes.length - 1;
+      };
+      const drain = (list) => {
+        const out = [];
+        while (!list.IsEmpty()) { out.push(shapeRef(list.First())); list.RemoveFirst(); }
+        list.delete();
+        return out;
+      };
+      const T = o.TopAbs_ShapeEnum;
+      const TRACKED = [T.TopAbs_VERTEX, T.TopAbs_EDGE, T.TopAbs_FACE, T.TopAbs_SOLID];
+      // The operation-history record lite's primitives leave on a result
+      // (StandardLibrary `._csHist = {hist, args, tools}`, read back by
+      // Select.LAST/NEW). BRepTools_History cannot be enumerated, so it is
+      // queried for every tracked sub-shape of the op's inputs — the only
+      // keys HistClassify and HistMerge ever look up — and only non-empty
+      // answers are kept.
+      const encodeHist = (rec) => {
+        const args = (rec.args || []).map(shapeRef);
+        const tools = (rec.tools || []).map(shapeRef);
+        let rel = null;
+        if (rec.hist) {
+          rel = [];
+          const map = new o.TopTools_IndexedMapOfShape_1();
+          for (const sh of (rec.args || []).concat(rec.tools || [])) {
+            for (const t of TRACKED) { o.TopExp.MapShapes_1(sh, t, map); }
+          }
+          for (let i = 1; i <= map.Extent(); i++) {
+            const sub = map.FindKey_1(i);
+            const mod = drain(rec.hist.Modified(sub));
+            const gen = drain(rec.hist.Generated(sub));
+            const removed = rec.hist.IsRemoved(sub) ? 1 : 0;
+            if (mod.length || gen.length || removed) {
+              rel.push([shapeRef(sub), mod, gen, removed]);
+            }
+          }
+          map.delete();
+        }
+        return { args, tools, rel };
+      };
+      const encode = (v) => {
+        if (v === null || typeof v !== 'object') {
+          if (typeof v === 'number' && !Number.isFinite(v)) { throw SKIP; }
+          if (typeof v === 'function' || typeof v === 'symbol') { throw SKIP; }
+          return v;
+        }
+        if (v.$$ !== undefined) {
+          const ref = { $s: shapeRef(v) };
+          if (v._csHist) { ref.hist = encodeHist(v._csHist); }
+          return ref;
+        }
+        if (Array.isArray(v)) { return v.map(encode); }
+        if (Object.getPrototypeOf(v) !== Object.prototype) { throw SKIP; }
+        const o = {};
+        for (const k of Object.keys(v)) {
+          if (k === 'hash' || k === 'producingLine') { continue; }
+          o[k] = encode(v[k]);
+        }
+        return o;
+      };
+      const entries = [];
+      let skipped = 0;
+      for (const key of Object.keys(globalThis.self.argCache)) {
+        if (key[0] !== 'k') { continue; }
+        try { entries.push([key, encode(globalThis.self.argCache[key])]); }
+        catch (e) {
+          if (e !== SKIP) { throw e; }
+          // (shapes it already registered stay as unreferenced children)
+          skipped++;
+        }
+      }
+      if (!entries.length) { return null; }
+      let bin = null;
+      if (shapes.length) {
+        const builder = new (oc().BRep_Builder)();
+        const compound = new (oc().TopoDS_Compound)();
+        builder.MakeCompound(compound);
+        for (const s of shapes) { builder.Add(compound, s); }
+        let ok = false;
+        try {
+          ok = oc().BinTools.Write_3(compound, '/' + SNAPSHOT_NAME,
+            new (oc().Message_ProgressRange_1)());
+          if (ok) { bin = oc().FS.readFile('/' + SNAPSHOT_NAME); }
+        } finally {
+          try { oc().FS.unlink('/' + SNAPSHOT_NAME); } catch (e) { /* not written */ }
+          try { compound.delete(); builder.delete(); } catch (e) { /* best effort */ }
+        }
+        if (!ok || !bin) { throw new Error('snapshotCache: the binary BREP writer failed'); }
+      }
+      return { format: CACHE_SNAPSHOT_FORMAT, pySrc: opts.pySrc, shapes: shapes.length,
+        entries, skipped, bin };
+    },
+
+    /** Detach triangulations from every cached result and the current
+     *  scene (BRepTools::Clean). Meshing — exportSTL(), measure()'s bounding
+     *  box, the viewport mesh — writes them INTO the shared TShapes, so in a
+     *  host that keeps the cache across runs they would leak into later
+     *  runs (BRepBndLib prefers a triangulation when one is present) and
+     *  into snapshots (BinTools writes them). Returns the number of shapes
+     *  cleaned. */
+    clearMeshes() {
+      const o = oc();
+      const clean = (s) => {
+        try { (o.BRepTools.Clean_1 || o.BRepTools.Clean).call(o.BRepTools, s, false); }
+        catch (e) {
+          try { (o.BRepTools.Clean_1 || o.BRepTools.Clean).call(o.BRepTools, s); }
+          catch (e2) { return 0; }
+        }
+        return 1;
+      };
+      let n = 0;
+      const cur = globalThis.self.currentShape;
+      if (cur && cur.$$ && !cur.IsNull()) { n += clean(cur); }
+      for (const v of Object.values(globalThis.self.argCache || {})) {
+        if (v && v.$$ !== undefined && typeof v.ShapeType === 'function' && !v.IsNull()) {
+          n += clean(v);
+        }
+      }
+      return n;
+    },
+
+    /** Repopulate the op cache from snapshotCache() output — typically in a
+     *  fresh isolate, before the first run(). Returns {restored, shapes}. */
+    restoreCache(snap) {
+      if (!globalThis.self._csStableCache) {
+        throw new Error('restoreCache: needs createHeadlessCascade({stableCache: true})');
+      }
+      if (!snap || snap.format !== CACHE_SNAPSHOT_FORMAT || snap.pySrc !== opts.pySrc) {
+        return { restored: 0, shapes: 0, rejected: 'format' };
+      }
+      const children = [];
+      if (snap.shapes) {
+        const compound = new (oc().TopoDS_Shape)();
+        let ok = false;
+        try {
+          oc().FS.writeFile('/' + SNAPSHOT_NAME, snap.bin);
+          ok = oc().BinTools.Read_2(compound, '/' + SNAPSHOT_NAME,
+            new (oc().Message_ProgressRange_1)());
+        } catch (e) { ok = false; }
+        try { oc().FS.unlink('/' + SNAPSHOT_NAME); } catch (e) { /* consumed */ }
+        if (!ok || compound.IsNull()) { return { restored: 0, shapes: 0, rejected: 'unreadable' }; }
+        const it = new (oc().TopoDS_Iterator_2)(compound, true, true);
+        for (; it.More(); it.Next()) { children.push(it.Value()); }
+        it.delete();
+        if (children.length !== snap.shapes) {
+          return { restored: 0, shapes: children.length, rejected: 'shape count' };
+        }
+      }
+      const o = oc();
+      const decodeHist = (h) => {
+        let hist = null;
+        if (h.rel) {
+          hist = new o.BRepTools_History();
+          for (const [sub, mod, gen, removed] of h.rel) {
+            for (const m of mod) { hist.AddModified(children[sub], children[m]); }
+            for (const g of gen) { hist.AddGenerated(children[sub], children[g]); }
+            if (removed && !mod.length) { hist.Remove(children[sub]); }
+          }
+        }
+        return { hist, args: h.args.map((i) => children[i]),
+          tools: h.tools.map((i) => children[i]) };
+      };
+      // The snapshot stores IsEqual shapes ONCE, but in memory they were
+      // distinct objects, each carrying its own key (and history record).
+      // Hand every reference after the first a fresh wrapper (embind
+      // clone(): a new JS handle on the same TopoDS_Shape) — sharing one
+      // object made the LAST entry's key overwrite the others', so every op
+      // downstream of the others missed.
+      const handedOut = new Set();
+      const decode = (v) => {
+        if (v === null || typeof v !== 'object') { return v; }
+        if (Array.isArray(v)) { return v.map(decode); }
+        if (typeof v.$s === 'number') {
+          let shape = children[v.$s];
+          if (handedOut.has(v.$s) || v.hist) { shape = shape.clone(); }
+          handedOut.add(v.$s);
+          if (v.hist) { shape._csHist = decodeHist(v.hist); }
+          return shape;
+        }
+        const o = {};
+        for (const k of Object.keys(v)) { o[k] = decode(v[k]); }
+        return o;
+      };
+      const utils = worker.standardLibrary.utils;
+      let restored = 0;
+      for (const [key, enc] of snap.entries) {
+        const v = decode(enc);
+        if (v === null || typeof v !== 'object') { continue; }
+        utils.AddToCache(key, v);
+        restored++;
+      }
+      return { restored, shapes: children.length };
+    },
 
     /** Wasm/heap footprint, split by owner — the number that has to stay
      *  under a Cloudflare Worker's 128 MB. */

@@ -18,6 +18,21 @@ class CascadeStudioUtils {
     this.modelHistory = [];
     this._pendingHistoryOp = null; // {fnName, lineNumber} of the op that just ran
 
+    // Stable cross-run cache (opt-in: self._csStableCache — see _stableHash).
+    // Object -> content-derived key, for every CacheOp result and every
+    // shape whose identity was DERIVED from keyed inputs (deriveStableKey).
+    this._stableKeys = new WeakMap();
+    // Object -> [fnName, inputs] for shapes DERIVED from other shapes
+    // (sub-shapes, compounds); the key is computed only if the shape is
+    // ever used as an op argument.
+    this._derivations = new WeakMap();
+    // OCJS.HashCode -> Set of argCache keys, so a fresh wrapper of a cached
+    // result (a TopoDS downcast) can be recognised by IsEqual.
+    this._stableIndex = new Map();
+    this._volatileSeq = 0;
+    this.volatileOps = 0;
+    this.volatileReasons = {};
+
     // Expose instance and methods on self for eval() access
     self.argCache = this.argCache;
     self.usedHashes = this.usedHashes;
@@ -28,6 +43,7 @@ class CascadeStudioUtils {
     self.CheckCache = this.CheckCache.bind(this);
     self.AddToCache = this.AddToCache.bind(this);
     self.ComputeHash = this.ComputeHash.bind(this);
+    self.deriveStableKey = this.deriveStableKey.bind(this);
     self.flushHistoryStep = this.flushHistoryStep.bind(this);
     self.recursiveTraverse = CascadeStudioUtils.recursiveTraverse;
     self.Remove = CascadeStudioUtils.Remove;
@@ -69,9 +85,18 @@ class CascadeStudioUtils {
 
     let toReturn = null;
     let curHash = this.ComputeHash(args, false, fnName);
-    this.usedHashes[curHash] = curHash;
+    // Stable mode: an op whose inputs have no content-derived identity
+    // (ComputeHash returned null) is computed every time and never cached —
+    // it gets a per-run tag, so everything downstream of it is volatile too.
+    const volatileOp = curHash === null;
+    if (volatileOp) {
+      curHash = 'v' + (++this._volatileSeq);
+      this.volatileOps++;
+    } else {
+      this.usedHashes[curHash] = curHash;
+    }
 
-    let check = this.CheckCache(curHash);
+    let check = volatileOp ? null : this.CheckCache(curHash);
     if (check && self.GUIState["Cache?"]) {
       toReturn = check;
       toReturn.hash = check.hash;
@@ -102,8 +127,9 @@ class CascadeStudioUtils {
           + this.currentLineNumber + ") — see the error logged above it.");
       }
       toReturn.hash = curHash;
-      if (self.GUIState["Cache?"]) { this.AddToCache(curHash, toReturn); }
-      this.cacheMisses = (this.cacheMisses || 0) + 1;
+      if (self.GUIState["Cache?"] && !volatileOp) { this.AddToCache(curHash, toReturn); }
+      // (a volatile op is counted in volatileOps, not as a miss)
+      if (!volatileOp) { this.cacheMisses = (this.cacheMisses || 0) + 1; }
     }
     // Tag the shape with the 1-based editor line that produced it so the
     // main thread can map picked shapes back to their source line.
@@ -174,13 +200,184 @@ class CascadeStudioUtils {
   AddToCache(hash, shape) {
     shape.hash = hash;
     this.argCache[hash] = shape;
+    if (self._csStableCache) { this._indexStable(hash, shape); }
     return hash;
+  }
+
+  // ------------------------------------------------------------------ //
+  // Stable cross-run op cache (opt-in: self._csStableCache).            //
+  //                                                                     //
+  // The legacy keys are a 32-bit hash of the arguments in which a shape //
+  // appears as its `.hash` — and for any shape no CacheOp produced, as  //
+  // OCJS.HashCode, i.e. its kernel ADDRESS. Within one run that is      //
+  // fine; across runs a freed address is reused by a different shape    //
+  // and the key collides, which is why the Python runtimes empty the    //
+  // cache before every run. A long-lived host (a Durable Object editing //
+  // session) needs the opposite, so in stable mode:                     //
+  //   * a key is 'k' + a ~106-bit hash of the op name and its JSON args //
+  //     (no 32-bit collisions in practice);                             //
+  //   * a shape argument contributes ONLY a content-derived identity:   //
+  //     the key of the CacheOp that produced it (by object identity),   //
+  //     a key DERIVED from keyed inputs (deriveStableKey — compounds),  //
+  //     or the key of a cached result it IsEqual()s (a fresh wrapper of //
+  //     the same TShape/location/orientation, e.g. a TopoDS downcast);  //
+  //   * any other shape, embind object, function or class instance     //
+  //     makes the op VOLATILE: computed, never cached, and its result   //
+  //     poisons everything downstream (so no address ever reaches a    //
+  //     key).                                                           //
+  // The keys are deterministic across isolates for the same library     //
+  // build, which is what lets a host persist the cached working set    //
+  // (headless.js snapshotCache/restoreCache).                           //
+  // ------------------------------------------------------------------ //
+
+  /** Stable-mode ComputeHash: the key, or null for a volatile op. With
+   *  `raw`, the canonical string the key is hashed from (null if volatile). */
+  _stableHash(args, raw, fnName) {
+    let volatile = null;
+    const utils = this;
+    let str;
+    try {
+      str = JSON.stringify(args, function (key, value) {
+        if (value === null) { return value; }
+        const t = typeof value;
+        if (t === 'number') { return CascadeStudioUtils._keyNumber(value); }
+        if (t === 'function' || t === 'symbol' || t === 'bigint') {
+          volatile = volatile || t;
+          return '#?';
+        }
+        if (t !== 'object') { return value; }
+        const k = utils.stableKeyOf(value);
+        if (k) { return { '#': k }; }
+        if (Array.isArray(value)) { return value; }
+        if (value.$$ !== undefined) {
+          volatile = volatile || ('unkeyed ' + CascadeStudioUtils._typeName(value));
+          return '#?';
+        }
+        const proto = Object.getPrototypeOf(value);
+        if (proto !== Object.prototype && proto !== null) {
+          volatile = volatile || ('opaque ' + CascadeStudioUtils._typeName(value));
+          return '#?';
+        }
+        return value;
+      });
+    } catch (e) {
+      volatile = 'unserializable';
+    }
+    if (volatile) {
+      const why = (fnName || '?') + ': ' + volatile;
+      this.volatileReasons[why] = (this.volatileReasons[why] || 0) + 1;
+      return null;
+    }
+    const canonical = (fnName || '') + str;
+    return raw ? canonical : 'k' + CascadeStudioUtils.strongHash(canonical);
+  }
+
+  /** The content-derived key of a shape (or cached array) argument, or
+   *  null when it has none. */
+  stableKeyOf(value) {
+    const known = this._stableKeys.get(value);
+    if (known !== undefined) { return known; }
+    const derivation = this._derivations.get(value);
+    if (derivation) {
+      this._derivations.delete(value);
+      const k = this._stableHash(derivation[1], false, 'derived:' + derivation[0]);
+      if (k) { this._stableKeys.set(value, k); return k; }
+    }
+    if (value.$$ === undefined || typeof value.ShapeType !== 'function') { return null; }
+    const oc = self.oc;
+    let hc;
+    try { hc = oc.OCJS.HashCode(value, 2147483647); } catch (e) { return null; }
+    const keys = this._stableIndex.get(hc);
+    if (!keys) { return null; }
+    for (const k of keys) {
+      const c = this.argCache[k];
+      if (!c || c.$$ === undefined || typeof c.IsEqual !== 'function') { continue; }
+      try {
+        // same TShape, location AND orientation
+        if (c.IsEqual(value)) {
+          this._stableKeys.set(value, k);
+          return k;
+        }
+      } catch (e) { /* a dead wrapper: not a match */ }
+    }
+    return null;
+  }
+
+  /** Record that `shape` (built outside CacheOp: a compound, a sub-shape
+   *  picked out of a keyed shape by an explorer) is a pure function of
+   *  `inputs`, so it can be keyed as `derived:<fnName>` of their keys if it
+   *  is ever an op argument. A no-op outside stable mode. */
+  deriveStableKey(shape, fnName, inputs) {
+    if (!self._csStableCache || !shape || typeof shape !== 'object') { return; }
+    if (!this._stableKeys.has(shape)) { this._derivations.set(shape, [fnName, inputs]); }
+  }
+
+  _indexStable(hash, value) {
+    this._stableKeys.set(value, hash);
+    if (value.$$ === undefined || typeof value.ShapeType !== 'function') { return; }
+    let hc;
+    try { hc = self.oc.OCJS.HashCode(value, 2147483647); } catch (e) { return; }
+    let set = this._stableIndex.get(hc);
+    if (!set) { set = new Set(); this._stableIndex.set(hc, set); }
+    set.add(hash);
+  }
+
+  /** Drop index entries whose cache entry is gone (after the end-of-run
+   *  sweep), or everything (after a kernel reset). */
+  pruneStableIndex(all) {
+    if (all) { this._stableIndex.clear(); return; }
+    for (const [hc, set] of this._stableIndex) {
+      for (const k of set) { if (this.argCache[k] === undefined) { set.delete(k); } }
+      if (set.size === 0) { this._stableIndex.delete(hc); }
+    }
+  }
+
+  /** A number as it enters a stable key: 12 significant digits, and
+   *  |v| < 1e-10 snapped to 0. Arguments computed from geometry carry
+   *  round-off that depends on HOW a transform was composed — a restored
+   *  snapshot's locations come back through gp_Trsf::SetValues, which
+   *  re-derives scale and form, so a face normal reads (1.1e-16, 1,
+   *  -2.2e-16) instead of (2.2e-16, 1, -1.1e-16) and an exact key would miss
+   *  (din_rail_algebra: 42 misses after a restore). Both thresholds sit far
+   *  below OCCT's own confusion tolerance (1e-7) and far above round-off;
+   *  a real edit moves values by more. */
+  static _keyNumber(v) {
+    if (!Number.isFinite(v)) { return String(v); }
+    if (Number.isInteger(v)) { return v; }
+    if (Math.abs(v) < 1e-10) { return 0; }
+    return Number(v.toPrecision(12));
+  }
+
+  static _typeName(v) {
+    try {
+      if (v.$$ && v.$$.ptrType && v.$$.ptrType.registeredClass) {
+        return v.$$.ptrType.registeredClass.name;
+      }
+      return (v.constructor && v.constructor.name) || 'object';
+    } catch (e) { return 'object'; }
+  }
+
+  /** ~106-bit string hash: two cyrb53 lanes with different seeds, hex. */
+  static strongHash(str) {
+    const lane = (seed) => {
+      let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+      for (let i = 0; i < str.length; i++) {
+        const ch = str.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+      }
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+      h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return (2097152 * (h2 >>> 0) + (h1 >>> 0)).toString(16).padStart(14, '0');
+    };
+    return lane(0) + lane(0x9e3779b9);
   }
 
   /** This function computes a 32-bit integer hash given a set of `arguments`.
    * If `raw` is true, the raw set of sanitized arguments will be returned instead.
    * @param {string} fnName - The calling function's name */
   ComputeHash(args, raw, fnName) {
+    if (self._csStableCache) { return this._stableHash(args, raw, fnName); }
     // A TopoDS argument that no CacheOp produced (an explorer sub-shape, a
     // JS helper's fresh result) carries no `.hash`; stripped of its "ptr" it
     // would stringify like EVERY other such shape and collide in the cache

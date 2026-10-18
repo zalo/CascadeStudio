@@ -11,6 +11,7 @@ export const USED_OCCT_SYMBOLS = [
   "BRepAlgoAPI_Section_3",
   "BRepAlgoAPI_Section_5",
   "BRepBndLib",
+  "BRepBuilderAPI_Copy_2",
   "BRepBuilderAPI_GTransform_2",
   "BRepBuilderAPI_MakeEdge_2",
   "BRepBuilderAPI_MakeEdge_24",

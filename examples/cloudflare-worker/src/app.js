@@ -63,7 +63,10 @@ const WARMUP_CODE = 'from build123d import *\nshow(Box(10, 10, 10))\n';
  *         backing store can be collected, and the parsed map is dropped once
  *         the library has registered. Nothing of it stays in the isolate.
  *  @param {object} [o.pyodide]  real flavor: the host that boots Pyodide from
- *         module bindings ({boot, installWheels}; src/real.js) */
+ *         module bindings ({boot, installWheels}; src/real.js)
+ *  @param {boolean} [o.stableCache]  keep the op cache across runs with
+ *         content-derived keys (the Durable Object editing session,
+ *         src/session.js). Such an engine must not be reset per request. */
 export function createWorker(o) {
   /** One engine per isolate, reused across requests (all of the engine's
    *  state lives on the worker global). */
@@ -138,6 +141,7 @@ export function createWorker(o) {
           // Bytes, not thunks: cascade-core parses each face on first use.
           fonts: o.fonts,
           upstreamPy,
+          stableCache: !!o.stableCache,
         });
         if (releaseTree) {
           // Chain onto the hook the kernel-image recapture also rides
@@ -217,15 +221,22 @@ GET  /health            boot + memory
     ? scheduler.wait(0)
     : new Promise((resolve) => setTimeout(resolve, 0));
 
-  /** Parse + validate a /render body. Returns {code, formats} or {error}. */
+  /** Parse + validate a /render body. Returns {code, formats, ...} or
+   *  {error}. `mesh` (a format) is the editor's viewport payload: [faces,
+   *  edges] at `maxDeviation` (mm, default 0.1) plus each scene shape's
+   *  source line; `gui` is the editor's widget state, which REPLACES the
+   *  engine's for this run. */
   function parseRenderBody(body) {
     const code = body && body.code;
     if (typeof code !== 'string' || !code.trim()) { return { error: 'missing "code"' }; }
     const formats = Array.isArray(body.formats) && body.formats.length
       ? body.formats.map((f) => String(f).toLowerCase())
       : ['step'];
+    const dev = Number(body.maxDeviation);
     return { code, formats, language: (body && body.language) || 'python',
-      measure: body && body.measure === true };
+      measure: body && body.measure === true,
+      maxDeviation: Number.isFinite(dev) ? Math.min(10, Math.max(0.005, dev)) : 0.1,
+      gui: body.gui && typeof body.gui === 'object' && !Array.isArray(body.gui) ? body.gui : null };
   }
 
   /** The whole job, with a hook fired at every real await boundary.
@@ -237,11 +248,15 @@ GET  /health            boot + memory
    *
    *  Returns the same object the JSON endpoint has always returned, plus the
    *  additive `progressOps` timeline. */
-  async function runRender(e, req, onPhase) {
+  async function runRender(e, req, onPhase, { reset = true, keepScene = false } = {}) {
     const t0 = Date.now();
     await onPhase('evaluating', { language: req.language, formats: req.formats });
 
-    const result = await e.run(req.code, { language: req.language, mesh: false });
+    // keepScene: the caller meshes the scene itself, incrementally
+    // (engine.meshScene — the editing session's streamed mesh)
+    const wantsMesh = req.formats.includes('mesh') && !keepScene;
+    const result = await e.run(req.code, { language: req.language, mesh: wantsMesh,
+      maxDeviation: req.maxDeviation, guiState: req.gui || undefined, keepScene });
 
     const out = {
       ok: result.ok,
@@ -249,6 +264,7 @@ GET  /health            boot + memory
       logs: result.logs,
       shapeCount: result.shapeCount,
       historySteps: result.historySteps,
+      guiWidgets: result.guiWidgets,
       // ADDITIVE: the worker's per-op Progress timeline ({n, op}). It is a
       // record of the evaluation, not live progress — see the README.
       progressOps: result.progressOps || [],
@@ -256,6 +272,14 @@ GET  /health            boot + memory
 
     await onPhase('evaluated', { shapeCount: out.shapeCount, ok: out.ok,
       errors: out.ok ? undefined : out.errors });
+
+    // The viewport payload is produced by the run itself (meshing consumes
+    // the scene list), so it is there even when the script raised half-way:
+    // the editor shows whatever was built, as it does locally.
+    if (wantsMesh && result.mesh) {
+      out.mesh = { faces: result.mesh[0], edges: result.mesh[1],
+        shapeLines: result.shapeLines || [] };
+    }
 
     if (result.ok && result.shapeCount > 0) {
       // `{"measure": true}` — the combined scene's volume/area/bbox. Cheap
@@ -298,11 +322,13 @@ GET  /health            boot + memory
 
     out.memory = e.memoryStats();
     out.timings = Object.assign({ totalMs: Date.now() - t0 }, result.timings);
+    out.cache = result.cache;
     // Rewind the kernel so the next request in this isolate starts from a
     // pristine OCCT heap — cascade-core's reset() restores the boot image,
     // which is also what stops one corrupting model (maker_coin's fillet)
-    // from poisoning every later export in the isolate.
-    e.reset();
+    // from poisoning every later export in the isolate. The editing session
+    // (src/session.js) keeps its working set instead and compacts it itself.
+    if (reset) { e.reset(); }
     return out;
   }
 
@@ -409,5 +435,8 @@ GET  /health            boot + memory
     });
   }
 
-  return { fetch, bootAtStartup };
+  return { fetch, bootAtStartup,
+    // for the editing session (src/session.js)
+    engine, runRender, parseRenderBody, json,
+    isBooted: () => enginePromise !== null };
 }

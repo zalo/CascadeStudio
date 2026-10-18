@@ -396,7 +396,12 @@ async function _bootstrap(srcKind) {
     /** Execute user Python source. Throws a JS Error whose message starts
      *  with the one-line Python summary followed by the full traceback. */
     run(code) {
-      for (const k in self.argCache) { delete self.argCache[k]; }
+      // Emptied per run unless the host opted into the stable cross-run
+      // cache, whose keys cannot collide across evaluations (StandardUtils
+      // _stableHash) — see the Brython runtime for why it is emptied.
+      if (!self._csStableCache) {
+        for (const k in self.argCache) { delete self.argCache[k]; }
+      }
       // Own the shared hooks: a worker that has ALSO booted Brython (mode
       // switched mid-session) must not keep Brython's frame walker.
       self.getPythonUserLine = () => userLine();

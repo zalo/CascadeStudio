@@ -156,3 +156,44 @@ cpu_ms = 300000
 
 [env.warm.observability]
 enabled = true
+
+# --------------------------------------------------------------------------
+# EDITING SESSIONS: one Durable Object per session id (src/index-session.js,
+# src/session.js) keeps a build123d-lite engine warm with cascade-core's
+# stable cross-run op cache, compacts its kernel heap, and persists the
+# cached working set (binary BREP, gzipped) in the object's SQLite storage.
+#   COMPACT_AT_MB  OCCT heap size that triggers snapshot -> rewind -> restore
+#   KEEP_WARM_MS   how long after the last render the object holds a timer +
+#                  re-arms an alarm so it neither hibernates nor is evicted
+#                  (billed as Durable Object duration). 0 (default): measured
+#                  on the edge, the ISOLATE — where the engine lives — outlived
+#                  the hibernated object across 15 s / 60 s / 3 min gaps either
+#                  way, and was gone after 7 min either way (EDIT-SESSIONS.md)
+# --------------------------------------------------------------------------
+[env.session]
+name = "cascade-headless-session"
+main = "src/index-session.js"
+
+[env.session.vars]
+COMPACT_AT_MB = "48"
+KEEP_WARM_MS = "0"
+
+# The editor (scripts/prepare-editor.cjs): served ahead of the Worker, so
+# /session/* (never a file) still reaches it.
+[env.session.assets]
+directory = "./editor"
+binding = "ASSETS"
+
+[[env.session.durable_objects.bindings]]
+name = "EDIT_SESSION"
+class_name = "EditSession"
+
+[[env.session.migrations]]
+tag = "v1"
+new_sqlite_classes = ["EditSession"]
+
+[env.session.limits]
+cpu_ms = 300000
+
+[env.session.observability]
+enabled = true

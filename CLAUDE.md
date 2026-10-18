@@ -1019,6 +1019,32 @@ generate-occt-symbols does not demand it). Never test `typeof e ===
   been re-run on the edge: locally all three now fit on a fresh isolate —
   see FIDELITY-ON-WORKERS.md.)
 
+### Editing sessions and the remote-session editor
+
+`examples/cloudflare-worker --env session` (EDIT-SESSIONS.md) keeps one
+build123d-lite engine per **Durable Object editing session**. It uses the
+stable cross-run op cache (`createHeadlessCascade({stableCache: true})`) and
+persists the working set as binary BREP. The same Worker serves **the editor
+in remote-session mode** at `/` (EDITOR.md):
+- **The engine swap.** `RemoteCascadeEngine` (cascade-core/src/engine) replaces
+  CascadeEngine, with the same API and events. It is chosen by
+  `resolveRemote()` from `window.CASCADE_REMOTE` (written by
+  `scripts/prepare-editor.cjs`) or `?engine=remote&server=<url>`.
+- **The payload.** Renders come back as a framed stream (MeshCodec.js): phase
+  events, the JSON, then the mesh as gzipped Float32/Uint32 buffers.
+- **Meshing.** Headless meshes one face per BRepMesh call (`meshPerFace`)
+  because the one-call transient passed 128 MB on heat_exchanger. The session
+  meshes with `IncrementalMesher` (cascade-core/src/worker): faces are keyed
+  by GEOMETRY, because OCCT rebuilds every face of a re-run op. A face meshed
+  before is reused, and one the page already holds goes as a reference.
+  Batches stream unchanged-first into the viewport (`renderPartialMesh`).
+  `test/incremental-mesh.mjs` checks reuse against fresh meshes.
+- **Tests.** `test/remote-session.spec.js` needs `CS_REMOTE_URL`, so the
+  default suite skips it. `node test/mesh-codec.mjs` tests the codec.
+- **Local runs.** Under `wrangler dev`, serve `editor/` separately (EDITOR.md,
+  *Limits*): Chrome requests that arrive during a long render crash the dev
+  proxy.
+
 ## Playwright Testing
 
 WebGL requires `--use-gl=angle --use-angle=swiftshader` in playwright.config.js launch args.
