@@ -52,8 +52,9 @@ the job is accepted:
 | frame | when | |
 |---|---|---|
 | `PHASE` | each await boundary | `booting` (cold isolate), `restoring` (snapshot from SQLite), `evaluating`, `evaluated` → the editor's progress line |
-| `RESULT` | at the end | the `/render` JSON: logs, errors, history steps, GUI widgets, `cache`, `session`, with `mesh` replaced by the per-face/edge scalars and offsets |
-| `F32`, `U32` | after `RESULT` | every coordinate list in one Float32 buffer, every triangle index in one Uint32 buffer |
+| `RESULT` | after the evaluation | the `/render` JSON: logs, errors, history steps, GUI widgets, `cache`, `session`, and `meshStream: {shapeLines}` |
+| `MESH` + `F32` + `U32` | per mesh batch, as it is meshed | the batch's face/edge scalars with offsets into its Float32 (coordinates) and Uint32 (triangle indices) buffers; a face the page already holds is just `{slot, id, ref}` |
+| `DONE` | the end | mesh stats (faces, reused, meshed, nodes) and `keep`: the face ids the page should hold on to |
 
 - **Gzip:** frames of 16 KB or more are gzipped by the object itself, because
   Cloudflare compresses only well-known content types. Phase events stay
@@ -62,18 +63,67 @@ the job is accepted:
   type, so a cross-origin editor makes no preflight request. The session
   routes answer any origin.
 
+A first render's mesh (nothing to reuse yet), against the JSON the
+browser's worker would post:
+
 | model | mesh as JSON | binary | on the wire (gzip) |
 |---|---|---|---|
-| mount | 0.3 MB | 0.10 MB | 0.05 MB |
-| maker_coin | 1.2 MB | 0.35 MB | 0.21 MB |
-| plate16 | 12.5 MB | 4.14 MB | 0.84 MB |
-| heat_exchanger | 19.5 MB | 6.30 MB | 1.43 MB |
+| mount | 0.3 MB | 0.08 MB | 0.04 MB |
+| maker_coin | 1.2 MB | 0.30 MB | 0.18 MB |
+| plate16 | 12.5 MB | 3.51 MB | 0.61 MB |
+| heat_exchanger | 19.5 MB | 5.33 MB | 1.06 MB |
+
+**Incremental, streamed meshing.** The session meshes with
+`IncrementalMesher` (cascade-core/src/worker), not ShapeToMesh. Every face of
+the scene is keyed by its **geometry**:
+- surface type and orientation;
+- nine surface points over its UV box;
+- every edge's type, midpoint and end points;
+
+all in world coordinates to 9 significant digits, plus the deflection. A face
+whose key was meshed before comes from a cache of typed arrays (12 MB, least
+recently used out) instead of BRepMesh.
+
+Kernel identity would not do: OCCT rebuilds every face of an op it re-runs.
+After a fillet edit, plate16 keeps 1 of its 522 faces as the same `TopoDS`
+face and heat_exchanger 0 of 1190. Geometrically, many are unchanged:
+
+| edit | faces unchanged geometrically | same kernel face |
+|---|---|---|
+| heat_exchanger: fillet radius | 596 of 1190 (50%) | 1 |
+| heat_exchanger: tube extension | 444 of 1190 (37%) | 0 |
+| maker_coin: fillet radius | 118 of 146 (81%) | 0 |
+| mount: hole size | 15 of 21 (71%) | 8 |
+| plate16: fillet radius, or grid size | 1 of 522 | 1 |
+| any re-run, or going back to the previous code | all | — |
+
+Geometric keys also survive the session's compaction (snapshot, kernel
+rewind, restore), which gives every shape a new identity.
+`test/incremental-mesh.mjs` checks the result:
+- a reused face covers the same surface as a fresh mesh of the edited model
+  (per-face area and bounding box);
+- the face and edge counts match ShapeToMesh's;
+- the cache serves every face after a kernel rewind.
+
+**The stream:**
+- **Order:** the faces with a cached mesh go out in the first batch, at once.
+  The rest follow every 20,000 nodes as they are meshed, then the edges.
+- **References:** the session tracks which face meshes the page holds, keyed
+  by a per-page cache id, and sends those as references. A re-run downloads
+  0.08-0.17 MB instead of 0.6-1.1 MB.
+- **Viewport:** it draws each batch as it lands (`meshBatch` →
+  `renderPartialMesh`): unchanged regions reappear first, changed ones fill
+  in. The finished mesh, with its pick metadata, then replaces the batches.
+- **Recovery:** if the page ever lacks a referenced face, it starts a fresh
+  cache and asks again.
+- **No UVs:** the matcap material does not read them, and ShapeToMesh's UV
+  atlas would make every face depend on every other.
 
 **Other routes:**
 - **Timeline:** `POST /session/<id>/history {step}` meshes one step of the last
-  render's modeling history. If a compaction rewound the kernel since, or
-  another session used the engine, it first re-runs the session's last code,
-  which is all cache hits.
+  render's modeling history, through the same incremental mesher and stream.
+  If a compaction rewound the kernel since, or another session used the
+  engine, it first re-runs the session's last code, which is all cache hits.
 - **Save STEP:** `POST /session/<id>/export {format}` exports the last
   render's shape, using the same re-run rule.
 - **Errors:** script errors come back with the Python traceback. The editor
@@ -106,28 +156,38 @@ The browser editor keeps the one-call pass.
 
 `scripts/editor-bench.mjs` drives a session the way the editor does: the
 mesh path, a timeline step, a STEP export. Same models and edits as
-`session-bench.mjs`. Client wall time, local `wrangler dev`, isolate already
-booted:
+`session-bench.mjs`, plus going back to the original code. Client wall time,
+local `wrangler dev`, isolate already booted. Each cell is *now (before the
+incremental mesh)*, and *first faces* is when the first batch with faces
+reached the page:
 
-| model | first render | re-run (all hits) | edit 1 | edit 2 | timeline step | Save STEP |
+| model | first render | re-run (all hits) | edit 1 | edit 2 | back to the original | timeline step |
 |---|---|---|---|---|---|---|
-| mount | 1.0 s¹ | 125 ms | 89 ms | 178 ms | 40 ms | 152 ms |
-| plate16 | 2.8 s | 1.7 s | 2.1 s | 2.2 s | 187 ms | 326 ms |
-| maker_coin | 4.5 s | 2.1 s | 3.2 s | 3.9 s | 1.3 s² | 241 ms |
-| heat_exchanger | 5.9 s | 3.2 s | 4.0 s | 5.0 s | 1.1 s² | 408 ms |
+| mount | 0.54 s¹ (1.0 s) | 51 ms (125 ms) | 64 ms (89 ms) | 112 ms (178 ms) | 97 ms | 23 ms (40 ms) |
+| plate16 | 2.8 s (2.8 s), first faces 1.9 s | 0.30 s (1.7 s) | 1.8 s (2.1 s), first faces 0.67 s | 1.8 s (2.2 s) | 0.74 s | 0.16 s (0.19 s) |
+| maker_coin | 4.5 s (4.5 s) | 2.0 s (2.1 s) | 3.2 s (3.2 s) | 3.8 s (3.9 s) | 3.9 s | 1.9 s² (1.3 s²) |
+| heat_exchanger | 6.0 s (5.9 s), first faces 4.3 s | 1.5 s (3.2 s) | 3.5 s (4.0 s), first faces 2.2 s | 4.8 s (5.0 s) | 3.5 s | 1.0 s² (1.1 s²) |
 
 ¹ including the engine boot. ² after a compaction, so it includes the
 re-run of the cached script.
 
-**Meshing now dominates a warm edit of a big model.** A re-run of plate16 is
-0.15 s of evaluation and 1.35 s of meshing. For heat_exchanger it is 1.0 s and
-1.95 s. Gzip adds about 0.15 s on the big meshes, which pays for itself on
-any real network link.
+**What the incremental mesh changes:**
+- **Unchanged geometry is not meshed again.** A re-run, or going back to code
+  whose faces are still cached, costs evaluation plus key computation: 60 ms
+  of meshing on plate16 instead of 1.7 s, 0.12 s on heat_exchanger instead of
+  2.4 s.
+- **An edit saves what it leaves alone.** heat_exchanger's fillet edit reuses
+  half the faces, but those are the small ones, so 69% of the nodes still
+  mesh (2.4 → 1.6 s of meshing). A plate16 fillet edit changes every face and
+  saves nothing, except that faces now arrive in batches instead of all at
+  the end.
+- **maker_coin** is dominated by evaluation (`project()`, EDIT-SESSIONS.md);
+  its mesh was always small.
 
 ### On the edge
 
-`cascade-headless-session.makeshifted.workers.dev`, deployed 2026-10-18 from
-`feat/do-editor`. Client wall time from this machine, one run each
+Before the incremental mesh: `cascade-headless-session.makeshifted.workers.dev`,
+deployed 2026-10-18 from `feat/do-editor` (2aaf689). Client wall time from this machine, one run each
 (placement varies about 1.6×, EDIT-SESSIONS.md). The first render includes
 booting a fresh isolate:
 
@@ -168,18 +228,18 @@ first item under *Limits* is about.
   cache's correctness gate covers Python only.
 - **No imports yet.** The STEP/IGES/STL import button and `import_step()`
   assets need an upload route.
-- **Every render re-meshes the whole scene**, and on the edge that costs more
-  than the evaluation for large models (above). The mesher strips its
-  triangulations after each pass. Keeping them on cached shapes would let
-  BRepMesh skip unchanged faces, but they would leak into later runs: OCCT's
-  bounding boxes prefer a triangulation when one is present, which is why the
-  session clears them. The way forward is a JS-side cache of each scene
-  shape's extracted mesh, keyed by its stable cache key. That makes re-runs,
-  timeline steps and multi-shape scenes nearly free; for example, a GUI-tool
-  commit adds one shape and leaves the others unchanged. An edit to a
-  single-solid model still re-meshes that solid. OCCT's
-  `IMeshTools_Parameters` (e.g. turning off surface-deflection control) is not
-  bound in this build.
+- **A changed face is meshed whole, and on the edge that is slow.** Faces
+  whose geometry changed go through BRepMesh. An edit that changes every face
+  (plate16's fillet radius) costs a full mesh, about 8.5 s on the edge
+  (above), now at least arriving in batches. OCCT's `IMeshTools_Parameters`
+  (e.g. turning off surface-deflection control) is not bound in this build.
+- **Reused faces keep the old mesh's boundary.** A reused face next to a
+  re-meshed one keeps the edge nodes it was meshed with. Where the new
+  neighbor discretizes that edge differently, a crack smaller than the
+  deflection could open. `test/incremental-mesh.mjs` found every face of the
+  edited box, maker_coin and heat_exchanger identical (to 1e-5 mm) to a fresh
+  mesh, so none opens there. It stays possible on edges whose discretization
+  depends on which face meshes them first.
 - **The timeline after a compaction re-runs the script.** Compaction (OCCT
   heap ≥ `COMPACT_AT_MB`, which the big models reach on every render) rewinds
   the kernel, and the history steps go with it.

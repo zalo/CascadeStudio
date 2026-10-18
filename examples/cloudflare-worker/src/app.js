@@ -248,13 +248,15 @@ GET  /health            boot + memory
    *
    *  Returns the same object the JSON endpoint has always returned, plus the
    *  additive `progressOps` timeline. */
-  async function runRender(e, req, onPhase, { reset = true } = {}) {
+  async function runRender(e, req, onPhase, { reset = true, keepScene = false } = {}) {
     const t0 = Date.now();
     await onPhase('evaluating', { language: req.language, formats: req.formats });
 
-    const wantsMesh = req.formats.includes('mesh');
+    // keepScene: the caller meshes the scene itself, incrementally
+    // (engine.meshScene — the editing session's streamed mesh)
+    const wantsMesh = req.formats.includes('mesh') && !keepScene;
     const result = await e.run(req.code, { language: req.language, mesh: wantsMesh,
-      maxDeviation: req.maxDeviation, guiState: req.gui || undefined });
+      maxDeviation: req.maxDeviation, guiState: req.gui || undefined, keepScene });
 
     const out = {
       ok: result.ok,

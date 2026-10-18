@@ -326,6 +326,8 @@ class EditorManager {
     }).then((result) => {
       if (this._app.viewport && result.meshData) {
         this._app.viewport.renderMeshData(result.meshData, result.sceneOptions);
+      } else if (this._app.viewport) {
+        this._app.viewport.clearPartialMesh();
       }
     }).catch((err) => {
       console.error("Evaluation error: " + err.message);

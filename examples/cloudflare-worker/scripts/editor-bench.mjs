@@ -10,6 +10,7 @@
 //   rerun     the same code again: every op a cache hit; the cost is the
 //             script's bookkeeping + meshing + transfer
 //   edit1/2   a late-in-the-script edit, then a second one
+//   revert    back to the original code (its faces may still be cached)
 //   history   mesh one timeline step (re-runs the cached script first when a
 //             compaction rewound the kernel since the render)
 //   step      export the last render's shape as STEP
@@ -51,16 +52,20 @@ for (const [name, m] of Object.entries(MODELS)) {
   await eng.init();
   const errors = [];
   eng.on('evalError', (e) => errors.push(e.message.split('\n')[0].slice(0, 120)));
+  let tStart = 0; let firstBatch = null;
+  eng.on('meshBatch', (b) => { if (firstBatch === null && b.faces.length) { firstBatch = performance.now() - tStart; } });
   const rows = [];
   const render = async (step, src) => {
     errors.length = 0;
+    tStart = performance.now(); firstBatch = null;
     const r = await eng.evaluate(src, { guiState: GUI, language: 'python' });
     const rep = eng.lastReport;
     const s = rep.session || {};
-    rows.push({ step, clientMs: rep.wallMs,
-      evalMs: rep.timings && rep.timings.evalMs, meshMs: rep.timings && rep.timings.combineMs,
+    const ms = rep.meshStats || {};
+    rows.push({ step, clientMs: rep.wallMs, firstFacesMs: firstBatch === null ? null : Math.round(firstBatch),
+      evalMs: rep.timings && rep.timings.evalMs,
       hits: rep.cache.hits, misses: rep.cache.misses, warm: s.warm, booted: s.engineBooted,
-      faces: r.meshData ? r.meshData.faces.length : 0,
+      faces: r.meshData ? r.meshData.faces.length : 0, reused: ms.reused,
       meshMB: +(rep.meshBytes / 1048576).toFixed(2), wireMB: +(rep.wireBytes / 1048576).toFixed(2),
       isolate: s.isolate, error: errors.length ? errors.join(' | ') : undefined });
   };
@@ -68,6 +73,7 @@ for (const [name, m] of Object.entries(MODELS)) {
   await render('rerun', code);
   await render('edit1', variants[0]);
   await render('edit2', variants[1]);
+  await render('revert', code);
   // let the post-response work (snapshot, compaction) finish first
   await new Promise((r) => setTimeout(r, 1500));
   let t0 = performance.now();

@@ -15,11 +15,18 @@
 //   RESULT  JSON                the render's JSON payload, with `mesh` packed
 //   F32     the Float32 buffer  (follows a RESULT that has a mesh)
 //   U32     the Uint32 buffer
+//   MESH    JSON                one batch of a STREAMED mesh (followed by
+//                               its F32 and U32): face/edge scalars with
+//                               offsets, or {slot, id, ref} for a face whose
+//                               geometry the client already holds
+//   DONE    JSON                the end of a streamed mesh: {stats, keep}
+//                               (`keep`: the face ids the client should hold
+//                               on to — the server will only refer to those)
 // A kind with the GZIP bit set carries a gzipped body. The sender gzips the
 // big frames itself: Cloudflare compresses only well-known content types,
 // and a viewport mesh shrinks ~4.5x (heat_exchanger: 6.3 -> 1.4 MB).
 
-export const FRAME = { PHASE: 1, RESULT: 2, F32: 3, U32: 4, GZIP: 0x80 };
+export const FRAME = { PHASE: 1, RESULT: 2, F32: 3, U32: 4, MESH: 5, DONE: 6, GZIP: 0x80 };
 export const FRAMES_CONTENT_TYPE = 'application/x-cascade-frames';
 /** Frames at least this big go out gzipped. */
 export const GZIP_MIN_BYTES = 16384;

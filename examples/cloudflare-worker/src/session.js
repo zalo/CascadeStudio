@@ -306,7 +306,10 @@ export function createSession(worker, o) {
         response: Promise.resolve(new Response(readable, { headers: {
           'content-type': FRAMES_CONTENT_TYPE, 'cache-control': 'no-store' } })),
         phase: (phase, detail) => send(FRAME.PHASE, Object.assign({ phase }, detail)),
-        finish: async (out, status) => {
+        /** `mesh` (optional): an incremental mesh to stream after the
+         *  result — {batches, shapeLines, client} (engine.meshScene() plus
+         *  the client's cache state, meshClientFor()). */
+        finish: async (out, status, mesh) => {
           if (!open) { return; }
           let packed = null;
           if (out.mesh) {
@@ -316,15 +319,63 @@ export function createSession(worker, o) {
               f32: packed.f32.length, u32: packed.u32.length };
           }
           out.status = status;
+          if (mesh) { out.meshStream = { shapeLines: mesh.shapeLines }; }
           await send(FRAME.RESULT, out);
           if (packed) {
             await send(FRAME.F32, packed.f32);
             await send(FRAME.U32, packed.u32);
           }
+          if (mesh) { await this.streamMesh(send, mesh); }
           open = false;
           try { await writer.close(); } catch (err) { /* already gone */ }
         },
       };
+    }
+
+    /** The client's face-mesh cache, as this object knows it: the ids of
+     *  the faces it was sent (and told to keep). Keyed by the page's
+     *  `clientCache` id, so a reload — a fresh client cache — starts over. */
+    meshClientFor(clientId) {
+      if (!clientId) { return { id: null, known: new Set() }; }
+      if (!this.meshClient || this.meshClient.id !== clientId) {
+        this.meshClient = { id: clientId, known: new Set() };
+      }
+      return this.meshClient;
+    }
+
+    /** Stream an incremental mesh: per batch a MESH frame (faces the client
+     *  already holds go as {slot, id, ref}) and its F32/U32 buffers, then
+     *  DONE with the stats and the ids the client should keep. Each send
+     *  yields, so a batch reaches the client while the next one meshes. */
+    async streamMesh(send, mesh) {
+      const known = mesh.client.known;
+      let stats = null;
+      try {
+        for (;;) {
+          const { value, done } = mesh.batches.next();
+          if (done) { stats = value; break; }
+          const faces = value.faces.map((f) => {
+            if (f.reused && f.id && known.has(f.id)) {
+              return { slot: f.slot, id: f.id, face_index: f.face_index, shape_index: f.shape_index, ref: 1 };
+            }
+            if (f.id) { known.add(f.id); }
+            const { reused, ...full } = f;
+            return full;
+          });
+          const packed = packMesh({ faces, edges: value.edges });
+          await send(FRAME.MESH, { lists: packed.meta, total: value.total, reused: value.reused });
+          await send(FRAME.F32, packed.f32);
+          await send(FRAME.U32, packed.u32);
+        }
+      } catch (err) {
+        await send(FRAME.DONE, { error: 'meshing failed: ' + ((err && err.message) || err) });
+        mesh.client.known = new Set();
+        return;
+      }
+      const live = new Set(mesh.live());
+      const keep = Array.from(known).filter((id) => live.has(id));
+      mesh.client.known = new Set(keep);
+      await send(FRAME.DONE, { stats, keep });
     }
 
     /** Run `fn(e)` under the engine lock with the session's channel; an
@@ -385,13 +436,15 @@ export function createSession(worker, o) {
       if (req.error) { return worker.json({ ok: false, error: req.error }, 400); }
 
       const frames = req.formats.includes('mesh');
+      // the editor's incremental, streamed mesh (older clients: one mesh)
+      const stream = frames && body.meshStream === true;
       const ch = this.channel(frames);
       const tArrive = performance.now();
       return this.job(ch, async (e, boot) => {
         const t1 = performance.now();
         const { warm, restore } = await this.adoptWithPhase(e, ch);
         const t2 = performance.now();
-        const out = await worker.runRender(e, req, ch.phase, { reset: false });
+        const out = await worker.runRender(e, req, ch.phase, { reset: false, keepScene: stream });
         const t3 = performance.now();
         isolate.renders++;
         this.instance.renders++;
@@ -415,7 +468,11 @@ export function createSession(worker, o) {
           // what the PREVIOUS render's post-response work cost
           previousAfter: this.lastAfter || null,
         };
-        await ch.finish(out, out.ok ? 200 : 422);
+        const m = stream ? e.meshScene({ maxDeviation: req.maxDeviation }) : null;
+        await ch.finish(out, out.ok ? 200 : 422, m && m.shapeLines.length ? {
+          batches: m.batches, shapeLines: m.shapeLines,
+          client: this.meshClientFor(body.clientCache), live: () => e.meshCache.liveIds(),
+        } : null);
         this.keepWarm();
 
         // ---- after the response: compaction and persistence ----
@@ -478,6 +535,13 @@ export function createSession(worker, o) {
         const last = await this.ensureLastRun(e, ch);
         if (!last) {
           return ch.finish({ ok: false, errors: ['nothing has been rendered in this session yet'] }, 409);
+        }
+        if (body.meshStream === true) {
+          const m = e.meshHistoryStepIncremental(step, { maxDeviation });
+          await ch.finish({ ok: true, step, steps: e.historyLength, rerun: last.rerun }, 200,
+            m ? { batches: m.batches, shapeLines: [], client: this.meshClientFor(body.clientCache),
+              live: () => e.meshCache.liveIds() } : null);
+          return;
         }
         const m0 = performance.now();
         const fe = e.meshHistoryStep(step, maxDeviation);

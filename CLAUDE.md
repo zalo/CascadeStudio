@@ -1033,7 +1033,12 @@ in remote-session mode** at `/` (EDITOR.md):
 - **The payload.** Renders come back as a framed stream (MeshCodec.js): phase
   events, the JSON, then the mesh as gzipped Float32/Uint32 buffers.
 - **Meshing.** Headless meshes one face per BRepMesh call (`meshPerFace`)
-  because the one-call transient passed 128 MB on heat_exchanger.
+  because the one-call transient passed 128 MB on heat_exchanger. The session
+  meshes with `IncrementalMesher` (cascade-core/src/worker): faces are keyed
+  by GEOMETRY, because OCCT rebuilds every face of a re-run op. A face meshed
+  before is reused, and one the page already holds goes as a reference.
+  Batches stream unchanged-first into the viewport (`renderPartialMesh`).
+  `test/incremental-mesh.mjs` checks reuse against fresh meshes.
 - **Tests.** `test/remote-session.spec.js` needs `CS_REMOTE_URL`, so the
   default suite skips it. `node test/mesh-codec.mjs` tests the codec.
 - **Local runs.** Under `wrangler dev`, serve `editor/` separately (EDITOR.md,

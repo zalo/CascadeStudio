@@ -152,6 +152,13 @@ class CascadeStudioApp {
       this.engine.on('evalError', ({ message, line }) => {
         this.console.reportError(message, line, 1, true, true);
       });
+      // A remote session streams its mesh: draw the batches as they land
+      this.engine.on('meshBatch', ({ faces, edges }) => {
+        if (this.viewport) { this.viewport.renderPartialMesh(faces, edges); }
+      });
+      this.engine.on('meshAbort', () => {
+        if (this.viewport) { this.viewport.clearPartialMesh(); }
+      });
 
       // Wire up engine events for viewport
       this.engine.on('modelHistory', (steps) => {

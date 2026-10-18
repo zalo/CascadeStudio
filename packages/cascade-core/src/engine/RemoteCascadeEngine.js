@@ -14,6 +14,14 @@
 // widget registrations, 'modelHistory', and 'resetWorking'. Script errors
 // arrive as 'evalError' {message, line} with the Python line resolved from
 // the traceback (the local worker throws them at the page instead).
+//
+// Two more, for the STREAMED mesh: the session meshes incrementally
+// (IncrementalMesher.js — a face whose geometry it meshed before is reused,
+// and if this page already holds it, only a reference is sent) and streams
+// it in batches, unchanged faces first. 'meshBatch' {faces, edges, total?}
+// fires per batch, so a viewport can draw them as they land; 'meshAbort'
+// when a stream is thrown away. evaluate() still resolves with the whole
+// mesh, in the session's order.
 
 import { FRAME, FRAMES_CONTENT_TYPE, readFrames, frameJSON, unpackMesh } from './MeshCodec.js';
 
@@ -53,18 +61,26 @@ class RemoteCascadeEngine {
     this._opNumber = 0;
     /** The last render's `session` report and timings (diagnostics/tests). */
     this.lastReport = null;
+    // Face meshes the session sent, by id: an unchanged face comes back as
+    // a reference to one of these (MeshCodec MESH frames). The id names THIS
+    // cache to the session, so a reload starts it over.
+    this._faceCache = new Map();
+    this._clientCacheId = RemoteCascadeEngine.randomId();
     // CascadeMain exposes `messageBus.handlers` on window for old callers.
     this.messageBus = { handlers: {} };
   }
 
-  static tabSessionId() {
-    const fresh = () => Array.from(crypto.getRandomValues(new Uint8Array(9)),
+  static randomId() {
+    return Array.from(crypto.getRandomValues(new Uint8Array(9)),
       (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 16);
+  }
+
+  static tabSessionId() {
     try {
       let id = sessionStorage.getItem(SESSION_KEY);
-      if (!id) { id = fresh(); sessionStorage.setItem(SESSION_KEY, id); }
+      if (!id) { id = RemoteCascadeEngine.randomId(); sessionStorage.setItem(SESSION_KEY, id); }
       return id;
-    } catch (e) { return fresh(); }
+    } catch (e) { return RemoteCascadeEngine.randomId(); }
   }
 
   get isRemote() { return true; }
@@ -80,12 +96,16 @@ class RemoteCascadeEngine {
   /** Nothing to load: the engine lives in the session. */
   async init() { this._ready = true; }
 
-  /** POST `body` to a framed session route; returns {result, f32, u32}. */
-  async _frames(action, body, onPhase) {
+  /** POST `body` to a framed session route. Streamed meshes arrive as
+   *  MESH batches (each handed to `onBatch` as it lands, references resolved
+   *  from the face cache) and a DONE frame. Returns {result, mesh, meshStats,
+   *  meshBytes, wireBytes}; `mesh` is {faces, edges, shapeLines} in the
+   *  session's (ShapeToMesh's) order, or null. */
+  async _frames(action, body, { onPhase, onBatch } = {}) {
     const resp = await fetch(this._url(action), {
       method: 'POST',
       headers: { 'content-type': POST_TYPE },
-      body: JSON.stringify(body),
+      body: JSON.stringify(Object.assign({ meshStream: true, clientCache: this._clientCacheId }, body)),
     });
     const type = resp.headers.get('content-type') || '';
     if (!type.startsWith(FRAMES_CONTENT_TYPE)) {
@@ -96,22 +116,60 @@ class RemoteCascadeEngine {
         || ('HTTP ' + resp.status + ' ' + text.slice(0, 200)));
     }
     let result = null; let f32 = null; let u32 = null;
-    let wireBytes = 0;
+    let wireBytes = 0; let meshBytes = 0;
+    let batchMeta = null; let done = null; let missing = 0;
+    const faces = []; const edges = [];
+    const takeBatch = () => {
+      const lists = unpackMesh(batchMeta.lists, f32, u32);
+      const arrived = [];
+      for (const f of lists.faces) {
+        let face = f;
+        if (f.ref) {
+          const g = this._faceCache.get(f.id);
+          if (!g) { missing++; continue; }
+          face = Object.assign({ slot: f.slot, id: f.id, face_index: f.face_index, shape_index: f.shape_index }, g);
+        } else if (f.id) {
+          this._faceCache.set(f.id, { vertex_coord: f.vertex_coord, normal_coord: f.normal_coord,
+            uv_coord: f.uv_coord, tri_indexes: f.tri_indexes, number_of_triangles: f.number_of_triangles });
+        }
+        faces[face.slot] = face;
+        arrived.push(face);
+      }
+      for (const e of lists.edges) { edges[e.slot] = e; }
+      if (onBatch) { onBatch({ faces: arrived, edges: lists.edges, total: batchMeta.total, reused: batchMeta.reused }); }
+      batchMeta = null;
+    };
     for await (const { kind, bytes, wireBytes: w } of readFrames(resp.body)) {
       wireBytes += w;
       if (kind === FRAME.PHASE) { if (onPhase) { onPhase(frameJSON(bytes)); } }
       else if (kind === FRAME.RESULT) { result = frameJSON(bytes); }
-      else if (kind === FRAME.F32) { f32 = new Float32Array(bytes.buffer, 0, bytes.byteLength / 4); }
-      else if (kind === FRAME.U32) { u32 = new Uint32Array(bytes.buffer, 0, bytes.byteLength / 4); }
+      else if (kind === FRAME.MESH) { batchMeta = frameJSON(bytes); f32 = null; u32 = null; }
+      else if (kind === FRAME.F32) { f32 = new Float32Array(bytes.buffer, 0, bytes.byteLength / 4); meshBytes += bytes.byteLength; }
+      else if (kind === FRAME.U32) {
+        u32 = new Uint32Array(bytes.buffer, 0, bytes.byteLength / 4);
+        meshBytes += bytes.byteLength;
+        if (batchMeta) { takeBatch(); }
+      } else if (kind === FRAME.DONE) { done = frameJSON(bytes); }
     }
     if (!result) { throw new Error('the session closed the stream without a result'); }
     let mesh = null;
-    if (result.mesh) {
+    if (result.meshStream) {
+      if (!done) { throw new Error('the mesh stream ended early'); }
+      if (done.error) { throw new Error(done.error); }
+      if (missing) {
+        const err = new Error(missing + ' face(s) referenced that this page does not hold');
+        err.code = 'mesh-cache-miss';
+        throw err;
+      }
+      const keep = new Set(done.keep || []);
+      for (const id of Array.from(this._faceCache.keys())) { if (!keep.has(id)) { this._faceCache.delete(id); } }
+      mesh = { faces: faces.filter(Boolean), edges: edges.filter(Boolean),
+        shapeLines: result.meshStream.shapeLines || [] };
+    } else if (result.mesh) {
       mesh = unpackMesh(result.mesh.lists, f32 || new Float32Array(0), u32 || new Uint32Array(0));
       mesh.shapeLines = result.mesh.shapeLines || [];
     }
-    const meshBytes = (f32 ? f32.byteLength : 0) + (u32 ? u32.byteLength : 0);
-    return { result, mesh, meshBytes, wireBytes };
+    return { result, mesh, meshStats: done && done.stats, meshBytes, wireBytes };
   }
 
   _progress(label) {
@@ -144,21 +202,45 @@ class RemoteCascadeEngine {
     this._opNumber = 0;
     this._progress(PHASE_LABELS.accepted);
     const t0 = performance.now();
+    const request = {
+      code,
+      formats: ['mesh'],
+      maxDeviation: maxDeviation || guiState['MeshRes'] || 0.1,
+      gui: guiState,
+    };
+    let received = 0;
+    this._meshTotal = 0;
+    const handlers = {
+      onPhase: (p) => this._progress(PHASE_LABELS[p.phase] || p.phase),
+      // the faces as they are meshed: unchanged ones first, then the rest
+      onBatch: (b) => {
+        if (b.total !== undefined) { this._meshTotal = b.total; }
+        received += b.faces.length;
+        if (this._meshTotal) { this._progress('Meshing ' + received + '/' + this._meshTotal + ' faces'); }
+        this._emit('meshBatch', b);
+      },
+    };
     let got;
     try {
-      got = await this._frames('/render', {
-        code,
-        formats: ['mesh'],
-        maxDeviation: maxDeviation || guiState['MeshRes'] || 0.1,
-        gui: guiState,
-      }, (p) => this._progress(PHASE_LABELS[p.phase] || p.phase));
+      try {
+        got = await this._frames('/render', request, handlers);
+      } catch (err) {
+        if (err.code !== 'mesh-cache-miss') { throw err; }
+        // out of sync with the session: start a fresh cache and ask again
+        this._faceCache.clear();
+        this._clientCacheId = RemoteCascadeEngine.randomId();
+        received = 0;
+        this._emit('meshAbort');
+        got = await this._frames('/render', request, handlers);
+      }
     } catch (err) {
       endProgress();
+      this._emit('meshAbort');
       this._emit('evalError', { message: 'Remote session: ' + err.message, line: 0 });
       return finish(null);
     }
     endProgress();
-    const { result, mesh, meshBytes, wireBytes } = got;
+    const { result, mesh, meshStats, meshBytes, wireBytes } = got;
     const wallMs = Math.round(performance.now() - t0);
 
     for (const line of result.logs || []) { this._emit('log', line); }
@@ -173,20 +255,31 @@ class RemoteCascadeEngine {
 
     const s = result.session || {};
     const c = result.cache || {};
-    this.lastReport = { wallMs, meshBytes, wireBytes, session: s, cache: c, timings: result.timings,
-      memory: result.memory, status: result.status };
+    this.lastReport = { wallMs, meshBytes, wireBytes, meshStats, session: s, cache: c,
+      timings: result.timings, memory: result.memory, status: result.status };
     this._emit('log', 'Remote session ' + this._sessionId + ': '
       + (s.engineBooted ? 'booted a fresh engine, ' : '')
       + (s.warm ? 'warm' : (s.restore ? 'restored ' + s.restore.restored + ' cached ops from storage'
         : 'new working set'))
-      + ', ' + (c.hits || 0) + ' cache hits / ' + (c.misses || 0) + ' misses, '
-      + wallMs + ' ms round trip');
+      + ', ' + (c.hits || 0) + ' cache hits / ' + (c.misses || 0) + ' misses'
+      + (meshStats ? ', ' + meshStats.reused + '/' + meshStats.faces + ' faces unchanged' : '')
+      + ', ' + wallMs + ' ms round trip');
     return finish(mesh);
   }
 
   /** Triangulate one step of the last evaluation's history. */
   async meshHistoryStep(stepIndex, maxDeviation = 0.1) {
-    const { result, mesh } = await this._frames('/history', { step: stepIndex, maxDeviation });
+    const request = { step: stepIndex, maxDeviation };
+    let got;
+    try {
+      got = await this._frames('/history', request);
+    } catch (err) {
+      if (err.code !== 'mesh-cache-miss') { throw err; }
+      this._faceCache.clear();
+      this._clientCacheId = RemoteCascadeEngine.randomId();
+      got = await this._frames('/history', request);
+    }
+    const { result, mesh } = got;
     if (!result.ok) { throw new Error((result.errors || []).join('\n') || 'history step failed'); }
     return mesh ? [mesh.faces, mesh.edges] : null;
   }

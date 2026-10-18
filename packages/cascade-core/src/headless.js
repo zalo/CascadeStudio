@@ -34,6 +34,7 @@
 // MUST be first: aliases `self` before any worker module is evaluated.
 import './worker/GlobalSelf.js';
 import { CascadeStudioWorker } from './worker/CascadeWorker.js';
+import { IncrementalMesher } from './worker/IncrementalMesher.js';
 import { toArrayBuffer } from './worker/WasmAssets.js';
 
 /** Message types that carry a GUI widget registration. The widget functions
@@ -94,6 +95,8 @@ export const CACHE_SNAPSHOT_FORMAT = 2;
  *                 must NOT reset() between jobs, and can persist the cached
  *                 working set with snapshotCache()/restoreCache().
  *    - `gui`      initial GUIState values (what a Slider() would return)
+ *    - `meshCacheBytes` cap on meshScene()'s geometry-keyed face-mesh cache
+ *                 (default 12 MB of typed arrays)
  *    - `meshPerFace` (default true) triangulate one face per BRepMesh call
  *                 (run({mesh: true})): the mesher's transient scales with the
  *                 faces in one call — 77-94 MB on 500-1200-face solids — and
@@ -135,7 +138,11 @@ export async function createHeadlessCascade(options = {}) {
     booted: false,
     externalFiles: null,
     kernelResets: 0,
+    // the last run's scene, kept for meshScene() (run({keepScene: true}))
+    scene: null,
   };
+  /** Geometry-keyed face meshes, kept across runs AND kernel resets. */
+  const mesher = new IncrementalMesher({ maxBytes: opts.meshCacheBytes });
 
   /** Cap on the retained per-op Progress timeline. heat_exchanger emits over
    *  a thousand ops; the timeline is a diagnostic, not a transcript. */
@@ -258,8 +265,10 @@ export async function createHeadlessCascade(options = {}) {
     if (!worker.hasKernelImage()) { return false; }
     globalThis.self.currentShape = null;
     globalThis.self.sceneShapes = [];
-    // the last run's history steps hold shapes in the heap being discarded
+    // the last run's history steps and scene hold shapes in the heap being
+    // discarded (the mesh cache does not: it is geometry, in JS)
     globalThis.self.modelHistory = [];
+    state.scene = null;
     for (const k in globalThis.self.argCache) { delete globalThis.self.argCache[k]; }
     worker.standardLibrary.utils.pruneStableIndex(true);
     globalThis.self.externalShapes = {};
@@ -332,6 +341,8 @@ export async function createHeadlessCascade(options = {}) {
      *  true also triangulates and returns the viewport mesh payload
      *  (`mesh` = [faces, edges], `shapeLines` = each scene shape's producing
      *  source line), at `opts.maxDeviation` (default 0.1).
+     *  `opts.keepScene` keeps the scene shapes for meshScene() (the
+     *  incremental, streamable mesher) instead of meshing here.
      *  `opts.gui` merges into the engine's GUI state; `opts.guiState`
      *  REPLACES it for this run (a host serving several clients from one
      *  engine must not let one client's widget values reach another). */
@@ -367,6 +378,7 @@ export async function createHeadlessCascade(options = {}) {
       const evalMs = now() - t0;
 
       const sceneShapeCount = (globalThis.self.sceneShapes || []).length;
+      state.scene = runOpts.keepScene ? (globalThis.self.sceneShapes || []).slice() : null;
       let mesh = null;
       let shapeLines = null;
       let shapeCount = 0;
@@ -421,6 +433,31 @@ export async function createHeadlessCascade(options = {}) {
     meshHistoryStep(stepIndex, maxDeviation = 0.1) {
       return worker.meshHistoryStep({ stepIndex, maxDeviation }) || null;
     },
+
+    /** Mesh the scene the last run({keepScene: true}) built, incrementally:
+     *  a generator of batches {faces, edges} (IncrementalMesher.js) — faces
+     *  whose geometry was meshed before come back from the mesh cache, the
+     *  rest are triangulated a batch at a time, so a host can stream them.
+     *  Returns {shapeLines, batches} or null when there is no kept scene. */
+    meshScene(o = {}) {
+      if (!state.scene) { return null; }
+      const shapes = state.scene;
+      return {
+        shapeLines: shapes.map((s) => (s && s.producingLine) || -1),
+        batches: mesher.mesh(shapes, o.maxDeviation || 0.1, { batchNodes: o.batchNodes }),
+      };
+    },
+
+    /** The same, for one step of the last run's modeling history. */
+    meshHistoryStepIncremental(stepIndex, o = {}) {
+      const step = (globalThis.self.modelHistory || [])[stepIndex];
+      if (!step || !step.shapes || step.shapes.length === 0) { return null; }
+      return { shapeLines: [], batches: mesher.mesh(step.shapes, o.maxDeviation || 0.1,
+        { batchNodes: o.batchNodes }) };
+    },
+
+    /** The incremental mesher's cache: {clear(), stats(), liveIds()}. */
+    meshCache: mesher,
 
     /** How many times the kernel has been rewound to its boot image (by
      *  reset()/resetKernel(), or by an export healing a damaged heap). */
