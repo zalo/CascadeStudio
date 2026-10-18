@@ -207,7 +207,9 @@ export const TOOLS = [
     name: 'find_hole_patterns',
     title: 'Find hole patterns',
     description: 'Group identical holes into bolt circles (centre, bolt-circle diameter), linear arrays (pitch, '
-      + 'direction) and rectangular grids (rows x cols, pitches, angle), with the member holes.',
+      + 'direction) and rectangular grids (rows x cols, pitches, angle), with the member holes. As upstream: a '
+      + 'grid needs at least 3 along one axis — four holes on a rectangle\'s corners are not reported (read their '
+      + 'spacing from find_holes), and a linear array needs 3 or more.',
     inputSchema: { type: 'object', properties: { session, object_name: objectName }, required: ['session'] },
     annotations: RO,
   },

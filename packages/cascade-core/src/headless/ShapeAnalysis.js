@@ -105,13 +105,19 @@ export function edgeDefects(oc, shape, maxDefects = 20) {
 
 /** The mesh gate (build123d-mcp's mesh check, which strict mesh consumers
  *  apply): triangulate the shape (the worker's ShapeToMesh — per-face
- *  meshing that reuses shared edges' discretization, so a valid solid's
- *  mesh is conforming), weld coincident nodes, and count triangle edges
+ *  in one BRepMesh call, so a valid solid's mesh is conforming), weld
+ *  coincident nodes, and count triangle edges
  *  used once (an open mesh boundary) or more than twice (non-manifold:
  *  self-touching or coincident faces a valid B-rep can still have).
  *  Returns {triangles, openEdges, nonManifoldEdges, defects}. */
 export function meshGate(oc, S, shape, maxDeviation = 0.1, maxDefects = 20) {
-  const res = S.ShapeToMesh(shape, maxDeviation, {}, {}, {}, {});
+  // ONE BRepMesh call over the whole shape: per-face meshing (the headless
+  // default, for memory) can sample a curved shared edge differently on its
+  // two faces, which welds into false open edges (a chamfered nut: 108)
+  const perFace = S._csMeshPerFace;
+  S._csMeshPerFace = false;
+  let res;
+  try { res = S.ShapeToMesh(shape, maxDeviation, {}, {}, {}, {}); } finally { S._csMeshPerFace = perFace; }
   const faces = (res && res[0]) || [];
   let lo = [Infinity, Infinity, Infinity]; let hi = [-Infinity, -Infinity, -Infinity];
   for (const f of faces) {
