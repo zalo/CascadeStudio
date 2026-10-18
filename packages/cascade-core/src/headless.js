@@ -94,6 +94,10 @@ export const CACHE_SNAPSHOT_FORMAT = 2;
  *                 must NOT reset() between jobs, and can persist the cached
  *                 working set with snapshotCache()/restoreCache().
  *    - `gui`      initial GUIState values (what a Slider() would return)
+ *    - `meshPerFace` (default true) triangulate one face per BRepMesh call
+ *                 (run({mesh: true})): the mesher's transient scales with the
+ *                 faces in one call — 77-94 MB on 500-1200-face solids — and
+ *                 a Worker has 128 MB in all. See ShapeToMesh.js.
  */
 let _engine = null;
 
@@ -118,6 +122,7 @@ export async function createHeadlessCascade(options = {}) {
     stableCache: false,
   }, options);
   globalThis.self._csStableCache = !!opts.stableCache;
+  globalThis.self._csMeshPerFace = opts.meshPerFace !== false;
 
   const state = {
     logs: [],
@@ -253,6 +258,8 @@ export async function createHeadlessCascade(options = {}) {
     if (!worker.hasKernelImage()) { return false; }
     globalThis.self.currentShape = null;
     globalThis.self.sceneShapes = [];
+    // the last run's history steps hold shapes in the heap being discarded
+    globalThis.self.modelHistory = [];
     for (const k in globalThis.self.argCache) { delete globalThis.self.argCache[k]; }
     worker.standardLibrary.utils.pruneStableIndex(true);
     globalThis.self.externalShapes = {};
@@ -322,19 +329,27 @@ export async function createHeadlessCascade(options = {}) {
      *  library) — OpenSCAD must be transpiled first (OpenSCADTranspiler).
      *  `opts.mesh`: false (default) builds only the exact BREP compound —
      *  meshing is the memory-expensive stage and STEP/BREP do not need it.
-     *  true also triangulates and returns the viewport mesh payload. */
+     *  true also triangulates and returns the viewport mesh payload
+     *  (`mesh` = [faces, edges], `shapeLines` = each scene shape's producing
+     *  source line), at `opts.maxDeviation` (default 0.1).
+     *  `opts.gui` merges into the engine's GUI state; `opts.guiState`
+     *  REPLACES it for this run (a host serving several clients from one
+     *  engine must not let one client's widget values reach another). */
     async run(code, runOpts = {}) {
       const language = runOpts.language || 'python';
       state.logs = [];
       state.errors = [];
       state.historySteps = [];
       state.progressOps = [];
+      state.guiWidgets = {};
       const t0 = now();
 
       worker.evaluate({
         code,
         language,
-        GUIState: Object.assign({}, state.guiState, runOpts.gui || {}),
+        GUIState: runOpts.guiState
+          ? Object.assign({ 'Cache?': !!opts.cache }, runOpts.guiState)
+          : Object.assign({}, state.guiState, runOpts.gui || {}),
         pyRuntime: opts.runtime,
         pySrc: opts.pySrc,
         pyTopo: opts.pyTopo,
@@ -353,13 +368,19 @@ export async function createHeadlessCascade(options = {}) {
 
       const sceneShapeCount = (globalThis.self.sceneShapes || []).length;
       let mesh = null;
+      let shapeLines = null;
       let shapeCount = 0;
       const tMesh = now();
-      if (runOpts.mesh) {
+      if (runOpts.mesh && sceneShapeCount === 0) {
+        // nothing to mesh — and the mesher would report the empty scene as
+        // a console.error, which the worker turns into a fake kernel error
+        shapeCount = worker.combineShapes();
+      } else if (runOpts.mesh) {
         const result = worker.combineAndRenderShapes({
           maxDeviation: runOpts.maxDeviation || 0.1,
         });
         mesh = result ? result[0] : null;
+        shapeLines = result ? (result[2] || []) : null;
         shapeCount = sceneShapeCount;
       } else {
         shapeCount = worker.combineShapes();
@@ -389,9 +410,24 @@ export async function createHeadlessCascade(options = {}) {
         progressOps: state.progressOps.slice(),
         guiWidgets: Object.assign({}, state.guiWidgets),
         mesh,
+        shapeLines,
         timings: { evalMs: round1(evalMs), combineMs: round1(now() - tMesh) },
       };
     },
+
+    /** Triangulate one step of the last run's modeling history (the
+     *  editor's timeline) -> [faces, edges], or null when the step has no
+     *  shapes. Valid until the next run() or kernel reset. */
+    meshHistoryStep(stepIndex, maxDeviation = 0.1) {
+      return worker.meshHistoryStep({ stepIndex, maxDeviation }) || null;
+    },
+
+    /** How many times the kernel has been rewound to its boot image (by
+     *  reset()/resetKernel(), or by an export healing a damaged heap). */
+    get kernelResets() { return state.kernelResets; },
+
+    /** Steps in the last run's modeling history (0 after a kernel reset). */
+    get historyLength() { return (globalThis.self.modelHistory || []).length; },
 
     /** STEP (ISO-10303-21) text for the shape built by the last run().
      *

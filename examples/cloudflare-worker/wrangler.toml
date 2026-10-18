@@ -178,6 +178,12 @@ main = "src/index-session.js"
 COMPACT_AT_MB = "48"
 KEEP_WARM_MS = "0"
 
+# The editor (scripts/prepare-editor.cjs): served ahead of the Worker, so
+# /session/* (never a file) still reaches it.
+[env.session.assets]
+directory = "./editor"
+binding = "ASSETS"
+
 [[env.session.durable_objects.bindings]]
 name = "EDIT_SESSION"
 class_name = "EditSession"

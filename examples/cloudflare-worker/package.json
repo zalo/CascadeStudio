@@ -13,9 +13,11 @@
     "bench:startup": "node scripts/startup-bench.mjs",
     "prepare-pyodide": "node scripts/prepare-pyodide.mjs",
     "dev:real": "npm run prepare-assets && npm run prepare-pyodide && wrangler dev --env real",
-    "dev:session": "npm run prepare-assets && wrangler dev --env session",
-    "deploy:session": "npm run prepare-assets && wrangler deploy --env session",
-    "bench:session": "node scripts/session-bench.mjs"
+    "dev:session": "npm run prepare-assets && npm run prepare-editor && wrangler dev --env session",
+    "deploy:session": "npm run prepare-assets && npm run prepare-editor && wrangler deploy --env session",
+    "bench:session": "node scripts/session-bench.mjs",
+    "prepare-editor": "node scripts/prepare-editor.cjs",
+    "bench:editor": "node scripts/editor-bench.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.125.0"

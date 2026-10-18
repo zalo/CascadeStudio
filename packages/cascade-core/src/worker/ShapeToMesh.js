@@ -150,7 +150,29 @@ class CascadeStudioMesher {
       let triangulations = []; let uv_boxes = []; let curFace = 0;
       for (let chunkInd = 0; chunkInd < chunks.length; chunkInd++) {
       const chunkShape = chunks[chunkInd].shape;
-      let mesher = new oc.BRepMesh_IncrementalMesh_2(chunkShape, maxDeviation, false, maxDeviation * 5, false);
+      // PER-FACE meshing (`self._csMeshPerFace`, headless default): one
+      // BRepMesh algo per face. BRepMesh's transient grows with the number
+      // of faces in ONE call — meshing a single-solid chunk of 522 faces
+      // (plate16) took the OCCT heap 30 -> 107 MB, 1190 faces
+      // (heat_exchanger) 42 -> 136 MB, past a 128 MB isolate — while the
+      // triangulations themselves are 5-8 MB. Face by face the peak is the
+      // largest face's (63 / 57 MB). Later faces reuse the discretization
+      // of edges an earlier face already meshed, so shared edges stay
+      // conforming; on those two models the result is bit-identical, on
+      // curved multi-face edges (maker_coin) the sampling can differ by a
+      // few nodes. The browser keeps the one-call pass.
+      let mesher = null;
+      if (self._csMeshPerFace) {
+        const fx = new oc.TopExp_Explorer_2(chunkShape, oc.TopAbs_ShapeEnum.TopAbs_FACE,
+          oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+        for (; fx.More(); fx.Next()) {
+          const face = fx.Current();
+          _del(new oc.BRepMesh_IncrementalMesh_2(face, maxDeviation, false, maxDeviation * 5, false), face);
+        }
+        _del(fx);
+      } else {
+        mesher = new oc.BRepMesh_IncrementalMesh_2(chunkShape, maxDeviation, false, maxDeviation * 5, false);
+      }
 
       // Iterate through the faces and triangulate each one
       CascadeStudioMesher.forEachFace(chunkShape, (faceIndex, myFace) => {

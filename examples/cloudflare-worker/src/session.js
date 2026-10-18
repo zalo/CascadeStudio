@@ -11,6 +11,15 @@
 //   POST   /session/<id>/render  {code, formats?, measure?}  -> the /render
 //                                JSON plus `session: {...}` (warm?, restore,
 //                                cache hits/misses, compaction, persistence)
+//                                With "mesh" among the formats (the editor,
+//                                EDITOR.md) the answer is a FRAMED
+//                                stream instead: phase events while the job
+//                                runs, then the JSON and the binary viewport
+//                                mesh (cascade-core MeshCodec.js).
+//   POST   /session/<id>/history {step, maxDeviation?} -> frames: one step
+//                                of the last render's modeling history
+//   POST   /session/<id>/export  {format: step|brep|stl} -> the shape of the
+//                                last render as text
 //   GET    /session/<id>         stats (instance, isolate, storage, memory)
 //   POST   /session/<id>/evict   drop the in-memory working set (test hook:
 //                                the next render restores from storage, as a
@@ -58,6 +67,8 @@
 //    was gone after 7 min with or without it (EDIT-SESSIONS.md).
 
 import { DurableObject } from 'cloudflare:workers';
+import { FRAME, FRAMES_CONTENT_TYPE, GZIP_MIN_BYTES, frameHeader, gzipBytes, packMesh }
+  from '../../../packages/cascade-core/src/engine/MeshCodec.js';
 
 const CHUNK_BYTES = 1900000;          // SQLite rows are capped at 2 MB
 const ALARM_MS = 30000;
@@ -74,7 +85,18 @@ const isolate = {
   renders: 0,
   compactions: 0,
   bootMs: null,
+  // which render's scene + modeling history the engine holds (`<key>:<n>`);
+  // null after anything that rewound the kernel
+  lastRun: null,
+  runSeq: 0,
 };
+
+/** Every kernel rewind goes through here: it also discards the scene and
+ *  the history steps of the last render. */
+function rewind(e) {
+  e.resetKernel();
+  isolate.lastRun = null;
+}
 
 function withEngine(fn) {
   const run = isolate.lock.then(fn, fn);
@@ -206,7 +228,7 @@ export function createSession(worker, o) {
     async adopt(e) {
       if (isolate.owner === this.key) { return { warm: true, restore: null }; }
       const t0 = Date.now();
-      if (isolate.owner !== null) { e.resetKernel(); }
+      if (isolate.owner !== null) { rewind(e); }
       isolate.owner = this.key;
       const snap = await this.loadSnapshot();
       let restore = null;
@@ -245,6 +267,116 @@ export function createSession(worker, o) {
       }
     }
 
+    /** Where one job's answer goes: plain JSON, or — for the editor's mesh
+     *  and history requests — a framed stream (cascade-core MeshCodec.js)
+     *  that is answered AT ONCE and carries a phase event per await boundary
+     *  (booting, restoring, evaluating, ...) until the result, so a cold
+     *  start shows what it is doing. */
+    channel(frames) {
+      if (!frames) {
+        let respond;
+        const response = new Promise((resolve) => { respond = resolve; });
+        return {
+          response,
+          phase: async () => {},
+          finish: async (out, status) => { respond(worker.json(out, status)); },
+        };
+      }
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+      let open = true;
+      const send = async (kind, body) => {
+        if (!open) { return; }
+        try {
+          let bytes = ArrayBuffer.isView(body)
+            ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
+            : new TextEncoder().encode(typeof body === 'string' ? body : JSON.stringify(body));
+          if (bytes.length >= GZIP_MIN_BYTES) {
+            bytes = await gzipBytes(bytes);
+            kind |= FRAME.GZIP;
+          }
+          await writer.write(frameHeader(kind, bytes.length));
+          await writer.write(bytes);
+        } catch (err) { open = false; return; }   // the client went away
+        // enqueued is not flushed: let the runtime write it out before the
+        // next synchronous stretch of wasm holds the isolate
+        await yieldToIo();
+      };
+      return {
+        response: Promise.resolve(new Response(readable, { headers: {
+          'content-type': FRAMES_CONTENT_TYPE, 'cache-control': 'no-store' } })),
+        phase: (phase, detail) => send(FRAME.PHASE, Object.assign({ phase }, detail)),
+        finish: async (out, status) => {
+          if (!open) { return; }
+          let packed = null;
+          if (out.mesh) {
+            const { shapeLines, ...lists } = out.mesh;
+            packed = packMesh(lists);
+            out.mesh = { lists: packed.meta, shapeLines,
+              f32: packed.f32.length, u32: packed.u32.length };
+          }
+          out.status = status;
+          await send(FRAME.RESULT, out);
+          if (packed) {
+            await send(FRAME.F32, packed.f32);
+            await send(FRAME.U32, packed.u32);
+          }
+          open = false;
+          try { await writer.close(); } catch (err) { /* already gone */ }
+        },
+      };
+    }
+
+    /** Run `fn(e)` under the engine lock with the session's channel; an
+     *  exception rewinds the engine (its state is unknown) and is answered
+     *  as a 500. */
+    job(ch, fn) {
+      const job = withEngine(async () => {
+        const booted = worker.isBooted();
+        const t0 = performance.now();
+        if (!booted) { await ch.phase('booting'); }
+        const e = await worker.engine();
+        if (!booted) { isolate.bootMs = Math.round(performance.now() - t0); }
+        return fn(e, { booted, bootMs: Math.round(performance.now() - t0) });
+      });
+      job.catch((err) => {
+        // the engine state is unknown: rewind it, restore from storage next time
+        if (isolate.owner === this.key) {
+          worker.engine().then((e) => { rewind(e); }).catch(() => {});
+          isolate.owner = null;
+        }
+        ch.finish({ ok: false, errors: ['session: ' + ((err && err.message) || err)] }, 500);
+      });
+      this.ctx.waitUntil(job.catch(() => {}));
+      return ch.response;
+    }
+
+    /** adopt(), announcing a restore from storage on the channel. */
+    async adoptWithPhase(e, ch) {
+      if (isolate.owner !== this.key && this.meta('snapshot')) {
+        await ch.phase('restoring', { bytes: this.meta('snapshot').bytes });
+      }
+      return this.adopt(e);
+    }
+
+    /** The scene and modeling history of this session's last render, in the
+     *  engine — re-running its code (all cache hits) when anything rewound
+     *  the kernel or another session ran since. null: nothing rendered yet. */
+    async ensureLastRun(e, ch) {
+      if (isolate.owner === this.key && isolate.lastRun !== null
+          && isolate.lastRun === this.lastRun) {
+        return { rerun: false };
+      }
+      const last = this.meta('last');
+      if (!last) { return null; }
+      await this.adoptWithPhase(e, ch);
+      await ch.phase('re-running');
+      const r = await e.run(last.code, { language: last.language, mesh: false,
+        guiState: last.gui || undefined });
+      isolate.lastRun = this.lastRun = this.key + ':' + (++isolate.runSeq);
+      return { rerun: true, ok: r.ok };
+    }
+
     async render(request) {
       let body;
       try { body = await request.json(); }
@@ -252,46 +384,47 @@ export function createSession(worker, o) {
       const req = worker.parseRenderBody(body);
       if (req.error) { return worker.json({ ok: false, error: req.error }, 400); }
 
-      let respond;
-      const response = new Promise((resolve) => { respond = resolve; });
+      const frames = req.formats.includes('mesh');
+      const ch = this.channel(frames);
       const tArrive = performance.now();
-      const job = withEngine(async () => {
-        const t0 = performance.now();
-        const booted = worker.isBooted();
-        const e = await worker.engine();
+      return this.job(ch, async (e, boot) => {
         const t1 = performance.now();
-        if (!booted) { isolate.bootMs = Math.round(t1 - t0); }
-        const { warm, restore } = await this.adopt(e);
+        const { warm, restore } = await this.adoptWithPhase(e, ch);
         const t2 = performance.now();
-        const out = await worker.runRender(e, req, () => {}, { reset: false });
+        const out = await worker.runRender(e, req, ch.phase, { reset: false });
         const t3 = performance.now();
         isolate.renders++;
         this.instance.renders++;
+        isolate.lastRun = this.lastRun = this.key + ':' + (++isolate.runSeq);
+        // what history/export re-run when the engine lost this render
+        this.ctx.storage.sql.exec('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', 'last',
+          JSON.stringify({ code: req.code, language: req.language, gui: req.gui,
+            maxDeviation: req.maxDeviation }));
         out.session = {
           id: this.key.slice(0, 12),
           instance: this.instance.id,
           isolate: isolate.id,
-          engineBooted: !booted,
+          engineBooted: !boot.booted,
           warm,
           restore,
           lastPersist: this.lastPersist,
           renders: this.instance.renders,
           // server phases (ms; the edge's clock only advances across I/O)
-          timing: { lockWaitMs: Math.round(t0 - tArrive), bootMs: Math.round(t1 - t0),
+          timing: { lockWaitMs: Math.round(t1 - tArrive - boot.bootMs), bootMs: boot.bootMs,
             adoptMs: Math.round(t2 - t1), renderMs: Math.round(t3 - t2) },
           // what the PREVIOUS render's post-response work cost
           previousAfter: this.lastAfter || null,
         };
-        respond(worker.json(out, out.ok ? 200 : 422));
+        await ch.finish(out, out.ok ? 200 : 422);
         this.keepWarm();
 
         // ---- after the response: compaction and persistence ----
         await yieldToIo();
         const a0 = performance.now();
         const after = { compacted: false };
-        // meshes written into cached shapes (STL export, measure) must not
-        // outlive this render — see engine.clearMeshes()
-        if (req.formats.includes('stl') || req.measure) {
+        // meshes written into cached shapes (the viewport mesh, STL export,
+        // measure) must not outlive this render — see engine.clearMeshes()
+        if (frames || req.formats.includes('stl') || req.measure) {
           const m0 = performance.now();
           after.meshesCleared = e.clearMeshes();
           after.clearMs = Math.round(performance.now() - m0);
@@ -311,7 +444,7 @@ export function createSession(worker, o) {
           after.snapshotMs = Math.round(performance.now() - s0);
           if (compact) {
             const c0 = performance.now();
-            e.resetKernel();
+            rewind(e);
             if (snap) { e.restoreCache(snap); }
             isolate.compactions++;
             after.compacted = true;
@@ -326,17 +459,72 @@ export function createSession(worker, o) {
         after.totalMs = Math.round(performance.now() - a0);
         this.lastAfter = after;
       });
-      job.catch((err) => {
-        // the engine state is unknown: rewind it, restore from storage next time
-        if (isolate.owner === this.key) {
-          worker.engine().then((e) => { e.resetKernel(); }).catch(() => {});
-          isolate.owner = null;
+    }
+
+    /** One step of the last render's modeling history, meshed (the
+     *  editor's timeline). */
+    async history(request) {
+      let body;
+      try { body = await request.json(); }
+      catch (err) { return worker.json({ ok: false, error: 'invalid JSON body' }, 400); }
+      const step = Number(body && body.step);
+      if (!Number.isInteger(step) || step < 0) {
+        return worker.json({ ok: false, error: 'missing integer "step"' }, 400);
+      }
+      const dev = Number(body.maxDeviation);
+      const maxDeviation = Number.isFinite(dev) ? Math.min(10, Math.max(0.005, dev)) : 0.1;
+      const ch = this.channel(true);
+      return this.job(ch, async (e) => {
+        const last = await this.ensureLastRun(e, ch);
+        if (!last) {
+          return ch.finish({ ok: false, errors: ['nothing has been rendered in this session yet'] }, 409);
         }
-        respond(worker.json({ ok: false,
-          errors: ['session: ' + ((err && err.message) || err)] }, 500));
+        const m0 = performance.now();
+        const fe = e.meshHistoryStep(step, maxDeviation);
+        await ch.finish({ ok: true, step, steps: e.historyLength, rerun: last.rerun,
+          mesh: fe ? { faces: fe[0], edges: fe[1] } : null,
+          timing: { meshMs: Math.round(performance.now() - m0) } }, 200);
+        await yieldToIo();
+        e.clearMeshes();
       });
-      this.ctx.waitUntil(job.catch(() => {}));
-      return response;
+    }
+
+    /** The last render's shape as STEP/BREP/STL text. */
+    async exportShape(request) {
+      let body;
+      try { body = await request.json(); }
+      catch (err) { return worker.json({ ok: false, error: 'invalid JSON body' }, 400); }
+      const format = String((body && body.format) || 'step').toLowerCase();
+      if (!['step', 'brep', 'stl'].includes(format)) {
+        return worker.json({ ok: false, error: 'format must be step, brep or stl' }, 400);
+      }
+      let respond;
+      const response = new Promise((resolve) => { respond = resolve; });
+      const ch = {
+        response,
+        phase: async () => {},
+        finish: async (out, status) => { respond(worker.json(out, status)); },
+      };
+      return this.job(ch, async (e) => {
+        const last = await this.ensureLastRun(e, ch);
+        if (!last) {
+          return ch.finish({ ok: false, errors: ['nothing has been rendered in this session yet'] }, 409);
+        }
+        const resets = e.kernelResets;
+        let text;
+        try {
+          text = format === 'step' ? e.exportSTEP() : format === 'brep' ? e.exportBREP() : e.exportSTL();
+        } catch (err) {
+          return ch.finish({ ok: false, errors: [format + ' export failed: ' + err.message] }, 422);
+        }
+        // exportSTEP() heals a damaged kernel by rewinding it: the working
+        // set is gone with it
+        if (e.kernelResets !== resets) { isolate.lastRun = null; }
+        respond(new Response(text, { headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          'x-cascade-rerun': String(last.rerun) } }));
+        if (format === 'stl') { await yieldToIo(); e.clearMeshes(); }
+      });
     }
 
     async stats() {
@@ -363,12 +551,14 @@ export function createSession(worker, o) {
       const url = new URL(request.url);
       const action = (url.pathname.match(/^\/session\/[^/]+(\/.*)?$/) || [])[1] || '/';
       if (action === '/render' && request.method === 'POST') { return this.render(request); }
+      if (action === '/history' && request.method === 'POST') { return this.history(request); }
+      if (action === '/export' && request.method === 'POST') { return this.exportShape(request); }
       if ((action === '/' || action === '') && request.method === 'GET') { return this.stats(); }
       if (action === '/evict' && request.method === 'POST') {
         return withEngine(async () => {
           const owned = isolate.owner === this.key;
           if (owned) {
-            (await worker.engine()).resetKernel();
+            rewind(await worker.engine());
             isolate.owner = null;
           }
           return worker.json({ ok: true, dropped: owned });
@@ -377,7 +567,7 @@ export function createSession(worker, o) {
       if ((action === '/' || action === '') && request.method === 'DELETE') {
         return withEngine(async () => {
           if (isolate.owner === this.key) {
-            (await worker.engine()).resetKernel();
+            rewind(await worker.engine());
             isolate.owner = null;
           }
           await this.ctx.storage.deleteAlarm();
@@ -398,25 +588,48 @@ export function createSession(worker, o) {
   curl -sX POST http://localhost:8787/session/demo/render -H 'content-type: application/json' \\
     -d '{"code":"from build123d import *\\nshow(Box(10,10,10))","formats":["brep"]}'
 
-POST   /session/<id>/render   {code, formats:[step|brep|stl], measure?}
+POST   /session/<id>/render   {code, formats:[step|brep|stl|mesh], measure?,
+                               maxDeviation?, gui?}  ("mesh": framed stream)
+POST   /session/<id>/history  {step, maxDeviation?}  (framed stream)
+POST   /session/<id>/export   {format: step|brep|stl}  -> text
 GET    /session/<id>          session/isolate/storage stats
 POST   /session/<id>/evict    drop the in-memory working set (test hook)
 DELETE /session/<id>          forget the session
 `;
 
+  /** The session API is open to any origin, so an editor served from
+   *  elsewhere (a local build, a preview deployment) can use it. */
+  const CORS = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
+    'access-control-allow-headers': 'content-type',
+    'access-control-expose-headers': 'x-cascade-rerun',
+    'access-control-max-age': '86400',
+  };
+  const withCors = (response) => {
+    const r = new Response(response.body, response);
+    for (const [k, v] of Object.entries(CORS)) { r.headers.set(k, v); }
+    return r;
+  };
+
   /** The front Worker: routes sessions to their object. It never touches the
-   *  engine (in \`wrangler dev\` it can share an isolate with the objects). */
+   *  engine (in \`wrangler dev\` it can share an isolate with the objects).
+   *  The editor (static assets from editor/, EDITOR.md) is served by
+   *  Cloudflare ahead of this handler; anything that is not an asset lands
+   *  here. */
   async function fetch(request, env) {
     const url = new URL(request.url);
     const m = url.pathname.match(/^\/session\/([A-Za-z0-9_.-]{1,64})(\/.*)?$/);
     if (m) {
+      if (request.method === 'OPTIONS') { return new Response(null, { status: 204, headers: CORS }); }
       const stub = env.EDIT_SESSION.get(env.EDIT_SESSION.idFromName(m[1]));
-      return stub.fetch(request);
+      return withCors(await stub.fetch(request));
     }
     if (url.pathname === '/health') {
-      return worker.json({ ok: true, flavor: o.flavor, sessions: true,
-        note: 'the engine boots inside each session object, on its first render' });
+      return withCors(worker.json({ ok: true, flavor: o.flavor, sessions: true,
+        note: 'the engine boots inside each session object, on its first render' }));
     }
+    if (url.pathname === '/' && env.ASSETS) { return env.ASSETS.fetch(request); }
     return new Response(USAGE, { headers: { 'content-type': 'text/plain; charset=utf-8' } });
   }
 

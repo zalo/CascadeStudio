@@ -221,15 +221,22 @@ GET  /health            boot + memory
     ? scheduler.wait(0)
     : new Promise((resolve) => setTimeout(resolve, 0));
 
-  /** Parse + validate a /render body. Returns {code, formats} or {error}. */
+  /** Parse + validate a /render body. Returns {code, formats, ...} or
+   *  {error}. `mesh` (a format) is the editor's viewport payload: [faces,
+   *  edges] at `maxDeviation` (mm, default 0.1) plus each scene shape's
+   *  source line; `gui` is the editor's widget state, which REPLACES the
+   *  engine's for this run. */
   function parseRenderBody(body) {
     const code = body && body.code;
     if (typeof code !== 'string' || !code.trim()) { return { error: 'missing "code"' }; }
     const formats = Array.isArray(body.formats) && body.formats.length
       ? body.formats.map((f) => String(f).toLowerCase())
       : ['step'];
+    const dev = Number(body.maxDeviation);
     return { code, formats, language: (body && body.language) || 'python',
-      measure: body && body.measure === true };
+      measure: body && body.measure === true,
+      maxDeviation: Number.isFinite(dev) ? Math.min(10, Math.max(0.005, dev)) : 0.1,
+      gui: body.gui && typeof body.gui === 'object' && !Array.isArray(body.gui) ? body.gui : null };
   }
 
   /** The whole job, with a hook fired at every real await boundary.
@@ -245,7 +252,9 @@ GET  /health            boot + memory
     const t0 = Date.now();
     await onPhase('evaluating', { language: req.language, formats: req.formats });
 
-    const result = await e.run(req.code, { language: req.language, mesh: false });
+    const wantsMesh = req.formats.includes('mesh');
+    const result = await e.run(req.code, { language: req.language, mesh: wantsMesh,
+      maxDeviation: req.maxDeviation, guiState: req.gui || undefined });
 
     const out = {
       ok: result.ok,
@@ -253,6 +262,7 @@ GET  /health            boot + memory
       logs: result.logs,
       shapeCount: result.shapeCount,
       historySteps: result.historySteps,
+      guiWidgets: result.guiWidgets,
       // ADDITIVE: the worker's per-op Progress timeline ({n, op}). It is a
       // record of the evaluation, not live progress — see the README.
       progressOps: result.progressOps || [],
@@ -260,6 +270,14 @@ GET  /health            boot + memory
 
     await onPhase('evaluated', { shapeCount: out.shapeCount, ok: out.ok,
       errors: out.ok ? undefined : out.errors });
+
+    // The viewport payload is produced by the run itself (meshing consumes
+    // the scene list), so it is there even when the script raised half-way:
+    // the editor shows whatever was built, as it does locally.
+    if (wantsMesh && result.mesh) {
+      out.mesh = { faces: result.mesh[0], edges: result.mesh[1],
+        shapeLines: result.shapeLines || [] };
+    }
 
     if (result.ok && result.shapeCount > 0) {
       // `{"measure": true}` — the combined scene's volume/area/bbox. Cheap

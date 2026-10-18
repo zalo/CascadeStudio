@@ -3,8 +3,8 @@
 
 import { createDockview } from '../lib/dockview-core/dockview-core.js';
 import { CascadeEnvironment } from './CascadeView.js';
-import { CascadeEngine, OpenSCADTranspiler } from 'cascade-core';
-import { EditorManager, resolveOcctExceptions } from './EditorManager.js';
+import { CascadeEngine, RemoteCascadeEngine, OpenSCADTranspiler } from 'cascade-core';
+import { EditorManager, resolveOcctExceptions, resolveRemote } from './EditorManager.js';
 import { ConsoleManager } from './ConsoleManager.js';
 import { GUIManager } from './GUIManager.js';
 import { OpenSCADMonaco } from './openscad/OpenSCADMonaco.js';
@@ -74,13 +74,20 @@ class CascadeStudioApp {
 
   /** Start the application: create the engine, wire up events, and initialize. */
   start() {
-    // Create the CascadeEngine (wraps Worker + MessageBus)
-    let workerPath = typeof ESBUILD !== 'undefined' ? './cascade-worker.js' : './js/CADWorker/CascadeStudioMainWorker.js';
-    // `?occtexceptions=js`: boot the JS-emulated-exceptions debug build of
-    // OCCT instead of the default (see resolveOcctExceptions). The worker
-    // reads it from its own URL, before any message can arrive.
-    if (resolveOcctExceptions() === 'js') { workerPath += '?occtexceptions=js'; }
-    this.engine = new CascadeEngine({ workerUrl: workerPath });
+    // Remote-session mode (see resolveRemote): build123d evaluates in a
+    // Durable Object editing session and no local worker is started.
+    this.remote = resolveRemote();
+    if (this.remote) {
+      this.engine = new RemoteCascadeEngine(this.remote);
+    } else {
+      // Create the CascadeEngine (wraps Worker + MessageBus)
+      let workerPath = typeof ESBUILD !== 'undefined' ? './cascade-worker.js' : './js/CADWorker/CascadeStudioMainWorker.js';
+      // `?occtexceptions=js`: boot the JS-emulated-exceptions debug build of
+      // OCCT instead of the default (see resolveOcctExceptions). The worker
+      // reads it from its own URL, before any message can arrive.
+      if (resolveOcctExceptions() === 'js') { workerPath += '?occtexceptions=js'; }
+      this.engine = new CascadeEngine({ workerUrl: workerPath });
+    }
 
     // Create subsystem managers
     this.editor = new EditorManager(this);
@@ -100,6 +107,8 @@ class CascadeStudioApp {
 
     // Register OpenSCAD language with Monaco (for syntax highlighting)
     this._openscadMonaco.registerLanguage();
+
+    if (this.remote) { this._applyRemoteChrome(); }
 
     // Mode toggle handler — save/restore code per mode
     this._savedCode = {};
@@ -138,6 +147,11 @@ class CascadeStudioApp {
         }
       });
       this.engine.on('resetWorking', () => { window.workerWorking = false; });
+      // Script errors from a remote session (the local worker throws them
+      // at the page, where window.onerror reports them)
+      this.engine.on('evalError', ({ message, line }) => {
+        this.console.reportError(message, line, 1, true, true);
+      });
 
       // Wire up engine events for viewport
       this.engine.on('modelHistory', (steps) => {
@@ -202,6 +216,9 @@ class CascadeStudioApp {
     let mode = loadFromURL ? 'cascadestudio' : CascadeStudioApp.DEFAULT_MODE;
     const urlMode = searchParams.get("mode");
     if (CascadeStudioApp.MODES.includes(urlMode)) { mode = urlMode; }
+    // A remote session evaluates build123d only (see _applyRemoteChrome).
+    const requestedMode = mode;
+    if (this.remote) { mode = 'python'; }
 
     let codeStr = CascadeStudioApp.starterCode(mode);
     this.gui.state = {};
@@ -234,6 +251,14 @@ class CascadeStudioApp {
           console.error("Failed to parse the GUI state in the URL: " + e.message);
         }
       }
+    }
+
+    const wanted = mode !== 'python' ? mode : requestedMode;
+    if (this.remote && wanted !== 'python') {
+      // Keep the code the link/project carried, but say why it fails.
+      mode = 'python';
+      setTimeout(() => console.log('This editor evaluates build123d (Python) in a remote '
+        + 'session; the ' + wanted + ' code it was given needs the local editor.'), 0);
     }
 
     // The editor panel is created before _applyMode runs, so it needs the
@@ -373,6 +398,32 @@ class CascadeStudioApp {
     window.addEventListener('resize', this._updateLayoutSize);
     window.addEventListener('orientationchange', this._updateLayoutSize);
     requestAnimationFrame(this._updateLayoutSize);
+  }
+
+  /** Remote-session mode: Python is the only language, and importing files
+   *  into the (remote) kernel is not wired up yet. */
+  _applyRemoteChrome() {
+    const modeSelect = document.getElementById('editorMode');
+    if (modeSelect) {
+      for (const opt of modeSelect.options) {
+        if (opt.value !== 'python') { opt.disabled = true; }
+      }
+      modeSelect.title = 'build123d runs in a remote editing session; '
+        + 'CascadeStudio JS and OpenSCAD need the local editor';
+    }
+    for (const el of document.querySelectorAll('.topnav-import, a[onmouseup*="clearExternalFiles"]')) {
+      el.style.display = 'none';
+    }
+    const brand = document.querySelector('.topnav-brand');
+    if (brand && !document.getElementById('remoteBadge')) {
+      const badge = document.createElement('span');
+      badge.id = 'remoteBadge';
+      badge.className = 'topnav-remote';
+      badge.textContent = 'remote session';
+      badge.title = 'Evaluated by a Cloudflare Durable Object editing session ('
+        + this.engine.endpoint + ', session ' + this.engine.sessionId + ')';
+      brand.after(badge);
+    }
   }
 
   /** Apply a resolved language mode to the editor and the topnav switcher,
