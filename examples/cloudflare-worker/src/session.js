@@ -251,6 +251,13 @@ function withResultShow(code) {
   return String(code).replace(/\s*$/, '') + '\nshow(result, "result")\n';
 }
 
+/** Under every export URL: the link is the person's, and a code sandbox
+ *  (claude.ai) is behind an egress allow-list that refuses this host unless
+ *  the account allows it, with a 403 that retrying never fixes. */
+const FILE_LINK_NOTE = 'The link is for the person: it opens in any browser, no sign-in. A code sandbox can download it '
+  + 'only if this host is on its allowed domains (claude.ai: Settings > Capabilities); if a download is refused '
+  + '(a 403 or connect_rejected from a proxy), give the person the link instead of retrying.';
+
 /** Scene indices for object references: an index, a show() name, a named
  *  list ("cubes" = cubes[0], cubes[1], ...), an array of those, or names
  *  separated by commas. null/undefined/'' = every shape. A list sent as
@@ -1095,7 +1102,7 @@ const MCP_TOOLS = {
       + f.url + '\n(kept ' + f.expiresInS + ' s) ' + idx.length + ' object(s): ' + idx.map((i) => label(shapes[i])).join(', ')
       + '; total volume ' + fmt(vol) + ' mm^3' + (format === 'glb' ? ', in metres with Y up' : '') + (format === '3mf' ? ', one mesh object per object, mm' : '')
       + (format === 'dxf' ? ', the ' + (a.view || 'iso') + ' view projected, mm, layers VISIBLE / HIDDEN' : '')
-      + gateLine }], after: { clear } };
+      + gateLine + '\n' + FILE_LINK_NOTE }], after: { clear } };
   },
 
   async session_state() {

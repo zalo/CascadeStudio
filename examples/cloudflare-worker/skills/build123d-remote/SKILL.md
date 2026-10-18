@@ -16,7 +16,7 @@ The server is `https://cascade-headless-session.makeshifted.workers.dev` (or whe
   - claude.ai: Settings → Connectors → Add custom connector → the URL. If the server has an access key it asks for it on the sign-in page.
   - Claude Code: `claude mcp add --transport http cad <server>/mcp` (add `--header "Authorization: Bearer <key>"` for a keyed server).
   - Claude API: `"mcp_servers": [{"type": "url", "url": "<server>/mcp", "name": "cad", "authorization_token": "<key>"}]` with `"tools": [{"type": "mcp_toolset", "mcp_server_name": "cad"}]` and the MCP connector beta header.
-- **No MCP, but a shell with network access** — the same tools over HTTP (send `-H "Authorization: Bearer <key>"` if the server is keyed):
+- **No MCP, but a shell with network access** — the same tools over HTTP (send `-H "Authorization: Bearer <key>"` if the server is keyed). A sandbox behind an egress allow-list (claude.ai code execution) needs the server's host on its allowed domains (Settings → Capabilities); a refused connection (403, `connect_rejected`) won't fix itself on a retry:
 
   ```bash
   S=<server>/session/my-part-1        # pick any id: letters, digits, _ . -
@@ -38,7 +38,7 @@ The server is `https://cascade-headless-session.makeshifted.workers.dev` (or whe
 4. **Verify with numbers**: `measure` (bounding box, volume, centre of mass, the face inventory with hole diameters and axes, inertia; `material: "pla"` for the mass); `compare` with `kind: "fit"` for whether two parts clear, touch or collide, `kind: "align"` for flushness; `resolve` to see what a selector picks before filleting it; `find_holes` / `find_hole_patterns` / `find_countersinks` / `find_bosses` to read features back (diameters, depths, counterbores, bolt circles); `cross_sections` for wall changes and voids; `analyze_printability` before an STL (overhangs, thin walls, tip-over, bed fit).
 5. **Fix errors** with `last_error` (the failing line in context) and `repair_hints`. Usual causes: a selector that matched nothing, a fillet larger than its neighbouring faces allow, a boolean between shapes that do not touch.
 6. **Before risky changes** `save_snapshot`; go back with `restore_snapshot`; `compare` with `kind: "snapshot"` shows what changed.
-7. **Finish**: `validate` must say PASS (`locate_gate_defects` says where it fails); `design_audit` checks the top-level dimensions survive a ±10% edit. Then `export` (`step` for CAD, `stl` for printing, `glb` for viewers, `svg` for a hidden-line drawing — each returns a URL kept for an hour), and give the user `open_in_editor`'s link: the CascadeStudio editor on the same session, where they can see the model, edit the script, and their edits come back to you (`session_state`, `get_script`).
+7. **Finish**: `validate` must say PASS (`locate_gate_defects` says where it fails); `design_audit` checks the top-level dimensions survive a ±10% edit. Then `export` (`step` for CAD, `stl` for printing, `glb` for viewers, `svg` for a hidden-line drawing — each returns a URL kept for an hour: hand it to the user as a link, since a sandbox can only download it if the host is on its allowed domains), and give the user `open_in_editor`'s link: the CascadeStudio editor on the same session, where they can see the model, edit the script, and their edits come back to you (`session_state`, `get_script`).
 
 Carry the session id from the first reply into every call.
 

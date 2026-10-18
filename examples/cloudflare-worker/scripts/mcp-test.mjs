@@ -101,6 +101,7 @@ for (const [format, magic] of [['step', 'ISO-10303-21'], ['stl', 'solid'], ['glb
   if (url) { head = Buffer.from(await (await fetch(url)).arrayBuffer()).subarray(0, 40).toString('latin1'); }
   check('export ' + format + ': a download URL that serves the file', !!url && head.includes(magic), url);
 }
+check('export says the link is for the person (sandboxes need the host allowed)', /allowed domains/.test(text(r)), text(r).split('\n').pop());
 
 // ---- snapshots, set_script, errors ----
 check('save_snapshot', !(await call('save_snapshot', { session: sid, name: 'plate-v2' })).isError);

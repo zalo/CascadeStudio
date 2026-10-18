@@ -340,7 +340,8 @@ export const TOOLS = [
       + 'step and brep are exact; stl and 3mf are meshes for printing (3mf: one named object per object, optional '
       + 'colours); glb is a mesh for viewers (metres, Y up); svg and '
       + 'dxf are an exact hidden-line projection (dxf: mm, layers VISIBLE and HIDDEN). 3-D formats report the '
-      + 'validity gate; with strict a FAILing object is not exported.',
+      + 'validity gate; with strict a FAILing object is not exported. The URL is a plain link to hand the person; '
+      + 'a code sandbox can fetch it only if this host is on its allowed domains.',
     inputSchema: { type: 'object', properties: { session, object_name: objectName,
       format: { type: 'string', enum: ['step', 'stl', 'brep', 'glb', '3mf', 'svg', 'dxf'] },
       colors: { type: 'object', additionalProperties: { type: 'string' }, description: '3mf: colours by object, e.g. {"lid": "red"}.' },
@@ -456,7 +457,7 @@ export const WORKFLOW = `# Working with remote build123d sessions
 5. Before a fillet or chamfer, check the selection: resolve(object_name, ".edges().filter_by(GeomType.CIRCLE)") or find_edges(...) in the script.
 6. Fix errors with last_error (the failing line in context) and repair_hints. Common causes: a selector that picked nothing, a fillet radius larger than the adjacent faces allow, booleans between shapes that do not touch.
 7. save_snapshot before a risky change; restore_snapshot to go back; compare(kind="snapshot") to see what changed.
-8. export: step for CAD, stl for printing, glb for viewers, svg for a drawing. Give the person open_in_editor's link so they can see and tweak the model; their edits appear in session_state/get_script.
+8. export: step for CAD, stl for printing, glb for viewers, svg for a drawing. Each returns a download URL for the person: give it as a link. A code sandbox (claude.ai code execution) can fetch it only if this host is on its allowed domains (Settings > Capabilities); when a fetch is refused, give the link and mention that setting rather than retrying. Give the person open_in_editor's link so they can see and tweak the model; their edits appear in session_state/get_script.
 
 ## Writing build123d here
 - Algebra mode: part = Box(80, 60, 8); part -= Pos(0, 0, 4) * Cylinder(10, 20); part = fillet(part.edges().filter_by(Axis.Z), 3)

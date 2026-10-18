@@ -82,6 +82,7 @@ The skill below shows both.
   - **Output:** `PngEncode.js` writes the PNG with the platform's `CompressionStream`.
   - **Drawings:** `engine.drawingSVG()` projects the exact B-rep with `HLRBRep_Algo`.
 - **Files without a filesystem.** Exports are stored in the session object's own SQLite storage, in rows of 1.9 MB or less, and served at `/session/<id>/files/<random id>/<name>`.
+  - **Links, not uploads:** an export URL is for the person, who opens it in a browser. A model's code sandbox can fetch it only if its egress allow-list has the host: claude.ai's code execution refuses unlisted hosts with a 403 (`connect_rejected`) until the account adds the domain under Settings → Capabilities. The `export` result, its description and the workflow say so, so a model hands over the link instead of retrying.
   - **Expiry:** each file expires after `FILE_TTL_S`, and expired files are dropped when the next one is stored.
   - **Limits:** 20 files and 32 MB per file per session.
   - **Why not R2:** it would add infrastructure to create, and the files belong with their session.
