@@ -17,11 +17,16 @@
     "deploy:session": "npm run prepare-assets && npm run prepare-editor && wrangler deploy --env session",
     "bench:session": "node scripts/session-bench.mjs",
     "prepare-editor": "node scripts/prepare-editor.cjs",
-    "bench:editor": "node scripts/editor-bench.mjs"
+    "bench:editor": "node scripts/editor-bench.mjs",
+    "test:mcp": "node scripts/mcp-test.mjs"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "wrangler": "^4.125.0"
   },
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^1.2.3"
+  }
 }

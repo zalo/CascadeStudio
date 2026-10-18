@@ -1044,6 +1044,13 @@ in remote-session mode** at `/` (EDITOR.md):
 - **Local runs.** Under `wrangler dev`, serve `editor/` separately (EDITOR.md,
   *Limits*): Chrome requests that arrive during a long render crash the dev
   proxy.
+- **MCP.** The same Worker serves the sessions as MCP tools at `/mcp` (MCP.md).
+  - `src/mcp.js` is a hand-written, stateless Streamable-HTTP JSON-RPC server: the SDK needs nodejs_compat.
+  - Tools take an explicit `session` id and run in the DO (`mcpTool()`, `MCP_TOOLS`).
+  - Sign-in is in `src/auth.js`: none, a bearer access key, or OAuth via workers-oauth-provider.
+  - Renders are software-rasterized in cascade-core (`src/headless/MeshRaster.js` → PNG). Exported files live in DO SQLite.
+  - The editor opens on, and follows, the session script (`GET /session/<id>/script`).
+  - Test with `BASE=… node examples/cloudflare-worker/scripts/mcp-test.mjs`.
 
 ## Playwright Testing
 

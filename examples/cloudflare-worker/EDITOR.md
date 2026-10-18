@@ -24,6 +24,12 @@ npx http-server editor -p 8797 -c-1
 # open http://127.0.0.1:8797/?server=http://127.0.0.1:8787
 ```
 
+**An agent can work on the same session.** The MCP endpoint ([MCP.md](MCP.md))
+uses the same session ids:
+- **Opening:** `open_in_editor` gives the link, and the editor opens on the session's script.
+- **Following the agent:** while the tab is visible and idle the editor polls for changes. With no unsaved local edits it applies an agent's change and re-evaluates (cache hits).
+- **Following the person:** each evaluation becomes the session script, which the agent sees in `session_state` and `get_script`.
+
 The editor can also be pointed at a session Worker from any other deployment
 of CascadeStudio: `?engine=remote&server=<session Worker URL>`. A tab gets
 its own session id, kept in `sessionStorage` so that a reload resumes the

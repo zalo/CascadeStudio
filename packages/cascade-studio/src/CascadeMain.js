@@ -191,6 +191,10 @@ class CascadeStudioApp {
       // Backward compat: expose messageHandlers to window
       window.messageHandlers = this.engine.messageBus.handlers;
 
+      // A remote session that already has a script (an agent built it, or
+      // this tab reloaded) opens on that script — unless the URL carries code.
+      if (this.remote) { this._attachRemoteScript(); }
+
       // Start the application with startup callback behavior
       this.startup = () => {
         let curState = this.console.goldenContainer?.getState();
@@ -405,6 +409,34 @@ class CascadeStudioApp {
     window.addEventListener('resize', this._updateLayoutSize);
     window.addEventListener('orientationchange', this._updateLayoutSize);
     requestAnimationFrame(this._updateLayoutSize);
+  }
+
+  /** Remote-session mode: load the session's script and follow it — an
+   *  agent working on the same session over MCP changes it, and the editor
+   *  shows the change (re-evaluating: unchanged ops are cache hits). */
+  _attachRemoteScript() {
+    const urlHasCode = new URLSearchParams(window.location.search).has('code');
+    const initial = this.engine.initialScript;
+    if (initial && !urlHasCode) {
+      this.editor.setCode(initial.code);
+      this.engine.knownRev = initial.rev;
+      this.engine.syncedCode = initial.code;
+      setTimeout(() => console.log('Opened session ' + this.engine.sessionId + ' (script rev ' + initial.rev
+        + (initial.source ? ', last changed in the ' + initial.source : '') + ')'), 0);
+    }
+    this.engine.startScriptSync({
+      getCode: () => this.editor.getCode(),
+      apply: (code, rev, source) => {
+        this.editor.setCode(code);
+        this.engine.syncedCode = this.editor.getCode();
+        console.log('The session script changed' + (source ? ' (by the ' + source + ')' : '') + ': rev ' + rev);
+        this.editor.evaluateCode();
+      },
+      conflict: (rev, source) => {
+        console.log('The session script changed' + (source ? ' (by the ' + source + ')' : '') + ' to rev ' + rev
+          + ' while this editor has unsaved edits. Evaluate to keep yours; reload to take theirs.');
+      },
+    });
   }
 
   /** Remote-session mode: Python is the only language, and importing files

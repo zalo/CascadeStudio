@@ -1,7 +1,8 @@
 // cascade-headless on Cloudflare Workers — EDITING SESSIONS (`--env session`):
 // one Durable Object per session id keeps a build123d-lite engine warm, with
 // cascade-core's stable cross-run op cache, and persists the cached working
-// set in its SQLite storage. Routes and design: ./session.js.
+// set in its SQLite storage. Routes and design: ./session.js. The same
+// Worker serves the editor (EDITOR.md) and an MCP endpoint, /mcp (MCP.md).
 //
 // Same assets as the lite entry (src/index.js). The stable cache is a
 // build123d-LITE feature (lite's kernel ops go through the worker's
@@ -10,6 +11,8 @@
 
 import { createWorker } from './app.js';
 import { createSession } from './session.js';
+import { createMcpHandler } from './mcp.js';
+import { createApp } from './auth.js';
 
 import occtWasm from '../assets/cascadestudio.wasm';
 import micropythonWasm from '../assets/micropython-cs.wasm';
@@ -32,7 +35,9 @@ const worker = createWorker({
 });
 
 const session = createSession(worker, { flavor: 'lite', bundleId });
+// POST /mcp: the sessions as MCP tools (mcp.js), behind auth.js
+const mcp = createMcpHandler({ callSessionTool: session.callSessionTool });
 
 export class EditSession extends session.EditSession {}
 
-export default { fetch: session.fetch };
+export default createApp({ session, mcp });

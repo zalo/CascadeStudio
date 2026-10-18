@@ -93,8 +93,51 @@ class RemoteCascadeEngine {
     return this._endpoint + '/session/' + encodeURIComponent(this._sessionId) + action;
   }
 
-  /** Nothing to load: the engine lives in the session. */
-  async init() { this._ready = true; }
+  /** Nothing to load — the engine lives in the session — but the session
+   *  may already have a script (an agent built it over MCP, or this tab
+   *  reloaded): `initialScript` is {rev, code, source} or null. */
+  async init() {
+    this.initialScript = null;
+    this.knownRev = 0;
+    try {
+      const resp = await fetch(this._url('/script'));
+      if (resp.ok) {
+        const s = await resp.json();
+        if (s && s.rev > 0 && typeof s.code === 'string' && s.code.trim()) {
+          this.initialScript = { rev: s.rev, code: s.code, source: s.source };
+        }
+      }
+    } catch (e) { /* no session yet, or offline: start from the starter */ }
+    this._ready = true;
+  }
+
+  /** Follow the session script while the page is open: an agent's change
+   *  (MCP) is applied when the editor holds nothing unsaved since the last
+   *  sync, otherwise reported once. Every `intervalMs` while the tab is
+   *  visible and idle.
+   *  @param {{getCode: () => string, apply: (code, rev, source) => void,
+   *           conflict: (rev, source) => void}} o */
+  startScriptSync({ getCode, apply, conflict, intervalMs = 4000 }) {
+    if (this._syncTimer) { return; }
+    let reported = 0;
+    this._syncTimer = setInterval(async () => {
+      if (this._working || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) { return; }
+      let s;
+      try { s = await (await fetch(this._url('/script?rev=' + this.knownRev))).json(); }
+      catch (e) { return; }
+      if (!s || !(s.rev > this.knownRev) || typeof s.code !== 'string' || this._working) { return; }
+      if (getCode() === this.syncedCode) {
+        this.knownRev = s.rev;
+        this.syncedCode = s.code;
+        apply(s.code, s.rev, s.source);
+      } else if (reported !== s.rev) {
+        reported = s.rev;
+        conflict(s.rev, s.source);
+      }
+    }, intervalMs);
+  }
+
+  stopScriptSync() { clearInterval(this._syncTimer); this._syncTimer = null; }
 
   /** POST `body` to a framed session route. Streamed meshes arrive as
    *  MESH batches (each handed to `onBatch` as it lands, references resolved
@@ -242,6 +285,11 @@ class RemoteCascadeEngine {
     endProgress();
     const { result, mesh, meshStats, meshBytes, wireBytes } = got;
     const wallMs = Math.round(performance.now() - t0);
+    // this evaluation's code is now the session script
+    if (result.session && result.session.scriptRev) {
+      this.knownRev = result.session.scriptRev;
+      this.syncedCode = code;
+    }
 
     for (const line of result.logs || []) { this._emit('log', line); }
     for (const message of result.errors || []) {

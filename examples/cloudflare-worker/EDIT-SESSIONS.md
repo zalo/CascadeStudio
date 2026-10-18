@@ -5,7 +5,7 @@ session id holds a build123d-lite engine whose op cache survives between
 edits, so an edit recomputes only what it changed — and the cached working
 set is persisted in the object's SQLite storage, so it survives eviction too.
 The same Worker serves the CascadeStudio editor on top of it at `/`
-([EDITOR.md](EDITOR.md)).
+([EDITOR.md](EDITOR.md)) and the sessions as MCP tools at `/mcp` ([MCP.md](MCP.md)).
 
 ```bash
 npm run dev:session          # prepare-assets + wrangler dev --env session
@@ -19,6 +19,9 @@ BASE=http://127.0.0.1:8787 node scripts/session-bench.mjs --models mount,plate16
 | `POST /session/<id>/render` | `{code, formats, measure?, maxDeviation?, gui?}` → the `/render` JSON plus `cache` (hits/misses/volatile) and `session` (warm?, restore, server phase timings, the previous render's post-response work); with `"mesh"` among the formats, a framed stream with the binary viewport mesh ([EDITOR.md](EDITOR.md)) |
 | `POST /session/<id>/history` | `{step, maxDeviation?}` → frames: one timeline step of the last render, meshed |
 | `POST /session/<id>/export` | `{format: step\|brep\|stl}` → the last render's shape as text |
+| `GET /session/<id>/script` | the session script `{rev, source, code}` (the editor opens on it and follows it; `?rev=` omits an unchanged text) |
+| `POST /session/<id>/tools/<name>`, `GET /session/<id>/view.png` | the MCP tools over plain HTTP ([MCP.md](MCP.md)) |
+| `GET /session/<id>/files/<id>/<name>` | an exported file, for `FILE_TTL_S` |
 | `GET /session/<id>` | instance, isolate, keep-warm, storage (snapshot size/rows), memory |
 | `POST /session/<id>/evict` | drop the in-memory working set — the next render restores from storage (test hook) |
 | `DELETE /session/<id>` | forget the session |

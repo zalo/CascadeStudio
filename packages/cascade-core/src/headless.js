@@ -35,6 +35,9 @@
 import './worker/GlobalSelf.js';
 import { CascadeStudioWorker } from './worker/CascadeWorker.js';
 import { IncrementalMesher } from './worker/IncrementalMesher.js';
+import { renderMeshImage, viewBasis, VIEWS } from './headless/MeshRaster.js';
+import { encodePNG } from './headless/PngEncode.js';
+import { encodeGLB } from './headless/GlbEncode.js';
 import { toArrayBuffer } from './worker/WasmAssets.js';
 
 /** Message types that carry a GUI widget registration. The widget functions
@@ -458,6 +461,205 @@ export async function createHeadlessCascade(options = {}) {
 
     /** The incremental mesher's cache: {clear(), stats(), liveIds()}. */
     meshCache: mesher,
+
+    /** The whole kept scene, meshed (meshScene() drained):
+     *  {faces, edges, shapeLines, stats} or null. */
+    meshSceneAll(o = {}) {
+      const m = engine.meshScene(o);
+      if (!m) { return null; }
+      const faces = []; const edges = [];
+      let stats = null;
+      for (;;) {
+        const { value, done } = m.batches.next();
+        if (done) { stats = value; break; }
+        faces.push(...value.faces);
+        edges.push(...value.edges);
+      }
+      faces.sort((a, b) => a.slot - b.slot);
+      edges.sort((a, b) => a.slot - b.slot);
+      return { faces, edges, shapeLines: m.shapeLines, stats };
+    },
+
+    /** A PNG of the kept scene (software-rendered: MeshRaster.js).
+     *  Options: view ('iso', 'front', 'top', ...) or azimuth/elevation,
+     *  width/height, shapes/highlight (scene-shape indices), edges,
+     *  labels, maxDeviation. Resolves {png, width, height, view, scale}. */
+    async renderPNG(o = {}) {
+      const mesh = o.mesh || engine.meshSceneAll({ maxDeviation: o.maxDeviation });
+      if (!mesh || !mesh.faces.length) {
+        throw new Error('renderPNG: the scene is empty — nothing to draw');
+      }
+      const img = renderMeshImage(mesh, o);
+      return { png: await encodePNG(img.width, img.height, img.rgb), width: img.width,
+        height: img.height, view: img.view, scale: img.scale };
+    },
+
+    /** Binary glTF of the kept scene (one node per scene shape, metres,
+     *  Y up). */
+    exportGLB(o = {}) {
+      const mesh = o.mesh || engine.meshSceneAll({ maxDeviation: o.maxDeviation });
+      if (!mesh || !mesh.faces.length) { throw new Error('exportGLB: the scene is empty'); }
+      return encodeGLB(mesh, o);
+    },
+
+    /** A hidden-line drawing of the current shape as SVG (HLRBRep, exact).
+     *  Options: view or azimuth/elevation, width/height (px), hidden (draw
+     *  hidden lines dashed, default true), deflection. Lines are in the
+     *  view plane, X to the right, Y up, fitted to the canvas. */
+    drawingSVG(o = {}) {
+      const shape = requireShape('drawingSVG');
+      const o2 = oc();
+      const preset = VIEWS[o.view] || VIEWS.iso;
+      const az = Number.isFinite(o.azimuth) ? o.azimuth : preset[0];
+      const el = Number.isFinite(o.elevation) ? o.elevation : preset[1];
+      const { toEye, right } = viewBasis(az, el);
+      const dev = o.deflection || 0.05;
+      const keep = [];
+      const hlr = new o2.HLRBRep_Algo_1();
+      hlr.Add_2(shape, 0);
+      const ax2 = new o2.gp_Ax2_2(new o2.gp_Pnt_3(0, 0, 0), new o2.gp_Dir_5(toEye[0], toEye[1], toEye[2]),
+        new o2.gp_Dir_5(right[0], right[1], right[2]));
+      hlr.Projector_1(new o2.HLRAlgo_Projector_2(ax2));
+      hlr.Update();
+      hlr.Hide_1();
+      const toShape = new o2.HLRBRep_HLRToShape(new o2.Handle_HLRBRep_Algo_2(hlr));
+      const collect = (getters) => {
+        const lines = [];
+        for (const get of getters) {
+          let c = null;
+          try { c = toShape[get](); } catch (e) { c = null; }
+          if (!c || c.IsNull()) { continue; }
+          keep.push(c);
+          try { o2.BRepLib.BuildCurves3d_2(c); } catch (e) { /* already 3-D */ }
+          const ex = new o2.TopExp_Explorer_2(c, o2.TopAbs_ShapeEnum.TopAbs_EDGE, o2.TopAbs_ShapeEnum.TopAbs_SHAPE);
+          for (; ex.More(); ex.Next()) {
+            const edge = o2.TopoDS_Cast.Edge_1(ex.Current());
+            let curve = null; let defl = null;
+            try {
+              curve = new o2.BRepAdaptor_Curve_2(edge);
+              defl = new o2.GCPnts_TangentialDeflection_2(curve, dev, 0.1, 2, 1.0e-9, 1.0e-7);
+              const pts = [];
+              for (let j = 1; j <= defl.NbPoints(); j++) {
+                const p = defl.Value(j);
+                pts.push([p.X(), p.Y()]);
+                p.delete();
+              }
+              if (pts.length > 1) { lines.push(pts); }
+            } catch (e) { /* an edge HLR left without geometry */ }
+            try { if (defl) { defl.delete(); } if (curve) { curve.delete(); } } catch (e) { /* best effort */ }
+          }
+          ex.delete();
+        }
+        return lines;
+      };
+      const visible = collect(['VCompound_1', 'Rg1LineVCompound_1', 'OutLineVCompound_1']);
+      const hidden = o.hidden === false ? [] : collect(['HCompound_1', 'OutLineHCompound_1']);
+      for (const k of keep) { try { k.delete(); } catch (e) { /* best effort */ } }
+      try { toShape.delete(); hlr.delete(); } catch (e) { /* owned by the handle */ }
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const l of visible.concat(hidden)) {
+        for (const [x, y] of l) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      }
+      const W = o.width || 800; const H = o.height || 600; const m = 30;
+      const sc = Math.min((W - 2 * m) / Math.max(x1 - x0, 1e-9), (H - 2 * m) / Math.max(y1 - y0, 1e-9));
+      const tx = (x) => (m + (x - x0) * sc + (W - 2 * m - (x1 - x0) * sc) / 2).toFixed(2);
+      const ty = (y) => (H - m - (y - y0) * sc - (H - 2 * m - (y1 - y0) * sc) / 2).toFixed(2);
+      const path = (l) => 'M' + l.map(([x, y]) => tx(x) + ' ' + ty(y)).join('L');
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H
+        + '" viewBox="0 0 ' + W + ' ' + H + '"><rect width="100%" height="100%" fill="white"/>'
+        + (hidden.length ? '<path fill="none" stroke="#9aa0a6" stroke-width="0.8" stroke-dasharray="4 3" d="'
+          + hidden.map(path).join('') + '"/>' : '')
+        + '<path fill="none" stroke="#1d2125" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="'
+        + visible.map(path).join('') + '"/></svg>';
+      return { svg, visible: visible.length, hidden: hidden.length, scale: sc,
+        size: [x1 - x0, y1 - y0], view: { azimuth: az, elevation: el } };
+    },
+
+    /** Per scene shape (run({keepScene: true}); otherwise the combined
+     *  shape): type, topology counts, volume, area, bounding box, centre of
+     *  mass, and validity (BRepCheck_Analyzer). `{quick: true}`: type,
+     *  solids/faces, volume and a FAST bounding box (BRepBndLib::Add, gap
+     *  removed: tight for analytic surfaces, may overshoot a B-spline's
+     *  control hull) — the exact one (AddOptimal) took 3.5 s of 3.5 s on
+     *  heat_exchanger. `{exactBox: false}` gives the full inspection with
+     *  the fast box. */
+    inspectShapes(o = {}) {
+      const exactBox = o.quick ? false : o.exactBox !== false;
+      const o2 = oc();
+      const S = globalThis.self;
+      const shapes = state.scene && state.scene.length ? state.scene
+        : (S.currentShape ? [S.currentShape] : []);
+      const TYPES = ['Compound', 'CompSolid', 'Solid', 'Shell', 'Face', 'Wire', 'Edge', 'Vertex', 'Shape'];
+      // unique sub-shapes: the explorer visits a shared edge once per face
+      const count = (shape, kind) => {
+        const buckets = new Map();
+        const held = [];
+        let n = 0;
+        const ex = new o2.TopExp_Explorer_2(shape, o2.TopAbs_ShapeEnum[kind], o2.TopAbs_ShapeEnum.TopAbs_SHAPE);
+        for (; ex.More(); ex.Next()) {
+          const cur = ex.Current();
+          const h = o2.OCJS.HashCode(cur, 100000000);
+          const bucket = buckets.get(h);
+          if (bucket && bucket.some((b) => b.IsSame(cur))) { cur.delete(); continue; }
+          if (bucket) { bucket.push(cur); } else { buckets.set(h, [cur]); }
+          held.push(cur);
+          n++;
+        }
+        ex.delete();
+        for (const c of held) { c.delete(); }
+        return n;
+      };
+      const r6 = (v) => Math.round(v * 1e6) / 1e6;
+      return shapes.map((shape, index) => {
+        const out = { index, line: (shape && shape.producingLine) || null };
+        try {
+          if (!shape || shape.IsNull()) { return Object.assign(out, { error: 'null shape' }); }
+          out.type = TYPES[shape.ShapeType().value] || 'Shape';
+          out.solids = count(shape, 'TopAbs_SOLID');
+          const fastBox = () => {
+            const box = new o2.Bnd_Box_1();
+            o2.BRepBndLib.Add(shape, box, false);
+            if (!box.IsVoid()) {
+              box.SetGap(0);
+              out.bbox = [box.GetXMin(), box.GetYMin(), box.GetZMin(), box.GetXMax(), box.GetYMax(), box.GetZMax()].map(r6);
+            }
+            box.delete();
+          };
+          if (o.quick) {
+            out.faces = count(shape, 'TopAbs_FACE');
+            out.volume = out.solids > 0 ? r6(S.SolidsVolume(shape)) : 0;
+            fastBox();
+            return out;
+          }
+          out.shells = count(shape, 'TopAbs_SHELL');
+          out.faces = count(shape, 'TopAbs_FACE');
+          out.edges = count(shape, 'TopAbs_EDGE');
+          out.vertices = count(shape, 'TopAbs_VERTEX');
+          const props = new o2.GProp_GProps_1();
+          if (out.solids > 0) {
+            out.volume = r6(S.SolidsVolume(shape));
+            o2.BRepGProp.VolumeProperties_1(shape, props, false, false, false);
+          } else {
+            out.volume = 0;
+            if (out.faces > 0) { o2.BRepGProp.SurfaceProperties_1(shape, props, false, false); }
+            else { o2.BRepGProp.LinearProperties(shape, props, false, false); }
+          }
+          out.area = r6(S.SurfaceArea(shape));
+          const c = props.CentreOfMass();
+          out.centerOfMass = [r6(c.X()), r6(c.Y()), r6(c.Z())];
+          c.delete(); props.delete();
+          if (exactBox) {
+            const bb = S.BoundingBox(shape, 0.1);
+            if (bb) { out.bbox = bb.map(r6); }
+          } else { fastBox(); }
+          out.bboxMethod = exactBox ? 'exact' : 'fast';
+          const check = new o2.BRepCheck_Analyzer(shape, true, false, false);
+          out.valid = !!check.IsValid_2();
+          check.delete();
+        } catch (e) { out.error = (e && e.message) || String(e); }
+        return out;
+      });
+    },
 
     /** How many times the kernel has been rewound to its boot image (by
      *  reset()/resetKernel(), or by an export healing a damaged heap). */
