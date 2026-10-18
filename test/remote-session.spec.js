@@ -121,6 +121,45 @@ show(plate)
   expect(await page.evaluate(() => window.threejsViewport.mainObject.visible)).toBe(true);
 });
 
+/** The MCP endpoint next to the editor's session API (an agent's view). */
+function mcpEndpoint() {
+  const url = new URL(REMOTE_URL);
+  return (url.searchParams.get('server') || url.origin).replace(/\/+$/, '') + '/mcp';
+}
+async function mcp(name, args) {
+  const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' };
+  if (process.env.CS_MCP_KEY) { headers.authorization = 'Bearer ' + process.env.CS_MCP_KEY; }
+  const resp = await fetch(mcpEndpoint(), { method: 'POST', headers,
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }) });
+  const j = await resp.json();
+  return { isError: !!j.result.isError, text: j.result.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n') };
+}
+
+test('an agent and the editor share one session over MCP', async ({ page }) => {
+  const sid = 'pw-mcp-' + Date.now().toString(36);
+  const made = await mcp('set_script', { session: sid, code: BOX });
+  expect(made.isError).toBe(false);
+  // the editor opens on the agent's script and renders it
+  const url = new URL(REMOTE_URL);
+  url.searchParams.set('session', sid);
+  await page.goto(url.href);
+  await page.waitForFunction(() => window.CascadeAPI && window.CascadeAPI.isReady(), { timeout: 60000 });
+  await page.waitForFunction(() => !window.CascadeAPI.isWorking() && window.threejsViewport._shapeLines.length === 1,
+    { timeout: 120000 });
+  expect(await page.evaluate(() => window.CascadeAPI.getCode())).toBe(BOX);
+  // the agent changes it; the open editor follows and re-renders
+  const appended = await mcp('execute', { session: sid, code: 'marker = Pos(40, 0, 0) * Box(4, 4, 4)\nshow(p.part, marker)' });
+  expect(appended.isError).toBe(false);
+  await page.waitForFunction(() => window.CascadeAPI.getCode().includes('marker = Pos(40, 0, 0)'), { timeout: 20000 });
+  await page.waitForFunction(() => !window.CascadeAPI.isWorking() && window.threejsViewport._shapeLines.length === 2,
+    { timeout: 60000 });
+  // the person edits and evaluates; the agent sees it
+  await page.evaluate(() => window.CascadeAPI.runCode(window.CascadeAPI.getCode().replace('Box(40, 30, 10)', 'Box(46, 30, 10)')));
+  const seen = await mcp('get_script', { session: sid });
+  expect(seen.text).toMatch(/last changed by the editor/);
+  expect(seen.text).toMatch(/Box\(46, 30, 10\)/);
+});
+
 test('Python errors land on their source line', async ({ page }) => {
   await gotoSession(page);
   const { result } = await run(page, BOX + 'p.part.no_such_method()\n');

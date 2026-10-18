@@ -177,6 +177,21 @@ main = "src/index-session.js"
 [env.session.vars]
 COMPACT_AT_MB = "48"
 KEEP_WARM_MS = "0"
+# MCP (MCP.md): per-session limits and how long exported files are kept.
+# MCP_ACCESS_KEY is a secret (`wrangler secret put MCP_ACCESS_KEY --env
+# session`; locally `--var MCP_ACCESS_KEY:...`): without it /mcp is open.
+MCP_CALLS_PER_MIN = "60"
+MCP_CALLS_PER_DAY = "3000"
+FILE_TTL_S = "3600"
+
+# OAuth for claude.ai connectors (auth.js): grants and tokens live in KV.
+# Create the namespace once and put its id here:
+#   npx wrangler kv namespace create OAUTH_KV --env session
+# (`wrangler dev` simulates KV locally whatever the id.) OAuth is only
+# active when MCP_ACCESS_KEY is set too.
+[[env.session.kv_namespaces]]
+binding = "OAUTH_KV"
+id = "00000000000000000000000000000000"
 
 # The editor (scripts/prepare-editor.cjs): served ahead of the Worker, so
 # /session/* (never a file) still reaches it.
