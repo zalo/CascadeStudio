@@ -36,7 +36,7 @@
 //    exist as builtins (math, json, os, random) are imported under an alias
 //    and remapped via sys.modules; the rest import normally from /lib.
 
-import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
+import { BUILD123D_LITE_PY, PY_SHIM_MODULES, LAZY_PY_MODULES } from './Build123dLite.js';
 import { bootstrapUpstreamB123d, ACTIVE_UPSTREAM_VENDOR,
   rewriteListConcatCoercion } from './UpstreamB123d.js';
 import { instantiateWasmSpec } from './WasmAssets.js';
@@ -224,7 +224,7 @@ _BUILTIN_CONFLICTS = ('math', 'json', 'os', 'random', 'io', 'time', 're',
                       'collections', 'struct', 'errno')
 import os as _os
 
-def _cs_register_module(name, src, is_package):
+def _cs_register_module(name, src, is_package, lazy=False):
     parts = name.split('.')
     if len(parts) == 1 and name in _BUILTIN_CONFLICTS:
         alias = '_cs_alias_' + name
@@ -251,6 +251,8 @@ def _cs_register_module(name, src, is_package):
         path = d + '/' + parts[-1] + '.py'
     with open(path, 'w') as fh:
         fh.write(src)
+    if lazy:
+        return    # imported (compiled) on first use
     mod = __import__(name)
     # __import__('a.b') returns a; make sure the submodule itself is bound
     if len(parts) > 1:
@@ -526,7 +528,7 @@ async function _bootstrap(srcKind) {
   for (const name of shimNames) {
     const isPackage = shimNames.some((k) => k.indexOf(name + '.') === 0);
     try {
-      br._cs_register_module(name, PY_SHIM_MODULES[name], isPackage);
+      br._cs_register_module(name, PY_SHIM_MODULES[name], isPackage, LAZY_PY_MODULES.includes(name));
     } catch (e) {
       console.warn('[pyruntime] micropython: shim module ' + name + ' failed to load: '
         + ((e && e.message) || e));

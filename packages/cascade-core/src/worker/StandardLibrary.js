@@ -16,6 +16,7 @@ import { csEmit } from './Emit.js';
 
 import { CascadeStudioUtils } from './StandardUtils.js';
 import quickhull3d from 'quickhull3d';
+import { encode3MF } from './ThreeMF.js';
 
 // --- CAD API Functions ---
 // These are regular function declarations (NOT class methods) to preserve
@@ -2613,6 +2614,123 @@ function _coneAxisFromRings(surf) {
   return [o, d.map((x) => x / len)];
 }
 
+/** What the _cs_ocp Python shim's BRepAdaptor_Surface reads (the vendored
+ *  build123d_drafting feature finders, Build123dDrafting.js), as one flat
+ *  array: [type, u0, u1, v0, v1, orientation, ...type-specific]. Cylinder:
+ *  r, axis point, axis dir, Position().Direct(); Cone (gp_Cone is unbound —
+ *  _coneAxisFromRings): semi angle (signed like gp_Cone), apex, location,
+ *  dir, ref radius; Sphere: r, centre, Direct(); Torus: R, r, location,
+ *  dir, Direct(). */
+function _csSurfaceInfo(face) {
+  const f = _asFace(face);
+  const surf = new self.oc.BRepAdaptor_Surface_2(f, true);
+  const ST = self.oc.GeomAbs_SurfaceType;
+  const t = surf.GetType();
+  const names = [[ST.GeomAbs_Plane, 'Plane'], [ST.GeomAbs_Cylinder, 'Cylinder'], [ST.GeomAbs_Cone, 'Cone'],
+    [ST.GeomAbs_Sphere, 'Sphere'], [ST.GeomAbs_Torus, 'Torus'], [ST.GeomAbs_BezierSurface, 'BezierSurface'],
+    [ST.GeomAbs_BSplineSurface, 'BSplineSurface'], [ST.GeomAbs_SurfaceOfRevolution, 'SurfaceOfRevolution'],
+    [ST.GeomAbs_SurfaceOfExtrusion, 'SurfaceOfExtrusion'], [ST.GeomAbs_OffsetSurface, 'OffsetSurface']];
+  const name = (names.find((n) => n[0] === t) || [null, 'OtherSurface'])[1];
+  const o = f.Orientation_1();
+  const OR = self.oc.TopAbs_Orientation;
+  const orient = o === OR.TopAbs_FORWARD ? 'FORWARD' : o === OR.TopAbs_REVERSED ? 'REVERSED'
+    : o === OR.TopAbs_INTERNAL ? 'INTERNAL' : 'EXTERNAL';
+  const out = [name, surf.FirstUParameter(), surf.LastUParameter(), surf.FirstVParameter(),
+    surf.LastVParameter(), orient];
+  const xyz = (p) => [p.X(), p.Y(), p.Z()];
+  try {
+    if (name === 'Cylinder') {
+      const c = surf.Cylinder(); const ax = c.Axis();
+      out.push(c.Radius(), ...xyz(ax.Location()), ...xyz(ax.Direction()), c.Position().Direct() ? 1 : 0);
+    } else if (name === 'Cone') {
+      const u0 = out[1], u1 = out[2], v0 = out[3], v1 = out[4];
+      const at = (u, v) => { const p = surf.Value(u, v); return [p.X(), p.Y(), p.Z()]; };
+      const ring = (v) => _circleThrough3(at(u0, v), at(u0 + (u1 - u0) / 3, v), at(u0 + 2 * (u1 - u0) / 3, v));
+      const va = v0 + (v1 - v0) * 0.25, vb = v0 + (v1 - v0) * 0.75;
+      const a = ring(va), b = ring(vb);
+      if (a && b) {
+        const d = [0, 1, 2].map((k) => b[0][k] - a[0][k]);
+        const len = Math.hypot(d[0], d[1], d[2]);
+        const dir = d.map((x) => x / len);
+        const slope = (b[1] - a[1]) / len;               // tan(semi angle), signed
+        const loc = [0, 1, 2].map((k) => a[0][k] + d[k] * (0 - va) / (vb - va));
+        const ref = a[1] + (b[1] - a[1]) * (0 - va) / (vb - va);
+        const tApex = -a[1] / slope;
+        const apex = [0, 1, 2].map((k) => a[0][k] + dir[k] * tApex);
+        out.push(Math.atan(slope), ...apex, ...loc, ...dir, ref);
+      }
+    } else if (name === 'Sphere') {
+      const c = surf.Sphere();
+      out.push(c.Radius(), ...xyz(c.Location()), c.Position().Direct() ? 1 : 0);
+    } else if (name === 'Torus') {
+      const c = surf.Torus(); const ax = c.Axis();
+      out.push(c.MajorRadius(), c.MinorRadius(), ...xyz(ax.Location()), ...xyz(ax.Direction()),
+        c.Position().Direct() ? 1 : 0);
+    }
+  } finally { surf.delete(); }
+  return out;
+}
+
+/** BRepClass3d_SolidClassifier at a point: [state name, on a face] —
+ *  build123d's Solid/Compound.is_inside (IN or on a face) and
+ *  Face.is_inside (on the face). */
+function _csClassify(shape, x, y, z, tol) {
+  const c = new self.oc.BRepClass3d_SolidClassifier_2(shape);
+  const p = new self.oc.gp_Pnt_3(x, y, z);
+  try {
+    c.Perform(p, tol || 1e-6);
+    const st = c.State();
+    const S = self.oc.TopAbs_State;
+    const name = st === S.TopAbs_IN ? 'IN' : st === S.TopAbs_OUT ? 'OUT' : st === S.TopAbs_ON ? 'ON' : 'UNKNOWN';
+    return [name, !!c.IsOnAFace()];
+  } finally { c.delete(); p.delete(); }
+}
+
+/** BRepCheck_Shell::Closed's verdict (unbound here): every non-degenerated
+ *  edge of the shell is used by exactly two face occurrences with OPPOSITE
+ *  orientations (a seam twice in one face counts). True = closed. */
+function _csShellClosed(shell) {
+  const oc = self.oc;
+  const buckets = new Map();
+  const recs = [];
+  const exF = new oc.TopExp_Explorer_2(shell, oc.TopAbs_ShapeEnum.TopAbs_FACE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+  for (; exF.More(); exF.Next()) {
+    const face = exF.Current();
+    const exE = new oc.TopExp_Explorer_2(face, oc.TopAbs_ShapeEnum.TopAbs_EDGE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    for (; exE.More(); exE.Next()) {
+      const e = exE.Current();
+      const fwd = e.Orientation_1() === oc.TopAbs_Orientation.TopAbs_FORWARD;
+      const h = oc.OCJS.HashCode(e, 100000000);
+      let list = buckets.get(h);
+      if (!list) { list = []; buckets.set(h, list); }
+      const rec = list.find((r) => r.edge.IsSame(e));
+      if (rec) { rec.uses++; rec.fwd += fwd ? 1 : 0; e.delete(); continue; }
+      const r = { edge: e, uses: 1, fwd: fwd ? 1 : 0 };
+      list.push(r); recs.push(r);
+    }
+    exE.delete(); face.delete();
+  }
+  exF.delete();
+  let closed = true;
+  for (const r of recs) {
+    if (closed && !(r.uses === 2 && r.fwd === 1)) {
+      const edge = oc.TopoDS_Cast.Edge_1(r.edge);
+      if (!oc.BRep_Tool.Degenerated(edge)) { closed = false; }
+      edge.delete();
+    }
+    r.edge.delete();
+  }
+  return closed;
+}
+
+/** TopoDS_Shape::Orientation() by name (the _cs_ocp shim). */
+function _csOrientation(shape) {
+  const o = shape.Orientation_1();
+  const OR = self.oc.TopAbs_Orientation;
+  return o === OR.TopAbs_FORWARD ? 'FORWARD' : o === OR.TopAbs_REVERSED ? 'REVERSED'
+    : o === OR.TopAbs_INTERNAL ? 'INTERNAL' : 'EXTERNAL';
+}
+
 function _faceAxisOfRotation(face) {
   let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
   let ST = self.oc.GeomAbs_SurfaceType;
@@ -3724,6 +3842,27 @@ function DraftAngleFaces(shape, faces, angleDeg, planeOrigin, planeNormal, keepS
 /** Write the shape as an STL file into the worker's Emscripten MEMFS and
  *  return the file's text content (ASCII) or byte length (binary) — the
  *  engine behind build123d-lite's Mesher/export_stl. */
+/** A 3MF of several shapes into MEMFS (build123d Mesher.write('x.3mf'), no
+ *  lib3mf: ThreeMF.js). `names`/`colors` per shape ('' / [] for none;
+ *  colours as [r, g, b] in 0..1), `unit` a 3MF unit name. Returns the byte
+ *  count, or 0 when nothing could be meshed. */
+function Export3MF(shapes, filename, names, colors, linearDeflection, unit) {
+  const list = Array.from(shapes || []);
+  const objects = list.map((s, i) => {
+    const res = self.ShapeToMesh(s, linearDeflection || 0.1, {}, {}, {}, {});
+    const c = colors && colors[i];
+    const ok = c && c.length === 3 && [0, 1, 2].every((k) => Number.isFinite(Number(c[k])));
+    return { name: (names && names[i] && String(names[i])) || 'object' + (i + 1),
+      color: ok ? [Number(c[0]), Number(c[1]), Number(c[2])] : null, faces: (res && res[0]) || [] };
+  });
+  const out = encode3MF(objects, { unit: unit || 'millimeter' });
+  if (!out.objects) { console.error('Export3MF: nothing could be meshed'); return 0; }
+  const name = String(filename).replace(/^\//, '');
+  try { self.oc.FS.unlink('/' + name); } catch (e) { /* absent */ }
+  self.oc.FS.writeFile('/' + name, out.bytes);
+  return out.bytes.length;
+}
+
 function ExportSTL(shape, filename, linearDeflection, angularDeflection, asciiFormat) {
   if (!shape || shape.IsNull()) { console.error("ExportSTL: input shape is null!"); return null; }
   if (!linearDeflection) { linearDeflection = 1e-3; }
@@ -5133,12 +5272,17 @@ class CascadeStudioStandardLibrary {
     self.FilletWireCorner = FilletWireCorner;
     self._faceRadius = _faceRadius;
     self._faceAxisOfRotation = _faceAxisOfRotation;
+    self._csSurfaceInfo = _csSurfaceInfo;
+    self._csOrientation = _csOrientation;
+    self._csClassify = _csClassify;
+    self._csShellClosed = _csShellClosed;
     self.CircularEdge = CircularEdge;
     self.EdgeIsInterior = EdgeIsInterior;
     self.HLRProject = HLRProject;
     self.SurfaceFromPoints = SurfaceFromPoints;
     self.PipeShellSweep = PipeShellSweep;
     self.ExportSTL = ExportSTL;
+    self.Export3MF = Export3MF;
     self.TessellateWithUVs = TessellateWithUVs;
     self.ExportOBJ = ExportOBJ;
     self.ExportBREP = ExportBREP;
@@ -5210,7 +5354,7 @@ class CascadeStudioStandardLibrary {
    *  state), classes and callbacks are excluded. */
   _deriveKeysOnExports(names) {
     const HIDDEN_INPUTS = new Set(['ImportBREP', 'SaveFile', 'Slider', 'Button',
-      'Checkbox', 'TextInput', 'Dropdown', 'TessellateWithUVs', 'ExportSTL',
+      'Checkbox', 'TextInput', 'Dropdown', 'TessellateWithUVs', 'ExportSTL', 'Export3MF',
       'ExportOBJ', 'ExportBREP', 'ExportSTEP', 'HistRecord', 'HistMerge',
       'HistClassify', 'ForEachSolid', 'ForEachShell', 'ForEachFace',
       'ForEachWire', 'ForEachEdge', 'ForEachVertex', 'Edges', 'Faces']);

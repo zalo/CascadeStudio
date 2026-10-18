@@ -37,21 +37,26 @@ shape and keeps its index; a named list shows its members as `name[0]`, `name[1]
 | `new_session` | a fresh session id and the editor link (also implicit: `execute`/`set_script` without a session start one) |
 | `execute` | append code to the session script and run it all; on error the append is rolled back and the error names its line in the code that was sent, with repair hints. The reply lists the objects and what changed since the last run (volume, faces, size), and warns when code ran but nothing shown changed (a boolean that missed) or a shape lost its volume. A chunk with an unnamed `show()` comments out earlier unnamed one-line `show()` calls. |
 | `set_script` / `get_script` | replace or read the whole script (numbered lines, revision, who changed it last: agent or editor) |
-| `render_view` | a PNG (shaded, edges, silhouettes, axis triad, view + size label) from a named view or an azimuth/elevation; `objects`/`highlight` pick objects by name; `format: "svg"` gives an exact hidden-line drawing as a file, inlined when small |
+| `render_view` | a PNG (shaded, edges, silhouettes, axis triad, view + size label) from a named view or an azimuth/elevation; `objects`/`highlight` pick objects by name; `colors`, `label_objects`, `quality`; `clip_plane`/`clip_at` for a section view; `style: "lines"` for an exact hidden-line PNG, `format: "svg"` for it as a file |
 | `measure` | per object: topology counts, volume, area, bounding box, centre of mass, validity; for up to four objects the face inventory (surface types with diameters, axes, angles) and the inertia tensor; with `density` or `material` the mass and inertia in g·mm² |
-| `validate` | the validity gate: PASS/FAIL. Each object must be valid to BRepCheck, a closed manifold solid (no open or non-manifold edges) with positive volume, and its solids must not overlap. Warnings for disjoint solids and for separate objects that interpenetrate. |
+| `validate` | the validity gate: PASS/FAIL. Each object must be valid to BRepCheck, a closed manifold solid (no open or non-manifold edges) with positive volume, its solids must not overlap, and its welded tessellation must have no non-manifold edges. Warnings for disjoint solids and for separate objects that interpenetrate. |
 | `locate_gate_defects` | where the gate fails: edge midpoints, overlapping solid pairs, BRepCheck failures, each with a hint |
 | `compare` | `fit` (clearance; apart / touching / containing / interpenetrating; overlap volumes), `align` (flush / center / clearance along an axis), `shape` (deltas and the exact volume added and removed), `snapshot` (a saved snapshot against now, per object) |
 | `resolve` | what a selector picks on an object (`".faces().sort_by(Axis.Z)[-1]"`): type, size, true centre, normal or axis and radius; labels are kept |
 | `design_audit` | the script's top-level numeric parameters, each rebuilt at ±10% and gated: robust, brittle, coupling or inconclusive |
+| `find_holes`, `find_hole_patterns`, `find_bosses`, `find_bored_bosses`, `find_countersinks` | feature recognition (build123d-drafting-helpers' finders, vendored into lite): holes with depth, bottom and counterbores; bolt circles, arrays, grids; bosses; countersinks |
+| `analyze_printability` | FDM checks (augura, vendored): overhangs, watertight, tip-over, brim, min feature, thin walls, bed fit |
+| `cross_sections` | exact section areas along an axis, with regions and holes per slice |
+| `import_cad_file` | a STEP or BREP file from a URL or as text, kept with the session and shown as a named object |
+| `health_check`, `destroy_session` | engine and session status; delete the session (`confirm: true`) |
 | `repair_hints` | fix suggestions for an error text |
-| `export` | `step`, `brep` (exact), `stl` (mesh), `glb` (mesh, metres, Y up), `svg` (drawing) → a download URL, kept `FILE_TTL_S` (1 h) |
+| `export` | `step`, `brep` (exact), `stl` (mesh), `glb` (mesh, metres, Y up), `svg`/`dxf` (exact projection) → a download URL, kept `FILE_TTL_S` (1 h); one object with `object_name`; 3-D formats report the gate, `strict` refuses a FAIL |
 | `session_state` / `last_error` | the overview (script, last run, snapshots, files, editor link) / the error with surrounding lines |
 | `save_snapshot` / `restore_snapshot` | named copies of the script |
 | `reset` | empty the script |
 | `open_in_editor` | the CascadeStudio editor on this session |
 | `workflow_hints` | the workflow guide (also the `build123d://workflow` resource; prompt `start-cad-session`) |
-| resources | `build123d://quickref` and `build123d://selectors` (runnable reference sections adapted from build123d-mcp), `build123d://starter` (one complete script) |
+| resources | `build123d://quickref` and `build123d://selectors` (runnable reference sections adapted from build123d-mcp), `build123d://starter` (one complete script), `build123d://skill/modeling` and `skill/edit` (build123d-mcp's skills, with a note on what differs here) |
 
 Plain HTTP reaches the same tools, for agents with a shell but no MCP client:
 - `POST /session/<id>/tools/<name>` takes the arguments as JSON and returns the MCP result.
@@ -163,9 +168,9 @@ each; placement varies about 1.6×.
 
 ## Limits
 
-- **build123d-lite, not real build123d.** It passes 223 of the 239 corpus scripts. numpy, the drafting module and 3MF are absent, and the tools say so in their errors.
+- **build123d-lite, not real build123d.** It passes 224 of the 239 corpus scripts. numpy and the drafting module are absent, and the tools say so in their errors.
 - **The scene is what `show()` says.** Lite's first `show()` of a run defines the scene and later ones append, and shapes made after a `show()` join the scene too. Named `show()` calls replace by name; for unnamed ones the guidance is one `show()` at the end, and `execute` comments out superseded one-line calls.
-- **The gate is the B-rep gate.** build123d-mcp also tessellates and checks the mesh (self-touching faces that are a valid B-rep); that, the feature finders, printability, cross-sections and per-region surface deviation are the next wave ([BUILD123D-MCP-PORT.md](BUILD123D-MCP-PORT.md)).
+- **The mesh check counts edges, not vertices.** build123d-mcp also flags non-manifold vertices (corner-to-corner touches); the quiddity-based recognition tools need numpy ([BUILD123D-MCP-PORT.md](BUILD123D-MCP-PORT.md)).
 - **Exact drawings are slow on big models.** Hidden-line removal took 11 s locally for heat_exchanger, so it would be several times that on the edge. The polygonal HLR algorithm isn't bound in this OCCT build.
 - **The REST bridge and the editor share the open session API.** Without an access key, anyone who knows a session id can use that session. With a key, the tools need it but the editor's routes don't.
 - **Files live an hour,** in the session's storage, and are deleted with the session.

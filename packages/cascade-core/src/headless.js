@@ -35,10 +35,11 @@
 import './worker/GlobalSelf.js';
 import { CascadeStudioWorker } from './worker/CascadeWorker.js';
 import { IncrementalMesher } from './worker/IncrementalMesher.js';
-import { renderMeshImage, viewBasis, VIEWS } from './headless/MeshRaster.js';
+import { renderMeshImage, renderLineImage, viewBasis, VIEWS } from './headless/MeshRaster.js';
 import { encodePNG } from './headless/PngEncode.js';
 import { encodeGLB } from './headless/GlbEncode.js';
 import * as SA from './headless/ShapeAnalysis.js';
+import { encode3MF } from './worker/ThreeMF.js';
 import { toArrayBuffer } from './worker/WasmAssets.js';
 
 /** Message types that carry a GUI widget registration. The widget functions
@@ -292,7 +293,9 @@ export async function createHeadlessCascade(options = {}) {
    *  statics — see COMPROMISE(kernel-heap-reset)),
    *  carry the shape out as BREP, rewind the kernel and write from the
    *  re-imported copy. Returns {text, healed}. */
-  const exportOrHeal = (what, shape, write) => {
+  // `own`: the shape is the caller's (one object of the scene), so a heal
+  // must not make the recovered copy the combined currentShape
+  const exportOrHeal = (what, shape, write, own = false) => {
     try { return { text: write(shape), healed: false }; }
     catch (firstError) {
       if (!worker.hasKernelImage()) { throw firstError; }
@@ -315,7 +318,7 @@ export async function createHeadlessCascade(options = {}) {
         throw new Error(what + ': recovering the shape through BREP after a '
           + 'kernel-heap reset produced nothing. ' + firstError.message);
       }
-      globalThis.self.currentShape = recovered;
+      if (!own) { globalThis.self.currentShape = recovered; }
       return { text: write(recovered), healed: true };
     }
   };
@@ -495,7 +498,7 @@ export async function createHeadlessCascade(options = {}) {
      *  labels, maxDeviation. Resolves {png, width, height, view, scale}. */
     async renderPNG(o = {}) {
       const mesh = o.mesh || engine.meshSceneAll({ maxDeviation: o.maxDeviation });
-      if (!mesh || !mesh.faces.length) {
+      if (!mesh || (!mesh.faces.length && !(mesh.edges || []).length)) {
         throw new Error('renderPNG: the scene is empty — nothing to draw');
       }
       const img = renderMeshImage(mesh, o);
@@ -503,10 +506,41 @@ export async function createHeadlessCascade(options = {}) {
         height: img.height, view: img.view, scale: img.scale };
     },
 
+    /** The exact hidden-line projection (hlrLines) as a PNG line drawing:
+     *  visible edges solid, hidden ones dashed. Options as hlrLines plus
+     *  width/height/labels/supersample. */
+    async renderLinesPNG(o = {}) {
+      const lines = engine.hlrLines(o);
+      const img = renderLineImage(lines, o);
+      return { png: await encodePNG(img.width, img.height, img.rgb), width: img.width, height: img.height,
+        view: lines.view, scale: img.scale, visible: lines.visible.length, hidden: lines.hidden.length };
+    },
+
+    /** 3MF (ThreeMF.js, no lib3mf) of scene shapes: one welded mesh object
+     *  per shape, named; `o.indices` picks shapes, `o.colors` {index: [r,g,b]}.
+     *  Returns {bytes, objects, triangles}. */
+    export3MF(o = {}) {
+      const scene = sceneShapes();
+      const names = engine.sceneNames();
+      const idx = Array.isArray(o.indices) ? o.indices : scene.map((x, i) => i);
+      const objects = idx.map((i) => {
+        const res = globalThis.self.ShapeToMesh(scene[i], o.maxDeviation || 0.05, {}, {}, {}, {});
+        return { name: names[i] || 'object' + i, color: (o.colors && o.colors[i]) || null, faces: (res && res[0]) || [] };
+      });
+      const out = encode3MF(objects, { unit: 'millimeter' });
+      if (!out.objects) { throw new Error('export3MF: nothing could be meshed'); }
+      return out;
+    },
+
     /** Binary glTF of the kept scene (one node per scene shape, metres,
      *  Y up). */
     exportGLB(o = {}) {
-      const mesh = o.mesh || engine.meshSceneAll({ maxDeviation: o.maxDeviation });
+      let mesh = o.mesh || engine.meshSceneAll({ maxDeviation: o.maxDeviation });
+      if (mesh && Array.isArray(o.indices)) {
+        // only some objects (by scene index)
+        const keep = (x) => o.indices.includes(x.shape_index);
+        mesh = Object.assign({}, mesh, { faces: mesh.faces.filter(keep), edges: (mesh.edges || []).filter(keep) });
+      }
       if (!mesh || !mesh.faces.length) { throw new Error('exportGLB: the scene is empty'); }
       return encodeGLB(mesh, o);
     },
@@ -516,7 +550,56 @@ export async function createHeadlessCascade(options = {}) {
      *  hidden lines dashed, default true), deflection. Lines are in the
      *  view plane, X to the right, Y up, fitted to the canvas. */
     drawingSVG(o = {}) {
-      const shape = requireShape('drawingSVG');
+      const { visible, hidden, view } = engine.hlrLines(o);
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const l of visible.concat(hidden)) {
+        for (const [x, y] of l) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      }
+      const W = o.width || 800; const H = o.height || 600; const m = 30;
+      const sc = Math.min((W - 2 * m) / Math.max(x1 - x0, 1e-9), (H - 2 * m) / Math.max(y1 - y0, 1e-9));
+      const tx = (x) => (m + (x - x0) * sc + (W - 2 * m - (x1 - x0) * sc) / 2).toFixed(2);
+      const ty = (y) => (H - m - (y - y0) * sc - (H - 2 * m - (y1 - y0) * sc) / 2).toFixed(2);
+      const path = (l) => 'M' + l.map(([x, y]) => tx(x) + ' ' + ty(y)).join('L');
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H
+        + '" viewBox="0 0 ' + W + ' ' + H + '"><rect width="100%" height="100%" fill="white"/>'
+        + (hidden.length ? '<path fill="none" stroke="#9aa0a6" stroke-width="0.8" stroke-dasharray="4 3" d="'
+          + hidden.map(path).join('') + '"/>' : '')
+        + '<path fill="none" stroke="#1d2125" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="'
+        + visible.map(path).join('') + '"/></svg>';
+      return { svg, visible: visible.length, hidden: hidden.length, scale: sc,
+        size: [x1 - x0, y1 - y0], view };
+    },
+
+    /** The same projection as DXF (R12, mm, true scale in the view plane):
+     *  layers VISIBLE and HIDDEN (DASHED), one POLYLINE per projected edge. */
+    drawingDXF(o = {}) {
+      const { visible, hidden, view } = engine.hlrLines(o);
+      const g = (code, value) => code + '\n' + value + '\n';
+      const n = (v) => (Math.abs(v) < 1e-12 ? 0 : +v.toFixed(6));
+      const polyline = (l, layer) => g(0, 'POLYLINE') + g(8, layer) + g(66, 1) + g(70, 0)
+        + g(10, 0) + g(20, 0) + g(30, 0)
+        + l.map(([x, y]) => g(0, 'VERTEX') + g(8, layer) + g(10, n(x)) + g(20, n(y)) + g(30, 0)).join('')
+        + g(0, 'SEQEND') + g(8, layer);
+      const ltype = (name, text, pattern) => g(0, 'LTYPE') + g(2, name) + g(70, 0) + g(3, text) + g(72, 65)
+        + g(73, pattern.length) + g(40, pattern.reduce((a, b) => a + Math.abs(b), 0)) + pattern.map((p) => g(49, p)).join('');
+      const layer = (name, color, lt) => g(0, 'LAYER') + g(2, name) + g(70, 0) + g(62, color) + g(6, lt);
+      const dxf = g(0, 'SECTION') + g(2, 'HEADER') + g(9, '$ACADVER') + g(1, 'AC1009') + g(9, '$INSUNITS') + g(70, 4)
+        + g(0, 'ENDSEC')
+        + g(0, 'SECTION') + g(2, 'TABLES')
+        + g(0, 'TABLE') + g(2, 'LTYPE') + g(70, 2) + ltype('CONTINUOUS', 'Solid line', []) + ltype('DASHED', '__ __ __', [3, -1.5])
+        + g(0, 'ENDTAB')
+        + g(0, 'TABLE') + g(2, 'LAYER') + g(70, 2) + layer('VISIBLE', 7, 'CONTINUOUS') + layer('HIDDEN', 8, 'DASHED')
+        + g(0, 'ENDTAB') + g(0, 'ENDSEC')
+        + g(0, 'SECTION') + g(2, 'ENTITIES')
+        + visible.map((l) => polyline(l, 'VISIBLE')).join('') + hidden.map((l) => polyline(l, 'HIDDEN')).join('')
+        + g(0, 'ENDSEC') + g(0, 'EOF');
+      return { dxf, visible: visible.length, hidden: hidden.length, view };
+    },
+
+    /** The exact hidden-line projection (HLRBRep) of the current shape, or
+     *  of `o.shape`: polylines in the view plane (mm), visible and hidden. */
+    hlrLines(o = {}) {
+      const shape = o.shape || requireShape('drawing');
       const o2 = oc();
       const preset = VIEWS[o.view] || VIEWS.iso;
       const az = Number.isFinite(o.azimuth) ? o.azimuth : preset[0];
@@ -565,23 +648,7 @@ export async function createHeadlessCascade(options = {}) {
       const hidden = o.hidden === false ? [] : collect(['HCompound_1', 'OutLineHCompound_1']);
       for (const k of keep) { try { k.delete(); } catch (e) { /* best effort */ } }
       try { toShape.delete(); hlr.delete(); } catch (e) { /* owned by the handle */ }
-      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-      for (const l of visible.concat(hidden)) {
-        for (const [x, y] of l) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
-      }
-      const W = o.width || 800; const H = o.height || 600; const m = 30;
-      const sc = Math.min((W - 2 * m) / Math.max(x1 - x0, 1e-9), (H - 2 * m) / Math.max(y1 - y0, 1e-9));
-      const tx = (x) => (m + (x - x0) * sc + (W - 2 * m - (x1 - x0) * sc) / 2).toFixed(2);
-      const ty = (y) => (H - m - (y - y0) * sc - (H - 2 * m - (y1 - y0) * sc) / 2).toFixed(2);
-      const path = (l) => 'M' + l.map(([x, y]) => tx(x) + ' ' + ty(y)).join('L');
-      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H
-        + '" viewBox="0 0 ' + W + ' ' + H + '"><rect width="100%" height="100%" fill="white"/>'
-        + (hidden.length ? '<path fill="none" stroke="#9aa0a6" stroke-width="0.8" stroke-dasharray="4 3" d="'
-          + hidden.map(path).join('') + '"/>' : '')
-        + '<path fill="none" stroke="#1d2125" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="'
-        + visible.map(path).join('') + '"/></svg>';
-      return { svg, visible: visible.length, hidden: hidden.length, scale: sc,
-        size: [x1 - x0, y1 - y0], view: { azimuth: az, elevation: el } };
+      return { visible, hidden, view: { azimuth: az, elevation: el } };
     },
 
     /** Per scene shape (run({keepScene: true}); otherwise the combined
@@ -698,6 +765,17 @@ export async function createHeadlessCascade(options = {}) {
           out.brepValid = !!check.IsValid_2();
           check.delete();
           Object.assign(out, SA.edgeDefects(o2, shape, o.maxDefects || 20));
+          if (o.mesh !== false && solids.length) {
+            const nFaces = SA.subShapes(o2, shape, 'TopAbs_FACE');
+            const tooBig = nFaces.length > (o.meshMaxFaces || 2000);
+            out.meshCheck = tooBig ? 'skipped (' + nFaces.length + ' faces)' : 'done';
+            SA.free(nFaces);
+            if (!tooBig) {
+              const m = SA.meshGate(o2, S, shape, o.maxDeviation || 0.1, o.maxDefects || 20);
+              Object.assign(out, { meshTriangles: m.triangles, meshOpenEdges: m.openEdges,
+                meshNonManifoldEdges: m.nonManifoldEdges, meshDefects: m.defects });
+            }
+          }
           const ov = SA.solidOverlaps(o2, S, solids, { budgetMs });
           out.overlaps = ov.overlaps;
           out.overlapChecked = ov.checked;
@@ -762,11 +840,26 @@ export async function createHeadlessCascade(options = {}) {
       } finally { p.free(); }
     },
 
+    /** Cross-sections of scene shapes along an axis (ShapeAnalysis). */
+    crossSections(indices, axis = 'Z', numSlices = 10) {
+      const p = engine.pickShape(indices);
+      try { return SA.crossSections(oc(), globalThis.self, p.shape, axis, numSlices); }
+      finally { p.free(); }
+    },
+
     /** compare kind='fit': clearance and containment of two scene shapes
      *  (or groups of them). */
     clearance(a, b) {
       const pa = engine.pickShape(a); const pb = engine.pickShape(b);
       try { return SA.clearance(oc(), globalThis.self, pa.shape, pb.shape); }
+      finally { pa.free(); pb.free(); }
+    },
+
+    /** Changed surface regions between two scene shapes (compare
+     *  kind="shape"). */
+    changedRegions(a, b) {
+      const pa = engine.pickShape(a); const pb = engine.pickShape(b);
+      try { return SA.changedRegions(oc(), globalThis.self, pa.shape, pb.shape); }
       finally { pa.free(); pb.free(); }
     },
 
@@ -807,14 +900,14 @@ export async function createHeadlessCascade(options = {}) {
         catch (e) { /* the static is absent in some builds */ }
       };
       if (lean) { setCurveMode(0); }
-      const { text } = exportOrHeal('exportSTEP', requireShape('exportSTEP'),
+      const { text } = exportOrHeal('exportSTEP', o.shape || requireShape('exportSTEP'),
         (shape) => {
           // A heal rewinds OCCT, which resets Interface_Static to its
           // defaults — re-apply inside the writer callback, not around it.
           if (lean) { setCurveMode(0); }
           try { return globalThis.self.ExportSTEP(shape, name, o.unit); }
           finally { if (lean) { setCurveMode(1); } }
-        });
+        }, !!o.shape);
       try { oc().FS.unlink('/' + name); } catch (e) { /* already read back */ }
       if (text == null) { throw new Error('exportSTEP: the STEP writer failed'); }
       return text;
@@ -825,7 +918,7 @@ export async function createHeadlessCascade(options = {}) {
       const name = o.name || DEFAULT_BREP_NAME;
       // No heal path: BREP *is* the carrier, so if BRepTools::Write is the
       // casualty there is nothing to carry the shape out with.
-      const text = globalThis.self.ExportBREP(requireShape('exportBREP'), name);
+      const text = globalThis.self.ExportBREP(o.shape || requireShape('exportBREP'), name);
       try { oc().FS.unlink('/' + name); } catch (e) { /* already read back */ }
       if (text == null) { throw new Error('exportBREP: the BREP writer failed'); }
       return text;
@@ -843,9 +936,9 @@ export async function createHeadlessCascade(options = {}) {
           + '(COMPROMISE(stl-ascii))');
       }
       const name = o.name || DEFAULT_STL_NAME;
-      const { text } = exportOrHeal('exportSTL', requireShape('exportSTL'),
+      const { text } = exportOrHeal('exportSTL', o.shape || requireShape('exportSTL'),
         (shape) => globalThis.self.ExportSTL(shape, name,
-          o.tolerance || 1e-3, o.angularTolerance || 0.1, true));
+          o.tolerance || 1e-3, o.angularTolerance || 0.1, true), !!o.shape);
       try { oc().FS.unlink('/' + name); } catch (e) { /* already read back */ }
       if (text == null) { throw new Error('exportSTL: the STL writer failed'); }
       return text;
@@ -893,6 +986,13 @@ export async function createHeadlessCascade(options = {}) {
     /** STEP/IGES assets a script can pick up with `import_step()`, keyed by
      *  file name (matched on the base name). Same contract as
      *  CascadeAPI.loadExternalFiles in the browser. */
+    /** Forget every external file handed over before (another tenant's
+     *  imports must not reach this one's scripts). */
+    clearExternalFiles() {
+      state.externalFiles = {};
+      globalThis.self.externalShapes = {};
+    },
+
     loadExternalFiles(files) {
       const dict = {};
       for (const [name, content] of Object.entries(files || {})) {

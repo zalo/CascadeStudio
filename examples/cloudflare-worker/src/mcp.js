@@ -17,9 +17,11 @@
 import { SERVER_INFO, TOOLS, INSTRUCTIONS, WORKFLOW, QUICKREF, SELECTORS, STARTER, PROMPTS, RESOURCES,
   promptMessages } from './mcp-tools.js';
 import { repairHints } from './repair-hints.js';
+import { UPSTREAM_SKILLS } from './skills-upstream.js';
 
 const RESOURCE_TEXT = { 'build123d://workflow': WORKFLOW, 'build123d://quickref': QUICKREF,
-  'build123d://selectors': SELECTORS, 'build123d://starter': STARTER };
+  'build123d://selectors': SELECTORS, 'build123d://starter': STARTER,
+  'build123d://skill/modeling': UPSTREAM_SKILLS.modeling, 'build123d://skill/edit': UPSTREAM_SKILLS.edit };
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -59,7 +61,7 @@ export function createMcpHandler(o) {
         + '\nPass "session": "' + id + '" to every call. Open the editor link to watch and edit the model.');
     }
     let sid = args.session;
-    if (sid === undefined && (name === 'execute' || name === 'set_script')) { sid = randomId(); }
+    if (sid === undefined && (name === 'execute' || name === 'set_script' || name === 'import_cad_file')) { sid = randomId(); }
     if (typeof sid !== 'string' || !/^[A-Za-z0-9_.-]{1,64}$/.test(sid)) {
       return textResult('a "session" id is needed (letters, digits, _ . -; up to 64): start one with new_session', true);
     }

@@ -291,6 +291,17 @@ function gateVerdict(g) {
     if (!s.brepValid) { reasons.push(tag + ' fails BRepCheck (invalid topology or geometry)'); }
     if (s.openEdges) { reasons.push(tag + ' has ' + s.openEdges + ' open edge(s): not watertight'); }
     if (s.nonManifoldEdges) { reasons.push(tag + ' has ' + s.nonManifoldEdges + ' non-manifold edge(s) (faces meet >2-ways)'); }
+    if (s.meshNonManifoldEdges) {
+      reasons.push(tag + "'s mesh has " + s.meshNonManifoldEdges + ' non-manifold edge(s): self-touching or coincident faces '
+        + '(a valid B-rep, but strict mesh consumers reject it)');
+    }
+    if (s.meshOpenEdges && !s.openEdges) {
+      warnings.push(tag + "'s mesh has " + s.meshOpenEdges + ' open edge(s) although the B-rep is closed: tessellation '
+        + 'gaps, usually harmless (re-check the exported STL)');
+    }
+    if (typeof s.meshCheck === 'string' && s.meshCheck.startsWith('skipped')) {
+      warnings.push(tag + ': mesh check ' + s.meshCheck + ' — the B-rep checks stand');
+    }
     if (s.solids > 0 && !(s.volume > 0)) { reasons.push(tag + ' has solids but no positive volume'); }
     for (const o of s.overlaps || []) {
       reasons.push(tag + ': solids ' + o.a + ' and ' + o.b + ' overlap (' + o.kind + ', ' + fmt(o.volume)
@@ -433,13 +444,32 @@ function paramVerdict(results) {
   return ['brittle', 'coupling', 'not_a_design_parameter', 'inconclusive', 'robust'].find((v) => seen.has(v));
 }
 
+const NAMED_COLORS = { red: [0.86, 0.24, 0.22], green: [0.30, 0.68, 0.36], blue: [0.26, 0.48, 0.84],
+  orange: [0.98, 0.58, 0.20], yellow: [0.95, 0.82, 0.25], purple: [0.58, 0.40, 0.78], violet: [0.58, 0.40, 0.78],
+  pink: [0.93, 0.55, 0.70], brown: [0.58, 0.40, 0.26], cyan: [0.30, 0.78, 0.84], magenta: [0.82, 0.32, 0.72],
+  gray: [0.62, 0.64, 0.67], grey: [0.62, 0.64, 0.67], black: [0.18, 0.19, 0.21], white: [0.95, 0.95, 0.95],
+  steel: [0.66, 0.70, 0.75], aluminum: [0.80, 0.82, 0.85], aluminium: [0.80, 0.82, 0.85], brass: [0.80, 0.66, 0.30],
+  copper: [0.78, 0.47, 0.30], gold: [0.86, 0.70, 0.28], wood: [0.72, 0.54, 0.36] };
+
+/** A colour name or #rgb / #rrggbb -> [r, g, b] in 0..1 (null if unreadable). */
+function parseColor(v) {
+  if (Array.isArray(v) && v.length === 3) { return v.map((x) => Math.max(0, Math.min(1, Number(x) > 1 ? Number(x) / 255 : Number(x)))); }
+  const t = String(v || '').trim().toLowerCase();
+  if (NAMED_COLORS[t]) { return NAMED_COLORS[t]; }
+  const m = t.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/);
+  if (!m) { return null; }
+  const hex = m[1].length === 3 ? m[1].split('').map((c) => c + c).join('') : m[1];
+  return [0, 2, 4].map((k) => parseInt(hex.slice(k, k + 2), 16) / 255);
+}
+
 const withHints = (text) => {
   const hints = repairHints(text);
   return hints.length ? '\nhints:\n' + hints.map((h) => '- ' + h).join('\n') : '';
 };
 
 const MIME = { step: 'model/step', stl: 'model/stl', brep: 'application/octet-stream',
-  glb: 'model/gltf-binary', svg: 'image/svg+xml' };
+  glb: 'model/gltf-binary', svg: 'image/svg+xml', dxf: 'image/vnd.dxf',
+  '3mf': 'model/3mf' };
 
 /** Tool implementations: `this` is the EditSession, `e` the engine (the
  *  engine lock is held). Throw UserError for the caller's mistakes. */
@@ -484,12 +514,25 @@ const MCP_TOOLS = {
         ? ' (it raised: ' + r.errors[0].split('\n')[0] + ')' : ''));
     }
     const last = this.meta('last') || {};
-    const dev = Number((last.gui && last.gui.MeshRes) || last.maxDeviation) || 0.1;
+    const QUALITY = { preview: [1, 0.3], standard: [2, null], high: [3, 0.03] };
+    const quality = QUALITY[a.quality] ? a.quality : 'standard';
+    const [supersample, qdev] = QUALITY[quality];
+    const baseDev = Number((last.gui && last.gui.MeshRes) || last.maxDeviation) || 0.1;
+    const dev = qdev === null ? baseDev : (quality === 'high' ? Math.min(baseDev, qdev) : Math.max(baseDev, qdev));
     const DIRECTION = { rear: 'back', side: 'right' };
     const view = a.view || (a.direction ? DIRECTION[a.direction] || a.direction : undefined);
+    const shapes = this.quickScene(e);
+    const names = e.sceneNames();
+    const pick = a.objects !== undefined && a.objects !== '' ? a.objects : a.shapes;
+    const only = pick === undefined || pick === '' || (Array.isArray(pick) && !pick.length)
+      ? null : resolveObjects(names, pick);
     if (a.format === 'svg') {
-      const d = e.drawingSVG({ view, azimuth: a.azimuth, elevation: a.elevation,
-        width: a.width, height: a.height, hidden: a.hidden });
+      const p = only ? e.pickShape(only) : null;
+      let d;
+      try {
+        d = e.drawingSVG({ view, azimuth: a.azimuth, elevation: a.elevation, width: a.width, height: a.height,
+          hidden: a.hidden, shape: p ? p.shape : undefined });
+      } finally { if (p) { p.free(); } }
       const f = this.storeFile('drawing-' + (view || 'iso') + '.svg', MIME.svg, new TextEncoder().encode(d.svg));
       const head = 'SVG hidden-line drawing, view az ' + d.view.azimuth + ' el ' + d.view.elevation + ': '
         + d.visible + ' visible and ' + d.hidden + ' hidden lines, ' + fmt(d.size[0]) + ' x ' + fmt(d.size[1])
@@ -498,11 +541,6 @@ const MCP_TOOLS = {
       return { content: [{ type: 'text', text: f.bytes <= 40000 ? head + '\n\n' + d.svg : head
         + '\n(too large to show inline; download it)' }], after: {} };
     }
-    const shapes = this.quickScene(e);
-    const names = e.sceneNames();
-    const pick = a.objects !== undefined && a.objects !== '' ? a.objects : a.shapes;
-    const only = pick === undefined || pick === '' || (Array.isArray(pick) && !pick.length)
-      ? null : resolveObjects(names, pick);
     const highlight = a.highlight === undefined || a.highlight === '' ? undefined : resolveObjects(names, a.highlight);
     const sel = only ? shapes.filter((s) => only.includes(s.index)) : shapes;
     const boxes = sel.map((s) => s.bbox).filter(Boolean);
@@ -513,16 +551,52 @@ const MCP_TOOLS = {
     const preset = VIEWS[view] || VIEWS.iso;
     const az = Number.isFinite(a.azimuth) ? a.azimuth : preset[0];
     const el = Number.isFinite(a.elevation) ? a.elevation : preset[1];
-    const img = await e.renderPNG({ azimuth: az, elevation: el,
-      width: a.width, height: a.height, shapes: only || undefined, highlight, edges: a.edges,
-      maxDeviation: dev, labels: [viewName.toUpperCase() + '  AZ ' + Math.round(az) + ' EL ' + Math.round(el),
-        bb ? [bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2]].map(fmt).join(' × ') + ' MM' : ''] });
+    const sizeLabel = bb ? [bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2]].map(fmt).join(' × ') + ' MM' : '';
+    const notes = [];
+    let clip;
+    if (a.clip_plane) {
+      const axis = 'xyz'.indexOf(String(a.clip_plane).toLowerCase());
+      if (axis < 0) { throw new UserError('clip_plane must be x, y or z'); }
+      const at = Number.isFinite(a.clip_at) ? a.clip_at : (bb ? (bb[axis] + bb[axis + 3]) / 2 : 0);
+      const keep = a.clip_keep === 'above' ? 'above' : 'below';
+      clip = { axis, at, keep };
+      notes.push('clipped at ' + 'XYZ'[axis] + ' = ' + fmt(at) + ' (keeping ' + keep + '; the cut shows red where it passes through material)');
+    }
+    let colors;
+    if (a.colors && typeof a.colors === 'object') {
+      colors = {};
+      for (const [key, value] of Object.entries(a.colors)) {
+        const c = parseColor(value);
+        if (!c) { throw new UserError('colors: cannot read "' + value + '" (a name like "red" or #rrggbb)'); }
+        for (const i of resolveObjects(names, /^\d+$/.test(key) ? Number(key) : key)) { colors[i] = c; }
+      }
+    }
+    const objectLabels = a.label_objects ? Object.fromEntries(sel.map((s) => [s.index, s.name || String(s.index)])) : undefined;
+    if (a.style === 'lines') {
+      const p = only ? e.pickShape(only) : null;
+      let img;
+      try {
+        img = await e.renderLinesPNG({ azimuth: az, elevation: el, width: a.width, height: a.height, supersample,
+          shape: p ? p.shape : undefined, hidden: a.hidden,
+          labels: [viewName.toUpperCase() + ' HIDDEN LINE  AZ ' + Math.round(az) + ' EL ' + Math.round(el), sizeLabel] });
+      } finally { if (p) { p.free(); } }
+      return { content: [
+        { type: 'image', data: toBase64(img.png), mimeType: 'image/png' },
+        { type: 'text', text: 'hidden-line view ' + viewName + ' (azimuth ' + img.view.azimuth + ', elevation '
+          + img.view.elevation + '), exact projection: ' + img.visible + ' visible, ' + img.hidden + ' hidden (dashed) lines, '
+          + img.width + 'x' + img.height + ' px. ' + sel.length + ' object(s); bbox ' + bboxText(bb) },
+      ], after: {} };
+    }
+    const img = await e.renderPNG({ azimuth: az, elevation: el, supersample,
+      width: a.width, height: a.height, shapes: only || undefined, highlight, edges: a.edges, colors, clip, objectLabels,
+      maxDeviation: dev, labels: [viewName.toUpperCase() + '  AZ ' + Math.round(az) + ' EL ' + Math.round(el), sizeLabel] });
     return { content: [
       { type: 'image', data: toBase64(img.png), mimeType: 'image/png' },
       { type: 'text', text: 'view ' + viewName + ' (azimuth ' + img.view.azimuth + ', elevation ' + img.view.elevation
-        + '), orthographic, ' + img.width + 'x' + img.height + ' px, ' + fmt(img.scale) + ' px/mm. '
+        + '), orthographic, ' + img.width + 'x' + img.height + ' px, ' + fmt(img.scale) + ' px/mm, quality ' + quality + '. '
         + sel.length + ' object(s): ' + sel.map(label).join(', ') + '; bbox ' + bboxText(bb)
-        + (highlight ? '; orange: ' + highlight.map((i) => label(shapes[i])).join(', ') : '') },
+        + (highlight ? '; orange: ' + highlight.map((i) => label(shapes[i])).join(', ') : '')
+        + (notes.length ? '; ' + notes.join('; ') : '') },
     ], after: {} };
   },
 
@@ -575,7 +649,8 @@ const MCP_TOOLS = {
       + JSON.stringify({ passes_gate: pass, reasons, warnings: v.warnings,
         objects: g.shapes.map((s) => ({ index: s.index, name: s.name, solids: s.solids, volume: s.volume,
           brep_valid: s.brepValid, open_edges: s.openEdges, nonmanifold_edges: s.nonManifoldEdges,
-          overlaps: s.overlaps, ...(s.error ? { error: s.error } : {}) })),
+          overlaps: s.overlaps, mesh_check: s.meshCheck, mesh_open_edges: s.meshOpenEdges,
+          mesh_nonmanifold_edges: s.meshNonManifoldEdges, ...(s.error ? { error: s.error } : {}) })),
         interference: g.interference }, null, 1)
       + (defects ? '\nlocate_gate_defects gives the coordinates.' : '')
       + (pass ? '' : withHints(reasons.join('\n'))), !pass);
@@ -591,6 +666,8 @@ const MCP_TOOLS = {
       overlap: 'overlapping solids in one object: fuse them (a + b), or show them as separate objects',
       brep_invalid: 'BRepCheck fails: rebuild the last feature differently (smaller fillet, real boolean overlap)',
       no_solid: 'no solid: this object is a sketch, surface or curve',
+      mesh_nonmanifold: 'the tessellation meets >2-ways here: faces touch or coincide; separate them or fuse with real overlap',
+      mesh_open: 'a gap in the tessellation: usually harmless when the B-rep is closed; re-check the exported STL',
     };
     const defects = [];
     for (const s of g.shapes) {
@@ -604,6 +681,10 @@ const MCP_TOOLS = {
       for (const o of s.overlaps || []) {
         defects.push(Object.assign({ kind: 'solid_overlap', solids: [o.a, o.b], volume: o.volume, relation: o.kind,
           hint: HINT.overlap }, obj));
+      }
+      for (const d of s.meshDefects || []) {
+        defects.push(Object.assign({ kind: d.kind, at: d.at, triangles_incident: d.uses,
+          hint: d.kind === 'mesh_nonmanifold_edge' ? HINT.mesh_nonmanifold : HINT.mesh_open }, obj));
       }
     }
     const counts = {};
@@ -650,6 +731,8 @@ const MCP_TOOLS = {
     };
     const da = diag(ia); const db = diag(ib);
     const changed = e.changedVolumes(ia, ib);
+    let regions = null;
+    try { regions = e.changedRegions(ia, ib); } catch (err) { regions = { error: (err && err.message) || String(err) }; }
     const off = da.center && db.center ? fmt(Math.hypot(...[0, 1, 2].map((k) => db.center[k] - da.center[k]))) : null;
     return toolText(JSON.stringify({ a: da, b: db,
       delta: { volume: fmt(db.volume - da.volume), faces: db.faces - da.faces, edges: db.edges - da.edges,
@@ -657,9 +740,12 @@ const MCP_TOOLS = {
       changed: { added_volume: changed.added === null ? null : fmt(changed.added),
         removed_volume: changed.removed === null ? null : fmt(changed.removed) },
       magnitude_method: changed.added === null || changed.removed === null ? 'volume_deltas_only' : 'exact_volume',
+      surface: regions,
       note: 'a to b. added_volume/removed_volume are the exact material in b and not a / in a and not b (booleans). '
-        + 'A tangential move (sliding a hole) can keep every total unchanged: check the centre offset and the face '
-        + 'inventory (measure) too. No per-region surface deviation here.' }, null, 1));
+        + 'surface.regions are the faces that differ, matched on the exact B-rep (type, area, centroid) and grouped '
+        + 'through shared edges: "added" are in b only, "removed" in a only, with max_deviation = how far they sit '
+        + 'from the other shape; a moved feature is a removed region plus an added one. A tangential move can keep '
+        + 'every volume total unchanged — the regions still show it.' }, null, 1));
   },
 
   async resolve(e, a) {
@@ -669,40 +755,64 @@ const MCP_TOOLS = {
     if (!/^[.[]/.test(sel) || /[\n;]/.test(sel)) {
       throw new UserError('selector must be one expression suffix starting with "." or "[", e.g. ".faces().sort_by(Axis.Z)[-1]"');
     }
-    const sc = this.script();
-    if (!sc.code.trim()) { throw new UserError('the session script is empty'); }
-    const lines = sc.code.replace(/\s*$/, '').split('\n').length;
-    const MARK = '@@cs-resolve@@';
-    const probe = sc.code.replace(/\s*$/, '') + '\nimport build123d as _cs_b\n'
-      + 'try:\n    _cs_obj = _cs_b._cs_shown_object(' + JSON.stringify(obj) + ')\nexcept KeyError as _cs_err:\n'
+    const prelude = 'try:\n    _cs_obj = _cs_b._cs_shown_object(' + JSON.stringify(obj) + ')\nexcept KeyError as _cs_err:\n'
       + (/^[A-Za-z_]\w*$/.test(obj) ? '    _cs_obj = globals()[' + JSON.stringify(obj) + '] if '
-        + JSON.stringify(obj) + ' in globals() else None\n    if _cs_obj is None:\n        raise _cs_err\n' : '    raise _cs_err\n')
-      + 'print(' + JSON.stringify(MARK) + ' + _cs_b._cs_describe(_cs_obj' + sel + '))\n';
-    await this.adopt(e);
-    const r = await e.run(withResultShow(probe), { keepScene: true, guiState: {} });
-    this.ranThisCall = true;
-    this.callMisses += r.cache ? r.cache.misses : 1;
-    // the engine now holds the probe, not the script: the next tool re-runs
-    isolate.lastRun = this.lastRun = this.key + ':' + (++isolate.runSeq);
-    this.lastRunRev = null;
-    const out = (r.logs || []).filter((l) => l.startsWith(MARK)).pop();
-    if (!r.ok || !out) {
-      const err = (r.errors || []).join('\n') || 'no result';
-      const n = [...err.matchAll(/File "main", line (\d+)/g)].map((m) => Number(m[1])).pop() || 0;
-      throw new UserError((n > lines ? 'the selector raised' : 'the script raised (fix it first)') + ': '
-        + err.split('\n').filter((l) => !/File "main", line/.test(l)).join('\n').trim().split('\n').pop()
-        + withHints(err));
-    }
-    const desc = JSON.parse(out.slice(MARK.length));
+        + JSON.stringify(obj) + ' in globals() else None\n    if _cs_obj is None:\n        raise _cs_err\n' : '    raise _cs_err\n');
+    const desc = await this.runProbe(e, prelude, '_cs_b._cs_describe(_cs_obj' + sel + ')', 'the selector');
     const ref = '@cad[' + obj + (a.label ? '#' + a.label : '') + ']';
     const res = Object.assign({ label: a.label || null, ref, object: obj, selector: sel }, desc);
     if (a.label) {
       const refs = this.meta('refs') || {};
-      refs[a.label] = { ref, object: obj, selector: sel, rev: sc.rev, type: desc.type,
+      refs[a.label] = { ref, object: obj, selector: sel, rev: this.script().rev, type: desc.type,
         center: desc.center || null, count: desc.count };
       this.setMeta('refs', refs);
     }
     return { content: [{ type: 'text', text: JSON.stringify(res, null, 1) }], after: {} };
+  },
+
+  async find_holes(e, a) { return this.findFeatures(e, a, 'holes'); },
+  async find_hole_patterns(e, a) { return this.findFeatures(e, a, 'hole_patterns'); },
+  async find_bosses(e, a) { return this.findFeatures(e, a, 'bosses'); },
+  async find_bored_bosses(e, a) { return this.findFeatures(e, a, 'bored_bosses'); },
+  async find_countersinks(e, a) { return this.findFeatures(e, a, 'countersinks'); },
+
+  async cross_sections(e, a) {
+    const r = await this.ensureScene(e);
+    if (!r.shapeCount) { throw new UserError('nothing to slice: the script shows no shapes'); }
+    const axis = String(a.axis || 'Z').toUpperCase();
+    if (!['X', 'Y', 'Z'].includes(axis)) { throw new UserError('axis must be X, Y or Z'); }
+    const idx = resolveObjects(e.sceneNames(), a.object_name);
+    const n = a.num_slices === undefined ? 10 : Number(a.num_slices);
+    if (!(n >= 2 && n <= 200)) { throw new UserError('num_slices must be 2..200'); }
+    const slices = e.crossSections(idx, axis, n);
+    const areas = slices.map((x) => x.area);
+    return toolText(JSON.stringify({ axis, objects: idx.map((i) => label(this.quickScene(e)[i])),
+      min_area: areas.length ? Math.min(...areas) : 0, max_area: areas.length ? Math.max(...areas) : 0,
+      slices }, null, 1));
+  },
+
+  async analyze_printability(e, a) {
+    const num = (v, d, what) => {
+      if (v === undefined || v === null || v === '') { return d; }
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0) { throw new UserError(what + ' must be a non-negative number'); }
+      return n;
+    };
+    let bv = 'None';
+    if (a.build_volume !== undefined && a.build_volume !== null && a.build_volume !== '') {
+      const parts = Array.isArray(a.build_volume) ? a.build_volume : String(a.build_volume).trim().split(/[\s,x×]+/);
+      if (parts.length !== 3 || parts.some((x) => !(Number(x) > 0))) {
+        throw new UserError("build_volume must be 'X Y Z' (three numbers in mm)");
+      }
+      bv = '(' + parts.map((x) => String(Number(x))).join(', ') + ')';
+    }
+    const args = 'support_angle=' + num(a.support_angle, 45, 'support_angle') + ', nozzle=' + num(a.nozzle, 0.4, 'nozzle')
+      + ', min_perimeters=' + Math.round(num(a.min_perimeters, 2, 'min_perimeters')) + ', build_volume=' + bv
+      + ', bed_tol=' + num(a.bed_tol, 0.001, 'bed_tol') + ', min_feature=' + num(a.min_feature, 0.5, 'min_feature');
+    const { label: label0, res } = await this.probeObject(e, a.object_name,
+      '_cs_f.printability(_cs_obj, ' + args + ')', 'the printability analysis');
+    return { content: [{ type: 'text', text: res.summary + ' (' + label0 + ', +Z up, resting on its lowest point)\n\n'
+      + JSON.stringify({ counts: res.counts, findings: res.findings }, null, 1) }], after: {} };
   },
 
   async design_audit(e, a) {
@@ -798,6 +908,89 @@ const MCP_TOOLS = {
       note }, null, 1) }], after: {} };
   },
 
+  async import_cad_file(e, a) {
+    const src = a.url !== undefined && a.url !== '' ? 'url' : (typeof a.content === 'string' && a.content ? 'content' : null);
+    if (!src) { throw new UserError('give the file as url (http/https) or as content (the STEP or BREP text)'); }
+    let file = String(a.filename || (src === 'url' ? String(a.url).split(/[?#]/)[0].split('/').pop() : '') || '').trim();
+    let bytes;
+    if (src === 'url') {
+      let u;
+      try { u = new URL(String(a.url)); } catch (err) { throw new UserError('url is not a URL'); }
+      if (!/^https?:$/.test(u.protocol)) { throw new UserError('url must be http or https'); }
+      const resp = await fetch(u.href, { redirect: 'follow' });
+      if (!resp.ok) { throw new UserError('fetching the file failed: HTTP ' + resp.status); }
+      const len = Number(resp.headers.get('content-length') || 0);
+      if (len > MAX_FILE_BYTES) { throw new UserError('the file is over ' + (MAX_FILE_BYTES / 1048576) + ' MB'); }
+      bytes = new Uint8Array(await resp.arrayBuffer());
+    } else {
+      bytes = new TextEncoder().encode(a.content);
+    }
+    if (bytes.length > MAX_FILE_BYTES) { throw new UserError('the file is over ' + (MAX_FILE_BYTES / 1048576) + ' MB'); }
+    const head = new TextDecoder('latin1').decode(bytes.subarray(0, 200));
+    let kind = /\.(step|stp)$/i.test(file) ? 'step' : /\.brep$/i.test(file) ? 'brep' : null;
+    if (!kind) { kind = /ISO-10303-21/.test(head) ? 'step' : /DBRep|CASCADE Topology/.test(head) ? 'brep' : null; }
+    if (!kind) {
+      throw new UserError('only STEP (.step/.stp) and BREP (.brep) files can be imported here (build123d-lite has no '
+        + 'STL/3MF import); this file looks like neither');
+    }
+    if (!file || !/^[A-Za-z0-9_.-]{1,80}$/.test(file)) { file = 'import.' + kind; }
+    if (!/\.(step|stp|brep)$/i.test(file)) { file += '.' + kind; }
+    const name = String(a.name || file.replace(/\.[A-Za-z0-9]+$/, '')).replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1');
+    if (!/^[A-Za-z_]\w{0,40}$/.test(name)) { throw new UserError('name must be a Python identifier'); }
+    const sql = this.ctx.storage.sql;
+    this.ctx.storage.transactionSync(() => {
+      sql.exec('DELETE FROM imports WHERE file = ?', file);
+      const n = Math.max(1, Math.ceil(bytes.length / CHUNK_BYTES));
+      for (let c = 0; c < n; c++) {
+        sql.exec('INSERT INTO imports (file, seq, data) VALUES (?, ?, ?)', file, c,
+          bytes.slice(c * CHUNK_BYTES, (c + 1) * CHUNK_BYTES).buffer);
+      }
+    });
+    await this.flush();
+    await this.adopt(e);
+    this.loadImports(e);
+    this.lastRunRev = null;   // the engine's external files changed
+    const code = name + ' = ' + (kind === 'step' ? 'import_step' : 'import_brep') + '(' + JSON.stringify(file) + ')\n'
+      + 'show(' + name + ', ' + JSON.stringify(name) + ')';
+    const res = await MCP_TOOLS.execute.call(this, e, { code });
+    res.content[0].text = 'imported ' + file + ' (' + (bytes.length / 1024).toFixed(1) + ' KB, kept with the session) as `'
+      + name + '`; the script now reads it with ' + (kind === 'step' ? 'import_step' : 'import_brep') + '("' + file + '").\n'
+      + res.content[0].text;
+    return res;
+  },
+
+  async health_check(e) {
+    const mem = (() => { try { return e.memoryStats(); } catch (err) { return null; } })();
+    const sc = this.script();
+    const res = this.lastResult || this.meta('result');
+    const imports = this.ctx.storage.sql.exec('SELECT file, SUM(LENGTH(data)) AS bytes FROM imports GROUP BY file').toArray();
+    return toolText(JSON.stringify({ ok: true, engine: { flavor: this.flavor, bootMs: isolate.bootMs, isolateAgeS: Math.round((Date.now() - isolate.startedAt) / 1000),
+      holdsThisSession: isolate.owner === this.key, compactions: isolate.compactions,
+      memoryMB: mem ? Object.fromEntries(Object.entries(mem).filter(([k, v]) => typeof v === 'number').map(([k, v]) => [k, Math.round(v / 1048576 * 10) / 10])) : null },
+      session: { name: this.sessionName, scriptRev: sc.rev, lines: sc.code ? sc.code.split('\n').length : 0,
+        lastRun: res ? { rev: res.rev, ok: res.ok, shapes: res.shapeCount } : null, imports },
+      limits: { callsPerMinute: this.callsPerMin, callsPerDay: this.callsPerDay, scriptKB: MAX_SCRIPT_BYTES / 1024,
+        fileMB: MAX_FILE_BYTES / 1048576, fileTtlS: this.fileTtlS } }, null, 1));
+  },
+
+  async destroy_session(e, a) {
+    if (a.confirm !== true) {
+      throw new UserError('destroy_session deletes the script, snapshots, exported and imported files and the cache '
+        + 'of this session for good: call it again with confirm: true');
+    }
+    if (isolate.owner === this.key) { rewind(e); isolate.owner = null; }
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    this.ensureTables();
+    this.persistedDigest = null;
+    this.lastPersist = null;
+    this.lastRestore = null;
+    this.lastResult = null;
+    this.lastRunRev = null;
+    return toolText('session ' + this.sessionName + ' destroyed: script, snapshots, files and cache are gone. '
+      + 'The id can be used again for a new, empty session.');
+  },
+
   async repair_hints(e, a) {
     return toolText(JSON.stringify({ hints: repairHints(a.error_text, true) }, null, 1));
   },
@@ -808,24 +1001,58 @@ const MCP_TOOLS = {
 
   async export(e, a) {
     const format = String(a.format || '').toLowerCase();
-    if (!MIME[format]) { throw new UserError('format must be one of step, stl, brep, glb, svg'); }
+    if (!MIME[format]) { throw new UserError('format must be one of ' + Object.keys(MIME).join(', ')); }
     const r = await this.ensureScene(e);
     if (!r.shapeCount) { throw new UserError('nothing to export: the script shows no shapes'); }
-    const base = String(a.filename || 'model').replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/\.[A-Za-z0-9]+$/, '') || 'model';
+    const names = e.sceneNames();
+    const idx = resolveObjects(names, a.object_name);
+    const all = idx.length === names.length;
+    const shapes = this.quickScene(e);
+    const base = String(a.filename || (all ? 'model' : names[idx[0]] || 'model')).replace(/[^A-Za-z0-9_.-]+/g, '_')
+      .replace(/\.[A-Za-z0-9]+$/, '') || 'model';
+    // the export gate (build123d-mcp's): a 3-D file of an object that fails
+    // validate would be rejected by strict consumers — say so, or refuse
+    let gateLine = '';
+    if (['step', 'stl', 'brep', 'glb', '3mf'].includes(format)) {
+      const v = gateVerdict(this.gateFor(e, { indices: idx }));
+      gateLine = '\ngate: ' + (v.passes ? 'PASS' : 'FAIL — ' + v.reasons.join('; '));
+      if (!v.passes && a.strict) {
+        throw new UserError('not exported: the validity gate FAILs (strict) — ' + v.reasons.join('; ')
+          + withHints(v.reasons.join('\n')));
+      }
+    }
+    const pick = all ? null : e.pickShape(idx);
     let bytes;
     let clear = false;
-    if (format === 'step') { bytes = new TextEncoder().encode(e.exportSTEP()); }
-    else if (format === 'brep') { bytes = new TextEncoder().encode(e.exportBREP()); }
-    else if (format === 'stl') { bytes = new TextEncoder().encode(e.exportSTL()); clear = true; }
-    else if (format === 'glb') { bytes = e.exportGLB(); }
-    else { bytes = new TextEncoder().encode(e.drawingSVG({ view: a.view }).svg); }
+    try {
+      const shape = pick ? pick.shape : undefined;
+      if (format === 'step') { bytes = new TextEncoder().encode(e.exportSTEP({ shape })); }
+      else if (format === 'brep') { bytes = new TextEncoder().encode(e.exportBREP({ shape })); }
+      else if (format === 'stl') { bytes = new TextEncoder().encode(e.exportSTL({ shape })); clear = true; }
+      else if (format === 'glb') { bytes = e.exportGLB({ indices: all ? undefined : idx, names }); }
+      else if (format === '3mf') {
+        let colors;
+        if (a.colors && typeof a.colors === 'object') {
+          colors = {};
+          for (const [key, value] of Object.entries(a.colors)) {
+            const c = parseColor(value);
+            if (!c) { throw new UserError('colors: cannot read "' + value + '"'); }
+            for (const i of resolveObjects(names, /^\d+$/.test(key) ? Number(key) : key)) { colors[i] = c; }
+          }
+        }
+        bytes = e.export3MF({ indices: idx, colors }).bytes;
+      }
+      else if (format === 'dxf') { bytes = new TextEncoder().encode(e.drawingDXF({ view: a.view, shape }).dxf); }
+      else { bytes = new TextEncoder().encode(e.drawingSVG({ view: a.view, shape }).svg); }
+    } finally { if (pick) { pick.free(); } }
     const f = this.storeFile(base + '.' + format, MIME[format], bytes);
     await this.flush();
-    const shapes = this.quickScene(e);
-    const vol = shapes.reduce((n, s) => n + (s.volume || 0), 0);
+    const vol = idx.reduce((n, i) => n + (shapes[i].volume || 0), 0);
     return { content: [{ type: 'text', text: format.toUpperCase() + ' ' + (f.bytes / 1024).toFixed(1) + ' KB: '
-      + f.url + '\n(kept ' + f.expiresInS + ' s) ' + shapes.length + ' object(s): ' + shapes.map(label).join(', ')
-      + '; total volume ' + fmt(vol) + ' mm^3' + (format === 'glb' ? ', in metres with Y up' : '') }], after: { clear } };
+      + f.url + '\n(kept ' + f.expiresInS + ' s) ' + idx.length + ' object(s): ' + idx.map((i) => label(shapes[i])).join(', ')
+      + '; total volume ' + fmt(vol) + ' mm^3' + (format === 'glb' ? ', in metres with Y up' : '') + (format === '3mf' ? ', one mesh object per object, mm' : '')
+      + (format === 'dxf' ? ', the ' + (a.view || 'iso') + ' view projected, mm, layers VISIBLE / HIDDEN' : '')
+      + gateLine }], after: { clear } };
   },
 
   async session_state() {
@@ -920,6 +1147,9 @@ export function createSession(worker, o) {
     constructor(ctx, env) {
       super(ctx, env);
       this.key = ctx.id.toString();
+      this.flavor = o.flavor;
+      // module scope runs before the clock starts on workerd (Date.now() is 0 there)
+      if (!(isolate.startedAt > 1e12)) { isolate.startedAt = Date.now(); }
       this.instance = { id: Math.random().toString(36).slice(2, 10), createdAt: Date.now(), renders: 0 };
       this.compactAtMB = Number(env.COMPACT_AT_MB || 48);
       this.keepWarmMs = Number(env.KEEP_WARM_MS || 0);
@@ -951,6 +1181,8 @@ export function createSession(worker, o) {
         sql.exec('ALTER TABLE snapshots ADD COLUMN summary TEXT');
       }
       sql.exec('CREATE TABLE IF NOT EXISTS files (id TEXT, seq INTEGER, data BLOB, PRIMARY KEY (id, seq))');
+      // files handed to the session's scripts (import_cad_file): kept with the session
+      sql.exec('CREATE TABLE IF NOT EXISTS imports (file TEXT, seq INTEGER, data BLOB, PRIMARY KEY (file, seq))');
       sql.exec('CREATE TABLE IF NOT EXISTS filemeta (id TEXT PRIMARY KEY, name TEXT, type TEXT, bytes INTEGER, '
         + 'chunks INTEGER, created INTEGER, expires INTEGER)');
     }
@@ -1007,6 +1239,7 @@ export function createSession(worker, o) {
       const t0 = Date.now();
       if (isolate.owner !== null) { rewind(e); }
       isolate.owner = this.key;
+      this.loadImports(e);
       const snap = await this.loadSnapshot();
       let restore = null;
       if (snap) {
@@ -1016,6 +1249,32 @@ export function createSession(worker, o) {
       }
       this.lastRestore = restore;
       return { warm: false, restore };
+    }
+
+    /** This session's imported files into the engine, and nobody else's:
+     *  STEP through the external-file table (import_step), BREP into MEMFS
+     *  (import_brep). */
+    loadImports(e) {
+      e.clearExternalFiles();
+      for (const f of isolate.memfsImports || []) { try { globalThis.self.oc.FS.unlink('/' + f); } catch (err) { /* gone */ } }
+      isolate.memfsImports = [];
+      const sql = this.ctx.storage.sql;
+      const files = sql.exec('SELECT DISTINCT file FROM imports').toArray().map((r) => r.file);
+      const steps = {};
+      for (const file of files) {
+        const parts = sql.exec('SELECT data FROM imports WHERE file = ? ORDER BY seq', file).toArray();
+        const total = parts.reduce((n, r) => n + r.data.byteLength, 0);
+        const buf = new Uint8Array(total);
+        let off = 0;
+        for (const r of parts) { buf.set(new Uint8Array(r.data), off); off += r.data.byteLength; }
+        const text = new TextDecoder('latin1').decode(buf);
+        if (/\.brep$/i.test(file)) {
+          e.writeFile(file.replace(/\//g, '_'), text);
+          isolate.memfsImports.push(file.replace(/\//g, '_'));
+        } else { steps[file] = text; }
+      }
+      if (Object.keys(steps).length) { e.loadExternalFiles(steps); }
+      return files;
     }
 
     keepWarm() {
@@ -1462,6 +1721,63 @@ export function createSession(worker, o) {
       const res = this.recordResult(sc.rev, r, { summary: r.shapeCount ? summaryOf(this.quickScene(e)) : [] });
       await this.flush();
       return res;
+    }
+
+    /** Run the session script plus a probe (`prelude` lines, then one
+     *  Python expression that evaluates to a JSON string) and return the
+     *  parsed value. The engine then holds the probe run, so the next tool
+     *  re-runs the script (all cache hits). `what` names the probe's part
+     *  in errors ("the selector"). */
+    async runProbe(e, prelude, expr, what = 'the probe') {
+      const sc = this.script();
+      if (!sc.code.trim()) { throw new UserError('the session script is empty: use execute or set_script first'); }
+      // the `result` fallback goes BEFORE the probe, so the probe sees the
+      // scene the tools see
+      const base = String(withResultShow(sc.code)).replace(/\s*$/, '');
+      const lines = base.split('\n').length;
+      const MARK = '@@cs-probe@@';
+      const probe = base + '\nimport build123d as _cs_b\n' + prelude
+        + 'print(' + JSON.stringify(MARK) + ' + (' + expr + '))\n';
+      await this.adopt(e);
+      const r = await e.run(probe, { keepScene: true, guiState: {} });
+      this.ranThisCall = true;
+      this.callMisses += r.cache ? r.cache.misses : 1;
+      isolate.lastRun = this.lastRun = this.key + ':' + (++isolate.runSeq);
+      this.lastRunRev = null;
+      const out = (r.logs || []).filter((l) => l.startsWith(MARK)).pop();
+      if (!r.ok || !out) {
+        const err = (r.errors || []).join('\n') || 'no result';
+        const n = [...err.matchAll(/File "main", line (\d+)/g)].map((m) => Number(m[1])).pop() || 0;
+        throw new UserError((n > lines ? what + ' raised' : 'the script raised (fix it first)') + ': '
+          + err.split('\n').filter((l) => !/File "main", line/.test(l)).join('\n').trim().split('\n').pop()
+          + withHints(err));
+      }
+      return JSON.parse(out.slice(MARK.length));
+    }
+
+    /** find_holes & co: build123d-drafting-helpers' finders (vendored into
+     *  build123d-lite as build123d_drafting) on one object, or on all shown
+     *  objects as one compound. */
+    async findFeatures(e, a, kind) {
+      const { label: label0, res } = await this.probeObject(e, a.object_name,
+        "_cs_f.report('" + kind + "', _cs_obj)", 'the feature finder');
+      return { content: [{ type: 'text', text: JSON.stringify(Object.assign({ object: label0 }, res), null, 1) }],
+        after: {} };
+    }
+
+    /** A probe on shown objects (one, several as a compound, or all):
+     *  `expr` sees the shape as _cs_obj and the vendored modules as _cs_f
+     *  (_cs_mcp_features); it returns a JSON-able value. */
+    async probeObject(e, objectName, expr, what) {
+      const r = await this.ensureScene(e);
+      if (!r.shapeCount) { throw new UserError('nothing to inspect: the script shows no shapes'); }
+      const names = e.sceneNames();
+      const idx = resolveObjects(names, objectName);
+      const label0 = idx.length === names.length ? (names.length === 1 ? (names[0] ? '"' + names[0] + '"' : '[0]')
+        : 'all shown objects') : idx.map((i) => (names[i] ? '"' + names[i] + '"' : '[' + i + ']')).join(' + ');
+      const res = await this.runProbe(e, 'import _cs_mcp_features as _cs_f\n_cs_obj = _cs_b._cs_scene_object('
+        + JSON.stringify(idx) + ')\n', '_cs_b._cs_json(' + expr + ')', what);
+      return { label: label0, res };
     }
 
     /** engine.gate() of the current run, cached per run and options

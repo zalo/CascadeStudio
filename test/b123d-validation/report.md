@@ -4,9 +4,9 @@ Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because
 
 | Status | Count |
 |---|---|
-| PASS | 223 |
+| PASS | 224 |
 | MISMATCH | 9 |
-| ERROR | 6 |
+| ERROR | 5 |
 | TIMEOUT | 1 |
 | SKIP | 8 |
 
@@ -15,7 +15,6 @@ Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because
 | Gap | Scripts |
 |---|---|
 | `ImportError: undefined` | 2 |
-| `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf` | 1 |
 | `other: Line 13712: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O` | 1 |
 | `NameError: Draft` | 1 |
 | `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l` | 1 |
@@ -67,6 +66,7 @@ Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because
 - examples/custom_sketch_objects_algebra (9 shapes)
 - examples/din_rail (3 shapes)
 - examples/din_rail_algebra (41 shapes)
+- examples/dual_color_3mf (6 shapes)
 - examples/extrude_algebra (35 shapes)
 - examples/extrude (10 shapes)
 - examples/handle (10 shapes)
@@ -274,7 +274,6 @@ Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because
 
 ## Errors by script
 
-- examples/dual_color_3mf: `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf`
 - examples/toy_truck: `other: Line 13712: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O`
 - docs/objects_2d: `NameError: Draft`
 - ttt/ttt-23-t-24-curved_support: `ImportError: undefined`
@@ -320,7 +319,7 @@ script (223 PASS / 9 MISMATCH / 6 ERROR / 1 TIMEOUT / 8 SKIP of 247).
 | docs/objects_1d (MISMATCH, `scene` bbox 0.07 mm) | `scene = Compound(...) + Compound.make_triad(2)`. | The triad's axes and spline arrow heads are built exactly; upstream also draws 'X'/'Y'/'Z' with the **`singleline` STROKE font**, which this build does not ship (only the outline font FreeSans). The `l1`/`l3`/`l4` residuals of earlier rounds are GONE: 0.12 made variables created inside a `BuildLine(<workplane>)` LOCAL natively, and lite's BuildScope does the same. | COMPROMISE(triad-labels). |
 | docs/tutorial_joints (was ERROR `insert`, now MISMATCH on `m6_screw` alone, d=1.82 mm) | The other 7 shapes match to 1e-9. The screw is placed by `CylindricalJoint.relative_to(..., position=5, angle=30)` off `hole2`, and lite's hole-location enumeration puts it on a different hole frame of the imported STEP part. | Joint algebra is upstream's; the difference is which of the part's hole frames the script's selector lands on. | Open, unchanged from the 0.11.1 round apart from the `insert()` blocker in front of it. |
 | examples/toy_truck (ERROR) | `fillet(bumper.edges(), 0.25)` raises "BRep_API: command not done" (caught, decoded via COMPROMISE(failure-decode), no heap corruption). | Upstream `Solid.fillet` = `BRepFilletAPI_MakeFillet(shape)` (ChFi3d_Rational) + `Add(radius, edge)`; lite is identical. Native 0.13.0 on OCCT **8.0.1** fillets the same bumper, so "8.0.1 kernel fault" is not the whole story: either this wasm build misbehaves where native 8.0.1 does not, or lite's bumper topology differs. | Open; not root-caused this round. |
-| examples/dual_color_3mf (ERROR, geometry closed) | All six measured shapes match the reference exactly; the script fails on its last statement, `Mesher.write("dual_color.3mf")`. | — | COMPROMISE(mesher): no lib3mf in this wasm build, so only STL export exists. |
+| examples/dual_color_3mf (PASS since 2026-10-18) | All six measured shapes match the reference exactly; `Mesher.write("dual_color.3mf")` now writes a real 3MF (ThreeMF.js, no lib3mf). | — | Was COMPROMISE(mesher)'s STL-only gap. |
 | ttt/ttt-ppp0110 (ERROR) | The coplanar-BSpline fuse drop, in the one shape where the General-Fuse rebuild cannot recover the dropped operand (result volume 0). | Upstream fuse defaults reproduce the drop on THIS wasm build. Native 0.13.0 on OCCT 8.0.1 fuses it correctly (no geometry change vs 7.9.3 anywhere in the corpus), so the fault is specific to this wasm build, not to OCCT 8.0.1 itself. | Wasm-build kernel fault, detected and raised (COMPROMISE(kernel-guard) cannot recover this one). |
 | docs/objects_2d (ERROR, `Draft`) | `drafting.Draft` (the dimension-styling dataclass) + `ExtensionLine`/`DimensionLine`/`TechnicalDrawing`. | ~450 code lines whose accuracy rides on `Compound.make_text` glyph metrics. No OCCT binding is missing. | Deliberate gap (the real-build123d leg runs it). |
 | ttt/ttt-23-t-24-curved_support (ERROR, `sympy`) | The part's dimensions are derived with sympy's symbolic solver. | n/a | Deliberate gap. |

@@ -74,9 +74,10 @@ export const TOOLS = [
   {
     name: 'render_view',
     title: 'Look at the model',
-    description: 'Render the session\'s shapes to a PNG (shaded, edges drawn, axis triad, size label) from a '
-      + 'named view or an azimuth/elevation, or to an SVG hidden-line drawing (format "svg"). Look at every '
-      + 'feature you add from at least two views.',
+    description: 'Render the session\'s objects to a PNG (shaded, edges drawn, axis triad, size label) from a '
+      + 'named view or an azimuth/elevation; or an exact hidden-line drawing (style "lines", or format "svg" for '
+      + 'the file). Section views with clip_plane, colours and name labels per object. Renders confirm appearance; '
+      + 'verify dimensions with measure. Look at every feature you add from at least two views.',
     inputSchema: { type: 'object', properties: {
       session,
       view: { type: 'string', enum: VIEW_NAMES, description: 'Named view (default iso).' },
@@ -90,7 +91,15 @@ export const TOOLS = [
       highlight: Object.assign({}, objectList, { description: 'Draw these objects in orange.' }),
       edges: { type: 'boolean', description: 'Draw the model edges (default true).' },
       format: { type: 'string', enum: ['png', 'svg'], description: 'png (default) or an svg hidden-line drawing.' },
-      hidden: { type: 'boolean', description: 'svg: draw hidden lines dashed (default true).' },
+      style: { type: 'string', enum: ['shaded', 'lines'], description: 'png: shaded (default) or an exact hidden-line drawing (hidden edges dashed).' },
+      hidden: { type: 'boolean', description: 'svg / lines: draw hidden lines dashed (default true).' },
+      quality: { type: 'string', enum: ['preview', 'standard', 'high'], description: 'preview: coarse and fast; high: finer mesh, 3x supersampling.' },
+      colors: { type: 'object', additionalProperties: { type: 'string' },
+        description: 'Colours by object name or index, e.g. {"lid": "steel", "pin": "#d04030"}.' },
+      clip_plane: { type: 'string', enum: ['x', 'y', 'z'], description: 'Cut the model with a plane normal to this axis; material the cut passes through shows red.' },
+      clip_at: { type: 'number', description: 'Where the clip plane sits (mm; default the middle of the objects).' },
+      clip_keep: { type: 'string', enum: ['below', 'above'], description: 'Which side of the plane to keep (default below).' },
+      label_objects: { type: 'boolean', description: 'Write each object\'s name on it.' },
     }, required: ['session'] },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -185,6 +194,111 @@ export const TOOLS = [
     annotations: RO,
   },
   {
+    name: 'find_holes',
+    title: 'Find drilled holes',
+    description: 'Recognise drilled holes on an object (default: every shown object) from its internal cylinders '
+      + '(build123d-drafting-helpers\' find_holes): per hole the axis (into the part), the opening location, '
+      + 'diameter, depth, bottom (through / flat / drill_point / unknown) and any counterbore or spotface step. '
+      + 'Countersinks are reported as plain openings here; see find_countersinks.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'find_hole_patterns',
+    title: 'Find hole patterns',
+    description: 'Group identical holes into bolt circles (centre, bolt-circle diameter), linear arrays (pitch, '
+      + 'direction) and rectangular grids (rows x cols, pitches, angle), with the member holes.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'find_bosses',
+    title: 'Find bosses',
+    description: 'Recognise external cylindrical bosses (and a turned part\'s outside diameters): axis (base to free '
+      + 'end), the free-end location, diameter and height.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'find_bored_bosses',
+    title: 'Find bored-boss edit candidates',
+    description: 'Candidates for "extend / edit the bored boss" requests: each recognised bore with the planar cap '
+      + 'faces around its opening, whether the cap is split across several faces, whether the opening is on the '
+      + 'outer envelope, risk flags and construction advice. A diagnostic table, not a proof of which boss is meant.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'find_countersinks',
+    title: 'Find countersinks',
+    description: 'Recognise countersinks (conical screw-head recesses flaring from a drilled bore): opening location, '
+      + 'axis into the part, major (surface) diameter, drill diameter, included angle (e.g. 82/90/100/120) and depth. '
+      + 'Drill-point cones and external chamfers are excluded.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'cross_sections',
+    title: 'Slice the object',
+    description: 'Cross-sections at evenly spaced planes along X, Y or Z (num_slices, default 10, from 1% inside '
+      + 'the bounding box to 1% inside its far side): per slice the position, the exact section area (holes '
+      + 'subtracted), the number of separate regions and of holes, and the section size. Finds internal '
+      + 'voids, wall changes and where a part necks down without a render.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName,
+      axis: { type: 'string', enum: ['X', 'Y', 'Z'], description: 'Default Z.' },
+      num_slices: { type: 'integer', minimum: 2, maximum: 200, description: 'Default 10.' },
+    }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'analyze_printability',
+    title: 'Check FDM printability',
+    description: 'FDM printability of an object as it is oriented (+Z up, resting on its lowest point), BREP-exact '
+      + '(augura): overhangs needing support (and short flat ceilings that bridge), watertight/manifold, tip-over '
+      + '(centre of mass outside the bed footprint), brim need (small footprint or tall aspect), the smallest '
+      + 'vertical feature (caps the layer height), walls thinner than min_perimeters x nozzle, and, with a '
+      + 'build_volume, bed fit. A summary line, then JSON findings (kind, severity, message, area, location).',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName,
+      support_angle: { type: 'number', description: 'Faces shallower than this many degrees from horizontal need support (default 45).' },
+      nozzle: { type: 'number', description: 'Nozzle diameter in mm (default 0.4).' },
+      min_perimeters: { type: 'integer', description: 'Walls thinner than min_perimeters x nozzle are flagged (default 2).' },
+      build_volume: { type: ['string', 'array'], items: { type: 'number' }, description: '"X Y Z" in mm, e.g. "220 220 250".' },
+      bed_tol: { type: 'number', description: 'Z tolerance in mm for bed-contact faces (default 0.001).' },
+      min_feature: { type: 'number', description: 'Smallest vertical feature in mm to report (default 0.5).' },
+    }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'import_cad_file',
+    title: 'Import a STEP or BREP file',
+    description: 'Bring a STEP (.step/.stp) or BREP file into the session, from a URL or as text, and show it as a named '
+      + 'object: the script gains `name = import_step("file.step")` + `show(name, "name")`, so it can be measured, '
+      + 'compared (compare kind "fit" against your design), cut or fused like any shape. The file is kept with the '
+      + 'session. STL/3MF cannot be imported (build123d-lite has no mesh import).',
+    inputSchema: { type: 'object', properties: { session: sessionOptional,
+      url: { type: 'string', description: 'http(s) URL of the file.' },
+      content: { type: 'string', description: 'The file text, instead of a URL.' },
+      filename: { type: 'string', description: 'File name (default from the URL), e.g. "bracket.step".' },
+      name: { type: 'string', description: 'The variable/object name (default the file stem).' },
+    } },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  },
+  {
+    name: 'health_check',
+    title: 'Server and session health',
+    description: 'The engine (flavor, boot time, isolate age, memory), the session (script revision, last run, imports) and the limits.',
+    inputSchema: { type: 'object', properties: { session }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'destroy_session',
+    title: 'Delete the session',
+    description: 'Delete everything of this session for good: script, snapshots, exported and imported files, the cache. '
+      + 'Needs confirm: true. (reset only empties the script.)',
+    inputSchema: { type: 'object', properties: { session, confirm: { type: 'boolean' } }, required: ['session', 'confirm'] },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  {
     name: 'repair_hints',
     title: 'Fix suggestions for an error',
     description: 'Targeted fix suggestions for an error message or validity-gate reason (execute and validate '
@@ -197,12 +311,17 @@ export const TOOLS = [
   {
     name: 'export',
     title: 'Export a file',
-    description: 'Export the session\'s shapes and return a download URL (kept for an hour). step and brep are '
-      + 'exact; stl is a mesh for printing; glb is a mesh for viewers (metres, Y up); svg is a hidden-line drawing.',
-    inputSchema: { type: 'object', properties: { session,
-      format: { type: 'string', enum: ['step', 'stl', 'brep', 'glb', 'svg'] },
-      filename: { type: 'string', description: 'Base name without extension (default "model").' },
-      view: { type: 'string', enum: VIEW_NAMES, description: 'svg only: the drawing view (default iso).' } },
+    description: 'Export the shown objects (or one, object_name) and return a download URL (kept for an hour). '
+      + 'step and brep are exact; stl and 3mf are meshes for printing (3mf: one named object per object, optional '
+      + 'colours); glb is a mesh for viewers (metres, Y up); svg and '
+      + 'dxf are an exact hidden-line projection (dxf: mm, layers VISIBLE and HIDDEN). 3-D formats report the '
+      + 'validity gate; with strict a FAILing object is not exported.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName,
+      format: { type: 'string', enum: ['step', 'stl', 'brep', 'glb', '3mf', 'svg', 'dxf'] },
+      colors: { type: 'object', additionalProperties: { type: 'string' }, description: '3mf: colours by object, e.g. {"lid": "red"}.' },
+      filename: { type: 'string', description: 'Base name without extension (default "model", or the object\'s name).' },
+      view: { type: 'string', enum: VIEW_NAMES, description: 'svg/dxf: the projection view (default iso).' },
+      strict: { type: 'boolean', description: 'Refuse to export an object that fails the validity gate.' } },
     required: ['session', 'format'] },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -293,7 +412,7 @@ export const WORKFLOW = `# Working with remote build123d sessions
 - The scene: show(part, "part") names an object (tools take object_name="part"); showing a name again replaces it; show(a, b) shows several unnamed. Shapes made after the first show() join the scene too, so show at the end or by name.
 
 ## What is not available
-numpy and other third-party packages, the drafting module (Draft, DimensionLine, TechnicalDrawing), 3MF output, import_svg/import_stl. File I/O happens through export, not open().
+numpy and other third-party packages, the drafting module (Draft, DimensionLine, TechnicalDrawing), import_svg/import_stl. File I/O happens through export, not open().
 
 ## Reading the renders
 Shaded grey with dark edges; highlighted objects are orange. The triad at the bottom left shows X (red), Y (green), Z (blue); the label shows the view and the overall size in mm. Orthographic, so parallel edges stay parallel.`;
@@ -325,6 +444,10 @@ export const RESOURCES = [
     description: 'Task-indexed recipes for picking faces, edges and vertices (adapted from build123d-mcp).' },
   { uri: 'build123d://starter', name: 'starter', title: 'A complete example', mimeType: 'text/markdown',
     description: 'One script with algebra mode, builder mode, a revolve and a named show().' },
+  { uri: 'build123d://skill/modeling', name: 'skill-modeling', title: 'Skill: model a part (build123d-mcp)', mimeType: 'text/markdown',
+    description: 'build123d-mcp\'s modeling workflow (incl. from technical drawings), with a note on what differs here.' },
+  { uri: 'build123d://skill/edit', name: 'skill-edit', title: 'Skill: edit an existing model (build123d-mcp)', mimeType: 'text/markdown',
+    description: 'build123d-mcp\'s workflow for modifying an existing (often imported) model, with a note on what differs here.' },
 ];
 
 export { QUICKREF, SELECTORS };

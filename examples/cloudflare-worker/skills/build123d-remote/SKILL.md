@@ -35,7 +35,7 @@ The server is `https://cascade-headless-session.makeshifted.workers.dev` (or whe
 1. **Plan**: overall size, the main body, then the features (holes, slots, fillets, chamfers). Put the key dimensions in variables at the top of the script.
 2. **Build in steps**: `execute` appends code to the session script and runs it; if it raises, the appended code is rolled back and the error names its line, with repair hints. Each reply lists the shown objects and what changed (volume, faces, size) — read it: "no shown shape changed" after a cut means the cutter missed. `set_script` replaces the whole script (kept even if it raises). The first `execute` adds `from build123d import *`.
 3. **Look after every feature**: `render_view` with `view: "iso"` plus an orthographic view that shows the feature (`front`, `top`, `right`). The label states the overall size; check it against the plan. Objects can be shown alone or highlighted by name (`objects: "lid"`, `highlight: ["boss"]`).
-4. **Verify with numbers**: `measure` (bounding box, volume, centre of mass, the face inventory with hole diameters and axes, inertia; `material: "pla"` for the mass); `compare` with `kind: "fit"` for whether two parts clear, touch or collide, `kind: "align"` for flushness; `resolve` to see what a selector picks before filleting it.
+4. **Verify with numbers**: `measure` (bounding box, volume, centre of mass, the face inventory with hole diameters and axes, inertia; `material: "pla"` for the mass); `compare` with `kind: "fit"` for whether two parts clear, touch or collide, `kind: "align"` for flushness; `resolve` to see what a selector picks before filleting it; `find_holes` / `find_hole_patterns` / `find_countersinks` / `find_bosses` to read features back (diameters, depths, counterbores, bolt circles); `cross_sections` for wall changes and voids; `analyze_printability` before an STL (overhangs, thin walls, tip-over, bed fit).
 5. **Fix errors** with `last_error` (the failing line in context) and `repair_hints`. Usual causes: a selector that matched nothing, a fillet larger than its neighbouring faces allow, a boolean between shapes that do not touch.
 6. **Before risky changes** `save_snapshot`; go back with `restore_snapshot`; `compare` with `kind: "snapshot"` shows what changed.
 7. **Finish**: `validate` must say PASS (`locate_gate_defects` says where it fails); `design_audit` checks the top-level dimensions survive a ±10% edit. Then `export` (`step` for CAD, `stl` for printing, `glb` for viewers, `svg` for a hidden-line drawing — each returns a URL kept for an hour), and give the user `open_in_editor`'s link: the CascadeStudio editor on the same session, where they can see the model, edit the script, and their edits come back to you (`session_state`, `get_script`).
@@ -62,11 +62,13 @@ show(part, "part")
 ```
 
 - **show(obj, "name")** registers what is displayed, measured and exported; tools take the name as `object_name`. Showing a name again replaces it (its index stays), so a chunk can re-show the edited part. Unnamed `show(a, b)` works too; with `execute`, a chunk with an unnamed `show()` comments out earlier unnamed one-line calls. With no `show()`, a top-level `result` is shown; failing that, every intermediate shape, sketches included.
-- `named_face(part, "top")` and `find_edges(part, geom="circle", radius=3)` are selection helpers (they print what they matched). `build123d://quickref` and `build123d://selectors` have runnable examples.
+- `named_face(part, "top")` and `find_edges(part, geom="circle", radius=3)` are selection helpers (they print what they matched). `from build123d_drafting import find_holes` and `import augura` work in scripts too.
+- To work on an existing part, `import_cad_file` brings a STEP or BREP in (from a URL or as text) as a named object.
+- Section views: `render_view` with `clip_plane: "x"` (and `clip_at`); exact line drawings with `style: "lines"`; `export` `dxf`/`svg` for the projection as a file. `build123d://quickref` and `build123d://selectors` have runnable examples.
 - Algebra mode (`a + b`, `a - b`, `a & b`, `Pos(...) * shape`, `Rot(...) * shape`) and builder mode (`with BuildPart() as p:` … `p.part`) both work.
 - Selectors: `edges()/faces()/vertices()/solids()`, `.filter_by(Axis.Z | GeomType.CIRCLE | Plane.XY)`, `.sort_by(Axis.Z)[-1]`, `.group_by(Axis.Z)[0]`.
 - 2-D → 3-D: `BuildSketch` with `Rectangle`, `RectangleRounded`, `Circle`, `Polygon`, `SlotOverall`, `Text`; then `extrude`, `revolve`, `loft`, `sweep`.
-- Not available: numpy and other packages, the drafting module (`Draft`, `DimensionLine`, `TechnicalDrawing`), 3MF output, `import_svg`/`import_stl`, `open()`. Files come from `export`.
+- Not available: numpy and other packages, the drafting module (`Draft`, `DimensionLine`, `TechnicalDrawing`), `import_svg`/`import_stl`, `open()`. Files come from `export`.
 
 ## Reading a render
 

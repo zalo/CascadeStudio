@@ -26,12 +26,15 @@
 //  * Unsupported (raise NotImplementedError rather than fake geometry):
 //    the drafting module beyond ArrowHead, partial cones,
 //    split(keep=Keep.BOTH), offset(min_edge_length=) (no
-//    fix_degenerate_edges), Kind.TANGENT offsets, 3MF export, imports.
+//    fix_degenerate_edges), Kind.TANGENT offsets, mesh imports.
 //  * Boolean results are cleaned with ShapeUpgrade_UnifySameDomain (the
 //    standard library always does); face/edge COUNTS can therefore differ
 //    from build123d even when the geometry (volume/bbox) matches.
 //  * Every remaining deliberate deviation is marked in source with a
 //    grep-able COMPROMISE(<topic>) comment; CLAUDE.md indexes them.
+
+import { CS_OCP_PY } from './CsOcpShim.js';
+import { BUILD123D_DRAFTING_PY, CS_MCP_FEATURES_PY, AUGURA_PY } from './Build123dDrafting.js';
 
 export const BUILD123D_LITE_PY = `
 # build123d-lite: a subset of build123d (algebra + builder mode) for
@@ -2989,6 +2992,20 @@ class Shape:
         return self
 
     # --- shape equality (upstream Shape.__eq__/__hash__) ---
+    def is_same(self, other):
+        """build123d Shape.is_same: TopoDS IsSame (same TShape and
+        location, orientation ignored)."""
+        if self.topo is None or getattr(other, 'topo', None) is None:
+            return False
+        return bool(w._sameShape(self.topo, _topo(other)))
+
+    def is_equal(self, other):
+        """build123d Shape.is_equal: TopoDS IsEqual (same TShape,
+        location AND orientation)."""
+        if self.topo is None or getattr(other, 'topo', None) is None:
+            return False
+        return bool(self.topo.IsEqual(_topo(other)))
+
     def __eq__(self, other):
         """Topological same-ness like upstream Shape.__eq__ (TopoDS IsSame:
         same underlying TShape + location; orientation ignored). Lite's
@@ -3040,6 +3057,13 @@ class Compound(Shape):
     """A Shape made of other shapes (upstream identity: Part/Sketch/Curve are
     Compound subclasses; builder transfers classify through Compound and
     extract base objects with get_type)."""
+
+    def is_inside(self, point, tolerance=1.0e-6):
+        """build123d Mixin3D.is_inside: the point is IN the solid or ON one
+        of its faces (BRepClass3d_SolidClassifier)."""
+        v = Vector(point)
+        st, on = w._csClassify(self.topo, v.X, v.Y, v.Z, tolerance)
+        return str(st) == 'IN' or bool(on)
 
     @property
     def volume(self):
@@ -3301,6 +3325,13 @@ class Part(Compound):
 class Solid(Shape):
     """A SINGLE solid (upstream identity: Solid is NOT a Compound; .solids()
     returns these, and the make_* classmethods build them)."""
+
+    def is_inside(self, point, tolerance=1.0e-6):
+        """build123d Mixin3D.is_inside: the point is IN the solid or ON one
+        of its faces (BRepClass3d_SolidClassifier)."""
+        v = Vector(point)
+        st, on = w._csClassify(self.topo, v.X, v.Y, v.Z, tolerance)
+        return str(st) == 'IN' or bool(on)
 
     _dim = 3
 
@@ -4479,6 +4510,12 @@ def _concatenate_edges(edges):
 
 
 class Face(Shape):
+    def is_inside(self, point, tolerance=1.0e-6):
+        """build123d Face.is_inside: the point lies on the face
+        (BRepClass3d_SolidClassifier.IsOnAFace)."""
+        v = Vector(point)
+        return bool(w._csClassify(self.topo, v.X, v.Y, v.Z, tolerance)[1])
+
     def __init__(self, topo, parent=None, index=None):
         # Face(outer_wire, [hole_wires]) like build123d
         inner = None
@@ -9419,6 +9456,24 @@ def topo_explore_common_vertex(edge1, edge2):
     return None  # No common vertex found
 
 
+def topo_explore_connected_faces(edge, parent=None):
+    """The faces of parent that contain edge, as raw TopoDS faces, unique
+    (build123d topology.one_d.topo_explore_connected_faces). A moved copy
+    of a parent edge is not relocated (upstream returns the faces in the
+    moved edge's frame)."""
+    if edge is None or edge.wrapped is None:
+        raise ValueError("Can't explore from an empty edge")
+    parent = parent if parent is not None else edge.topo_parent
+    if parent is None:
+        raise ValueError('edge has no valid parent')
+    out = []
+    for f in parent.faces():
+        if any(w._sameShape(edge.wrapped, e.wrapped) for e in f.edges()):
+            if not any(w._sameShape(f.wrapped, o) for o in out):
+                out.append(f.wrapped)
+    return out
+
+
 def topo_explore_connected_edges(edge, parent=None,
                                  continuity=ContinuityLevel.C0):
     """Find edges connected to the given edge with at least the requested
@@ -11233,10 +11288,11 @@ class BallJoint(Joint):
 
 
 class Mesher:
-    """STL-only mesher (build123d's Mesher writes 3MF/STL via lib3mf).
-    COMPROMISE(mesher): only STL export is supported, via the JS engine's
-    StlAPI_Writer into the worker's Emscripten MEMFS — there is no lib3mf in
-    the WASM build, so .3mf paths raise; read() is not supported."""
+    """STL and 3MF mesher (build123d's Mesher writes both via lib3mf).
+    COMPROMISE(mesher): files go into the worker's Emscripten MEMFS (no
+    disk); 3MF is written without lib3mf (ThreeMF.js: one welded mesh object
+    per added shape, names from labels, colours from shape.color, STORED zip
+    entries); read() is not supported."""
 
     def __init__(self, unit=Unit.MM, **kwargs):
         self.unit = unit
@@ -11263,13 +11319,23 @@ class Mesher:
 
     def write(self, file_name):
         name = str(file_name)
-        if not name.lower().endswith('.stl'):
-            raise NotImplementedError(
-                'build123d-lite Mesher writes STL only (no lib3mf in the '
-                'WASM build); got ' + name)
+        low = name.lower()
         if not self._shapes:
             raise ValueError('Mesher: no shapes added')
         topos = [_topo(s) for s in self._shapes]
+        if low.endswith('.3mf'):
+            names = [str(getattr(s, 'label', '') or '') for s in self._shapes]
+            colors = [_cs_color_rgb(getattr(s, 'color', None)) or [] for s in self._shapes]
+            unit = {Unit.MM: 'millimeter', Unit.CM: 'centimeter', Unit.M: 'meter',
+                    Unit.IN: 'inch', Unit.FT: 'foot', Unit.MC: 'micron'}.get(self.unit, 'millimeter')
+            n = w.Export3MF(topos, name.replace('/', '_'), names, colors,
+                            self.linear_deflection, unit)
+            if not n:
+                raise RuntimeError('3MF export failed')
+            return True
+        if not low.endswith('.stl'):
+            raise NotImplementedError(
+                'build123d-lite Mesher writes STL and 3MF; got ' + name)
         topo = topos[0] if len(topos) == 1 else w.MakeCompound(topos, True)
         text = w.ExportSTL(topo, name.replace('/', '_'),
                            self.linear_deflection, self.angular_deflection)
@@ -11283,6 +11349,40 @@ class Mesher:
 
 
 ExportDXF = _unsupported('ExportDXF')
+
+
+_CS_NAMED_RGB = {'red': (1.0, 0.0, 0.0), 'green': (0.0, 0.5, 0.0), 'lime': (0.0, 1.0, 0.0),
+                 'blue': (0.0, 0.0, 1.0), 'yellow': (1.0, 1.0, 0.0), 'orange': (1.0, 0.647, 0.0),
+                 'purple': (0.5, 0.0, 0.5), 'black': (0.0, 0.0, 0.0), 'white': (1.0, 1.0, 1.0),
+                 'gray': (0.5, 0.5, 0.5), 'grey': (0.5, 0.5, 0.5), 'cyan': (0.0, 1.0, 1.0),
+                 'magenta': (1.0, 0.0, 1.0), 'brown': (0.647, 0.165, 0.165), 'pink': (1.0, 0.753, 0.796),
+                 'silver': (0.753, 0.753, 0.753), 'gold': (1.0, 0.843, 0.0), 'navy': (0.0, 0.0, 0.5)}
+
+
+def _cs_color_rgb(c):
+    """[r, g, b] in 0..1 from a lite Color (a stub keeping its arguments:
+    Color(r, g, b[, a]), Color(name[, a]), Color(0xRRGGBB)) or a tuple;
+    None when it cannot be read."""
+    if c is None:
+        return None
+    args = tuple(getattr(c, 'args', ())) if isinstance(c, Color) else (tuple(c) if isinstance(c, (list, tuple)) else (c,))
+    if not args:
+        return None
+    a0 = args[0]
+    if isinstance(a0, str):
+        key = a0.strip().lower()
+        if key.startswith('#') and len(key) in (7, 9):
+            return [int(key[1:3], 16) / 255.0, int(key[3:5], 16) / 255.0, int(key[5:7], 16) / 255.0]
+        rgb = _CS_NAMED_RGB.get(key)
+        return list(rgb) if rgb else None
+    if isinstance(a0, int) and len(args) <= 2 and a0 > 255:
+        return [((a0 >> 16) & 255) / 255.0, ((a0 >> 8) & 255) / 255.0, (a0 & 255) / 255.0]
+    if len(args) >= 3 and all(isinstance(x, (int, float)) for x in args[:3]):
+        vals = [float(x) for x in args[:3]]
+        if max(vals) > 1.0:
+            vals = [v / 255.0 for v in vals]
+        return vals
+    return None
 
 
 def import_step(file_name):
@@ -11700,6 +11800,50 @@ def find_edges(shape, geom=None, radius=None, at_z=None, length=None, tol=0.05):
     return result
 
 
+def _cs_wrap_topo(t):
+    """A raw TopoDS shape as the lite class of its type."""
+    v = int(t.ShapeType().value)
+    cls = {0: Compound, 1: Compound, 2: Solid, 3: Shell, 4: Face, 5: Wire,
+           6: Edge, 7: Vertex}.get(v, Compound)
+    res = object.__new__(cls)
+    Shape.__init__(res, t)
+    return res
+
+
+def _cs_final_scene():
+    """The scene in the order the evaluation will end with (CascadeWorker
+    _orderNamedScene: named shapes by first show, then the rest)."""
+    n = _scene_len()
+    topos = [w.sceneShapes[i] for i in range(n)]
+    names = getattr(w, 'sceneShapeNames', None)
+    order = getattr(w, 'sceneNameOrder', None)
+    if names is None or order is None:
+        return topos
+    try:
+        count = len(order)
+    except TypeError:
+        count = int(order.length)
+    if count == 0:
+        return topos
+
+    def rank(i):
+        k = int(order.indexOf(names.get(topos[i])))
+        return k if k >= 0 else count
+    return [topos[i] for i in sorted(range(n), key=lambda i: (rank(i), i))]
+
+
+def _cs_scene_object(indices=None):
+    """Scene shapes by final index (all when None), as one lite shape:
+    the shape itself, or a Compound of several (MCP harness probes)."""
+    topos = _cs_final_scene()
+    if indices is not None:
+        topos = [topos[i] for i in indices]
+    shapes = [_cs_wrap_topo(t) for t in topos]
+    if len(shapes) == 1:
+        return shapes[0]
+    return Compound(shapes)
+
+
 _CS_GEOM_NAMES = ('LINE', 'CIRCLE', 'ELLIPSE', 'HYPERBOLA', 'PARABOLA',
                   'BEZIER', 'BSPLINE', 'PLANE', 'CYLINDER', 'CONE', 'SPHERE',
                   'TORUS', 'OTHER')
@@ -11960,7 +12104,24 @@ def _measure_globals_json(g):
 // ships `math` as a built-in JS module but the import machinery cannot load
 // it inside a module worker, and brython_stdlib.js (pure-Python stdlib) is
 // deliberately not shipped — these cover what the build123d examples use.
+/** Shim modules registered on first mention, not at boot, by the runtimes
+ *  that execute every shim eagerly (Brython, Pyodide): a large module only
+ *  MCP harness probes import should not cost every Python boot. In
+ *  dependency order: mentioning one registers it and those before it. */
+export const LAZY_PY_MODULES = ['build123d_drafting', 'augura', '_cs_mcp_features'];
+
 export const PY_SHIM_MODULES = {
+  // MicroPython has no __future__ module (a compiler directive in CPython;
+  // annotations are ignored by MicroPython anyway): modern code's
+  // 'from __future__ import annotations' must not be an ImportError
+  __future__: `
+annotations = None
+division = None
+absolute_import = None
+print_function = None
+unicode_literals = None
+generator_stop = None
+`,
   math: `
 # math shim delegating to the JS Math object (build123d-lite worker)
 from browser import self as _w
@@ -13612,4 +13773,13 @@ def critical(*a, **k):
 def exception(*a, **k):
     pass
 `,
+  // LAST (they import the shims above): build123d-drafting-helpers' feature
+  // finders (find_holes, find_bosses, find_hole_patterns) + build123d-mcp's
+  // recognise_countersinks, vendored by scripts/vendor-drafting.py, over the
+  // _cs_ocp shim
+  _cs_ocp: CS_OCP_PY,
+  build123d_drafting: BUILD123D_DRAFTING_PY,
+  // augura's BREP printability checks (github.com/pzfreo/augura, Apache-2.0)
+  augura: AUGURA_PY,
+  _cs_mcp_features: CS_MCP_FEATURES_PY,
 };

@@ -103,6 +103,62 @@ export function edgeDefects(oc, shape, maxDefects = 20) {
   return { openEdges, nonManifoldEdges, defects };
 }
 
+/** The mesh gate (build123d-mcp's mesh check, which strict mesh consumers
+ *  apply): triangulate the shape (the worker's ShapeToMesh — per-face
+ *  meshing that reuses shared edges' discretization, so a valid solid's
+ *  mesh is conforming), weld coincident nodes, and count triangle edges
+ *  used once (an open mesh boundary) or more than twice (non-manifold:
+ *  self-touching or coincident faces a valid B-rep can still have).
+ *  Returns {triangles, openEdges, nonManifoldEdges, defects}. */
+export function meshGate(oc, S, shape, maxDeviation = 0.1, maxDefects = 20) {
+  const res = S.ShapeToMesh(shape, maxDeviation, {}, {}, {}, {});
+  const faces = (res && res[0]) || [];
+  let lo = [Infinity, Infinity, Infinity]; let hi = [-Infinity, -Infinity, -Infinity];
+  for (const f of faces) {
+    const v = f.vertex_coord;
+    for (let i = 0; i < v.length; i += 3) {
+      for (let k = 0; k < 3; k++) { if (v[i + k] < lo[k]) { lo[k] = v[i + k]; } if (v[i + k] > hi[k]) { hi[k] = v[i + k]; } }
+    }
+  }
+  const diag = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) || 1;
+  const q = diag * 1e-9;
+  const ids = new Map(); const pos = [];
+  const idOf = (x, y, z) => {
+    const key = Math.round(x / q) + ',' + Math.round(y / q) + ',' + Math.round(z / q);
+    let id = ids.get(key);
+    if (id === undefined) { id = pos.length; ids.set(key, id); pos.push([x, y, z]); }
+    return id;
+  };
+  const uses = new Map();
+  let triangles = 0;
+  for (const f of faces) {
+    const v = f.vertex_coord; const t = f.tri_indexes;
+    const local = new Array(v.length / 3);
+    for (let i = 0; i < local.length; i++) { local[i] = idOf(v[i * 3], v[i * 3 + 1], v[i * 3 + 2]); }
+    for (let k = 0; k + 2 < t.length; k += 3) {
+      const a = local[t[k]], b = local[t[k + 1]], c = local[t[k + 2]];
+      if (a === b || b === c || a === c) { continue; }
+      triangles++;
+      for (const [p0, p1] of [[a, b], [b, c], [c, a]]) {
+        const key = p0 < p1 ? p0 * 4294967296 + p1 : p1 * 4294967296 + p0;
+        uses.set(key, (uses.get(key) || 0) + 1);
+      }
+    }
+  }
+  let openEdges = 0; let nonManifoldEdges = 0;
+  const defects = [];
+  for (const [key, n] of uses) {
+    if (n === 2) { continue; }
+    if (n === 1) { openEdges++; } else { nonManifoldEdges++; }
+    if (defects.length < maxDefects && (n > 2 || defects.filter((d) => d.kind === 'mesh_open_edge').length < maxDefects / 2)) {
+      const a = Math.floor(key / 4294967296); const b = key % 4294967296;
+      defects.push({ kind: n === 1 ? 'mesh_open_edge' : 'mesh_nonmanifold_edge', uses: n,
+        at: [0, 1, 2].map((k) => r4((pos[a][k] + pos[b][k]) / 2)) });
+    }
+  }
+  return { triangles, openEdges, nonManifoldEdges, defects };
+}
+
 /** Volume of a boolean of two shapes ('common' | 'cut'), or null when the
  *  kernel fails. The result is measured and released. */
 export function booleanVolume(oc, S, kind, a, b) {
@@ -363,6 +419,174 @@ export function inertia(oc, shape) {
     m.delete();
     return out;
   } finally { props.delete(); }
+}
+
+/** Where two versions of a part differ, on the exact B-rep (compare
+ *  kind="shape"): faces are matched between a and b by surface type, area
+ *  and centroid; the unmatched ones are grouped into regions through shared
+ *  edges — `added` (in b only) and `removed` (in a only) — each with its
+ *  area, centre, size and the largest distance of its face centroids and
+ *  vertices from the other shape (how far the surface moved). A moved
+ *  feature shows as a removed region and an added one. */
+export function changedRegions(oc, S, a, b, o = {}) {
+  const bbA = fastBox(oc, a) || [0, 0, 0, 0, 0, 0]; const bbB = fastBox(oc, b) || bbA;
+  const diag = Math.max(Math.hypot(bbA[3] - bbA[0], bbA[4] - bbA[1], bbA[5] - bbA[2]),
+    Math.hypot(bbB[3] - bbB[0], bbB[4] - bbB[1], bbB[5] - bbB[2]), 1e-9);
+  const ST = oc.GeomAbs_SurfaceType;
+  const sig = (shape) => subShapes(oc, shape, 'TopAbs_FACE').map((f) => {
+    const face = oc.TopoDS_Cast.Face_1(f);
+    const surf = new oc.BRepAdaptor_Surface_2(face, true);
+    const t = surf.GetType(); surf.delete();
+    const props = new oc.GProp_GProps_1();
+    oc.BRepGProp.SurfaceProperties_1(face, props, false, false);
+    const c = props.CentreOfMass();
+    const rec = { face, raw: f, type: t, area: Math.abs(props.Mass()), c: [c.X(), c.Y(), c.Z()] };
+    c.delete(); props.delete();
+    return rec;
+  });
+  const fa = sig(a); const fb = sig(b);
+  const same = (x, y) => x.type === y.type && Math.abs(x.area - y.area) <= 1e-6 * Math.max(1, x.area)
+    && Math.hypot(x.c[0] - y.c[0], x.c[1] - y.c[1], x.c[2] - y.c[2]) <= 1e-6 * diag;
+  const usedB = new Set();
+  for (const x of fa) {
+    const j = fb.findIndex((y, k) => !usedB.has(k) && same(x, y));
+    if (j >= 0) { usedB.add(j); x.matched = true; fb[j].matched = true; }
+  }
+  // distances are measured to the other shape's FACES: a sample inside the
+  // other solid's material then measures to its boundary, not 0
+  const facesOf = (shape) => {
+    const comp = new oc.TopoDS_Compound(); const bld = new oc.BRep_Builder();
+    bld.MakeCompound(comp);
+    const fs = subShapes(oc, shape, 'TopAbs_FACE');
+    for (const x of fs) { bld.Add(comp, x); }
+    free(fs); bld.delete();
+    return comp;
+  };
+  const skinA = facesOf(a); const skinB = facesOf(b);
+  const regionsOf = (list, other, change) => {
+    const loose = list.filter((x) => !x.matched);
+    // union faces that share an edge
+    const parent = loose.map((x, i) => i);
+    const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+    const edgeOwner = new Map();
+    loose.forEach((x, i) => {
+      for (const e of subShapes(oc, x.face, 'TopAbs_EDGE')) {
+        const h = oc.OCJS.HashCode(e, 100000000);
+        const bucket = edgeOwner.get(h) || [];
+        const hit = bucket.find((r) => r.e.IsSame(e));
+        if (hit) { parent[find(i)] = find(hit.i); e.delete(); } else { bucket.push({ e, i }); edgeOwner.set(h, bucket); }
+      }
+    });
+    for (const bucket of edgeOwner.values()) { for (const r of bucket) { r.e.delete(); } }
+    const groups = new Map();
+    loose.forEach((x, i) => { const r = find(i); if (!groups.has(r)) { groups.set(r, []); } groups.get(r).push(x); });
+    const out = [];
+    for (const g of groups.values()) {
+      const area = g.reduce((n, x) => n + x.area, 0);
+      const center = [0, 1, 2].map((k) => g.reduce((n, x) => n + x.c[k] * x.area, 0) / Math.max(area, 1e-12));
+      let lo = [Infinity, Infinity, Infinity]; let hi = [-Infinity, -Infinity, -Infinity];
+      let dev = 0;
+      const samples = [];
+      for (const x of g.slice(0, o.maxFacesPerRegion || 40)) {
+        // points ON the face: mid and quarter parameters, and its vertices
+        const surf = new oc.BRepAdaptor_Surface_2(x.face, true);
+        const u0 = surf.FirstUParameter(), u1 = surf.LastUParameter(), v0 = surf.FirstVParameter(), v1 = surf.LastVParameter();
+        for (const [fu, fv] of [[0.5, 0.5], [0.25, 0.25], [0.75, 0.75], [0.25, 0.75], [0.75, 0.25]]) {
+          const p = surf.Value(u0 + (u1 - u0) * fu, v0 + (v1 - v0) * fv);
+          samples.push([p.X(), p.Y(), p.Z()]); p.delete();
+        }
+        surf.delete();
+        for (const v of subShapes(oc, x.face, 'TopAbs_VERTEX').slice(0, 8)) {
+          const p = oc.BRep_Tool.Pnt(oc.TopoDS_Cast.Vertex_1(v));
+          samples.push([p.X(), p.Y(), p.Z()]); p.delete(); v.delete();
+        }
+        const fbx = fastBox(oc, x.face);
+        if (fbx) { for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], fbx[k]); hi[k] = Math.max(hi[k], fbx[k + 3]); } }
+      }
+      for (const s of samples.slice(0, o.maxSamples || 120)) {
+        const mv = new oc.BRepBuilderAPI_MakeVertex(new oc.gp_Pnt_3(s[0], s[1], s[2]));
+        const vtx = mv.Vertex();
+        const d = distance(oc, vtx, other);
+        if (d) { dev = Math.max(dev, d.distance); }
+        vtx.delete(); mv.delete();
+      }
+      out.push({ change, faces: g.length, area: r4(area), center: center.map(r4),
+        size: lo[0] === Infinity ? null : [0, 1, 2].map((k) => r4(hi[k] - lo[k])), max_deviation: r4(dev) });
+    }
+    return out.sort((p, q) => q.area - p.area);
+  };
+  const regions = regionsOf(fb, skinA, 'added').concat(regionsOf(fa, skinB, 'removed'));
+  skinA.delete(); skinB.delete();
+  const matched = fa.filter((x) => x.matched).length;
+  for (const x of fa.concat(fb)) { x.face.delete(); x.raw.delete(); }
+  return { regions, faces_a: fa.length, faces_b: fb.length, faces_matched: matched,
+    unchanged_elsewhere: regions.length > 0 && matched > 0, identical_faces: regions.length === 0 };
+}
+
+/** Cross-sections at evenly spaced planes along X, Y or Z (build123d-mcp's
+ *  cross_sections: num_slices >= 2 positions from 1% inside the bounding
+ *  box to 1% inside its far side). Each slice is the Common of the shape
+ *  with a planar face covering the box, so holes come out as holes of the
+ *  section faces and the area needs no loop-nesting guesswork; per slice
+ *  the area, the number of separate regions (faces) and of holes (inner
+ *  wires), and the section's 2-D size. `area_uncertain` marks a slice
+ *  whose boolean failed. */
+export function crossSections(oc, S, shape, axis = 'Z', numSlices = 10) {
+  axis = String(axis).toUpperCase();
+  const k = 'XYZ'.indexOf(axis);
+  if (k < 0) { throw new Error('axis must be X, Y or Z'); }
+  const bb = fastBox(oc, shape);
+  if (!bb) { return []; }
+  const n = Math.max(2, Math.min(200, Math.round(numSlices) || 10));
+  const lo = bb[k] + (bb[k + 3] - bb[k]) * 0.01;
+  const hi = bb[k + 3] - (bb[k + 3] - bb[k]) * 0.01;
+  const pad = Math.max(bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2]) + 10;
+  const dir = [0, 0, 0]; dir[k] = 1;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const pos = lo + (hi - lo) * i / (n - 1);
+    const at = [(bb[0] + bb[3]) / 2, (bb[1] + bb[4]) / 2, (bb[2] + bb[5]) / 2]; at[k] = pos;
+    const pnt = new oc.gp_Pnt_3(at[0], at[1], at[2]);
+    const d = new oc.gp_Dir_5(dir[0], dir[1], dir[2]);
+    const pln = new oc.gp_Pln_3(pnt, d);
+    const rec = { position: r4(pos) };
+    let face = null; let mf = null; let res = null;
+    const op = new oc.BRepAlgoAPI_Common_1();
+    const args = new oc.TopTools_ListOfShape(); const tools = new oc.TopTools_ListOfShape();
+    const range = new oc.Message_ProgressRange_1();
+    try {
+      mf = new oc.BRepBuilderAPI_MakeFace_9(pln, -pad, pad, -pad, pad);
+      face = mf.Face();
+      args.Append(shape); tools.Append(face);
+      op.SetArguments(args); op.SetTools(tools); op.SetNonDestructive(true);
+      op.Build(range);
+      if (!op.IsDone()) { throw new Error('section boolean failed'); }
+      res = op.Shape();
+      const faces = subShapes(oc, res, 'TopAbs_FACE');
+      let holes = 0;
+      for (const f of faces) {
+        const wires = subShapes(oc, f, 'TopAbs_WIRE');
+        holes += Math.max(0, wires.length - 1);
+        free(wires);
+      }
+      rec.area = faces.length ? r4(Math.abs(S.SurfaceArea(res))) : 0;
+      rec.regions = faces.length;
+      rec.holes = holes;
+      const sb = faces.length ? fastBox(oc, res) : null;
+      if (sb) {
+        const others = [0, 1, 2].filter((j) => j !== k);
+        rec.size = others.map((j) => r4(sb[j + 3] - sb[j]));
+      }
+      free(faces);
+    } catch (e) {
+      Object.assign(rec, { area: 0, area_uncertain: true, error: (e && e.message) || String(e) });
+    } finally {
+      try { if (res) { res.delete(); } if (face) { face.delete(); } if (mf) { mf.delete(); } } catch (e) { /* best effort */ }
+      op.delete(); args.delete(); tools.delete(); range.delete(); pln.delete(); pnt.delete(); d.delete();
+    }
+    out.push(rec);
+  }
+  return out;
 }
 
 /** Densities in g/cm^3 for measure(material=...) — build123d-mcp's presets. */

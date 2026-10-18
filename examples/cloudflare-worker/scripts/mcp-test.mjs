@@ -38,7 +38,7 @@ const call = (name, args = {}) => client.callTool({ name, arguments: args });
 
 // ---- discovery ----
 const tools = (await client.listTools()).tools.map((t) => t.name);
-check('20 tools listed', tools.length === 20, tools.join(' '));
+check('30 tools listed', tools.length === 30, tools.join(' '));
 check('instructions sent', /render_view/.test(client.getInstructions() || ''));
 const prompts = (await client.listPrompts()).prompts;
 check('the start-cad-session prompt', prompts.some((p) => p.name === 'start-cad-session'));
@@ -49,6 +49,8 @@ check('the quickref resource', /BuildPart/.test(quick.contents[0].text) && /Serv
 const sel = await client.readResource({ uri: 'build123d://selectors' });
 check('the selectors resource', /Drill-down idiom/.test(sel.contents[0].text));
 check('the starter resource', /show\(/.test((await client.readResource({ uri: 'build123d://starter' })).contents[0].text));
+check('the upstream skills, with the note', /On this server/.test((await client.readResource({ uri: 'build123d://skill/modeling' })).contents[0].text)
+  && /Edit|edit/.test((await client.readResource({ uri: 'build123d://skill/edit' })).contents[0].text));
 check('repair_hints (no session needed)', /from build123d import/.test(text(await call('repair_hints',
   { error_text: "NameError: name 'Box' is not defined" }))));
 check('workflow_hints', /The loop/.test(text(await call('workflow_hints'))));
@@ -216,6 +218,96 @@ r = await call('set_script', { session: sid, code: 'from build123d import *\nske
 check('no show(): a top-level result is shown', !r.isError && /shapes: 1/.test(text(r)) && /"result"/.test(text(r)), text(r));
 }
 
+// ---- wave 2: feature finders, printability, sections, exports, imports ----
+{
+const sid = await newSid();
+const J = (x) => JSON.parse(text(x));
+r = await call('set_script', { session: sid, code: [
+  'from build123d import *',
+  'with BuildPart() as p:',
+  '    Box(80, 60, 10)',
+  '    with Locations((-25, 15, 5)):',
+  '        CounterBoreHole(radius=3, counter_bore_radius=5, counter_bore_depth=3)',
+  '    with Locations((25, 15, 5)):',
+  '        CounterSinkHole(radius=3, counter_sink_radius=6)',
+  '    with Locations((0, 15, 5)):',
+  '        Hole(radius=2, depth=6)',
+  '    with Locations((0, -12, 5)):',
+  '        with PolarLocations(12, 6):',
+  '            Hole(radius=1.5)',
+  '    with Locations((30, -20, 5)):',
+  '        Cylinder(4, 8, align=(Align.CENTER, Align.CENTER, Align.MIN))',
+  'show(p.part, "plate")'].join('\n') });
+check('wave 2 test part builds', !r.isError, text(r).split('\n').slice(0, 3).join(' | '));
+let h = J(await call('find_holes', { session: sid, object_name: 'plate' }));
+check('find_holes: 9 holes, the counterbore and the blind hole', h.count === 9
+  && h.holes.some((x) => x.cbore && x.cbore.diameter === 10 && x.cbore.depth === 3)
+  && h.holes.some((x) => x.bottom === 'flat' && x.diameter === 4 && x.depth === 6), JSON.stringify(h).slice(0, 200));
+let hp = J(await call('find_hole_patterns', { session: sid }));
+check('find_hole_patterns: a 6-hole bolt circle, BCD 24', hp.patterns.some((x) => x.type === 'bolt_circle'
+  && x.holes.length === 6 && Math.abs(x.diameter - 24) < 1e-6), JSON.stringify(hp).slice(0, 200));
+let bo = J(await call('find_bosses', { session: sid }));
+check('find_bosses: the 8 mm boss', bo.count === 1 && bo.bosses[0].diameter === 8 && bo.bosses[0].height === 8, JSON.stringify(bo));
+let cs2 = J(await call('find_countersinks', { session: sid }));
+check('find_countersinks: 82 deg, major 12, drill 6', cs2.count === 1 && cs2.countersinks[0].included_angle === 82
+  && cs2.countersinks[0].major_diameter === 12 && cs2.countersinks[0].drill_diameter === 6, JSON.stringify(cs2));
+let bb = J(await call('find_bored_bosses', { session: sid }));
+check('find_bored_bosses: a candidate table', typeof bb.count === 'number' && Array.isArray(bb.candidates), JSON.stringify(bb).slice(0, 160));
+r = await call('cross_sections', { session: sid, object_name: 'plate', axis: 'Z', num_slices: 3 });
+let xs = J(r);
+check('cross_sections: exact areas with the holes subtracted', xs.slices.length === 3 && xs.slices[1].holes >= 9
+  && xs.slices[1].area < 4800 && xs.slices[1].area > 4500, JSON.stringify(xs.slices[1]));
+r = await call('set_script', { session: sid, code: 'from build123d import *\nbase = Box(40, 30, 5, align=(Align.CENTER, Align.CENTER, Align.MIN))\n'
+  + 'wall = Pos(-15, 0, 12) * Box(0.5, 20, 15)\nshelf = Pos(25, 0, 20) * Box(20, 10, 3)\nshow(base + wall, "thin", base + shelf, "shelf")' });
+r = await call('analyze_printability', { session: sid, object_name: 'thin' });
+check('analyze_printability: the 0.5 mm wall', /thin_wall/.test(text(r)) && /Wall as thin as 0\.50 mm/.test(text(r)), text(r).split('\n')[0]);
+r = await call('analyze_printability', { session: sid, object_name: 'shelf', build_volume: '30 30 30' });
+check('analyze_printability: the shelf overhang and the bed fit', /"overhang"/.test(text(r)) && /"bed_fit"/.test(text(r)), text(r).split('\n')[0]);
+r = await call('validate', { session: sid, object_name: 'thin' });
+check('validate runs the mesh check', /"mesh_check": "done"/.test(text(r)) && /"mesh_nonmanifold_edges": 0/.test(text(r)), text(r).split('\n')[0]);
+for (const [args, test, what] of [
+  [{ style: 'lines' }, (x) => /hidden-line view/.test(text(x)), 'a hidden-line PNG'],
+  [{ clip_plane: 'x', clip_at: -15 }, (x) => /clipped at X = -15/.test(text(x)), 'a clipped section view'],
+  [{ colors: { thin: 'steel', shelf: '#d04030' }, label_objects: true, quality: 'preview' }, (x) => /quality preview/.test(text(x)), 'colours, labels, preview quality']]) {
+  r = await call('render_view', Object.assign({ session: sid }, args));
+  const im = (r.content || []).find((c) => c.type === 'image');
+  check('render_view: ' + what, !r.isError && !!im && !!pngSize(im.data) && test(r), text(r));
+}
+r = await call('export', { session: sid, format: 'dxf', view: 'front', object_name: 'shelf' });
+let du = urlIn(text(r));
+check('export dxf of one object', !!du && /SECTION/.test(await (await fetch(du)).text()), text(r));
+r = await call('export', { session: sid, format: 'step', object_name: 'shelf', filename: 'shelf' });
+const stepUrl = urlIn(text(r));
+check('export step of one object, with the gate', !!stepUrl && /1 object\(s\): \[1\] "shelf"/.test(text(r)) && /gate: PASS/.test(text(r)), text(r));
+r = await call('export', { session: sid, format: '3mf', colors: { thin: 'steel', shelf: 'red' } });
+let tm = urlIn(text(r));
+const tmb = tm ? Buffer.from(await (await fetch(tm)).arrayBuffer()) : Buffer.alloc(0);
+check('export 3mf: a zip with the model part and both objects', tmb.subarray(0, 2).toString() === 'PK'
+  && tmb.includes(Buffer.from('3D/3dmodel.model')) && tmb.includes(Buffer.from('name="thin"'))
+  && tmb.includes(Buffer.from('displaycolor')), text(r));
+r = await call('import_cad_file', { session: sid, url: stepUrl, name: 'shelf_copy' });
+check('import_cad_file from a URL: shown and measurable', !r.isError && /"shelf_copy"/.test(text(r)), text(r).split('\n').slice(0, 3).join(' | '));
+let mi = J(await call('measure', { session: sid, object_name: 'shelf_copy' }));
+let ms2 = J(await call('measure', { session: sid, object_name: 'shelf' }));
+check('the imported copy has the original volume', Math.abs(mi.shapes[0].volume - ms2.shapes[0].volume) < 1e-3, mi.shapes[0].volume + ' vs ' + ms2.shapes[0].volume);
+r = await call('set_script', { session: sid, code: 'from build123d import *\na = Box(40, 20, 5) - Pos(-10, 0, 0) * Cylinder(3, 10)\n'
+  + 'b = Box(40, 20, 5) - Pos(10, 0, 0) * Cylinder(3, 10)\nshow(a, "a", b, "b")' });
+let cr = J(await call('compare', { session: sid, a: 'a', b: 'b', kind: 'shape' }));
+check('compare shape: the moved hole is a removed and an added region', cr.surface && cr.surface.regions.some((x) => x.change === 'removed')
+  && cr.surface.regions.some((x) => x.change === 'added') && Math.abs(cr.delta.volume) < 1e-6, JSON.stringify(cr.surface).slice(0, 240));
+r = await call('set_script', { session: sid, code: 'from build123d import *\nshow(Circle(5).edges(), "ring")' });
+r = await call('render_view', { session: sid });
+check('render_view of an edge-only scene', !r.isError && !!(r.content || []).find((c) => c.type === 'image'), text(r));
+r = await call('export', { session: sid, format: 'step', strict: true });
+check('export strict refuses an object that fails the gate', r.isError && /not exported/.test(text(r)), text(r).split('\n')[0]);
+let hc = J(await call('health_check', { session: sid }));
+check('health_check', hc.ok === true && hc.session.scriptRev > 0, JSON.stringify(hc).slice(0, 160));
+r = await call('destroy_session', { session: sid });
+check('destroy_session needs confirm', r.isError && /confirm/.test(text(r)));
+r = await call('destroy_session', { session: sid, confirm: true });
+check('destroy_session deletes', !r.isError && /destroyed/.test(text(r)) && /\(empty\)/.test(text(await call('get_script', { session: sid }))));
+}
+
 const skill = fs.readFileSync(new URL('../skills/build123d-remote/SKILL.md', import.meta.url), 'utf8');
 r = await call('set_script', { session: sid, code: skill.split('```python')[1].split('```')[0] });
 check('the skill\'s example runs', !r.isError && /shapes: 1/.test(text(r)) && /size 80 x 50 x 26/.test(text(r)),
@@ -286,7 +378,7 @@ if (process.env.OAUTH) {
       client_id: reg.client_id, code_verifier: verifier, resource: BASE + '/mcp' }) })).json();
   check('the code becomes an access token', !!tok.access_token, Object.keys(tok).join(','));
   const oc = await connect(tok.access_token);
-  check('the OAuth token opens /mcp', (await oc.listTools()).tools.length === 20);
+  check('the OAuth token opens /mcp', (await oc.listTools()).tools.length === 30);
   await oc.close();
 }
 

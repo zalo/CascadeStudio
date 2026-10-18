@@ -154,6 +154,36 @@ test.describe('Python (build123d) mode', () => {
     expect(d.radius).toBe(3);
   });
 
+  test('vendored build123d_drafting and augura import on first mention (Brython lazy modules)', async ({ page }) => {
+    await gotoAndReady(page);
+    await page.evaluate(() => window.CascadeAPI.setMode('python'));
+    const code = [
+      'from build123d import *',
+      'from build123d_drafting import find_holes, find_hole_patterns, recognise_countersinks',
+      'import augura',
+      'with BuildPart() as p:',
+      '    Box(60, 40, 8)',
+      '    with PolarLocations(12, 4):',
+      '        Hole(radius=2)',
+      '    with Locations((22, 12, 4)):',
+      '        CounterSinkHole(radius=2, counter_sink_radius=4)',
+      'holes = find_holes(p.part)',
+      'print("holes", len(holes))',
+      'print("patterns", [type(x).__name__ for x in find_hole_patterns(holes)])',
+      'print("csink", [c["included_angle"] for c in recognise_countersinks(p.part)])',
+      'wall = Box(40, 30, 5) + Pos(0, 0, 10) * Box(0.5, 20, 15)',
+      'print("augura", [f.kind for f in augura.analyze(wall).findings])',
+      'show(p.part, "plate")',
+    ].join('\n');
+    const result = await runCodeAndRender(page, code, 1);
+    expect(result.errors).toEqual([]);
+    const logs = await waitForConsole(page, 'logs', 'items.some(l => l.startsWith("augura"))');
+    expect(logs).toContain('holes 5');
+    expect(logs.some((l) => /^patterns .*BoltCircle/.test(l))).toBe(true);
+    expect(logs.some((l) => /^csink \[82(\.0)?\]/.test(l))).toBe(true);
+    expect(logs.some((l) => /^augura .*thin_wall/.test(l))).toBe(true);
+  });
+
   test('Python errors surface as console errors with the traceback', async ({ page }) => {
     await gotoAndReady(page);
     await page.evaluate(() => window.CascadeAPI.setMode('python'));

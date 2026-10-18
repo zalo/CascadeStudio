@@ -445,9 +445,11 @@ the same OCCT version as the wasm kernel — validated by running EVERY runnable
 script in the upstream `examples/` and `docs/` trees through both, see
 `test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
 Too Tall Toby challenge parts (mass asserts kept) and every docs `.rst`
-code-block; currently **223/239 scripts PASS** (volume within 0.5%, bbox within
-1e-3/axis), 9 MISMATCH, 6 ERROR, 1 TIMEOUT, 8 SKIP (real build123d fails
+code-block; currently **224/239 scripts PASS** (volume within 0.5%, bbox within
+1e-3/axis), 9 MISMATCH, 5 ERROR, 1 TIMEOUT, 8 SKIP (real build123d fails
 natively), **identically on the Brython and the MicroPython lite legs**
+(dual_color_3mf joined the PASS set when Mesher learned 3MF, 2026-10-18; the
+results files below predate it)
 (`results-013-lite.json`, `results-013-lite-micropython.json`; the unmodified
 pre-0.13 lite scored 191/13/34/1/8 on both — `baseline-013-lite*.json`) —
 full breakdown with per-script reasons AND a hand-maintained
@@ -578,7 +580,7 @@ parent, children)` assemblies with `global_location` and upstream's assembly
 | Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault; every result carries its operation record for `Select.LAST/NEW`), `Part()/Sketch()/Curve()` empty starters, `Compound(obj, ..., children=)` (children = an assembly, `child.parent` set), `copy.copy`, `Shape.__iter__` | — |
 | Measure | `volume/area/length` (volume = per-solid sum; an ASSEMBLY counts its plain children like upstream's Compound.volume), `center()`, `bounding_box()`/`BoundBox(shape)` with 0.12's predicates (`covers`, `contains`/`within`, `contains_properly`, `intersects`/`disjoint`, `touches`, `overlaps`, degenerate axes), **materials** (`Shape.material` = bd_materials name/FinishedMaterial, `mass()`/`compute_mass()`/`compute_volume()`, `Compound.mass` over children, `Unit` G/KG/LB, `UNITS_PER_KILOGRAM`; `bd_materials` shim — COMPROMISE(materials)), `.wrapped`, `.is_forward` | mass properties beyond density × volume |
 | Stdlib | `math`, `copy` (incl. `copy.copy(<Builder>)` snapshots), `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `os` (PATH ARITHMETIC ONLY — `os.path.join/dirname/abspath/...`, `getcwd`; no filesystem is faked, `os.path.exists` is always False), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d), `scipy.spatial.Voronoi` (2-D, Bowyer-Watson Delaunay circumcentres — `.vertices` only, verified vertex-set-identical to scipy on full_round's inputs), `pytest.approx` (real, documented tolerances) | `numpy`, `sympy`, the rest of `pytest`, 2-D `ConvexHull`, Voronoi ridges/regions (raise loudly), everything else |
-| Export/import | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS), `export_obj` (0.12, MEMFS, UVs — COMPROMISE(obj-atlas)), `export_step` (REAL — STEPControl_Writer into MEMFS, incl. `unit=`; `write_pcurves`/`precision_mode` accepted and ignored), `export_brep`/`import_brep`, `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | 3MF (no lib3mf — raises), `export_gltf` (no-op), `ExportDXF`, `import_stl`/`import_svg` |
+| Export/import | `Mesher` (STL and 3MF into worker MEMFS; 3MF written without lib3mf by `ThreeMF.js` — one welded mesh object per shape, labels and colours), `export_stl` (MEMFS), `export_obj` (0.12, MEMFS, UVs — COMPROMISE(obj-atlas)), `export_step` (REAL — STEPControl_Writer into MEMFS, incl. `unit=`; `write_pcurves`/`precision_mode` accepted and ignored), `export_brep`/`import_brep`, `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | `export_gltf` (no-op), `ExportDXF`, `import_stl`/`import_svg` |
 
 **Known honest gaps** (kept as ERRORs rather than fake geometry — see the
 defaults-audit table in report.md for per-script root causes and
@@ -588,9 +590,7 @@ upstream-vs-lite defaults comparisons): the `drafting` module beyond
 draft-angle operation, which lite has had for rounds; the port is ~450 code
 lines whose accuracy rides entirely on `Compound.make_text` glyph metrics,
 since `Text(...).bounding_box().size.X` feeds every arrow position and
-`DimensionLine`'s 3-candidate label placement), `sympy`, 3MF export (no lib3mf
-in this wasm build — dual_color_3mf builds all six of its shapes correctly and
-then fails on `Mesher.write`), `Mesher.read` (the STL round trip through
+`DimensionLine`'s 3-candidate label placement), `sympy`, `Mesher.read` (the STL round trip through
 `pathlib`/`tempfile` in docs-rst/topology_selection/b10 — no mesh reader, and
 its measured faces are individual BRepMesh triangles),
 `fix_degenerate_edges`/`offset(min_edge_length=)` and `split(Keep.BOTH)`.
@@ -636,7 +636,7 @@ rest needs the examples to opt into `sort_by(..., tie_break=True)` /
 authoritative list):
 - `scipy-shim` — pure-Python Nelder-Mead/golden-section instead of scipy; all other scipy APIs raise.
 - `joints` — location algebra on lite shapes; no assembly tree/XCAF (roadmap).
-- `mesher` — STL only, written into the worker's in-memory Emscripten FS (no lib3mf, no disk).
+- `mesher` — STL and 3MF, written into the worker's in-memory Emscripten FS (no disk); 3MF without lib3mf (ThreeMF.js: STORED zip entries, welded mesh objects, base-material colours); no `Mesher.read`.
 - `double-tangent-arc` — scan+bisection root solve over a sampled/refined curve distance; trims the over-extended target segment where upstream relies on wire fixing.
 - `kernel-guard` — fuse results smaller than the largest input are rebuilt from the (correct) General-Fuse partition; the partition keeps internal contact faces, so selectors see the contact topology.
 - `helix` — exact interpolation through dense samples with analytic tangents (no surface-curve segment type).
@@ -1060,6 +1060,13 @@ in remote-session mode** at `/` (EDITOR.md):
     - A name shown again replaces its shape. At the end of a Python evaluation named shapes are ordered by first show (`_orderNamedScene`), so an object keeps its index after a boolean consumed it.
     - With no `show()`, the session appends `show(result, "result")` for a top-level `result`.
     - `named_face`/`find_edges` are build123d-mcp helpers in lite; `named_face`'s front is −Y.
+  - **Vendored upstream Python** (wave 2): `packages/cascade-core/scripts/vendor-drafting.py` generates `src/worker/Build123dDrafting.js`.
+    - **Modules:** `build123d_drafting` (build123d-drafting-helpers' finders + the countersink recognizer), `augura` (printability) and `_cs_mcp_features` (serializers), all Apache-2.0 (`packages/cascade-core/third_party/`).
+    - **OCP access:** the `_cs_ocp` shim (`CsOcpShim.js`, with `_csSurfaceInfo`/`_csClassify`/`_csShellClosed` in StandardLibrary) stands in for OCP.
+    - **Registration:** they are `LAZY_PY_MODULES` — Brython/Pyodide register them when the code mentions them (in dependency order), MicroPython writes them to MEMFS without importing.
+    - **Edits:** re-run the script rather than edit the output. The edits are mechanical MicroPython portability: dataclasses → `Record`, starred tuples, `zip(strict=)`.
+  - Lite also gained `Shape.is_same`/`is_equal`, `is_inside`, `topo_explore_connected_faces`, a MicroPython `__future__` shim, and cone-face `axis_of_rotation` (gp_Cone is unbound: ring centres).
+  - **The MCP tools' probes:** they run the script plus appended lines and read a marked print (`runProbe`/`probeObject` in session.js), then invalidate the run.
 
 ## Playwright Testing
 
