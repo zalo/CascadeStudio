@@ -186,10 +186,32 @@ re-run of the cached script.
 
 ### On the edge
 
-Before the incremental mesh: `cascade-headless-session.makeshifted.workers.dev`,
-deployed 2026-10-18 from `feat/do-editor` (2aaf689). Client wall time from this machine, one run each
-(placement varies about 1.6×, EDIT-SESSIONS.md). The first render includes
-booting a fresh isolate:
+With the incremental mesh: `cascade-headless-session.makeshifted.workers.dev`,
+version 20138bba, deployed 2026-10-18 (ffc225f). Client wall time from this
+machine, one run each. Each cell is *now (before)*, and *first faces* is when
+the first batch with faces arrived:
+
+| model | re-run (all hits) | edit 1 | edit 2 | back to the original | timeline step |
+|---|---|---|---|---|---|
+| mount | 168 ms (516 ms) | 227 ms (361 ms) | 366 ms (504 ms) | 331 ms | 60 ms (80 ms) |
+| plate16 | 1.7 s (10.4 s) | 11.4 s (13.3 s), first faces 4.3 s | 10.5 s (14.4 s), first faces 4.3 s | 4.4 s | 0.63 s (1.1 s) |
+| maker_coin | 5.5 s (7.4 s) | 9.1 s (10.9 s) | 10.6 s (12.6 s) | 11.4 s | 5.9 s² (4.4 s²) |
+| heat_exchanger | 3.0 s (11.6 s) | 7.8 s (14.9 s), first faces 4.7 s | 12.0 s (18.2 s), first faces 7.9 s | 9.1 s | 2.2 s² (3.8 s²) |
+
+- **Re-runs:** meshing was the edge's bottleneck, so a re-run of a big model
+  now costs its evaluation plus a fraction of a second.
+- **Edits:** heat_exchanger's halve. plate16's fillet edits still re-mesh
+  every face (about 6-7 s of the 11), but faces start arriving at 4.3 s and
+  fill in from there.
+- **Going back to the original code:** it reuses the cached faces but
+  re-evaluates the ops it changed (the op cache keeps one run).
+- **maker_coin:** dominated by evaluation; the spread is placement as much as
+  anything (EDIT-SESSIONS.md).
+- **The remote spec** (5 tests, including the streaming one) passes against
+  this deployment.
+
+Before the incremental mesh (2aaf689, the same day). Placement varies about
+1.6× (EDIT-SESSIONS.md); the first render includes booting a fresh isolate:
 
 | model | first render | re-run (all hits) | edit 1 | edit 2 | timeline step | Save STEP |
 |---|---|---|---|---|---|---|
@@ -218,8 +240,8 @@ meshing about 8.5 s on the edge, against 1.35 s locally. This is the same
 - **Not the transfer:** the gzipped payload arrives in under half a second.
 
 Models with small meshes stay interactive: a mount edit comes back in under
-half a second. Large ones pay their mesh on every edit, which is what the
-first item under *Limits* is about.
+half a second. Before the incremental mesh, large ones paid their whole mesh
+on every edit; now they pay only for the faces the edit changed (above).
 
 ## Limits
 
