@@ -1051,6 +1051,15 @@ in remote-session mode** at `/` (EDITOR.md):
   - Renders are software-rasterized in cascade-core (`src/headless/MeshRaster.js` → PNG). Exported files live in DO SQLite.
   - The editor opens on, and follows, the session script (`GET /session/<id>/script`).
   - Test with `BASE=… node examples/cloudflare-worker/scripts/mcp-test.mjs`.
+  - build123d-mcp's harness is ported (BUILD123D-MCP-PORT.md; attribution in `third_party/build123d-mcp/`):
+    - the reference resources (`src/knowledge.js`, every runnable section run by the test) and repair hints (`src/repair-hints.js`);
+    - execute's change line, `compare`, `resolve`, `design_audit`, the validity gate and `locate_gate_defects`;
+    - the exact checks are in cascade-core `src/headless/ShapeAnalysis.js` and `engine.gate()`.
+  - **Named objects.** In lite, `show(part, "part")` names a scene shape (`names=[...]` too).
+    - The names go into `self.sceneShapeNames`, a per-evaluation Map read by identity; `engine.sceneNames()` and `inspectShapes()` report them.
+    - A name shown again replaces its shape. At the end of a Python evaluation named shapes are ordered by first show (`_orderNamedScene`), so an object keeps its index after a boolean consumed it.
+    - With no `show()`, the session appends `show(result, "result")` for a top-level `result`.
+    - `named_face`/`find_edges` are build123d-mcp helpers in lite; `named_face`'s front is −Y.
 
 ## Playwright Testing
 

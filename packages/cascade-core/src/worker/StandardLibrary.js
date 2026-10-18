@@ -1014,6 +1014,9 @@ function Difference(mainBody, objectsToSubtract, keepObjects, fuzzValue, keepEdg
     difference.hash = self.ComputeHash(arguments);
     if (GetNumSolidsInCompound(difference) === 1) {
       difference = GetSolidFromCompound(difference, 0);
+      // the user-facing op adds its result to the scene, and Difference
+      // pushes it below: once is enough (it doubled the solid in exports)
+      if (self.sceneShapes[self.sceneShapes.length - 1] === difference) { self.sceneShapes.pop(); }
     }
     if (hstate) {
       difference._csHist = { hist: hstate.ok ? hstate.hist : null,
@@ -2577,12 +2580,45 @@ function _faceRadius(face) {
 
 /** Rotational axis of a cone/cylinder/sphere/torus/surface-of-revolution
  *  face (build123d Face.axis_of_rotation) as [origin, direction], else null. */
+/** The circle through three points: [centre, radius], null if collinear. */
+function _circleThrough3(a, b, c) {
+  const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+  const cross = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+  const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  const u = sub(b, a); const v = sub(c, a); const w = cross(u, v);
+  const ww = dot(w, w);
+  if (ww < 1e-18) { return null; }
+  const t1 = cross(w, u).map((x) => x * dot(v, v)); const t2 = cross(v, w).map((x) => x * dot(u, u));
+  const off = [0, 1, 2].map((k) => (t1[k] + t2[k]) / (2 * ww));
+  return [[a[0] + off[0], a[1] + off[1], a[2] + off[2]], Math.sqrt(dot(off, off))];
+}
+
+/** A conical face's axis as gp_Cone::Axis() gives it — gp_Cone is not
+ *  bound in this build ("unbound types: 7gp_Cone"). On a
+ *  Geom_ConicalSurface V runs along the axis direction and the ring at
+ *  V = 0 is centred on the cone's Location, so the ring centres at two V
+ *  give the direction and, extrapolated to V = 0, the origin. */
+function _coneAxisFromRings(surf) {
+  const u0 = surf.FirstUParameter(); const u1 = surf.LastUParameter();
+  const v0 = surf.FirstVParameter(); const v1 = surf.LastVParameter();
+  const at = (u, v) => { const p = surf.Value(u, v); return [p.X(), p.Y(), p.Z()]; };
+  const ring = (v) => _circleThrough3(at(u0, v), at(u0 + (u1 - u0) / 3, v), at(u0 + 2 * (u1 - u0) / 3, v));
+  const va = v0 + (v1 - v0) * 0.25; const vb = v0 + (v1 - v0) * 0.75;
+  const a = ring(va); const b = ring(vb);
+  if (!a || !b) { return null; }
+  const d = [0, 1, 2].map((k) => b[0][k] - a[0][k]);
+  const len = Math.hypot(d[0], d[1], d[2]);
+  if (len < 1e-12) { return null; }
+  const o = [0, 1, 2].map((k) => a[0][k] + d[k] * (0 - va) / (vb - va));
+  return [o, d.map((x) => x / len)];
+}
+
 function _faceAxisOfRotation(face) {
   let surf = new self.oc.BRepAdaptor_Surface_2(_asFace(face), true);
   let ST = self.oc.GeomAbs_SurfaceType;
   let type = surf.GetType();
   let ax = null;
-  if (type === ST.GeomAbs_Cone) { ax = surf.Cone().Axis(); }
+  if (type === ST.GeomAbs_Cone) { return _coneAxisFromRings(surf); }
   else if (type === ST.GeomAbs_Cylinder) { ax = surf.Cylinder().Axis(); }
   else if (type === ST.GeomAbs_Torus) { ax = surf.Torus().Axis(); }
   else if (type === ST.GeomAbs_Sphere) { ax = surf.Sphere().Position().Axis(); }
@@ -3479,13 +3515,30 @@ function ScaleXYZ(factors, shape, keepShape) {
 /** Hidden-line-removal projection: project the shape onto a viewport with
  *  the given view direction, returning [visibleEdges, hiddenEdges] as two
  *  compounds (HLRBRep — what build123d's project_to_viewport uses). */
-function HLRProject(shape, viewDir, keepShape) {
+/** Hidden-line projection — build123d's Shape.project_to_viewport. The
+ *  camera frame sits at `origin` with its main direction `projDir` pointing
+ *  TO THE VIEWER (viewport_origin - look_at) and its Y axis along `up`
+ *  (gp_Ax2::SetYDirection: X = up x N), exactly as upstream builds it, so
+ *  visible/hidden and the page axes match. `focus` makes it a perspective
+ *  projection. Returns [visible, hidden] edge compounds in the projector's
+ *  frame, in upstream's order (V, Rg1LineV, OutLineV / H, OutLineH,
+ *  Rg1LineH). */
+function HLRProject(shape, projDir, keepShape, origin, up, focus) {
   let result = self.CacheOp(arguments, "HLRProject", () => {
     let hlr = new self.oc.HLRBRep_Algo_1();
     hlr.Add_2(shape, 0);
-    let projDir = new self.oc.gp_Dir_5(viewDir[0], viewDir[1], viewDir[2]);
-    let ax2 = new self.oc.gp_Ax2_4(new self.oc.gp_Pnt_3(0, 0, 0), projDir);
-    let projector = new self.oc.HLRAlgo_Projector_2(ax2);
+    const o = origin || [0, 0, 0];
+    const u = up || [0, 0, 1];
+    const nl = Math.hypot(projDir[0], projDir[1], projDir[2]) || 1;
+    const n = [projDir[0] / nl, projDir[1] / nl, projDir[2] / nl];
+    let x = [u[1] * n[2] - u[2] * n[1], u[2] * n[0] - u[0] * n[2], u[0] * n[1] - u[1] * n[0]];
+    const xl = Math.hypot(x[0], x[1], x[2]);
+    const pnt = new self.oc.gp_Pnt_3(o[0], o[1], o[2]);
+    const dir = new self.oc.gp_Dir_5(n[0], n[1], n[2]);
+    // up parallel to the view: no Y to keep (upstream's SetYDirection raises)
+    let ax2 = xl < 1e-9 ? new self.oc.gp_Ax2_4(pnt, dir)
+      : new self.oc.gp_Ax2_2(pnt, dir, new self.oc.gp_Dir_5(x[0] / xl, x[1] / xl, x[2] / xl));
+    let projector = focus ? new self.oc.HLRAlgo_Projector_3(ax2, focus) : new self.oc.HLRAlgo_Projector_2(ax2);
     hlr.Projector_1(projector);
     hlr.Update();
     hlr.Hide_1();
@@ -3497,8 +3550,8 @@ function HLRProject(shape, viewDir, keepShape) {
     grab(toShape.Rg1LineVCompound_1(), visible);
     grab(toShape.OutLineVCompound_1(), visible);
     grab(toShape.HCompound_1(), hidden);
-    grab(toShape.Rg1LineHCompound_1(), hidden);
     grab(toShape.OutLineHCompound_1(), hidden);
+    grab(toShape.Rg1LineHCompound_1(), hidden);
     let mk = (list) => {
       let builder = new self.oc.BRep_Builder();
       let compound = new self.oc.TopoDS_Compound();

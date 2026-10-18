@@ -122,6 +122,37 @@ test.describe('Python (build123d) mode', () => {
     expect(grab('diff_volume')).toBeCloseTo(8000 - Math.PI * 25 * 20, 0);
   });
 
+  test('show(obj, "name"): a re-shown name replaces its shape and keeps its place; harness helpers', async ({ page }) => {
+    await gotoAndReady(page);
+    await page.evaluate(() => window.CascadeAPI.setMode('python'));
+    const code = [
+      'from build123d import *',
+      'base = Box(40, 30, 6)',
+      'show(base, "base")',
+      'pin = Pos(0, 0, 8) * Cylinder(3, 10)',
+      'show(pin, "pin")',
+      'base = base - Cylinder(3, 20)',
+      'show(base, "base")',
+      'show([Pos(30, 0, 0) * Box(2, 2, 2), Pos(35, 0, 0) * Box(2, 2, 2)], "cubes")',
+      'print("top_z", named_face(base, "top").center().Z)',
+      'find_edges(base, geom="circle", radius=3)',
+      'import build123d as b',
+      'print("described", b._cs_describe(b._cs_shown_object("pin").faces().filter_by(GeomType.CYLINDER)[0]))',
+    ].join('\n');
+    // base (re-shown, not doubled), pin, cubes[0], cubes[1]
+    const result = await runCodeAndRender(page, code, 4);
+    expect(result.errors).toEqual([]);
+    // the cut base (line 6) keeps index 0, ahead of the pin (line 4)
+    const lines = await page.evaluate(() => window.threejsViewport._shapeLines.slice());
+    expect(lines.slice(0, 2)).toEqual([6, 4]);
+    const logs = await waitForConsole(page, 'logs', 'items.some(l => l.startsWith("described"))');
+    expect(logs).toContain('top_z 3.0');
+    expect(logs.some((l) => /^find_edges: 2 edge\(s\) matched, radii \[3(\.0)?\]/.test(l))).toBe(true);
+    const d = JSON.parse(logs.find((l) => l.startsWith('described')).slice('described '.length));
+    expect(d.geom_type).toBe('CYLINDER');
+    expect(d.radius).toBe(3);
+  });
+
   test('Python errors surface as console errors with the traceback', async ({ page }) => {
     await gotoAndReady(page);
     await page.evaluate(() => window.CascadeAPI.setMode('python'));

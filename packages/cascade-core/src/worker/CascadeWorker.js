@@ -501,6 +501,10 @@ class CascadeStudioWorker {
     self.opNumber = 0;
     self.GUIState = payload.GUIState;
     self.evalLanguage = payload.language || 'cascadestudio';
+    // scene shape -> the name a Python show(shape, "name") gave it, for
+    // this evaluation only (Build123dLite show(); hosts read it by identity)
+    self.sceneShapeNames = new Map();
+    self.sceneNameOrder = [];   // names in first-shown order
     // Heavy-model memory flags (EditorManager resolves them from the URL /
     // localStorage): lowMemory drops history shape refs + deletes pruned
     // cache entries; ocpLifetime='leak' opts OUT of the deterministic
@@ -568,8 +572,23 @@ class CascadeStudioWorker {
     } catch (e) {
       csDeferError(() => { throw e; });
     } finally {
+      CascadeStudioWorker._orderNamedScene();
       this._finishEvaluation();
     }
+  }
+
+  /** Named shapes first, in the order their names were first shown, then
+   *  the rest in scene order: a name re-shown after a boolean consumed its
+   *  shape (the result is appended) keeps its index. */
+  static _orderNamedScene() {
+    const order = self.sceneNameOrder; const names = self.sceneShapeNames;
+    if (!order || !order.length || !names || !Array.isArray(self.sceneShapes)) { return; }
+    const rank = (s) => {
+      const k = order.indexOf(names.get(s));
+      return k < 0 ? order.length : k;
+    };
+    self.sceneShapes = self.sceneShapes.map((s, i) => [s, rank(s), i])
+      .sort((a, b) => (a[1] - b[1]) || (a[2] - b[2])).map((x) => x[0]);
   }
 
   /** Post-evaluation bookkeeping shared by the JS and Python paths:

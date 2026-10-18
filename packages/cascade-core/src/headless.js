@@ -38,6 +38,7 @@ import { IncrementalMesher } from './worker/IncrementalMesher.js';
 import { renderMeshImage, viewBasis, VIEWS } from './headless/MeshRaster.js';
 import { encodePNG } from './headless/PngEncode.js';
 import { encodeGLB } from './headless/GlbEncode.js';
+import * as SA from './headless/ShapeAnalysis.js';
 import { toArrayBuffer } from './worker/WasmAssets.js';
 
 /** Message types that carry a GUI widget registration. The widget functions
@@ -329,6 +330,10 @@ export async function createHeadlessCascade(options = {}) {
     return shape;
   };
 
+  /** The kept scene (run({keepScene: true})), else the combined shape. */
+  const sceneShapes = () => (state.scene && state.scene.length ? state.scene
+    : (globalThis.self.currentShape ? [globalThis.self.currentShape] : []));
+
   const engine = {
     /** The underlying CascadeStudioWorker (escape hatch: `.worker.oc`, the
      *  standard library on `globalThis.self`, etc.). */
@@ -382,6 +387,10 @@ export async function createHeadlessCascade(options = {}) {
 
       const sceneShapeCount = (globalThis.self.sceneShapes || []).length;
       state.scene = runOpts.keepScene ? (globalThis.self.sceneShapes || []).slice() : null;
+      // show(shape, "name") names, by scene position (null: unnamed)
+      const names = globalThis.self.sceneShapeNames;
+      state.sceneNames = state.scene
+        ? state.scene.map((sh) => (names && names.get(sh)) || null) : null;
       let mesh = null;
       let shapeLines = null;
       let shapeCount = 0;
@@ -610,8 +619,9 @@ export async function createHeadlessCascade(options = {}) {
         return n;
       };
       const r6 = (v) => Math.round(v * 1e6) / 1e6;
+      const names = (state.scene && state.sceneNames) || [];
       return shapes.map((shape, index) => {
-        const out = { index, line: (shape && shape.producingLine) || null };
+        const out = { index, name: names[index] || null, line: (shape && shape.producingLine) || null };
         try {
           if (!shape || shape.IsNull()) { return Object.assign(out, { error: 'null shape' }); }
           out.type = TYPES[shape.ShapeType().value] || 'Shape';
@@ -659,6 +669,116 @@ export async function createHeadlessCascade(options = {}) {
         } catch (e) { out.error = (e && e.message) || String(e); }
         return out;
       });
+    },
+
+    /** The kept scene's show() names, by index (null: unnamed). */
+    sceneNames() { return state.scene ? (state.sceneNames || state.scene.map(() => null)).slice() : []; },
+
+    /** The validity gate for each kept scene shape (build123d-mcp's
+     *  validate / locate_gate_defects, on the exact B-rep): solids,
+     *  volume, BRepCheck, the edge->face map (open and non-manifold edges,
+     *  with their midpoints), and overlapping solids inside the shape.
+     *  `o.indices` limits it to some shapes; `o.interference` (default
+     *  true) also checks solids of DIFFERENT shapes against each other. */
+    gate(o = {}) {
+      const o2 = oc();
+      const S = globalThis.self;
+      const scene = sceneShapes();
+      const names = engine.sceneNames();
+      const idx = Array.isArray(o.indices) ? o.indices : scene.map((x, i) => i);
+      const budgetMs = o.budgetMs || 8000;
+      const shapes = idx.map((index) => {
+        const shape = scene[index];
+        const out = { index, name: names[index] || null };
+        try {
+          const solids = SA.subShapes(o2, shape, 'TopAbs_SOLID');
+          out.solids = solids.length;
+          out.volume = solids.length ? Math.round(S.SolidsVolume(shape) * 1e4) / 1e4 : 0;
+          const check = new o2.BRepCheck_Analyzer(shape, true, false, false);
+          out.brepValid = !!check.IsValid_2();
+          check.delete();
+          Object.assign(out, SA.edgeDefects(o2, shape, o.maxDefects || 20));
+          const ov = SA.solidOverlaps(o2, S, solids, { budgetMs });
+          out.overlaps = ov.overlaps;
+          out.overlapChecked = ov.checked;
+          if (!ov.checked) { out.overlapNote = ov.why; }
+          SA.free(solids);
+        } catch (e) { out.error = (e && e.message) || String(e); }
+        return out;
+      });
+      let interference = null;
+      if (o.interference !== false && idx.length > 1) {
+        // one representative per shape: the solids of different shapes
+        const owners = []; const solids = [];
+        for (const index of idx) {
+          for (const sol of SA.subShapes(o2, scene[index], 'TopAbs_SOLID')) {
+            owners.push(index); solids.push(sol);
+          }
+        }
+        const labels = owners.map((index, k) => {
+          const nm = names[index] !== null && names[index] !== undefined ? names[index] : String(index);
+          const nth = owners.slice(0, k).filter((x) => x === index).length;
+          return owners.filter((x) => x === index).length > 1 ? nm + ' solid ' + nth : nm;
+        });
+        const ov = SA.solidOverlaps(o2, S, solids, { budgetMs, labels, maxSolids: o.maxSolids || 24 });
+        interference = { checked: ov.checked, pairs: ov.overlaps.filter((p) => {
+          const a = labels.indexOf(p.a); const b = labels.indexOf(p.b);
+          return owners[a] !== owners[b];
+        }) };
+        if (!ov.checked) { interference.note = ov.why; }
+        SA.free(solids);
+      }
+      return { shapes, interference };
+    },
+
+    /** One shape for analysis: a scene shape, or a new compound of several
+     *  (release it with the returned free()). */
+    pickShape(indices) {
+      const scene = sceneShapes();
+      const list = (Array.isArray(indices) ? indices : [indices]).map((i) => scene[i]);
+      if (list.some((x) => !x)) { throw new Error('no such scene shape: ' + JSON.stringify(indices)); }
+      if (list.length === 1) { return { shape: list[0], free() {} }; }
+      const o2 = oc();
+      const comp = new o2.TopoDS_Compound();
+      const b = new o2.BRep_Builder();
+      b.MakeCompound(comp);
+      for (const x of list) { b.Add(comp, x); }
+      b.delete();
+      return { shape: comp, free() { try { comp.delete(); } catch (e) { /* best effort */ } } };
+    },
+
+    /** The face inventory and the inertia tensor of a scene shape (or of
+     *  several, as one): build123d-mcp's measure() extras. */
+    shapeDetails(indices) {
+      const o2 = oc();
+      const S = globalThis.self;
+      const p = engine.pickShape(indices);
+      try {
+        const solids = SA.subShapes(o2, p.shape, 'TopAbs_SOLID');
+        const out = { faceInventory: SA.faceInventory(o2, S, p.shape) };
+        if (solids.length) { out.inertia = SA.inertia(o2, p.shape); }
+        SA.free(solids);
+        return out;
+      } finally { p.free(); }
+    },
+
+    /** compare kind='fit': clearance and containment of two scene shapes
+     *  (or groups of them). */
+    clearance(a, b) {
+      const pa = engine.pickShape(a); const pb = engine.pickShape(b);
+      try { return SA.clearance(oc(), globalThis.self, pa.shape, pb.shape); }
+      finally { pa.free(); pb.free(); }
+    },
+
+    /** The exact volumes of a minus b and b minus a: what an edit added
+     *  and removed (compare kind='shape'). */
+    changedVolumes(a, b) {
+      const pa = engine.pickShape(a); const pb = engine.pickShape(b);
+      const S = globalThis.self;
+      try {
+        return { removed: SA.booleanVolume(oc(), S, 'cut', pa.shape, pb.shape),
+          added: SA.booleanVolume(oc(), S, 'cut', pb.shape, pa.shape) };
+      } finally { pa.free(); pb.free(); }
     },
 
     /** How many times the kernel has been rewound to its boot image (by

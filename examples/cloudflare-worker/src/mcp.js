@@ -14,8 +14,12 @@
 // prompts, resources. test/mcp-session.mjs drives it with the official SDK
 // client.
 
-import { SERVER_INFO, TOOLS, INSTRUCTIONS, WORKFLOW, QUICKREF, PROMPTS, RESOURCES, promptMessages }
-  from './mcp-tools.js';
+import { SERVER_INFO, TOOLS, INSTRUCTIONS, WORKFLOW, QUICKREF, SELECTORS, STARTER, PROMPTS, RESOURCES,
+  promptMessages } from './mcp-tools.js';
+import { repairHints } from './repair-hints.js';
+
+const RESOURCE_TEXT = { 'build123d://workflow': WORKFLOW, 'build123d://quickref': QUICKREF,
+  'build123d://selectors': SELECTORS, 'build123d://starter': STARTER };
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -46,6 +50,9 @@ export function createMcpHandler(o) {
     const args = (params && params.arguments) || {};
     if (!toolNames.has(name)) { return textResult('unknown tool: ' + name, true); }
     if (name === 'workflow_hints') { return textResult(WORKFLOW); }
+    if (name === 'repair_hints') {
+      return textResult(JSON.stringify({ hints: repairHints(args.error_text, true) }, null, 1));
+    }
     if (name === 'new_session') {
       const id = randomId();
       return textResult('session: ' + id + '\neditor: ' + origin + '/?session=' + id
@@ -95,9 +102,10 @@ export function createMcpHandler(o) {
       case 'resources/list': result = { resources: RESOURCES }; break;
       case 'resources/templates/list': result = { resourceTemplates: [] }; break;
       case 'resources/read': {
-        const text = p.uri === 'build123d://workflow' ? WORKFLOW : p.uri === 'build123d://quickref' ? QUICKREF : null;
-        if (text === null) { return rpcError(msg.id, -32002, 'resource not found: ' + p.uri); }
-        result = { contents: [{ uri: p.uri, mimeType: 'text/markdown', text }] };
+        const text = RESOURCE_TEXT[p.uri];
+        if (text === undefined) { return rpcError(msg.id, -32002, 'resource not found: ' + p.uri); }
+        const res = RESOURCES.find((r) => r.uri === p.uri);
+        result = { contents: [{ uri: p.uri, mimeType: res.mimeType, text }] };
         break;
       }
       case 'logging/setLevel': result = {}; break;

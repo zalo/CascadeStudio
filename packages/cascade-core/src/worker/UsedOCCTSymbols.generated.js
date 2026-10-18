@@ -124,6 +124,7 @@ export const USED_OCCT_SYMBOLS = [
   "Geom_BezierCurve_1",
   "Geom_Plane_2",
   "HLRAlgo_Projector_2",
+  "HLRAlgo_Projector_3",
   "HLRBRep_Algo_1",
   "HLRBRep_HLRToShape",
   "Handle_Geom2d_Curve_2",

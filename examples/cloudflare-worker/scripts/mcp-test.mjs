@@ -8,7 +8,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import fs from 'node:fs';
-import { QUICKREF } from '../src/mcp-tools.js';
+import { STARTER } from '../src/mcp-tools.js';
+import { RUNNABLE_EXAMPLES } from '../src/knowledge.js';
 
 const BASE = (process.env.BASE || 'http://127.0.0.1:8787').replace(/\/+$/, '');
 const KEY = process.env.ACCESS_KEY || '';
@@ -37,14 +38,19 @@ const call = (name, args = {}) => client.callTool({ name, arguments: args });
 
 // ---- discovery ----
 const tools = (await client.listTools()).tools.map((t) => t.name);
-check('15 tools listed', tools.length === 15, tools.join(' '));
+check('20 tools listed', tools.length === 20, tools.join(' '));
 check('instructions sent', /render_view/.test(client.getInstructions() || ''));
 const prompts = (await client.listPrompts()).prompts;
 check('the start-cad-session prompt', prompts.some((p) => p.name === 'start-cad-session'));
 const pr = await client.getPrompt({ name: 'start-cad-session', arguments: { description: 'a 20 mm cube' } });
 check('the prompt fills in the description', /20 mm cube/.test(pr.messages[0].content.text));
 const quick = await client.readResource({ uri: 'build123d://quickref' });
-check('the quickref resource', /BuildPart/.test(quick.contents[0].text));
+check('the quickref resource', /BuildPart/.test(quick.contents[0].text) && /Server conventions/.test(quick.contents[0].text));
+const sel = await client.readResource({ uri: 'build123d://selectors' });
+check('the selectors resource', /Drill-down idiom/.test(sel.contents[0].text));
+check('the starter resource', /show\(/.test((await client.readResource({ uri: 'build123d://starter' })).contents[0].text));
+check('repair_hints (no session needed)', /from build123d import/.test(text(await call('repair_hints',
+  { error_text: "NameError: name 'Box' is not defined" }))));
 check('workflow_hints', /The loop/.test(text(await call('workflow_hints'))));
 
 // ---- a session ----
@@ -83,7 +89,7 @@ const m = JSON.parse(text(r));
 check('measure: volume, centre of mass, mass', m.shapes[0].volume > 15000 && m.shapes[0].centerOfMass && m.shapes[0].massGrams > 40,
   JSON.stringify({ volume: m.shapes[0].volume, mass: m.shapes[0].massGrams, faces: m.shapes[0].faces }));
 r = await call('validate', { session: sid });
-check('validate: PASS', !r.isError && /^PASS/.test(text(r)));
+check('validate: PASS', !r.isError && /^Validity gate: PASS/.test(text(r)), text(r).split('\n')[0]);
 
 // ---- export ----
 for (const [format, magic] of [['step', 'ISO-10303-21'], ['stl', 'solid'], ['glb', 'glTF'], ['brep', 'DBRep'], ['svg', '<svg']]) {
@@ -110,14 +116,102 @@ check('session_state: rev, snapshots, files, editor link', st.script.rev === 5 &
   && st.files.length >= 5 && /\?session=/.test(st.editor), JSON.stringify({ rev: st.script.rev, files: st.files.length }));
 check('open_in_editor', /\?session=/.test(text(await call('open_in_editor', { session: sid }))));
 
-// ---- the documentation's own example runs ----
-const code = QUICKREF.split('```python')[1].split('```')[0];
+// ---- the documentation's own examples run ----
+const code = STARTER.split('```python')[1].split('```')[0];
 r = await call('set_script', { session: sid, code });
-check('the quickref example runs and shows its three parts', !r.isError && /shapes: 3/.test(text(r)), text(r).split('\n').slice(0, 5).join(' | '));
-r = await call('execute', { session: sid, code: 'extra = Pos(0, 0, 50) * Box(5, 5, 5)\nshow(extra)' });
-const after = text(await call('get_script', { session: sid }));
-check('a chunk with show() supersedes the earlier show()', !r.isError && /shapes: 1/.test(text(r))
-  && /# show\(Pos\(-100/.test(after), text(r).split('\n')[1]);
+check('the starter example runs and shows its three named parts', !r.isError && /shapes: 3/.test(text(r))
+  && /"bracket"/.test(text(r)), text(r).split('\n').slice(0, 5).join(' | '));
+r = await call('set_script', { session: sid, code: 'from build123d import *\na = Box(1, 1, 1)\nshow(a)' });
+r = await call('execute', { session: sid, code: 'b = Pos(5, 0, 0) * Box(2, 2, 2)\nshow(b)' });
+let after = text(await call('get_script', { session: sid }));
+check('a chunk with an unnamed show() supersedes the earlier one', !r.isError && /shapes: 1/.test(text(r))
+  && /# show\(a\)/.test(after), text(r).split('\n')[1]);
+// (own sessions: the per-minute limit is per session)
+const newSid = async () => (text(await call('new_session')).match(/session: (\S+)/) || [])[1];
+const exSid = await newSid();
+let bad = [];
+for (const [lbl, ex] of RUNNABLE_EXAMPLES) {
+  const x = await call('set_script', { session: exSid, code: ex });
+  if (x.isError || /shapes: none/.test(text(x))) { bad.push(lbl + ': ' + text(x).split('\n').slice(1, 3).join(' ')); }
+}
+check('all ' + RUNNABLE_EXAMPLES.length + ' runnable quickref/selectors sections run and show something', !bad.length, bad.join(' || '));
+
+// ---- named objects, change diagnostics ----
+const mainSid = sid;
+{
+const sid = await newSid();
+r = await call('execute', { session: sid, code: 'x = Bxo(1, 2, 3)' });
+check('a failing execute carries repair hints', r.isError && /hints:\n- A name is not defined/.test(text(r)), text(r).slice(-120));
+r = await call('set_script', { session: sid, code: 'from build123d import *\nbase = Box(40, 30, 6)\nshow(base, "base")\n'
+  + 'pin = Pos(0, 0, 8) * Cylinder(3, 10)\nshow(pin, "pin")' });
+check('named show(): both objects listed by name', !r.isError && /\[0\] "base"/.test(text(r)) && /\[1\] "pin"/.test(text(r)), text(r));
+r = await call('execute', { session: sid, code: 'base = base - Cylinder(3, 20)\nshow(base, "base")' });
+check('re-showing a name replaces it, and the change is reported', !r.isError && /shapes: 2/.test(text(r))
+  && /"base": volume 7200 -> 7030\.354 \(-169\.646, -2\.4%\), faces 6 -> 7/.test(text(r)), text(r));
+r = await call('execute', { session: sid, code: 'base = base - Pos(100, 0, 0) * Box(1, 1, 1)\nshow(base, "base")' });
+check('a boolean that missed is flagged', !r.isError && /Warning: the code ran but no shown shape changed/.test(text(r)), text(r));
+r = await call('measure', { session: sid, object_name: 'pin', material: 'pla' });
+let mm = JSON.parse(text(r).replace(/ — .*$/, ''));
+check('measure object_name + material: face inventory, inertia, mass', mm.shapes.length === 1 && mm.shapes[0].name === 'pin'
+  && mm.shapes[0].faceInventory.some((f) => f.type === 'Cylinder' && f.diameter === 6) && mm.shapes[0].inertia.Izz > 0
+  && Math.abs(mm.shapes[0].massGrams - 0.351) < 0.01, JSON.stringify(mm.shapes[0]).slice(0, 300));
+r = await call('compare', { session: sid, a: 'pin', b: 'base', kind: 'fit' });
+let cf = JSON.parse(text(r));
+check('compare fit: the pin sits on the plate in its hole (touching)', cf.status === 'touching' && cf.clearance === 0, text(r));
+r = await call('compare', { session: sid, a: 'pin', b: 'base', kind: 'align', axis: 'Z', mode: 'clearance' });
+check('compare align', Math.abs(JSON.parse(text(r)).delta) < 1e-6 && /touching/.test(text(r)), text(r));
+r = await call('compare', { session: sid, a: 'base', b: 'pin', kind: 'shape' });
+let cs = JSON.parse(text(r));
+check('compare shape: exact added/removed volumes', cs.magnitude_method === 'exact_volume' && Math.abs(cs.changed.removed_volume - 7030.354) < 0.01, text(r).slice(0, 200));
+r = await call('resolve', { session: sid, object_name: 'base', selector: '.faces().sort_by(Axis.Z)[-1]', label: 'top' });
+let rs = JSON.parse(text(r));
+check('resolve: the top face, its normal and centre', rs.type === 'Face' && rs.geom_type === 'PLANE' && rs.normal[2] === 1
+  && rs.center[2] === 3 && rs.ref === '@cad[base#top]', text(r).slice(0, 200));
+r = await call('resolve', { session: sid, object_name: 'base', selector: '.edges().filter_by(GeomType.CIRCLE)' });
+rs = JSON.parse(text(r));
+check('resolve a list: count, arc centres, radius', rs.count === 2 && rs.entities[0].radius === 3, text(r).slice(0, 200));
+r = await call('resolve', { session: sid, object_name: 'base', selector: '.nope()' });
+check('resolve: a bad selector is an error', r.isError && /selector raised/.test(text(r)), text(r));
+check('session_state lists the resolve label and objects', /"top"/.test(text(await call('session_state', { session: sid })))
+  && /"base"/.test(text(await call('session_state', { session: sid }))));
+check('save_snapshot with a summary', /2 object/.test(text(await call('save_snapshot', { session: sid, name: 'two' }))));
+await call('execute', { session: sid, code: 'pin = Pos(0, 0, 8) * Cylinder(3, 14)\nshow(pin, "pin")' });
+r = await call('compare', { session: sid, a: 'two', kind: 'snapshot' });
+check('compare snapshot: the pin changed, the base did not', /~ \[1\] "pin"/.test(text(r)) && /= \[0\] "base"/.test(text(r)), text(r));
+r = await call('render_view', { session: sid, objects: 'pin', highlight: ['pin'] });
+check('render_view objects by name', /1 object\(s\): \[1\] "pin"/.test(text(r)), text(r));
+
+// ---- the validity gate ----
+r = await call('set_script', { session: sid, code: 'from build123d import *\npair = Compound([Box(10, 10, 10), Pos(5, 0, 0) * Box(10, 10, 10)])\n'
+  + 'show(pair, "pair", Face.make_rect(10, 10), "sheet")' });
+r = await call('validate', { session: sid });
+check('validate FAILs overlapping solids and a sheet', r.isError && /overlap \(interpenetrating, 500/.test(text(r))
+  && /"sheet" has no solid/.test(text(r)) && /4 open edge/.test(text(r)), text(r).split('\n')[0]);
+r = await call('validate', { session: sid, object_name: 'sheet' });
+check('validate object_name', r.isError && !/"pair"/.test(text(r).split('\n')[0]), text(r).split('\n')[0]);
+r = await call('locate_gate_defects', { session: sid });
+let ld = JSON.parse(text(r));
+check('locate_gate_defects: the overlap and the open edges with coordinates', ld.counts.solid_overlap === 1 && ld.counts.open_edge === 4
+  && ld.defects.find((d) => d.kind === 'open_edge').at.length === 3, JSON.stringify(ld.counts));
+r = await call('set_script', { session: sid, code: 'from build123d import *\nshow(Box(10, 10, 10), "a", Pos(8, 0, 0) * Box(10, 10, 10), "b")' });
+r = await call('validate', { session: sid });
+check('separate objects that interpenetrate: PASS with a warning', !r.isError && /PASS/.test(text(r)) && /interpenetrate/.test(text(r)), text(r).split('\n')[0]);
+
+// ---- design_audit, the result fallback ----
+r = await call('set_script', { session: sid, code: 'from build123d import *\n\nwidth = 40.0\nthick = 4.0\nr = 1.9\n'
+  + 'plate = Box(width, 30, thick)\nplate = fillet(plate.edges(), r)\nshow(plate, "plate")' });
+r = await call('design_audit', { session: sid });
+let da = JSON.parse(text(r));
+const vr = (n) => (da.audit.find((x) => x.name === n) || {}).verdict;
+check('design_audit: width robust, the fillet radius needs review', da.summary.total_params === 3 && vr('width') === 'robust'
+  && ['coupling', 'brittle'].includes(vr('r')) && da.summary.needs_review >= 1, JSON.stringify(da.summary) + ' r=' + vr('r') + ' thick=' + vr('thick'));
+r = await call('get_script', { session: sid });
+check('design_audit leaves the script alone', /r = 1\.9/.test(text(r)) && !/r = 2\.09/.test(text(r)));
+r = await call('measure', { session: sid, object_name: 'plate' });
+check('the next tool re-runs the real script', !r.isError && Math.abs(JSON.parse(text(r)).shapes[0].bbox[3] - 20) < 1e-6);
+r = await call('set_script', { session: sid, code: 'from build123d import *\nsketch = Rectangle(5, 5)\nresult = Box(1, 2, 3)' });
+check('no show(): a top-level result is shown', !r.isError && /shapes: 1/.test(text(r)) && /"result"/.test(text(r)), text(r));
+}
 
 const skill = fs.readFileSync(new URL('../skills/build123d-remote/SKILL.md', import.meta.url), 'utf8');
 r = await call('set_script', { session: sid, code: skill.split('```python')[1].split('```')[0] });
@@ -128,7 +222,7 @@ check('the skill\'s example runs', !r.isError && /shapes: 1/.test(text(r)) && /s
 const rest = BASE + '/session/' + sid;
 const auth = KEY ? { authorization: 'Bearer ' + KEY } : {};
 const rv = await fetch(rest + '/tools/validate', { method: 'POST', headers: auth, body: '{}' });
-check('REST: POST /tools/validate', rv.status === 200 && /^PASS/.test((await rv.json()).content[0].text));
+check('REST: POST /tools/validate', rv.status === 200 && /^Validity gate: PASS/.test((await rv.json()).content[0].text));
 const png = await fetch(rest + '/view.png?view=front&width=320&height=240', { headers: auth });
 const pb = Buffer.from(await png.arrayBuffer());
 check('REST: GET /view.png', png.status === 200 && pb.readUInt32BE(16) === 320, png.headers.get('content-type'));
@@ -189,7 +283,7 @@ if (process.env.OAUTH) {
       client_id: reg.client_id, code_verifier: verifier, resource: BASE + '/mcp' }) })).json();
   check('the code becomes an access token', !!tok.access_token, Object.keys(tok).join(','));
   const oc = await connect(tok.access_token);
-  check('the OAuth token opens /mcp', (await oc.listTools()).tools.length === 15);
+  check('the OAuth token opens /mcp', (await oc.listTools()).tools.length === 20);
   await oc.close();
 }
 

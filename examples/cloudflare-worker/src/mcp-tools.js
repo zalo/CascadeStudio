@@ -2,9 +2,13 @@
 // build123d-mcp's where the meaning matches, so its workflow guidance
 // carries over), the server instructions, the workflow guide, one prompt and
 // two resources. The tools themselves run in the session Durable Object
-// (session.js, mcpTool()); the protocol is mcp.js.
+// (session.js, mcpTool()); the protocol is mcp.js. The reference resources
+// (build123d://quickref, build123d://selectors) are adapted from
+// build123d-mcp: knowledge.js.
 
-export const SERVER_INFO = { name: 'cascade-build123d', title: 'CascadeStudio build123d (remote sessions)', version: '0.1.0' };
+import { QUICKREF, SELECTORS } from './knowledge.js';
+
+export const SERVER_INFO = { name: 'cascade-build123d', title: 'CascadeStudio build123d (remote sessions)', version: '0.2.0' };
 
 const session = {
   type: 'string',
@@ -15,6 +19,16 @@ const sessionOptional = Object.assign({}, session, {
   description: session.description + ' Omit it to start a new session; the reply says which id it got.',
 });
 const VIEW_NAMES = ['iso', 'front', 'back', 'right', 'left', 'top', 'bottom', 'iso-back', 'iso-below'];
+const objectName = {
+  type: ['string', 'integer'],
+  description: 'A shown object: the name given in show(obj, "name"), or its index. A named list is all its '
+    + 'members (name[0], name[1], ...). Omit for every shown shape.',
+};
+const objectList = {
+  type: ['array', 'string'], items: { type: ['string', 'integer'] },
+  description: 'Shown objects by name or index (an array, or names separated by commas).',
+};
+const RO = { readOnlyHint: true, openWorldHint: false };
 
 export const TOOLS = [
   {
@@ -30,9 +44,12 @@ export const TOOLS = [
     title: 'Run build123d code',
     description: 'Append build123d Python to the session script and run the whole script (unchanged operations '
       + 'are cached, so re-running earlier code is cheap). If it raises, the appended code is rolled back and the '
-      + 'error comes back with its line. `from build123d import *` is added to an empty session. End a chunk '
-      + 'with show(obj, ...) when it should change what is displayed: the last show() wins (earlier one-line '
-      + 'show calls are commented out). print() output is returned. Units are millimetres.',
+      + 'error comes back with its line and repair hints. `from build123d import *` is added to an empty session. '
+      + 'Register what to display, measure and export with show(obj, "name"): showing a name again replaces it, '
+      + 'and a chunk with an unnamed show() supersedes earlier unnamed show lines. With no show() at all, a '
+      + 'top-level `result` is shown. The reply lists each shown shape and what changed since the last run '
+      + '(volume, faces, bbox), and warns when a boolean changed nothing. print() output is returned. '
+      + 'Units are millimetres.',
     inputSchema: { type: 'object', properties: { session: sessionOptional,
       code: { type: 'string', description: 'build123d Python (builder or algebra mode).' } }, required: ['code'] },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -63,12 +80,14 @@ export const TOOLS = [
     inputSchema: { type: 'object', properties: {
       session,
       view: { type: 'string', enum: VIEW_NAMES, description: 'Named view (default iso).' },
+      direction: { type: 'string', description: 'build123d-mcp\'s name for view (also accepts "rear", "side").' },
       azimuth: { type: 'number', description: 'Degrees; 0 looks from the front (-Y), 90 from the right (+X). Overrides view.' },
       elevation: { type: 'number', description: 'Degrees; 90 looks straight down. Overrides view.' },
       width: { type: 'integer', minimum: 128, maximum: 1600, description: 'Pixels (default 800).' },
       height: { type: 'integer', minimum: 128, maximum: 1200, description: 'Pixels (default 600).' },
-      shapes: { type: 'array', items: { type: 'integer' }, description: 'Only these shapes (indices from measure).' },
-      highlight: { type: 'array', items: { type: 'integer' }, description: 'Draw these shapes in orange.' },
+      objects: Object.assign({}, objectList, { description: 'Only these shown objects (names or indices).' }),
+      shapes: { type: 'array', items: { type: ['string', 'integer'] }, description: 'Same as objects.' },
+      highlight: Object.assign({}, objectList, { description: 'Draw these objects in orange.' }),
       edges: { type: 'boolean', description: 'Draw the model edges (default true).' },
       format: { type: 'string', enum: ['png', 'svg'], description: 'png (default) or an svg hidden-line drawing.' },
       hidden: { type: 'boolean', description: 'svg: draw hidden lines dashed (default true).' },
@@ -78,11 +97,18 @@ export const TOOLS = [
   {
     name: 'measure',
     title: 'Measure the shapes',
-    description: 'Per shape: type, solids/faces/edges/vertices, volume (mm^3), area (mm^2), bounding box, centre '
-      + 'of mass, validity; with a density (g/cm^3) also the mass in grams.',
+    description: 'Per shown object: type, solids/faces/edges/vertices, volume (mm^3), area (mm^2), bounding box, '
+      + 'centre of mass, validity; for up to four objects also the face inventory (every face as Plane/Cylinder/'
+      + 'Cone/Sphere/Torus/BSpline with its diameter, axis, angle; identical faces collapsed with a count) and '
+      + 'the inertia tensor. With a density or material also the mass, and the inertia in g*mm^2. Prefer '
+      + 'measure over a render to check geometry: numbers are unambiguous, and face counts show whether a '
+      + 'boolean did anything.',
     inputSchema: { type: 'object', properties: { session,
-      shape: { type: 'integer', description: 'Only this shape index.' },
+      object_name: objectName,
+      shape: { type: ['string', 'integer'], description: 'Same as object_name.' },
       density: { type: 'number', description: 'g/cm^3, e.g. 1.24 for PLA, 2.7 for aluminium.' },
+      material: { type: 'string', enum: ['steel', 'stainless', 'aluminum', '6061', 'brass', 'copper', 'titanium',
+        'abs', 'pla', 'petg', 'nylon'], description: 'A density preset instead of density.' },
       exact_bbox: { type: 'boolean', description: 'Optimal bounding boxes (slower; the default box is tight for '
         + 'planes, cylinders, cones, spheres and tori but may overshoot a B-spline surface).' } }, required: ['session'] },
     annotations: { readOnlyHint: true, openWorldHint: false },
@@ -90,10 +116,82 @@ export const TOOLS = [
   {
     name: 'validate',
     title: 'Check before export',
-    description: 'PASS/FAIL with reasons: every shape valid to OpenCascade (BRepCheck), solids closed with positive '
-      + 'volume, nothing empty; warnings for disjoint solids and shapes with no solid.',
-    inputSchema: { type: 'object', properties: { session }, required: ['session'] },
-    annotations: { readOnlyHint: true, openWorldHint: false },
+    description: 'The validity gate before export: PASS/FAIL with reasons. Each object must be valid to OpenCascade '
+      + '(BRepCheck), a closed manifold solid (every edge shared by exactly two faces: no open or non-manifold '
+      + 'edges) with positive volume, and its solids must not overlap each other (an overlap counts its volume '
+      + 'twice). A sketch, surface or loose curve shown as an object FAILs. Warnings: disjoint solids, and '
+      + 'separate objects that interpenetrate. locate_gate_defects says where a FAIL is.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'locate_gate_defects',
+    title: 'Where the gate fails',
+    description: 'Where an object fails the validity gate, with coordinates: open_edge and nonmanifold_edge '
+      + '(the edge midpoint and how many faces use it), overlapping solids (which pair, the overlap volume, '
+      + 'containing or interpenetrating), BRepCheck failures; each with a repair hint. Empty when it passes.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'compare',
+    title: 'Compare two objects',
+    description: 'kind "fit": how two shown objects sit: clearance (surface distance), status apart / touching / '
+      + 'containing / interpenetrating, containment, the intersection volume and each one\'s volume outside the '
+      + 'other. kind "align": two objects along one axis (mode flush = the max extremes, center = the box '
+      + 'centres, clearance = the nearest faces; negative = overlap). kind "shape": volume, topology, bbox and '
+      + 'centre deltas plus the exact volume added and removed from a to b. kind "snapshot": snapshot a against '
+      + 'the current session (or snapshot b), per object.',
+    inputSchema: { type: 'object', properties: { session,
+      a: { type: ['string', 'integer'], description: 'An object (name or index), or for kind snapshot a snapshot name.' },
+      b: { type: ['string', 'integer'], description: 'The second object (or snapshot); snapshot: omit for the current state.' },
+      kind: { type: 'string', enum: ['fit', 'align', 'shape', 'snapshot'], description: 'Default fit.' },
+      axis: { type: 'string', enum: ['X', 'Y', 'Z'], description: 'align: the axis (default Z).' },
+      mode: { type: 'string', enum: ['flush', 'center', 'clearance'], description: 'align: default flush.' },
+      format: { type: 'string', enum: ['text', 'json'], description: 'snapshot: default text.' },
+    }, required: ['session', 'a'] },
+    annotations: RO,
+  },
+  {
+    name: 'resolve',
+    title: 'Evaluate a selector',
+    description: 'Apply a selector to a shown object and describe what it picks, before using it in a fillet or '
+      + 'chamfer: e.g. selector ".faces().sort_by(Axis.Z)[-1]" or ".edges().filter_by(GeomType.CIRCLE)". '
+      + 'Returns type, geom_type, area/length and the TRUE centre (a circle\'s arc centre, a face\'s area '
+      + 'centroid); a planar face also its normal, a curved face its axis and radius; a list its count, average '
+      + 'centre and up to 50 entities. object_name is a name from show() or a top-level variable of the script. '
+      + 'With a label the result is kept (session_state lists it).',
+    inputSchema: { type: 'object', properties: { session,
+      object_name: { type: 'string', description: 'A show() name or a top-level variable.' },
+      selector: { type: 'string', description: 'A Python expression suffix applied to the object, starting with "." or "[".' },
+      label: { type: 'string', pattern: '^[A-Za-z0-9_.-]{1,40}$', description: 'Keep the result under this label.' },
+    }, required: ['session', 'object_name', 'selector'] },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: 'design_audit',
+    title: 'Audit the design\'s parameters',
+    description: 'Audit the script as a design to edit, not just a shape: find its top-level numeric parameters '
+      + '(width = 60.0, or a, b = 10, 20), rebuild with each one nudged by +/-epsilon (default 10%) and run the '
+      + 'validity gate on each variant. A parameter is brittle when a small change fails to rebuild or fails the '
+      + 'gate; coupling when a dependent fillet/chamfer/offset breaks; inconclusive when it is reassigned later or '
+      + 'the time budget ran out. The session script is not changed. Runs are cached, but each variant re-runs '
+      + 'what depends on the parameter: keep max_params small on big models.',
+    inputSchema: { type: 'object', properties: { session,
+      epsilon: { type: 'number', exclusiveMinimum: 0, exclusiveMaximum: 1, description: 'Relative nudge (default 0.1).' },
+      max_params: { type: 'integer', minimum: 1, maximum: 12, description: 'Parameters to audit (default 8).' },
+    }, required: ['session'] },
+    annotations: RO,
+  },
+  {
+    name: 'repair_hints',
+    title: 'Fix suggestions for an error',
+    description: 'Targeted fix suggestions for an error message or validity-gate reason (execute and validate '
+      + 'already append the matching ones): Location syntax, missing .part, CadQuery idioms, missing imports, '
+      + 'empty booleans, fillet failures, open or non-manifold edges, overlapping solids, what this build123d lacks.',
+    inputSchema: { type: 'object', properties: {
+      error_text: { type: 'string', description: 'The error or gate reason, in full.' } }, required: ['error_text'] },
+    annotations: RO,
   },
   {
     name: 'export',
@@ -132,7 +230,8 @@ export const TOOLS = [
   {
     name: 'save_snapshot',
     title: 'Save a snapshot',
-    description: 'Save the current script under a name, to come back to with restore_snapshot.',
+    description: 'Save the current script under a name (with a summary of its shapes), to come back to with '
+      + 'restore_snapshot or to diff with compare(kind="snapshot").',
     inputSchema: { type: 'object', properties: { session,
       name: { type: 'string', pattern: '^[A-Za-z0-9_.-]{1,40}$' } }, required: ['session', 'name'] },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -166,35 +265,37 @@ export const INSTRUCTIONS = `Remote build123d CAD: build123d (the "lite" port) o
 
 Loop: execute (or set_script) -> render_view (look, from two views) -> measure / validate -> fix -> export -> open_in_editor to hand the model to a person.
 - A session keeps one script. execute appends and rolls back on error; set_script replaces. Re-runs are cheap: unchanged operations come from a cache.
-- show(a, b, ...) at the END of the script decides what is displayed, measured and exported (without it, every shape the script made is shown, sketches included). Units are millimetres, Z is up.
+- show(part, "part") registers what is displayed, measured and exported, and names it: tools take the name as object_name. Without show(), a top-level \`result\` is shown. Units are millimetres, Z is up.
+- Prefer numbers over pictures to verify: measure (face inventory, inertia), compare(kind="fit") for clearances, resolve to check a selector before a fillet, validate before export.
 - Carry the session id from the first reply into every later call.
-- workflow_hints has the full guide and the supported API.`;
+- workflow_hints has the full guide; build123d://quickref and build123d://selectors have runnable examples.`;
 
 export const WORKFLOW = `# Working with remote build123d sessions
 
 ## The loop
-1. Plan the part: overall size, the main body, then features (holes, fillets, chamfers, cut-outs). Write the key dimensions as variables at the top.
-2. Build it in steps with execute: one feature per call. A failing step is rolled back, so the session always holds the last working model.
+1. Plan the part: overall size, the main body, then features (holes, fillets, chamfers, cut-outs). Write the key dimensions as named variables at the top (design_audit checks they survive a +/-10% edit).
+2. Build it in steps with execute: one feature per call. A failing step is rolled back (with repair hints), so the session always holds the last working model. Each reply lists the shown shapes and what changed (volume, faces, bbox); a boolean that changed nothing gets a warning.
 3. Look after every feature: render_view from "iso" plus one orthographic view ("front", "top" or "right") that shows the feature. Check the size label against your intent.
-4. Measure what matters: measure gives the bounding box, volume, centre of mass; compare with the plan. validate before exporting.
-5. Fix errors with last_error (it shows the failing line in context). Common causes: a selector that picked nothing (print the selection first), a fillet radius larger than the adjacent edges allow, booleans between shapes that do not touch.
-6. save_snapshot before a risky change; restore_snapshot to go back.
-7. export: step for CAD, stl for printing, glb for viewers, svg for a drawing. Give the person open_in_editor's link so they can see and tweak the model; their edits appear in session_state/get_script.
+4. Measure what matters: measure gives the bounding box, volume, centre of mass, the face inventory (hole diameters, axes) and the inertia; compare(kind="fit") says whether two parts clear, touch or collide; compare(kind="align") checks flushness. validate before exporting; locate_gate_defects says where a FAIL is.
+5. Before a fillet or chamfer, check the selection: resolve(object_name, ".edges().filter_by(GeomType.CIRCLE)") or find_edges(...) in the script.
+6. Fix errors with last_error (the failing line in context) and repair_hints. Common causes: a selector that picked nothing, a fillet radius larger than the adjacent faces allow, booleans between shapes that do not touch.
+7. save_snapshot before a risky change; restore_snapshot to go back; compare(kind="snapshot") to see what changed.
+8. export: step for CAD, stl for printing, glb for viewers, svg for a drawing. Give the person open_in_editor's link so they can see and tweak the model; their edits appear in session_state/get_script.
 
 ## Writing build123d here
 - Algebra mode: part = Box(80, 60, 8); part -= Pos(0, 0, 4) * Cylinder(10, 20); part = fillet(part.edges().filter_by(Axis.Z), 3)
 - Builder mode: with BuildPart() as p: Box(...); with Locations(...): Hole(...)
-- Selectors: edges()/faces()/vertices()/solids() with filter_by(Axis.Z | GeomType.CIRCLE | Plane.XY), sort_by(Axis.Z), group_by(Axis.Z)[-1], slicing.
+- Selectors: edges()/faces()/vertices()/solids() with filter_by(Axis.Z | GeomType.CIRCLE | Plane.XY), sort_by(Axis.Z), group_by(Axis.Z)[-1], slicing. Helpers: named_face(part, "top"), find_edges(part, geom="circle", radius=3).
 - Placement: Pos(x, y, z) * shape, Rot(rx, ry, rz) * shape, Locations, GridLocations, PolarLocations, Plane.XZ * sketch.
 - 2-D: BuildSketch / Rectangle, Circle, RegularPolygon, Polygon, SlotOverall, Text; then extrude, revolve, loft, sweep.
 - Ops: fillet, chamfer, offset, mirror, split, extrude(taper=), revolve, loft, sweep, section, project, thicken, make_hull.
-- show(a, b, ...) displays several shapes; measure/render_view index them in that order. Call it once, after the last shape is built: shapes created after a show() are added to the scene as well. With execute, a chunk that calls show() supersedes earlier show() lines.
+- The scene: show(part, "part") names an object (tools take object_name="part"); showing a name again replaces it; show(a, b) shows several unnamed. Shapes made after the first show() join the scene too, so show at the end or by name.
 
 ## What is not available
 numpy and other third-party packages, the drafting module (Draft, DimensionLine, TechnicalDrawing), 3MF output, import_svg/import_stl. File I/O happens through export, not open().
 
 ## Reading the renders
-Shaded grey with dark edges; highlighted shapes are orange. The triad at the bottom left shows X (red), Y (green), Z (blue); the label shows the view and the overall size in mm. Orthographic, so parallel edges stay parallel.`;
+Shaded grey with dark edges; highlighted objects are orange. The triad at the bottom left shows X (red), Y (green), Z (blue); the label shows the view and the overall size in mm. Orthographic, so parallel edges stay parallel.`;
 
 export const PROMPTS = [
   {
@@ -216,11 +317,18 @@ export function promptMessages(name, args = {}) {
 export const RESOURCES = [
   { uri: 'build123d://workflow', name: 'workflow', title: 'Remote build123d workflow', mimeType: 'text/markdown',
     description: 'The modeling loop and the supported API (same as workflow_hints).' },
-  { uri: 'build123d://quickref', name: 'quickref', title: 'build123d quick reference', mimeType: 'text/markdown',
-    description: 'Short examples of the common build123d calls.' },
+  { uri: 'build123d://quickref', name: 'quickref', title: 'build123d quick reference', mimeType: 'text/plain',
+    description: 'Runnable examples of the common build123d patterns, primitives, booleans, placement, sketches, '
+      + 'selectors, fillets, joints, patterns, sweep/loft/mirror/offset (adapted from build123d-mcp).' },
+  { uri: 'build123d://selectors', name: 'selectors', title: 'build123d selectors cookbook', mimeType: 'text/plain',
+    description: 'Task-indexed recipes for picking faces, edges and vertices (adapted from build123d-mcp).' },
+  { uri: 'build123d://starter', name: 'starter', title: 'A complete example', mimeType: 'text/markdown',
+    description: 'One script with algebra mode, builder mode, a revolve and a named show().' },
 ];
 
-export const QUICKREF = `# build123d quick reference (remote sessions)
+export { QUICKREF, SELECTORS };
+
+export const STARTER = `# A complete build123d script (remote sessions)
 
 \`\`\`python
 from build123d import *
@@ -247,8 +355,8 @@ with BuildSketch(Plane.XZ) as prof:
     Polygon((0, 0), (20, 0), (20, 5), (8, 12), (0, 12), align=None)
 knob = revolve(prof.sketch, Axis.Z)
 
-# what to display, measure and export: once, at the end
-show(Pos(-100, 0, 0) * plate, bracket.part, Pos(100, 0, 0) * knob)
+# what to display, measure and export, by name (tools take object_name="plate")
+show(Pos(-100, 0, 0) * plate, "plate", bracket.part, "bracket", Pos(100, 0, 0) * knob, "knob")
 \`\`\`
 
 Selectors: \`part.edges().filter_by(Axis.Z)\`, \`.filter_by(GeomType.CIRCLE)\`, \`.sort_by(Axis.Z)[-1]\`, \`.group_by(Axis.Z)[0]\`, \`part.faces().sort_by(Axis.Z)[-1]\` (top face).
