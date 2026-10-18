@@ -116,16 +116,16 @@ isolate: a lock serializes the sessions, and `owner` records whose working
 set is loaded. A session that finds another owner rewinds the kernel and
 restores its own snapshot first — a context switch through BREP.
 
-### 5. Keep-warm
+### 5. Keep-warm (optional, off by default)
 
 Per the [lifecycle docs](https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/),
 an idle object with nothing pending **hibernates after ~10 s** and loses its
 memory; one that cannot hibernate (a pending `setTimeout` is enough) is
-**evicted after 70–140 s** without events. For `KEEP_WARM_MS` (5 min) after
-the last render the session holds a timer and re-arms a storage alarm every
-30 s. Duration is billed while it holds ($12.50 per million GB-s at 128 MB,
-≈ $0.0058 per hour). `KEEP_WARM_MS=0` turns it off; persistence makes a cold
-return cost a boot plus a restore instead of a full evaluation.
+**evicted after 70–140 s** without events. With `KEEP_WARM_MS` > 0 the
+session holds a timer and re-arms a storage alarm every 30 s for that long
+after the last render; duration is billed while it holds ($12.50 per million
+GB-s at 128 MB, ≈ $0.0058 per hour). The edge measurements below show why
+it defaults to 0: the engine is not in the object.
 
 ## Measured locally (`wrangler dev`, 2026-10-17)
 
@@ -156,6 +156,69 @@ weld fillet / the tube extension (which touches every tube).
   `CacheOp`. `project` rides on `ProjectWireOnShape`, which touches the
   scene list, so it cannot be cached generically; converting such functions
   to `CacheOp` one by one is the next step.
+
+## Measured on the edge (deployed 2026-10-17)
+
+`https://cascade-headless-session.makeshifted.workers.dev`, same bench, from
+this machine; stateless = the deployed lite Worker
+(`cascade-headless.makeshifted.workers.dev`, built from `feat/build123d-0.13`).
+Client wall time, one run each — the edge's spread between placements is
+large (below), so read these as ±2×.
+
+| model | stateless cold | stateless edit | session cold | re-run | edit 1 | edit 2 | restored after evict |
+|---|---|---|---|---|---|---|---|
+| mount | 4.6 s | 553 ms | 4.0 s | 187 ms | **177 ms** | 497 ms | 269 ms |
+| plate16 | 7.3 s | 4.5 s | 12.3 s | 1.0 s | **3.4 s** | 3.9 s | 4.0 s |
+| maker_coin | 15.3 s | 12.6 s | 27.9 s | 10.3 s | **17.1 s** | 18.9 s | 17.5 s |
+| heat_exchanger | 29.6 s | 25.1 s | 14.3 s | 2.9 s | **5.4 s** | 8.7 s | 5.1 s |
+
+- **heat_exchanger: an edit is 5× faster than stateless** (5.4 vs 25.1 s),
+  mount 3×. plate16's edit IS its most expensive op, so the session saves
+  only the rest.
+- **maker_coin gains nothing on the edge.** Its label edit recomputes the
+  heavy tail, and the uncached library work (above) is large. The run above
+  also landed on a slow placement: a second session on another isolate did
+  cold 17.4 s and 100%-hit re-runs of 6.1–7.7 s (vs 10.3 s here) — ~3.4×
+  local, the usual edge factor.
+- The edge freezes the clock during CPU work, so the session's server-side
+  phase timings read 0 there; use the client column.
+
+### Keep-warm on the edge: the isolate matters, not the object
+
+A session renders mount, idles, renders again (`/tmp/do/keepwarm.mjs`).
+`instance` is the Durable Object (its constructor ran), `isolate` the JS
+isolate holding the engine, `warm` = the working set was still loaded.
+
+| idle gap | `KEEP_WARM_MS=300000` (timer + alarm) | `KEEP_WARM_MS=0` |
+|---|---|---|
+| 15 s | same instance, same isolate, warm (676 ms) | **new instance**, same isolate, warm (626 ms) |
+| 60 s | same instance, same isolate, warm (153 ms) | new instance, same isolate, warm (768 ms) |
+| 3 min | same instance, same isolate, warm (491 ms) | new instance, same isolate, warm (475 ms) |
+| 7 min | new instance, **new isolate**: engine boot + restore of all 20 entries from SQLite, 20/20 hits (2.2 s) | new instance, **new isolate**: boot + restore, 20/20 hits (3.1 s) |
+| 15 min | — | new instance, new isolate: boot + restore, 20/20 hits (5.7 s) |
+
+Without keep-warm the object does hibernate after every gap — but the
+engine lives at ISOLATE scope (§4), and the isolate outlived the object:
+the next render found its working set loaded. Somewhere between 3 and 7
+minutes idle the isolate goes, with or without keep-warm, and the SQLite
+snapshot turns that cold return into a boot plus a restore (every op a hit)
+instead of a full evaluation. One trial per cell: Cloudflare's isolate
+lifetime is not a documented guarantee.
+
+So **keep-warm is off by default** (`KEEP_WARM_MS = "0"`). A hibernated
+object is not billed for duration (only an object "actively running" or
+"idle in-memory and non-hibernateable" is), so a session costs its active
+time instead of every second of the editing hour:
+
+| per editing hour, an edit every 15 s | keep-warm on | keep-warm off |
+|---|---|---|
+| Durable Object duration (128 MB, $12.50/M GB-s) | 3,600 s → **$0.0058** | active time only: mount ~240 × 0.2 s → ~$0.0001; heat_exchanger ~240 × 5.4 s → ~$0.002 |
+| requests (DO $0.15/M + front Worker $0.30/M) | 240 → $0.0001 | same |
+| SQLite (rows written $1.00/M, storage $0.20/GB-month) | ≤4 rows per changed render, ≤0.4 MB per session → <$0.001 | same |
+
+For comparison, the stateless Workers cost $0.061 (lite) to $0.26 (real)
+per such hour on heat_exchanger (Workers-vs-container cost model,
+2026-10-15) and take ~5× longer per edit.
 
 ## Correctness
 

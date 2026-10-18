@@ -47,12 +47,15 @@
 //    working set is loaded — a different session resets the kernel and
 //    restores its own snapshot first.
 //
-//  * KEEP-WARM. An idle object with nothing pending HIBERNATES after ~10 s
-//    and loses its memory; one that cannot hibernate is evicted after
-//    70-140 s without events. For KEEP_WARM_MS after the last render the
-//    session holds a timer (which blocks hibernation) and re-arms a storage
-//    alarm every ALARM_MS (an event, which defers eviction). Duration is
-//    billed while it is held. KEEP_WARM_MS=0 disables it.
+//  * KEEP-WARM (off by default). An idle object with nothing pending
+//    HIBERNATES after ~10 s and loses its memory; one that cannot hibernate
+//    is evicted after 70-140 s without events. For KEEP_WARM_MS after the
+//    last render the session holds a timer (which blocks hibernation) and
+//    re-arms a storage alarm every ALARM_MS (an event, which defers
+//    eviction); duration is billed while it is held. Measured on the edge
+//    it buys little: the engine lives at ISOLATE scope, and the isolate
+//    outlived the hibernated object across 15 s - 3 min gaps without it and
+//    was gone after 7 min with or without it (EDIT-SESSIONS.md).
 
 import { DurableObject } from 'cloudflare:workers';
 
@@ -137,7 +140,7 @@ export function createSession(worker, o) {
       this.key = ctx.id.toString();
       this.instance = { id: Math.random().toString(36).slice(2, 10), createdAt: Date.now(), renders: 0 };
       this.compactAtMB = Number(env.COMPACT_AT_MB || 48);
-      this.keepWarmMs = Number(env.KEEP_WARM_MS === undefined ? 300000 : env.KEEP_WARM_MS);
+      this.keepWarmMs = Number(env.KEEP_WARM_MS || 0);
       this.keepWarmUntil = 0;
       this.warmTimer = null;
       this.persistedDigest = null;

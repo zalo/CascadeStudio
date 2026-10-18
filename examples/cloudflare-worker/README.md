@@ -23,7 +23,7 @@ Four entries, one codebase — see [Source flavors](#source-flavors):
 | `--env warm` | lite, engine booted + warmed at global scope (`BOOT=warm`) | as lite | `cascade-headless-warm.makeshifted.workers.dev` |
 | `--env upstream` | **verbatim upstream 0.13.0** over the OCP shim | 233/239 (0.13.0 reference) | `cascade-headless-upstream.makeshifted.workers.dev` |
 | `--env real` | **the PyPI build123d 0.13.0 wheel + numpy** on Pyodide 314, same shim | 232/239 (0.13.0 reference) | `cascade-headless-real.makeshifted.workers.dev` |
-| `--env session` | lite in **one Durable Object per editing session**: warm engine, cross-run op cache, cached working set persisted as binary BREP — see [EDIT-SESSIONS.md](EDIT-SESSIONS.md) | as lite | not deployed (branch `feat/do-edit-session`) |
+| `--env session` | lite in **one Durable Object per editing session**: warm engine, cross-run op cache, cached working set persisted as binary BREP — see [EDIT-SESSIONS.md](EDIT-SESSIONS.md) | as lite | `cascade-headless-session.makeshifted.workers.dev` (branch `feat/do-edit-session`) |
 
 All four were deployed from `feat/build123d-0.13` on 2026-10-15; the edge
 ladder and startup times are in
