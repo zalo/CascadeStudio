@@ -82,11 +82,32 @@ process per part, on parts exported by build123d-lite:
 A Worker isolate has 128 MB, which counts V8's heap and the 15 MB module's compiled code as well.
 So `MAX_FACES` (wrangler.toml, default 80) refuses bigger parts before opening them, counting the
 STEP's `ADVANCED_FACE` entities.
-- **Not yet measured on the edge:** what Cloudflare counts against the 128 MB (see
-  FIDELITY-ON-WORKERS.md §6 for the same question about the engine). Tune `MAX_FACES` once the
-  deployed Worker has been tried.
-- **If a part still runs out of memory:** the request fails, the isolate is replaced, and the
-  session reports it.
+
+**On the edge** (deployed 2026-10-18, through the live MCP `make_drawing`, with the limit lifted
+for the test):
+
+| part | faces | `make_drawing` wall time | drafting CPU (`wrangler tail`) | result |
+|---|---:|---:|---:|---|
+| plate with a bore | 7 | 0.3–0.5 s warm, 1.5 s cold | — | drawn |
+| plate, 6×5 holes | 36 | 10.3 s (first call) | 8.6 s | drawn |
+| plate, 8×6 holes | 54 | 7.8 s | 6.6 s | drawn |
+| plate, 10×6 holes | 66 | 10.4 s | 9.0 s | drawn |
+| plate, 10×8 holes | 86 | 12.7–15.8 s | 13.4 s | drawn |
+| plate, 8×5 counterbored | 126 | 12.9–19.2 s | 13.1 s | drawn on a fresh isolate or after the 86; out of memory once |
+| plate, 12×10 holes | 126 | 22–30 s | 24.0 s | out of memory, twice |
+
+- **Speed:** the edge runs about three times slower than a local machine.
+- **The ceiling depends on the isolate's history.** wasm memory never shrinks, so a part that fits
+  a fresh isolate can fail after a big one.
+- **Failures are clean, in two forms:**
+  - `memory.grow` refused: the glue throws "Invalid array buffer length", and `draw()` returns
+    `code: 'out_of_memory'`;
+  - the isolate killed: the binding call throws "Worker exceeded memory limit".
+
+  `make_drawing` reports both as "ran out of memory", and the next request gets a working (or
+  fresh) isolate; a 7-face part drew in 0.3–0.5 s right after each failure.
+- **Why 80:** it stays below the largest part that drew every time (86), because memory per face
+  varies. A NIST FTC-10 part needs ~1.9 MB per face.
 
 To move to a newer draftwright-rust release, change `VERSION` and `SHA256` in
 `scripts/fetch-draftwright.mjs` and run it with `--force`.

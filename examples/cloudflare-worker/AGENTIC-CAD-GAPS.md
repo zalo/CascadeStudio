@@ -161,10 +161,9 @@ This is the most winnable gap. [pzfreo/draftwright](https://github.com/pzfreo/dr
 does all of it. Its Rust port publishes a wasm package that reads STEP with no OpenCascade.
 - **Measured:** it ran in workerd, drawing a session's STEP in 0.6–1.5 s with 11–23 MB for
   typical parts. Dense 200+-face parts need 66–540 MB, more than a Worker isolate has.
-- **Open:** licensing (AGPL) and the author's own hosted service need a decision first.
 
-- **Built locally:** a separate drafting Worker and the `make_drawing` MCP tool
-  ([drafting/README.md](drafting/README.md)).
+- **Built and deployed:** a separate drafting Worker and the `make_drawing` MCP tool
+  ([drafting/README.md](drafting/README.md)). The author agreed.
 
 Details are in [DRAFTWRIGHT-WASM.md](DRAFTWRIGHT-WASM.md).
 

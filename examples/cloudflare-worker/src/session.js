@@ -1151,7 +1151,7 @@ const MCP_TOOLS = {
         d = await drafting.draw(stepBytes, { name: base + '.step', ops, formats: ['pdf', 'svg'] });
       } catch (err) {
         const m = String((err && err.message) || err);
-        throw new UserError((/memory/i.test(m) ? 'the drawing service ran out of memory on this part (draw a simpler one): '
+        throw new UserError((/memory|array buffer/i.test(m) ? 'the drawing service ran out of memory on this part (draw a simpler one): '
           : 'the drawing service is unavailable or failed: ') + m);
       }
       if (!d.ok) {

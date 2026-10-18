@@ -33,9 +33,8 @@ Our sessions already export STEP, so the pipeline is: `show()`n object → STEP 
 - **Drawing quality:** right on the parts tried. See §2.
 - **The limit is dense parts:** 200–300-face parts need 66–540 MB and 7–18 s, and NIST CTC-02
   (637 faces) needed 98 s. They don't fit a 128 MB isolate. See §3.
-- **Licence:** AGPL-3.0, and the author runs a hosted product. This needs a decision before
-  shipping. See §4.
-- **Built:** a separate drafting Worker plus the `make_drawing` tool, verified locally (§5).
+- **Licence:** AGPL-3.0, and the author runs a hosted product. He was asked and agreed. See §4.
+- **Built and deployed:** a separate drafting Worker plus the `make_drawing` tool (§5).
 
 **The Python route was also tried:** Python draftwright on our real-build123d Pyodide flavor. It
 produces a correct drawing too, but only with a stack of polyfills, and it needs ~128 MB of wasm
@@ -128,6 +127,7 @@ Options for dense parts:
   account limits. A free embedded copy would compete with it. He also wrote build123d-mcp, whose
   harness we ported. **Recommendation:** ask him before shipping. That could also turn into a
   collaboration: he publishes the wasm package for exactly this kind of embedding.
+  *(2026-10-18: he was asked and is fine with it.)*
 - **Why not just use his connector?** Users could add both connectors, but remote MCP servers have
   no sanctioned way to pass a file between them. The model would have to carry the STEP, which is
   the sandbox-egress problem again. Embedding is the only one-hop path.
@@ -136,7 +136,10 @@ Options for dense parts:
 
 ## 5. Built: the drafting Worker and `make_drawing`
 
-Built and verified locally, not deployed. See [drafting/README.md](drafting/README.md).
+**Deployed 2026-10-18:** `cascade-drafting` (no public URL) and the session Worker with the
+binding. `scripts/mcp-test.mjs` passes 114/114 against the live endpoint. The edge measurements
+(about three times slower than locally; 86 faces always fit, 126 only on a fresh isolate) are in
+[drafting/README.md](drafting/README.md).
 1. **`drafting/`, the `cascade-drafting` Worker:**
    - `scripts/fetch-draftwright.mjs` downloads the pinned release (`v0.1.0-alpha.5`, whose `.wasm`
      is 15.1 MB, not the 13.6 MB in its docs), checks its SHA-256 and unpacks it into the
@@ -162,11 +165,12 @@ Built and verified locally, not deployed. See [drafting/README.md](drafting/READ
    JSON-text `ops`, the one-part rule and the face limit.
 
 **Still open:**
-- **Deployment:** deploy the drafting Worker before the session Worker binds it.
-- **Edge memory accounting:** tune `MAX_FACES` from a deployed run.
 - **Persisting the Spec between calls:** each call starts from the defaults plus its own ops.
-- **A container for parts over the limit.**
-- **The licence and author question in §4.**
+- **A container for parts over the limit,** or a pointer to pzfreo's hosted service for them.
+- **Re-instantiating the engine after a big drawing:** the wasm-bindgen glue initialises once, so
+  a warm isolate keeps its high-water mark.
+
+The author was asked, and agreed (§4).
 
 **Probe scripts** are in [`experiments/draftwright-wasm/`](../../experiments/draftwright-wasm/),
 whose README covers fetching the release and the wheels:

@@ -10,7 +10,8 @@
 // draftwright reads the STEP with its own B-rep kernel (no OpenCascade) and
 // plans the whole sheet in one call. Its wasm memory grows with the part
 // (~1.1 MB per face on hole-heavy parts, measured) and never shrinks, so
-// parts over MAX_FACES are refused before they are opened.
+// parts over MAX_FACES are refused before they are opened. On the edge an
+// 86-face plate drew and 126-face ones ran out of memory (README.md).
 import { WorkerEntrypoint } from 'cloudflare:workers';
 import { initSync, Engine } from '../vendor/draftwright_wasm.js';
 import wasmModule from '../vendor/draftwright_wasm_bg.wasm';
@@ -39,12 +40,21 @@ function countFaces(bytes) {
   return m ? m.length : 0;
 }
 
+// A wasm memory.grow refused at the isolate's limit surfaces from the glue as
+// a RangeError ("Invalid array buffer length"); the isolate itself recovers.
+const OUT_OF_MEMORY = /Invalid array buffer length|out of memory|Array buffer allocation failed/i;
+
 function engineError(thrown) {
   try {
     const e = JSON.parse(String(thrown));
     return { code: e.code || 'failed', message: e.message || String(thrown), choices: e.choices };
   } catch (err) {
-    return { code: 'failed', message: String((thrown && thrown.message) || thrown) };
+    const message = String((thrown && thrown.message) || thrown);
+    if (OUT_OF_MEMORY.test(message)) {
+      return { code: 'out_of_memory', message: 'the part needs more memory than this service has (a Worker '
+        + 'isolate has 128 MB): draw a simpler variant, or one body of an assembly (' + message + ')' };
+    }
+    return { code: 'failed', message };
   }
 }
 
@@ -64,13 +74,9 @@ export async function draw(env, step, opts = {}) {
   const formats = (opts.formats && opts.formats.length ? opts.formats : FORMATS).filter((f) => FORMATS.includes(f));
   const t0 = Date.now();
   if (!wasm) { wasm = initSync({ module: wasmModule }); }
-  let e;
+  let e = null;
   try {
     e = new Engine(String(opts.name || 'part.step'), bytes);
-  } catch (thrown) {
-    return Object.assign({ ok: false }, engineError(thrown), src);
-  }
-  try {
     if (opts.ops && opts.ops.length) {
       try {
         e.apply(JSON.stringify(opts.ops), true);
@@ -101,8 +107,14 @@ export async function draw(env, step, opts = {}) {
     out.ms = { plan: planMs, render: Date.now() - t1 };
     out.memoryMB = Math.round(wasm.memory.buffer.byteLength / MB);
     return out;
+  } catch (thrown) {
+    // the engine's own errors are JSON strings; a memory.grow refusal is a
+    // RangeError from the glue, anywhere from opening to rendering
+    return Object.assign({ ok: false }, engineError(thrown), src);
   } finally {
-    e.free();
+    if (e) {
+      try { e.free(); } catch (err) { /* a trapped engine may not free */ }
+    }
   }
 }
 
