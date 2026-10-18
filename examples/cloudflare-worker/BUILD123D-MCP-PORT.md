@@ -73,11 +73,41 @@ The vendored code reads the B-rep through `_cs_ocp`, a small OCP shim over the w
 - **Skills:** upstream's `skill/repair`, whose recipes are OCP code that lite can't run; it needs adapted recipes.
 - **`execute_file`:** has no meaning without a filesystem (`set_script` takes the text).
 
-**Wave 3.** Needs more of the stack:
-- **quiddity** powers `recognise_features`, `find_candidates`, `interface_features`, `edit_feature` and `inspect_part`. It needs numpy, scipy and OCP. Try it on the Pyodide runtime flavor (real CPython, numpy available), with the OCP calls over `OcpShim`.
-- **The drafting module** (`Draft`, `DimensionLine`, `TechnicalDrawing`), once lite has it (CLAUDE.md, "Known honest gaps").
-- **The part library** (`search_library`, `load_part`) needs bd_warehouse on lite.
-- ~~**3MF**~~ done without lib3mf: `packages/cascade-core/src/worker/ThreeMF.js` writes the package (STORED zip, welded mesh objects, colours). `export` has `3mf`, and lite's `Mesher.write('x.3mf')` works, so the corpus's dual_color_3mf passes (224/239).
+## Wave 3 (#204)
+
+**The part library** (`search_library`, `load_part`). Upstream's mechanism is a directory of part files given with `--library`; it ships no parts. Here the library is curated and bundled, in the same file format (`PART_INFO` plus `make(**params)`). It lives in `packages/cascade-core/src/worker/CsParts.js` and is importable in scripts as `cs_parts`. There are 13 parts:
+- **Fasteners:** ISO 4032 hex nuts, ISO 4017 hex bolts, ISO 4762 socket head cap screws, ISO 7089 washers.
+- **Bearings:** ISO 15 ball bearings (625–6005, 6200–6202).
+- **Hardware:** hex standoffs, spacers, heat-set insert bosses, knobs.
+- **Brackets, enclosures, gears:** L brackets, pipe clamps, enclosures with lids, involute spur gears.
+
+`load_part` appends a readable `name = cs_parts.load("hex_nut", size="M8")` plus a named `show()`. Each part runs as a black box: its intermediate shapes never join the scene. Every part passes the validity gate with defaults and with other parameters. The test also checks dimensions; the spur gear's tip diameter, for example, is m(z+2).
+
+**The drafting module.** `Draft`, `Arrow`, `DimensionLine`, `ExtensionLine` and `TechnicalDrawing` come from build123d 0.13's own `drafting.py`.
+- **How it's ported:** `packages/cascade-core/scripts/port-drafting.py` appends it to lite's source with listed edits, made through AST source ranges.
+- **Lite gained, on the way:**
+  - `Wire.trim` across edges;
+  - edge/wire-profile `sweep`;
+  - `trace`, `tangent_angle_at`, `perpendicular_line`, `Vector.get_angle`/`project_to_line`;
+  - `Builder._get_context`;
+  - geometry from `Compound(children=)`;
+  - an Enum `HeadType`;
+  - an `ArrowHead` that honours `rotation=` outside a builder.
+- **Result:** `docs/objects_2d` matches on 41 of 42 shapes, up from ERROR. The 42nd is a `Text` 25 µm wider, the opentype.js-vs-FreeType residual the upstream leg shows too.
+
+**3MF** (above): the corpus is now 224 PASS / 10 MISMATCH / 4 ERROR / 1 TIMEOUT.
+
+**The quiddity spike** (`recognise_features`, `find_candidates`, `interface_features`, `edit_feature`, `inspect_part`). I measured it statically and did not run the downloaded code. The findings:
+- **Size:** 45,000 lines of Python in 42 OCP-importing files.
+- **numpy/scipy:** one file only, using `asarray`, `quantile`, `outer`, `cross` and `concatenate` plus scipy's `cKDTree`. A pure-Python shim is easy.
+- **OCP:** about 90 distinct names from 30 modules. The upstream flavor's OCP shim already maps most of them. Missing are `BRepClass_FaceClassifier`, `IntCurvesFace_ShapeIntersector`, `ShapeAnalysis_CanonicalRecognition`/`_Surface`, the `TColStd`/`TColgp` arrays and `Geom_BSplineSurface` handles, plus `OSD_Parallel`/`OSD_ThreadPool` (sequential stubs would do). `gp_Cone` is not bound in this OCCT build at all; the ring-based substitute (`_coneAxisFromRings`) shows the way round it.
+- **Where it can run:** quiddity calls real build123d and OCP together on the same objects. That is the upstream flavor (build123d 0.13 over the OCP shim on MicroPython), not lite, whose `.wrapped` is a raw handle. The MCP endpoint would need a second, upstream-flavor session class for these tools, which also costs more memory per session.
+- **Verdict:** feasible, but a project of its own: shim additions, a numpy subset, an upstream-flavor session object, then fidelity checks against native quiddity. It stays out of this series.
+
+**Still open, as before:**
+- the drafting *tools* (upstream deprecated them in favour of draftwright, AGPL);
+- `bd_warehouse` (threads, a large OCP surface);
+- `Mesher.read` (no mesh import).
 
 **Not ported:**
 

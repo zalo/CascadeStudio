@@ -18,6 +18,7 @@ import { SERVER_INFO, TOOLS, INSTRUCTIONS, WORKFLOW, QUICKREF, SELECTORS, STARTE
   promptMessages } from './mcp-tools.js';
 import { repairHints } from './repair-hints.js';
 import { UPSTREAM_SKILLS } from './skills-upstream.js';
+import { searchParts } from '../../../packages/cascade-core/src/worker/CsParts.js';
 
 const RESOURCE_TEXT = { 'build123d://workflow': WORKFLOW, 'build123d://quickref': QUICKREF,
   'build123d://selectors': SELECTORS, 'build123d://starter': STARTER,
@@ -52,6 +53,11 @@ export function createMcpHandler(o) {
     const args = (params && params.arguments) || {};
     if (!toolNames.has(name)) { return textResult('unknown tool: ' + name, true); }
     if (name === 'workflow_hints') { return textResult(WORKFLOW); }
+    if (name === 'search_library') {
+      const parts = searchParts(args.query || '');
+      return textResult(JSON.stringify({ count: parts.length, parts,
+        note: 'load one with load_part(name, params); scripts can also call cs_parts.load(name, **params)' }, null, 1));
+    }
     if (name === 'repair_hints') {
       return textResult(JSON.stringify({ hints: repairHints(args.error_text, true) }, null, 1));
     }
@@ -61,7 +67,7 @@ export function createMcpHandler(o) {
         + '\nPass "session": "' + id + '" to every call. Open the editor link to watch and edit the model.');
     }
     let sid = args.session;
-    if (sid === undefined && (name === 'execute' || name === 'set_script' || name === 'import_cad_file')) { sid = randomId(); }
+    if (sid === undefined && ['execute', 'set_script', 'import_cad_file', 'load_part'].includes(name)) { sid = randomId(); }
     if (typeof sid !== 'string' || !/^[A-Za-z0-9_.-]{1,64}$/.test(sid)) {
       return textResult('a "session" id is needed (letters, digits, _ . -; up to 64): start one with new_session', true);
     }

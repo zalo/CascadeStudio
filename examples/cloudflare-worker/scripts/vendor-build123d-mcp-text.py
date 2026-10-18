@@ -71,12 +71,14 @@ def adapt_quickref(secs):
                  '- from build123d_drafting import find_holes, find_bosses, find_hole_patterns and\n'
                  '  import augura (printability) work inside scripts too.\n'
                  "- After a change, execute reports each shown shape's volume / face-count / bbox deltas\n"
-                 '  and warns when a boolean changed nothing.')
+                 '  and warns when a boolean changed nothing.\n'
+                 '- Standard parts: search_library / load_part, or cs_parts.load("hex_nut", size="M4") in the\n'
+                 '  script (ISO nuts, bolts, cap screws, washers, bearings, standoffs, gears, ...).')
         if t.startswith('## Common gotchas'):
             t = t.replace('- After every -, +, & : call measure() and check topology.faces — a failed boolean leaves counts unchanged',
                           "- After every -, +, & : read execute's change line (or measure()) — a failed boolean leaves the counts unchanged")
-            t += ('\n- Not available here: numpy and other packages, the drafting module (Draft, DimensionLine,\n'
-                  '  TechnicalDrawing), 3MF, import_svg/import_stl, files (open()). Files come from export.')
+            t += ('\n- Not available here: numpy and other packages, import_svg/import_stl, files (open()).\n'
+                  '  Files come from export (STEP, STL, 3MF, GLB, BREP, SVG, DXF).')
         res.append({'label': label, 'text': t})
     return res
 

@@ -299,6 +299,29 @@ export const TOOLS = [
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   },
   {
+    name: 'search_library',
+    title: 'Search the part library',
+    description: 'Search the part library: standard parts with real dimensions (ISO 4032/4017/4762/7089 hex nuts, bolts, '
+      + 'socket head cap screws, washers; ISO 15 ball bearings; standoffs, spacers, heat-set insert bosses; brackets, '
+      + 'enclosures, knobs, pipe clamps; involute spur gears). Words match name, category, description and tags; an '
+      + 'empty query lists everything. Returns each part\'s parameters with types, defaults and descriptions.',
+    inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+    annotations: RO,
+  },
+  {
+    name: 'load_part',
+    title: 'Load a library part',
+    description: 'Add a library part to the session as a named object: the script gains '
+      + '`name = cs_parts.load("hex_nut", size="M4")` + a named show(), so it can be moved, cut, fused and measured like '
+      + 'anything else (and the person in the editor sees the same line). params: the part\'s parameters (others default).',
+    inputSchema: { type: 'object', properties: { session: sessionOptional,
+      name: { type: 'string', description: 'A part name from search_library.' },
+      params: { type: ['object', 'string'], description: 'Parameter overrides, e.g. {"size": "M4"} (or the same as a JSON string).' },
+      as_name: { type: 'string', description: 'The variable/object name (default the part name).' },
+    }, required: ['name'] },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
     name: 'repair_hints',
     title: 'Fix suggestions for an error',
     description: 'Targeted fix suggestions for an error message or validity-gate reason (execute and validate '
@@ -412,7 +435,7 @@ export const WORKFLOW = `# Working with remote build123d sessions
 - The scene: show(part, "part") names an object (tools take object_name="part"); showing a name again replaces it; show(a, b) shows several unnamed. Shapes made after the first show() join the scene too, so show at the end or by name.
 
 ## What is not available
-numpy and other third-party packages, the drafting module (Draft, DimensionLine, TechnicalDrawing), import_svg/import_stl. File I/O happens through export, not open().
+numpy and other third-party packages, import_svg/import_stl. (The drafting module — Draft, DimensionLine, ExtensionLine, TechnicalDrawing — and the part library — search_library, cs_parts.load — are available.) File I/O happens through export, not open().
 
 ## Reading the renders
 Shaded grey with dark edges; highlighted objects are orange. The triad at the bottom left shows X (red), Y (green), Z (blue); the label shows the view and the overall size in mm. Orthographic, so parallel edges stay parallel.`;

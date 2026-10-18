@@ -38,7 +38,7 @@ const call = (name, args = {}) => client.callTool({ name, arguments: args });
 
 // ---- discovery ----
 const tools = (await client.listTools()).tools.map((t) => t.name);
-check('30 tools listed', tools.length === 30, tools.join(' '));
+check('32 tools listed', tools.length === 32, tools.join(' '));
 check('instructions sent', /render_view/.test(client.getInstructions() || ''));
 const prompts = (await client.listPrompts()).prompts;
 check('the start-cad-session prompt', prompts.some((p) => p.name === 'start-cad-session'));
@@ -300,6 +300,31 @@ r = await call('render_view', { session: sid });
 check('render_view of an edge-only scene', !r.isError && !!(r.content || []).find((c) => c.type === 'image'), text(r));
 r = await call('export', { session: sid, format: 'step', strict: true });
 check('export strict refuses an object that fails the gate', r.isError && /not exported/.test(text(r)), text(r).split('\n')[0]);
+// ---- wave 3: the part library, drafting ----
+let lib = J(await call('search_library', { query: '' }));
+check('search_library lists the parts', lib.count >= 13 && lib.parts.some((x) => x.name === 'spur_gear'), lib.count);
+let lq = J(await call('search_library', { query: 'm3 nut' }));
+check('search_library matches sizes in parameter descriptions', lq.parts.length === 1 && lq.parts[0].name === 'hex_nut', JSON.stringify(lq.parts.map((x) => x.name)));
+r = await call('reset', { session: sid });
+r = await call('load_part', { session: sid, name: 'hex_nut', params: { size: 'M8' }, as_name: 'nut' });
+check('load_part: a named library part', !r.isError && /"nut"/.test(text(r)) && /cs_parts\.load\("hex_nut", size="M8"\)/.test(text(await call('get_script', { session: sid }))), text(r).split('\n').slice(0, 3).join(' | '));
+r = await call('load_part', { session: sid, name: 'spur_gear', params: '{"module": 2, "teeth": 12}', as_name: 'gear' });
+let mg = J(await call('measure', { session: sid, object_name: 'gear', exact_bbox: true }));
+check('load_part: a spur gear with its tip diameter m(z+2)', Math.abs((mg.shapes[0].bbox[3] - mg.shapes[0].bbox[0]) - 28) < 0.05, JSON.stringify(mg.shapes[0].bbox));
+r = await call('load_part', { session: sid, name: 'hex_nut', params: { colour: 'red' } });
+check('load_part: an unknown parameter is an error', r.isError && /no parameter "colour"/.test(text(r)), text(r));
+r = await call('validate', { session: sid });
+check('library parts pass the gate', !r.isError && /PASS/.test(text(r)), text(r).split('\n')[0]);
+r = await call('set_script', { session: sid, code: [
+  'from build123d import *',
+  'd = Draft(font_size=3.0, decimal_precision=1)',
+  'with BuildSketch() as drawing:',
+  '    Rectangle(60, 30)',
+  '    ExtensionLine([(-30, 15), (30, 15)], 8, d)',
+  '    DimensionLine([(-30, -20), (30, -20)], d)',
+  'frame = TechnicalDrawing(title="Plate", sub_title="drafting check")',
+  'show(drawing.sketch, "drawing", frame, "frame")'].join('\n') });
+check('the drafting module: dimensions, extension lines, a drawing frame', !r.isError && /"drawing"/.test(text(r)) && /"frame"/.test(text(r)), text(r).split('\n').slice(0, 3).join(' | '));
 let hc = J(await call('health_check', { session: sid }));
 check('health_check', hc.ok === true && hc.session.scriptRev > 0, JSON.stringify(hc).slice(0, 160));
 r = await call('destroy_session', { session: sid });
@@ -378,7 +403,7 @@ if (process.env.OAUTH) {
       client_id: reg.client_id, code_verifier: verifier, resource: BASE + '/mcp' }) })).json();
   check('the code becomes an access token', !!tok.access_token, Object.keys(tok).join(','));
   const oc = await connect(tok.access_token);
-  check('the OAuth token opens /mcp', (await oc.listTools()).tools.length === 30);
+  check('the OAuth token opens /mcp', (await oc.listTools()).tools.length === 32);
   await oc.close();
 }
 

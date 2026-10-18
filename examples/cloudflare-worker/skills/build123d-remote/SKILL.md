@@ -64,11 +64,13 @@ show(part, "part")
 - **show(obj, "name")** registers what is displayed, measured and exported; tools take the name as `object_name`. Showing a name again replaces it (its index stays), so a chunk can re-show the edited part. Unnamed `show(a, b)` works too; with `execute`, a chunk with an unnamed `show()` comments out earlier unnamed one-line calls. With no `show()`, a top-level `result` is shown; failing that, every intermediate shape, sketches included.
 - `named_face(part, "top")` and `find_edges(part, geom="circle", radius=3)` are selection helpers (they print what they matched). `from build123d_drafting import find_holes` and `import augura` work in scripts too.
 - To work on an existing part, `import_cad_file` brings a STEP or BREP in (from a URL or as text) as a named object.
+- Standard parts come from the library: `search_library` ("m4 screw", "608 bearing", "gear"), then `load_part` (or `cs_parts.load("hex_nut", size="M4")` in the script). Position the result like any shape.
+- Dimensioned 2-D drawings: `Draft`, `DimensionLine`, `ExtensionLine`, `TechnicalDrawing` (build123d's drafting module).
 - Section views: `render_view` with `clip_plane: "x"` (and `clip_at`); exact line drawings with `style: "lines"`; `export` `dxf`/`svg` for the projection as a file. `build123d://quickref` and `build123d://selectors` have runnable examples.
 - Algebra mode (`a + b`, `a - b`, `a & b`, `Pos(...) * shape`, `Rot(...) * shape`) and builder mode (`with BuildPart() as p:` … `p.part`) both work.
 - Selectors: `edges()/faces()/vertices()/solids()`, `.filter_by(Axis.Z | GeomType.CIRCLE | Plane.XY)`, `.sort_by(Axis.Z)[-1]`, `.group_by(Axis.Z)[0]`.
 - 2-D → 3-D: `BuildSketch` with `Rectangle`, `RectangleRounded`, `Circle`, `Polygon`, `SlotOverall`, `Text`; then `extrude`, `revolve`, `loft`, `sweep`.
-- Not available: numpy and other packages, the drafting module (`Draft`, `DimensionLine`, `TechnicalDrawing`), `import_svg`/`import_stl`, `open()`. Files come from `export`.
+- Not available: numpy and other packages, `import_svg`/`import_stl`, `open()`. Files come from `export`.
 
 ## Reading a render
 

@@ -74,6 +74,7 @@ import { VIEWS } from '../../../packages/cascade-core/src/headless/MeshRaster.js
 import { alignCheck, MATERIALS } from '../../../packages/cascade-core/src/headless/ShapeAnalysis.js';
 import { repairHints } from './repair-hints.js';
 import { WORKFLOW } from './mcp-tools.js';
+import { partInfo, searchParts } from '../../../packages/cascade-core/src/worker/CsParts.js';
 
 const CHUNK_BYTES = 1900000;          // SQLite rows are capped at 2 MB
 const ALARM_MS = 30000;
@@ -955,6 +956,43 @@ const MCP_TOOLS = {
     const res = await MCP_TOOLS.execute.call(this, e, { code });
     res.content[0].text = 'imported ' + file + ' (' + (bytes.length / 1024).toFixed(1) + ' KB, kept with the session) as `'
       + name + '`; the script now reads it with ' + (kind === 'step' ? 'import_step' : 'import_brep') + '("' + file + '").\n'
+      + res.content[0].text;
+    return res;
+  },
+
+  async search_library(e, a) {
+    const parts = searchParts(a.query || '');
+    return toolText(JSON.stringify({ count: parts.length, parts }, null, 1));
+  },
+
+  async load_part(e, a) {
+    const name = String(a.name || '');
+    const info = partInfo(name);
+    if (!info) {
+      throw new UserError('no part named "' + name + '"; search_library lists them: '
+        + searchParts('').map((p) => p.name).join(', '));
+    }
+    let params = a.params || {};
+    if (typeof params === 'string') {
+      try { params = params.trim() ? JSON.parse(params) : {}; } catch (err) { throw new UserError('params must be a JSON object'); }
+    }
+    const spec = info.parameters || {};
+    const args = [];
+    for (const [k, v] of Object.entries(params)) {
+      if (!spec[k]) { throw new UserError(name + ' has no parameter "' + k + '"; it takes ' + Object.keys(spec).join(', ')); }
+      const t = spec[k].type;
+      if (t === 'str') { args.push(k + '=' + JSON.stringify(String(v))); }
+      else {
+        const n = Number(v);
+        if (!Number.isFinite(n)) { throw new UserError(k + ' must be a number'); }
+        args.push(k + '=' + (t === 'int' ? String(Math.round(n)) : String(n)));
+      }
+    }
+    const var0 = String(a.as_name || name).replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1');
+    const code = 'import cs_parts\n' + var0 + ' = cs_parts.load(' + JSON.stringify(name) + (args.length ? ', ' + args.join(', ') : '')
+      + ')\nshow(' + var0 + ', ' + JSON.stringify(var0) + ')';
+    const res = await MCP_TOOLS.execute.call(this, e, { code });
+    res.content[0].text = 'loaded the library part ' + name + ' (' + info.description + ') as `' + var0 + '`\n'
       + res.content[0].text;
     return res;
   },

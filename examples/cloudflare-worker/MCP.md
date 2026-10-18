@@ -48,6 +48,7 @@ shape and keeps its index; a named list shows its members as `name[0]`, `name[1]
 | `analyze_printability` | FDM checks (augura, vendored): overhangs, watertight, tip-over, brim, min feature, thin walls, bed fit |
 | `cross_sections` | exact section areas along an axis, with regions and holes per slice |
 | `import_cad_file` | a STEP or BREP file from a URL or as text, kept with the session and shown as a named object |
+| `search_library`, `load_part` | the part library: ISO-dimensioned nuts, bolts, cap screws, washers, ball bearings, standoffs, spacers, insert bosses, brackets, enclosures, knobs, clamps, spur gears; `load_part` adds `name = cs_parts.load(...)` + a named `show()` |
 | `health_check`, `destroy_session` | engine and session status; delete the session (`confirm: true`) |
 | `repair_hints` | fix suggestions for an error text |
 | `export` | `step`, `brep` (exact), `stl` (mesh), `glb` (mesh, metres, Y up), `svg`/`dxf` (exact projection) → a download URL, kept `FILE_TTL_S` (1 h); one object with `object_name`; 3-D formats report the gate, `strict` refuses a FAIL |
@@ -168,7 +169,7 @@ each; placement varies about 1.6×.
 
 ## Limits
 
-- **build123d-lite, not real build123d.** It passes 224 of the 239 corpus scripts. numpy and the drafting module are absent, and the tools say so in their errors.
+- **build123d-lite, not real build123d.** It passes 224 of the 239 corpus scripts. numpy is absent, and the tools say so in their errors. The drafting module (`DimensionLine`, `ExtensionLine`, `TechnicalDrawing`) is ported.
 - **The scene is what `show()` says.** Lite's first `show()` of a run defines the scene and later ones append, and shapes made after a `show()` join the scene too. Named `show()` calls replace by name; for unnamed ones the guidance is one `show()` at the end, and `execute` comments out superseded one-line calls.
 - **The mesh check counts edges, not vertices.** build123d-mcp also flags non-manifold vertices (corner-to-corner touches); the quiddity-based recognition tools need numpy ([BUILD123D-MCP-PORT.md](BUILD123D-MCP-PORT.md)).
 - **Exact drawings are slow on big models.** Hidden-line removal took 11 s locally for heat_exchanger, so it would be several times that on the edge. The polygonal HLR algorithm isn't bound in this OCCT build.

@@ -184,6 +184,31 @@ test.describe('Python (build123d) mode', () => {
     expect(logs.some((l) => /^augura .*thin_wall/.test(l))).toBe(true);
   });
 
+  test('the part library (cs_parts) and the drafting module run in the browser', async ({ page }) => {
+    await gotoAndReady(page);
+    await page.evaluate(() => window.CascadeAPI.setMode('python'));
+    const code = [
+      'from build123d import *',
+      'import cs_parts',
+      'nut = cs_parts.load("hex_nut", size="M8")',
+      'gear = Pos(40, 0, 0) * cs_parts.load("spur_gear", module=2, teeth=12)',
+      'print("parts", len(cs_parts.search("bearing")), round(nut.volume, 1))',
+      'd = Draft(font_size=3.0)',
+      'with BuildSketch() as sk:',
+      '    Rectangle(40, 20)',
+      '    e = ExtensionLine([(-20, 10), (20, 10)], -6, d)',
+      'print("dims", round(e.dimension, 2), len(sk.sketch.faces()) > 1, round(sk.sketch.bounding_box().max.Y, 1) >= 16)',
+      'show(nut, "nut", gear, "gear")',
+    ].join('\n');
+    const result = await runCodeAndRender(page, code, 2);
+    expect(result.errors).toEqual([]);
+    const logs = await waitForConsole(page, 'logs', 'items.some(l => l.startsWith("dims"))');
+    // M8 ISO 4032 nut: 641.1 mm^3 (13 across flats, 6.8 high, 30 deg chamfers, 8 mm bore)
+    expect(logs.some((l) => /^parts 1 641\.1$/.test(l))).toBe(true);
+    // a 40 mm dimension, drawn 6 mm above the rectangle's top edge (offset < 0 = left of a +X path)
+    expect(logs.some((l) => /^dims 40(\.0)? True True$/.test(l))).toBe(true);   // Brython prints round(40.0, 2) as 40
+  });
+
   test('Python errors surface as console errors with the traceback', async ({ page }) => {
     await gotoAndReady(page);
     await page.evaluate(() => window.CascadeAPI.setMode('python'));

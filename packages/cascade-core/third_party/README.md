@@ -16,3 +16,12 @@
 - **augura:** the mesh (trimesh) and CadQuery paths are left out.
 
 The tests are `examples/cloudflare-worker/scripts/mcp-test.mjs` (the `find_*` and `analyze_printability` checks) and `test/python-mode.spec.js`.
+
+## Also in build123d-lite
+
+**build123d's drafting module.** `Draft`, `Arrow`, `DimensionLine`, `ExtensionLine` and `TechnicalDrawing` come from build123d 0.13.0's `src/build123d/drafting.py`. The licence is Apache-2.0 (Gumyr and contributors), in `vendor/build123d-0.13.0/LICENSE`.
+- **How:** `scripts/port-drafting.py` appends the module to `BUILD123D_LITE_PY`, as `src/worker/Build123dDraftingPort.js`.
+- **The file's own notice** is kept, as comments.
+- **The edits** are listed in that file's header and in the script.
+
+**The part library.** `src/worker/CsParts.js`, the `cs_parts` module, is CascadeStudio's own code. It uses build123d-mcp's part-file format (`PART_INFO` plus `make()`) and the nominal dimensions of the ISO standards it cites.
