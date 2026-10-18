@@ -259,7 +259,8 @@ const MCP_TOOLS = {
 
   async measure(e, a) {
     await this.ensureScene(e);
-    let shapes = e.inspectShapes();
+    let shapes = a.exact_bbox ? e.inspectShapes({ exactBox: true })
+      : this.inspectFull(e).map((x) => Object.assign({}, x));
     if (Number.isInteger(a.shape)) { shapes = shapes.filter((s) => s.index === a.shape); }
     if (!shapes.length) { throw new UserError('no such shape: ' + a.shape); }
     if (Number.isFinite(a.density)) {
@@ -270,7 +271,7 @@ const MCP_TOOLS = {
 
   async validate(e) {
     const r = await this.ensureScene(e);
-    const shapes = r.shapeCount ? e.inspectShapes() : [];
+    const shapes = r.shapeCount ? this.inspectFull(e) : [];
     const reasons = []; const warnings = [];
     if (!r.ok) { reasons.push('the script raised: ' + (r.errors[0] || '').split('\n')[0]); }
     if (!shapes.length) { reasons.push('no shapes are shown'); }
@@ -301,6 +302,7 @@ const MCP_TOOLS = {
     else if (format === 'glb') { bytes = e.exportGLB(); }
     else { bytes = new TextEncoder().encode(e.drawingSVG({ view: a.view }).svg); }
     const f = this.storeFile(base + '.' + format, MIME[format], bytes);
+    await this.flush();
     const shapes = e.inspectShapes({ quick: true });
     const vol = shapes.reduce((n, s) => n + (s.volume || 0), 0);
     return { content: [{ type: 'text', text: format.toUpperCase() + ' ' + (f.bytes / 1024).toFixed(1) + ' KB: '
@@ -673,6 +675,7 @@ export function createSession(worker, o) {
       this.lastRunRev = sc.rev;
       this.lastRunKept = true;
       this.recordResult(sc.rev, r);
+      await this.flush();
       return { rerun: true, ok: r.ok };
     }
 
@@ -733,14 +736,19 @@ export function createSession(worker, o) {
         // meshes written into cached shapes (the viewport mesh, STL export,
         // measure) must not outlive this render — see engine.clearMeshes()
         this.lastAfter = await this.afterRun(e, { clear: frames || req.formats.includes('stl') || req.measure,
-          faulted });
+          faulted, misses: out.cache ? out.cache.misses : null });
       });
     }
 
     /** After a run: drop meshes written into cached shapes (`clear`),
      *  compact when the OCCT heap reached COMPACT_AT_MB or the kernel
-     *  faulted, persist the working set when its keys changed. */
-    async afterRun(e, { clear = false, faulted = false } = {}) {
+     *  faulted, persist the working set when its keys changed. `ran`: an
+     *  evaluation happened (it leaks its intermediates into the heap). A
+     *  call that only looked at the existing scene — render, measure,
+     *  export, or a re-run that was all cache hits (`misses: 0`) — compacts
+     *  only if the heap grew: compaction rewinds the kernel, and the next
+     *  call would re-run the whole script (and compact again, and again). */
+    async afterRun(e, { clear = false, faulted = false, ran = true, misses = null } = {}) {
       const a0 = performance.now();
       const after = { compacted: false };
       if (clear) {
@@ -754,7 +762,12 @@ export function createSession(worker, o) {
       // A kernel fault can leave OCCT's statics damaged (the stateless
       // Worker rewinds after EVERY job for exactly this): rewind after one
       // too, keeping the working set through the snapshot.
-      const compact = occtMB >= this.compactAtMB || faulted;
+      // A run with cache misses leaves its intermediates in the heap: compact
+      // at COMPACT_AT_MB. Anything else (an all-hits re-run, a render's
+      // meshing, an export) mostly frees what it allocates — the heap's high
+      // water mark rises once and stays — so it compacts only at a hard cap.
+      const leaky = ran && (misses === null || misses > 0);
+      const compact = faulted || occtMB >= (leaky ? this.compactAtMB : this.compactAtMB + 40);
       if (faulted) { after.faulted = true; }
       if (digest !== this.persistedDigest || compact) {
         const s0 = performance.now();
@@ -874,6 +887,16 @@ export function createSession(worker, o) {
       this.ctx.storage.sql.exec('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)', k, JSON.stringify(v));
     }
 
+    /** Let pending storage writes commit before a long synchronous stretch
+     *  of wasm. A SQL write is applied at once but committed when the event
+     *  loop turns; an evaluation that then holds the isolate for 30 s+ (a
+     *  heavy model on the edge) times the commit out, and the runtime
+     *  resets the object ("storage operation exceeded timeout"). */
+    async flush() {
+      try { await this.ctx.storage.sync(); }
+      catch (err) { await yieldToIo(); }
+    }
+
     /** What the last run did (session_state, last_error, the editor). */
     recordResult(rev, r, extra = {}) {
       const res = Object.assign({ rev, ok: !!r.ok, errors: (r.errors || []).slice(0, 20),
@@ -896,10 +919,23 @@ export function createSession(worker, o) {
       }
       await this.adopt(e);
       const r = await e.run(sc.code, { keepScene: true, guiState: {} });
+      this.ranThisCall = true;
+      this.callMisses += r.cache ? r.cache.misses : 1;
       isolate.lastRun = this.lastRun = this.key + ':' + (++isolate.runSeq);
       this.lastRunRev = sc.rev;
       this.lastRunKept = true;
-      return this.recordResult(sc.rev, r);
+      const res = this.recordResult(sc.rev, r);
+      await this.flush();
+      return res;
+    }
+
+    /** inspectShapes() of the engine's current run, computed once per run
+     *  (BRepCheck and the exact bounding boxes are seconds on big models). */
+    inspectFull(e) {
+      if (!this.inspected || this.inspected.run !== isolate.lastRun || isolate.lastRun === null) {
+        this.inspected = { run: isolate.lastRun, shapes: e.inspectShapes({ exactBox: false }) };
+      }
+      return this.inspected.shapes;
     }
 
     /** null, or why this call is over the session's rate limit. */
@@ -984,6 +1020,7 @@ export function createSession(worker, o) {
       if (!impl) { return toolText('unknown tool: ' + name, true); }
       const limited = this.rateLimited();
       if (limited) { return toolText(limited, true); }
+      await this.flush();
       return new Promise((resolve) => {
         const job = withEngine(async () => {
           const booted = worker.isBooted();
@@ -992,13 +1029,18 @@ export function createSession(worker, o) {
           if (!booted) { isolate.bootMs = Math.round(performance.now() - t0); }
           let result;
           let after = null;
+          this.ranThisCall = false;
+          this.callMisses = 0;
           try {
             result = await impl.call(this, e, args);
           } catch (err) {
             if (!(err instanceof UserError)) { throw err; }
             result = toolText(err.message, true);
           }
-          if (result.after) { after = result.after; delete result.after; }
+          if (result.after) {
+            after = Object.assign({ ran: this.ranThisCall, misses: this.callMisses }, result.after);
+            delete result.after;
+          }
           resolve(result);
           if (after) {
             await yieldToIo();
@@ -1023,6 +1065,8 @@ export function createSession(worker, o) {
       }
       await this.adopt(e);
       const r = await e.run(code, { keepScene: true, guiState: {} });
+      this.ranThisCall = true;
+      this.callMisses += r.cache ? r.cache.misses : 1;
       isolate.lastRun = this.lastRun = this.key + ':' + (++isolate.runSeq);
       const faulted = !r.ok && KERNEL_FAULT.test(r.errors.join('\n'));
       const mapLines = (text) => (offset ? String(text).replace(/File "main", line (\d+)/g, (m, n) => {
@@ -1041,6 +1085,7 @@ export function createSession(worker, o) {
       this.lastRunRev = sc.rev;
       this.lastRunKept = true;
       this.recordResult(sc.rev, r);
+      await this.flush();
       const lines = [(r.ok ? 'OK' : 'ERROR') + ': ' + label + ' the session script (rev ' + sc.rev + ', '
         + code.split('\n').length + ' lines). session: ' + this.sessionName];
       if (!r.ok) { lines.push(r.errors.map(mapLines).join('\n\n')); }

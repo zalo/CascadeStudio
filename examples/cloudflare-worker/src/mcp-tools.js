@@ -82,7 +82,9 @@ export const TOOLS = [
       + 'of mass, validity; with a density (g/cm^3) also the mass in grams.',
     inputSchema: { type: 'object', properties: { session,
       shape: { type: 'integer', description: 'Only this shape index.' },
-      density: { type: 'number', description: 'g/cm^3, e.g. 1.24 for PLA, 2.7 for aluminium.' } }, required: ['session'] },
+      density: { type: 'number', description: 'g/cm^3, e.g. 1.24 for PLA, 2.7 for aluminium.' },
+      exact_bbox: { type: 'boolean', description: 'Optimal bounding boxes (slower; the default box is tight for '
+        + 'planes, cylinders, cones, spheres and tori but may overshoot a B-spline surface).' } }, required: ['session'] },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {

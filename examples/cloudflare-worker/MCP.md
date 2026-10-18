@@ -11,6 +11,9 @@ with a warm build123d engine and a cached working set. It is the same session
 the editor uses ([EDITOR.md](EDITOR.md)), so a person can open the model the agent is building
 and edit it, and each side sees the other's changes.
 
+**Live:** `https://cascade-headless-session.makeshifted.workers.dev/mcp`. It is open (no access key)
+for now, like the session API; see *Signing in* to lock it down.
+
 ```bash
 npm run dev:session                       # API + editor + /mcp on :8787
 claude mcp add --transport http cad http://127.0.0.1:8787/mcp
@@ -124,6 +127,25 @@ npx wrangler secret put MCP_ACCESS_KEY --env session
 | the first view of a model also meshes it | plate16 3.3 s, heat_exchanger 6.5 s |
 | `drawingSVG` (exact HLR) | mount 0.1 s, maker_coin 0.7 s, plate16 5.6 s, heat_exchanger 11 s |
 | `exportGLB` | 6-360 ms |
+
+### On the edge
+
+Deployed 2026-10-18 (open mode). Client wall time from this machine, one run
+each; placement varies about 1.6×.
+
+| call | mount | heat_exchanger |
+|---|---|---|
+| `set_script`, the session's first run (a fresh isolate also boots the engine, ~4 s) | 4.0 s | 19-32 s |
+| `render_view`, the first view (meshes the model) | 1.4 s | 15.6 s |
+| `render_view`, another view | 0.87 s | 2.5 s |
+| `measure` / `validate` | 0.26 / 0.21 s | 2.3 / 0.1 s |
+| `export` step / glb | 0.38 / 0.22 s | 3.0 s / — |
+| `render_view` svg drawing | 0.29 s | (not run: 11 s locally) |
+| `execute` (a small append) | 0.28 s | — |
+
+**Two edge-only problems surfaced** that `wrangler dev` does not show:
+- **Storage commits:** a SQL write in a Durable Object applies at once but commits when the event loop turns. A tool wrote a small row, the rate-limit counter, and then held the isolate for 30 s or more evaluating heat_exchanger. The commit timed out and the runtime reset the object ("storage operation exceeded timeout"). Every write that precedes a long evaluation, render or export is now followed by `await ctx.storage.sync()` (`flush()`).
+- **Compaction:** the threshold compacted after every call once heat_exchanger's heap passed 48 MB. Compaction rewinds the kernel, so the next call re-ran the script and compacted again, at 9-15 s per call. Now only runs with cache misses compact at `COMPACT_AT_MB`. Re-runs that are all hits, renders and exports compact only past 48 + 40 MB, and the full inspection is cached per run. A second view dropped from 11 s to 2.5 s, and `measure` from 12 s to 2.3 s. The exact bounding box (`AddOptimal`, 3.5 s locally on heat_exchanger) is now opt-in (`exact_bbox`); the default box is tight for analytic faces.
 
 ## Limits
 

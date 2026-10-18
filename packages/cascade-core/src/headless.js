@@ -578,8 +578,13 @@ export async function createHeadlessCascade(options = {}) {
     /** Per scene shape (run({keepScene: true}); otherwise the combined
      *  shape): type, topology counts, volume, area, bounding box, centre of
      *  mass, and validity (BRepCheck_Analyzer). `{quick: true}`: type,
-     *  solids/faces, volume and bounding box only. */
+     *  solids/faces, volume and a FAST bounding box (BRepBndLib::Add, gap
+     *  removed: tight for analytic surfaces, may overshoot a B-spline's
+     *  control hull) — the exact one (AddOptimal) took 3.5 s of 3.5 s on
+     *  heat_exchanger. `{exactBox: false}` gives the full inspection with
+     *  the fast box. */
     inspectShapes(o = {}) {
+      const exactBox = o.quick ? false : o.exactBox !== false;
       const o2 = oc();
       const S = globalThis.self;
       const shapes = state.scene && state.scene.length ? state.scene
@@ -611,11 +616,19 @@ export async function createHeadlessCascade(options = {}) {
           if (!shape || shape.IsNull()) { return Object.assign(out, { error: 'null shape' }); }
           out.type = TYPES[shape.ShapeType().value] || 'Shape';
           out.solids = count(shape, 'TopAbs_SOLID');
+          const fastBox = () => {
+            const box = new o2.Bnd_Box_1();
+            o2.BRepBndLib.Add(shape, box, false);
+            if (!box.IsVoid()) {
+              box.SetGap(0);
+              out.bbox = [box.GetXMin(), box.GetYMin(), box.GetZMin(), box.GetXMax(), box.GetYMax(), box.GetZMax()].map(r6);
+            }
+            box.delete();
+          };
           if (o.quick) {
             out.faces = count(shape, 'TopAbs_FACE');
             out.volume = out.solids > 0 ? r6(S.SolidsVolume(shape)) : 0;
-            const qb = S.BoundingBox(shape, 0.1);
-            if (qb) { out.bbox = qb.map(r6); }
+            fastBox();
             return out;
           }
           out.shells = count(shape, 'TopAbs_SHELL');
@@ -635,8 +648,11 @@ export async function createHeadlessCascade(options = {}) {
           const c = props.CentreOfMass();
           out.centerOfMass = [r6(c.X()), r6(c.Y()), r6(c.Z())];
           c.delete(); props.delete();
-          const bb = S.BoundingBox(shape, 0.1);
-          if (bb) { out.bbox = bb.map(r6); }
+          if (exactBox) {
+            const bb = S.BoundingBox(shape, 0.1);
+            if (bb) { out.bbox = bb.map(r6); }
+          } else { fastBox(); }
+          out.bboxMethod = exactBox ? 'exact' : 'fast';
           const check = new o2.BRepCheck_Analyzer(shape, true, false, false);
           out.valid = !!check.IsValid_2();
           check.delete();

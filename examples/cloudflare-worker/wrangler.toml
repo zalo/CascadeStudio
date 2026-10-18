@@ -191,7 +191,7 @@ FILE_TTL_S = "3600"
 # active when MCP_ACCESS_KEY is set too.
 [[env.session.kv_namespaces]]
 binding = "OAUTH_KV"
-id = "00000000000000000000000000000000"
+id = "6604adf7000a4fd485508a8198f9e8b1"
 
 # The editor (scripts/prepare-editor.cjs): served ahead of the Worker, so
 # /session/* (never a file) still reaches it.
