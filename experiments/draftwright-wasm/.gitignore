@@ -1,0 +1,6 @@
+pkg/
+out/
+worker/src/draftwright_wasm.js
+worker/src/draftwright_wasm_bg.wasm
+worker/.wrangler/
+pyodide/out/
