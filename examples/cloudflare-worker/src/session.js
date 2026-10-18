@@ -1105,6 +1105,87 @@ const MCP_TOOLS = {
       + gateLine + '\n' + FILE_LINK_NOTE }], after: { clear } };
   },
 
+  /** One shown object as an engineering drawing. The drafting Worker
+   *  (drafting/, draftwright-rust, AGPL) plans it from the object's STEP over
+   *  the DRAFTING service binding. The STEP is written here, inside the
+   *  engine queue; the drawing is awaited outside it (`outside`), so other
+   *  sessions on this isolate's engine are not held up while it plans. */
+  async make_drawing(e, a) {
+    const drafting = this.env.DRAFTING;
+    if (!drafting) { throw new UserError('drawings are not available on this deployment (no drafting service is bound)'); }
+    const r = await this.ensureScene(e);
+    if (!r.shapeCount) { throw new UserError('nothing to draw: the script shows no shapes'); }
+    const names = e.sceneNames();
+    const shapes = this.quickScene(e);
+    const idx = resolveObjects(names, a.object_name);
+    if (idx.length !== 1) {
+      throw new UserError('make_drawing draws one part: pass object_name (the scene has ' + names.length
+        + ' objects: ' + shapes.map(label).join(', ') + ')');
+    }
+    const ops = [];
+    for (const key of ['title', 'number', 'material', 'tolerance', 'drawn_by', 'revision']) {
+      if (a[key] !== undefined && a[key] !== '') { ops.push({ op: 'set', path: 'sheet/title/' + key, value: String(a[key]) }); }
+    }
+    for (const key of ['size', 'scale', 'projection']) {
+      if (a[key] !== undefined && a[key] !== '') { ops.push({ op: 'set', path: 'sheet/' + key, value: String(a[key]) }); }
+    }
+    if (a.ops !== undefined) {
+      const list = Array.isArray(a.ops) ? a.ops : [a.ops];
+      if (list.some((op) => !op || typeof op !== 'object' || typeof op.op !== 'string' || typeof op.path !== 'string')) {
+        throw new UserError('ops must be a list of draftwright Spec edits, each {"op", "path", "value"}');
+      }
+      ops.push(...list);
+    }
+    const v = gateVerdict(this.gateFor(e, { indices: idx }));
+    const pick = names.length > 1 ? e.pickShape(idx) : null;
+    let step;
+    try { step = e.exportSTEP({ shape: pick ? pick.shape : undefined }); }
+    finally { if (pick) { pick.free(); } }
+    const s = shapes[idx[0]];
+    const base = String(a.filename || s.name || 'drawing').replace(/[^A-Za-z0-9_.-]+/g, '_')
+      .replace(/\.[A-Za-z0-9]+$/, '') || 'drawing';
+    const stepBytes = new TextEncoder().encode(step);
+    return { outside: async () => {
+      let d;
+      try {
+        d = await drafting.draw(stepBytes, { name: base + '.step', ops, formats: ['pdf', 'svg'] });
+      } catch (err) {
+        const m = String((err && err.message) || err);
+        throw new UserError((/memory/i.test(m) ? 'the drawing service ran out of memory on this part (draw a simpler one): '
+          : 'the drawing service is unavailable or failed: ') + m);
+      }
+      if (!d.ok) {
+        throw new UserError('no drawing: ' + d.message
+          + (d.choices && d.choices.length ? '\nchoices: ' + JSON.stringify(d.choices) : ''));
+      }
+      const pdf = this.storeFile(base + '.pdf', 'application/pdf', new Uint8Array(d.pdf));
+      const svg = this.storeFile(base + '.svg', MIME.svg, new Uint8Array(d.svg));
+      await this.flush();
+      const rank = { error: 0, warning: 1, info: 2 };
+      const problems = d.problems.slice().sort((p, q) => (rank[p.severity] ?? 3) - (rank[q.severity] ?? 3));
+      const lines = ['DRAWING of ' + label(s) + ': ' + (d.sheet.size || '?') + ' at ' + (d.sheet.scale || '?')
+        + ', views ' + d.views.join(', ') + '; ' + d.dimensions + ' dimensions; ' + d.faces + ' faces, '
+        + d.features + ' features recognised (status: ' + d.status + ')',
+        'PDF ' + (pdf.bytes / 1024).toFixed(1) + ' KB: ' + pdf.url,
+        'SVG ' + (svg.bytes / 1024).toFixed(1) + ' KB: ' + svg.url + '\n(kept ' + pdf.expiresInS + ' s)'];
+      if (problems.length) {
+        lines.push('problems (' + problems.length + '); a fix is Spec edits to pass in ops:');
+        for (const p of problems.slice(0, 15)) {
+          const msg = String(p.message || '');
+          lines.push('- [' + p.severity + '] ' + p.code + ': ' + (msg.length > 280 ? msg.slice(0, 277) + '...' : msg)
+            + (p.fix && p.fix.length ? '\n  fix: ' + JSON.stringify(p.fix) : ''));
+        }
+        if (problems.length > 15) { lines.push('... and ' + (problems.length - 15) + ' more'); }
+      } else {
+        lines.push('problems: none');
+      }
+      lines.push('gate: ' + (v.passes ? 'PASS' : 'FAIL — ' + v.reasons.join('; ')), FILE_LINK_NOTE,
+        'Drawn by ' + d.engine + ' (' + d.license + '); source: ' + d.engineSource
+        + (d.serviceSource ? '; this drawing service: ' + d.serviceSource : '') + '.');
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    } };
+  },
+
   async session_state() {
     const sc = this.script();
     const res = this.lastResult || this.meta('result');
@@ -1982,6 +2063,9 @@ export function createSession(worker, o) {
       if (limited) { return toolText(limited, true); }
       await this.flush();
       return new Promise((resolve) => {
+        // a tool can finish outside the engine queue (make_drawing awaits
+        // another Worker): it returns {outside: async () => result}
+        let outside = null;
         const job = withEngine(async () => {
           const booted = worker.isBooted();
           const t0 = performance.now();
@@ -2001,12 +2085,18 @@ export function createSession(worker, o) {
             after = Object.assign({ ran: this.ranThisCall, misses: this.callMisses }, result.after);
             delete result.after;
           }
-          resolve(result);
+          if (typeof result.outside === 'function') { outside = result.outside; }
+          else { resolve(result); }
           if (after) {
             await yieldToIo();
             this.lastAfter = await this.afterRun(e, after);
           }
         });
+        job.then(() => {
+          if (!outside) { return; }
+          outside().then(resolve, (err) => resolve(toolText(err instanceof UserError ? err.message
+            : 'session error: ' + ((err && err.message) || err), true)));
+        }, () => {});
         job.catch((err) => {
           if (isolate.owner === this.key) {
             worker.engine().then((e) => { rewind(e); }).catch(() => {});

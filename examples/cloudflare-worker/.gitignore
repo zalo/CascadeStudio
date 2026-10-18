@@ -10,3 +10,7 @@ public/
 # The editor served by the session Worker (scripts/prepare-editor.cjs: the
 # CascadeStudio build, remote-session mode, minus the local engine).
 editor/
+
+# draftwright-wasm, fetched by scripts/fetch-draftwright.mjs (AGPL, not committed)
+drafting/vendor/
+drafting/.wrangler/

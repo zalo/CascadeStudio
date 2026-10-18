@@ -163,6 +163,9 @@ does all of it. Its Rust port publishes a wasm package that reads STEP with no O
   typical parts. Dense 200+-face parts need 66–540 MB, more than a Worker isolate has.
 - **Open:** licensing (AGPL) and the author's own hosted service need a decision first.
 
+- **Built locally:** a separate drafting Worker and the `make_drawing` MCP tool
+  ([drafting/README.md](drafting/README.md)).
+
 Details are in [DRAFTWRIGHT-WASM.md](DRAFTWRIGHT-WASM.md).
 
 ### 7. Real purchasable parts

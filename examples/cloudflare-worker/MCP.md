@@ -52,6 +52,7 @@ shape and keeps its index; a named list shows its members as `name[0]`, `name[1]
 | `health_check`, `destroy_session` | engine and session status; delete the session (`confirm: true`) |
 | `repair_hints` | fix suggestions for an error text |
 | `export` | `step`, `brep` (exact), `stl` (mesh), `glb` (mesh, metres, Y up), `svg`/`dxf` (exact projection) → a download URL, kept `FILE_TTL_S` (1 h); one object with `object_name`; 3-D formats report the gate, `strict` refuses a FAIL |
+| `make_drawing` | a dimensioned engineering drawing of one object (PDF + SVG URLs): views, a section where one helps, hole and feature callouts, a title block (`title`, `number`, `material`, `tolerance`, `size`, `scale`, …). The problems come back with fixes as Spec edits, which `ops` applies. Planned by draftwright-rust in the separate drafting Worker ([drafting/README.md](drafting/README.md), AGPL), so it is listed only where that Worker is bound; parts over its face limit are refused |
 | `session_state` / `last_error` | the overview (script, last run, snapshots, files, editor link) / the error with surrounding lines |
 | `save_snapshot` / `restore_snapshot` | named copies of the script |
 | `reset` | empty the script |
@@ -81,6 +82,7 @@ The skill below shows both.
   - **Raster:** a z-buffered software rasterizer with per-vertex lighting, edges drawn on top with a depth test, and silhouettes from depth jumps. It renders at 2× and filters down.
   - **Output:** `PngEncode.js` writes the PNG with the platform's `CompressionStream`.
   - **Drawings:** `engine.drawingSVG()` projects the exact B-rep with `HLRBRep_Algo`.
+- **Drawings in a Worker of their own (`drafting/`).** `make_drawing` exports the object's STEP inside the engine queue, then awaits the drafting Worker over a service binding (Workers RPC) outside it, so other sessions on the isolate aren't held up while the sheet is planned (1–5 s). The drafting Worker links draftwright-rust's wasm package and is AGPL-3.0-only; every drawing names both sources. Its memory grows ~1.1 MB per face, hence the face limit. Locally, `npm run dev:drafting` beside `dev:session` connects through wrangler's dev registry; deploy it before the session Worker.
 - **Files without a filesystem.** Exports are stored in the session object's own SQLite storage, in rows of 1.9 MB or less, and served at `/session/<id>/files/<random id>/<name>`.
   - **Links, not uploads:** an export URL is for the person, who opens it in a browser. A model's code sandbox can fetch it only if its egress allow-list has the host: claude.ai's code execution refuses unlisted hosts with a 403 (`connect_rejected`) until the account adds the domain under Settings → Capabilities. The `export` result, its description and the workflow say so, so a model hands over the link instead of retrying.
   - **Expiry:** each file expires after `FILE_TTL_S`, and expired files are dropped when the next one is stored.
@@ -136,7 +138,8 @@ npx wrangler secret put MCP_ACCESS_KEY --env session
   - snapshots and the last-show-wins rule;
   - that the starter's and the skill's code run, and all 38 runnable quickref/selectors sections;
   - named objects (replace by name, stable indices), the change line and the missed-boolean warning, `measure` with a material, `compare` of each kind, `resolve` (including a bad selector), the gate on overlapping solids and a sheet, `locate_gate_defects`, `design_audit` (a fillet radius that breaks the solid at +10% is brittle; the script is left alone), and the `result` fallback;
-  - the REST bridge.
+  - the REST bridge;
+  - with the drafting Worker bound, `make_drawing`: the sheet, views and links; the PDF by its magic bytes; the title block fields in the SVG; a problem's fix; a bad Spec edit; `ops` as JSON text; the one-part rule; and the face limit.
   - Auth runs: the 401 challenge; wrong and right keys; the whole OAuth flow (metadata, registration, the consent page with a wrong then the right key, code, token, a call with the token); the per-minute limit, which stops at call 60.
 - **`test/remote-session.spec.js`** has an agent and the editor share one session. The editor opens on the agent's script, follows an `execute`, and the agent sees the person's edit.
 - **A real client:** Claude Code (Sonnet), given only this MCP server, modeled "a 30 × 20 × 10 mm block with a 6 mm through-hole and 1 mm vertical fillets".

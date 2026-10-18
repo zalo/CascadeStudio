@@ -352,6 +352,29 @@ export const TOOLS = [
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
+    name: 'make_drawing',
+    title: 'Make an engineering drawing',
+    description: 'A dimensioned engineering drawing of ONE shown object (object_name when several), as PDF and SVG '
+      + 'download URLs: front, plan, side and iso views, a section where one helps, hole and feature callouts and '
+      + 'a title block, planned by draftwright from the object\'s STEP. The result lists the drawing\'s problems, '
+      + 'each with a fix as Spec edits; pass edits back in ops to apply them. Parts with many faces are refused.',
+    inputSchema: { type: 'object', properties: { session, object_name: objectName,
+      title: { type: 'string', description: 'Title block: part title (default: the object\'s name).' },
+      number: { type: 'string', description: 'Title block: drawing number.' },
+      material: { type: 'string', description: 'Title block: material.' },
+      tolerance: { type: 'string', description: 'Title block: general tolerance, e.g. "ISO 2768-m".' },
+      drawn_by: { type: 'string', description: 'Title block: drawn by.' },
+      revision: { type: 'string', description: 'Title block: revision.' },
+      size: { type: 'string', enum: ['A4', 'A3', 'A2', 'A1', 'A0'], description: 'Sheet size (default: chosen to fit).' },
+      scale: { type: 'string', description: 'Sheet scale, e.g. "1:2" (default: chosen to fit).' },
+      projection: { type: 'string', enum: ['first', 'third'], description: 'Projection angle (default first).' },
+      ops: { type: 'array', items: { type: 'object' }, description: 'draftwright Spec edits applied after the '
+        + 'fields above, e.g. [{"op": "set", "path": "features/f:hole:3/fit", "value": "H7"}] or a problem\'s fix.' },
+      filename: { type: 'string', description: 'Base name of the files (default: the object\'s name).' } },
+    required: ['session'] },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  {
     name: 'session_state',
     title: 'Session overview',
     description: 'Script revision and who changed it last, the last run (ok, errors, shapes, cache hits), '
@@ -457,7 +480,7 @@ export const WORKFLOW = `# Working with remote build123d sessions
 5. Before a fillet or chamfer, check the selection: resolve(object_name, ".edges().filter_by(GeomType.CIRCLE)") or find_edges(...) in the script.
 6. Fix errors with last_error (the failing line in context) and repair_hints. Common causes: a selector that picked nothing, a fillet radius larger than the adjacent faces allow, booleans between shapes that do not touch.
 7. save_snapshot before a risky change; restore_snapshot to go back; compare(kind="snapshot") to see what changed.
-8. export: step for CAD, stl for printing, glb for viewers, svg for a drawing. Each returns a download URL for the person: give it as a link. A code sandbox (claude.ai code execution) can fetch it only if this host is on its allowed domains (Settings > Capabilities); when a fetch is refused, give the link and mention that setting rather than retrying. Give the person open_in_editor's link so they can see and tweak the model; their edits appear in session_state/get_script.
+8. export: step for CAD, stl for printing, glb for viewers, svg for a projection; make_drawing for a dimensioned engineering drawing (PDF), fixing what its problems list says through ops. Each returns a download URL for the person: give it as a link. A code sandbox (claude.ai code execution) can fetch it only if this host is on its allowed domains (Settings > Capabilities); when a fetch is refused, give the link and mention that setting rather than retrying. Give the person open_in_editor's link so they can see and tweak the model; their edits appear in session_state/get_script.
 
 ## Writing build123d here
 - Algebra mode: part = Box(80, 60, 8); part -= Pos(0, 0, 4) * Cylinder(10, 20); part = fillet(part.edges().filter_by(Axis.Z), 3)

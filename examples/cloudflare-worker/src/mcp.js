@@ -53,6 +53,9 @@ export function createMcpHandler(o) {
     if (!toolsByName.has(name)) { return textResult('unknown tool: ' + name, true); }
     const args = coerceArgs(toolsByName.get(name), (params && params.arguments) || {});
     if (name === 'workflow_hints') { return textResult(WORKFLOW); }
+    if (name === 'make_drawing' && !(env && env.DRAFTING)) {
+      return textResult('drawings are not available on this deployment (no drafting service is bound)', true);
+    }
     if (name === 'search_library') {
       const parts = searchParts(args.query || '');
       return textResult(JSON.stringify({ count: parts.length, parts,
@@ -98,7 +101,8 @@ export function createMcpHandler(o) {
         break;
       }
       case 'ping': result = {}; break;
-      case 'tools/list': result = { tools: TOOLS }; break;
+      // make_drawing needs the drafting Worker's service binding (drafting/)
+      case 'tools/list': result = { tools: env && env.DRAFTING ? TOOLS : TOOLS.filter((t) => t.name !== 'make_drawing') }; break;
       case 'tools/call': result = await callTool(p, env, origin); break;
       case 'prompts/list': result = { prompts: PROMPTS }; break;
       case 'prompts/get': {

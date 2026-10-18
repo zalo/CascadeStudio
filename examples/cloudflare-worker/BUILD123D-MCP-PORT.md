@@ -113,7 +113,7 @@ The vendored code reads the B-rep through `_cs_ocp`, a small OCP shim over the w
 
 | tools | why |
 |---|---|
-| the drawing tools (`inspect_drawing`, `prepare_drawing`, `crop_drawing`, `view_axes`, `lint_drawing`, `render_drawing`, `save_drawing_annotations`, `suggest_view_layout`) | deprecated upstream in favour of draftwright (AGPL) |
+| the drawing tools (`inspect_drawing`, `prepare_drawing`, `crop_drawing`, `view_axes`, `lint_drawing`, `render_drawing`, `save_drawing_annotations`, `suggest_view_layout`) | deprecated upstream in favour of draftwright (AGPL); here `make_drawing` calls draftwright-rust in a separate AGPL Worker ([drafting/README.md](drafting/README.md)) |
 | `execute_file`, `bank_candidate`, `install_skill` | local files; here the script travels as text, and `SKILL.md` is a file to upload |
 | `list_sessions` | session ids are the only protection of an open deployment, so they are never listed |
 | `repair_advice`, `mesh_section`, `mesh_holes` | long recipes tied to upstream's gate ladder, and tools for imported meshes that need STL import first |

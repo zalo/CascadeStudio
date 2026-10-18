@@ -38,7 +38,10 @@ const call = (name, args = {}) => client.callTool({ name, arguments: args });
 
 // ---- discovery ----
 const tools = (await client.listTools()).tools.map((t) => t.name);
-check('32 tools listed', tools.length === 32, tools.join(' '));
+// make_drawing is listed only where the drafting Worker is bound (drafting/)
+const drawing = tools.includes('make_drawing');
+const TOOL_COUNT = drawing ? 33 : 32;
+check(TOOL_COUNT + ' tools listed' + (drawing ? ' (with make_drawing)' : ''), tools.length === TOOL_COUNT, tools.join(' '));
 check('instructions sent', /render_view/.test(client.getInstructions() || ''));
 const prompts = (await client.listPrompts()).prompts;
 check('the start-cad-session prompt', prompts.some((p) => p.name === 'start-cad-session'));
@@ -362,6 +365,43 @@ r = await call('measure', {});
 check('a tool without a session id is an error', r.isError && /session/.test(text(r)));
 r = await call('execute', { code: 'show(Box(1, 2, 3))' });
 check('execute without a session starts one', !r.isError && /session: [a-z0-9]{12}/.test(text(r)));
+// ---- drawings: the drafting Worker (draftwright-rust) over the DRAFTING binding ----
+if (drawing) {
+  const dsid = (text(await call('new_session')).match(/session: (\S+)/) || [])[1];
+  await call('execute', { session: dsid, code: 'plate = Box(80, 50, 10)\nplate -= Cylinder(8, 20)\n'
+    + 'plate -= GridLocations(60, 30, 2, 2) * Cylinder(3, 20)\nshow(plate, "plate")' });
+  let d = await call('make_drawing', { session: dsid, title: 'Test plate', number: 'T-1', material: 'AlMg3',
+    tolerance: 'ISO 2768-m' });
+  const dt = text(d);
+  check('make_drawing: sheet, views and links', !d.isError && /^DRAWING of \[0\] "plate": A\d at \d+:\d+, views front, plan, side, iso/.test(dt)
+    && /PDF [\d.]+ KB: http/.test(dt) && /SVG [\d.]+ KB: http/.test(dt), dt.split('\n')[0]);
+  const pdfUrl = (dt.match(/PDF [\d.]+ KB: (\S+)/) || [])[1];
+  const svgUrl = (dt.match(/SVG [\d.]+ KB: (\S+)/) || [])[1];
+  const pdf = pdfUrl ? Buffer.from(await (await fetch(pdfUrl)).arrayBuffer()) : Buffer.alloc(0);
+  check('the drawing PDF downloads', pdf.subarray(0, 5).toString() === '%PDF-', pdf.length + ' bytes');
+  const svgText = svgUrl ? await (await fetch(svgUrl)).text() : '';
+  check('the SVG carries the title block fields', /<svg/.test(svgText) && /AlMg3/.test(svgText) && /ISO 2768-m/.test(svgText)
+    && /T-1/.test(svgText), svgText.length + ' chars');
+  check('setting the tolerance clears general_tolerance_missing', !/general_tolerance_missing/.test(dt));
+  check('it names draftwright, its licence and both sources', /draftwright-rust \S+ \(AGPL-3\.0-only\); source: https:\/\/github\.com\/pzfreo\/draftwright-rust\/tree\/v/.test(dt)
+    && /this drawing service: http/.test(dt));
+  d = await call('make_drawing', { session: dsid });
+  check('a problem comes with its fix as Spec edits', /general_tolerance_missing/.test(text(d))
+    && /fix: \[\{"op":"set","path":"sheet\/title\/tolerance"/.test(text(d)));
+  d = await call('make_drawing', { session: dsid, ops: [{ op: 'set', path: 'sheet/nope', value: 'x' }] });
+  check('a bad Spec edit is an error that says why', d.isError && /unknown field/.test(text(d)), text(d).slice(0, 120));
+  d = await call('make_drawing', { session: dsid, ops: '[{"op": "set", "path": "sheet/title/material", "value": "S235"}]' });
+  check('ops sent as JSON text are accepted', !d.isError, text(d).split('\n')[0]);
+  await call('execute', { session: dsid, code: 'big = Box(200, 140, 10) - GridLocations(18, 16, 10, 8) * Cylinder(3, 40)\nshow(big, "big")' });
+  d = await call('make_drawing', { session: dsid });
+  check('two objects shown: make_drawing asks for object_name', d.isError && /draws one part/.test(text(d)));
+  d = await call('make_drawing', { session: dsid, object_name: 'big' });
+  check('a part over the face limit is refused with its count', d.isError && /has \d+ faces; this service draws parts up to \d+/.test(text(d)),
+    text(d).slice(0, 120));
+} else {
+  console.log('  SKIP  make_drawing: no drafting service bound (npm run dev:drafting beside dev:session)');
+}
+
 await client.close();
 
 // ---- auth ----
@@ -409,7 +449,7 @@ if (process.env.OAUTH) {
       client_id: reg.client_id, code_verifier: verifier, resource: BASE + '/mcp' }) })).json();
   check('the code becomes an access token', !!tok.access_token, Object.keys(tok).join(','));
   const oc = await connect(tok.access_token);
-  check('the OAuth token opens /mcp', (await oc.listTools()).tools.length === 32);
+  check('the OAuth token opens /mcp', (await oc.listTools()).tools.length === TOOL_COUNT);
   await oc.close();
 }
 

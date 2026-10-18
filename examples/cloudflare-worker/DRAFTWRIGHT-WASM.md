@@ -27,7 +27,7 @@ Our sessions already export STEP, so the pipeline is: `show()`n object → STEP 
 | render SVG + PDF | 17–25 ms | 32–43 ms |
 | wasm memory | 11–15 MB | 15–23 MB |
 
-- **Package:** 13.6 MB raw, 3.0 MB Brotli (its own figures, `docs/wasm.md`).
+- **Package:** 15.1 MB raw for `v0.1.0-alpha.5` (its docs quote 13.6 MB raw / 3.0 MB Brotli for an earlier build).
 - **Bundle size:** the session Worker is 25.5 MiB of the 64 MiB limit, so it would fit even in the
   same Worker.
 - **Drawing quality:** right on the parts tried. See §2.
@@ -35,6 +35,7 @@ Our sessions already export STEP, so the pipeline is: `show()`n object → STEP 
   (637 faces) needed 98 s. They don't fit a 128 MB isolate. See §3.
 - **Licence:** AGPL-3.0, and the author runs a hosted product. This needs a decision before
   shipping. See §4.
+- **Built:** a separate drafting Worker plus the `make_drawing` tool, verified locally (§5).
 
 **The Python route was also tried:** Python draftwright on our real-build123d Pyodide flavor. It
 produces a correct drawing too, but only with a stack of polyfills, and it needs ~128 MB of wasm
@@ -133,25 +134,39 @@ Options for dense parts:
 
 *This is an engineering reading of the licence, not legal advice.*
 
-## 5. How it would plug in
+## 5. Built: the drafting Worker and `make_drawing`
 
-1. **A `draftwright` Worker** (`--env drafting`):
-   - The wasm is fetched from the pinned release by a script that verifies the checksum (like
-     `fetch-pyodide.cjs`), not committed.
-   - `POST /draw` takes STEP plus an optional Spec JSON and returns problems, the Spec and the
-     SVG/PDF bytes.
-2. **The session Worker** reaches it by service binding.
-3. **A `make_drawing` MCP tool** on the session:
-   - It takes the `show()`n object, exports STEP and calls the binding.
-   - It stores the PDF and SVG as session files (the same links and TTL as `export`).
-   - It returns the problems with their suggested fixes, the sheet and scale, and the links.
-   - Title, material and tolerance arguments map to Spec ops.
-   - The Spec JSON is kept in DO storage, so a follow-up call can apply more ops. Re-planning
-     costs 1–2 s for typical parts.
-4. **A face/feature budget** that fails closed above what fits (§3). A container covers the rest
-   later.
-5. **Checks** in `scripts/mcp-test.mjs`: the PDF signature, the problems shape, the gate message,
-   and the AGPL source link in the output.
+Built and verified locally, not deployed. See [drafting/README.md](drafting/README.md).
+1. **`drafting/`, the `cascade-drafting` Worker:**
+   - `scripts/fetch-draftwright.mjs` downloads the pinned release (`v0.1.0-alpha.5`, whose `.wasm`
+     is 15.1 MB, not the 13.6 MB in its docs), checks its SHA-256 and unpacks it into the
+     gitignored `drafting/vendor/`.
+   - The Worker exposes `draw()`/`info()` as Workers RPC (`entrypoint = "Drafting"`), plus a curl
+     HTTP surface for `wrangler dev`.
+   - It has no public URL (`workers_dev = false`), and the directory carries the AGPL text.
+2. **The session Worker's `DRAFTING` service binding:** `tools/list` shows `make_drawing` only
+   where it is bound.
+3. **The `make_drawing` tool:**
+   - It draws one shown object (`object_name` when several).
+   - Title block and sheet arguments become Spec ops; `ops` passes raw ones, including a problem's
+     own fix.
+   - It stores the PDF and SVG as session files and lists the problems with their fixes.
+   - It names both sources.
+   - The STEP is written inside the engine queue and the drawing awaited outside it (an `outside`
+     continuation in `mcpTool`). Measured locally: another session's `measure` returned in 323 ms
+     while a 66-face drawing took 3.2 s.
+4. **A face limit** (`MAX_FACES`, default 80): the Worker counts the STEP's faces before opening
+   it. The calibration table is in the drafting README.
+5. **`scripts/mcp-test.mjs`:** ten drawing checks when the binding is present, all passing locally.
+   They cover the sheet line, the PDF magic, the title block fields, a problem's fix, a bad edit,
+   JSON-text `ops`, the one-part rule and the face limit.
+
+**Still open:**
+- **Deployment:** deploy the drafting Worker before the session Worker binds it.
+- **Edge memory accounting:** tune `MAX_FACES` from a deployed run.
+- **Persisting the Spec between calls:** each call starts from the defaults plus its own ops.
+- **A container for parts over the limit.**
+- **The licence and author question in §4.**
 
 **Probe scripts** are in [`experiments/draftwright-wasm/`](../../experiments/draftwright-wasm/),
 whose README covers fetching the release and the wheels:
