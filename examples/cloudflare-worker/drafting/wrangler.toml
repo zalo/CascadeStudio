@@ -14,11 +14,12 @@ workers_dev = false
 [vars]
 # Parts with more faces are refused before they are opened: draftwright's
 # wasm memory grows ~1.1 MB per face on hole-heavy parts (measured: 54 faces
-# 65 MB, 86 faces 95 MB) and a Worker isolate has 128 MB in all. Deployed
-# 2026-10-18: an 86-face plate drew, both 126-face parts ran out of memory
-# (a clean error; the isolate recovered). 80 leaves a margin, since memory
-# per face varies by part.
-MAX_FACES = "80"
+# 65 MB, 86 faces 95 MB, 126 faces 112 MB) and a Worker isolate has 128 MB in
+# all. Each drawing gets an engine instance of its own, dropped afterwards, so
+# the ceiling no longer depends on what the isolate drew before: on the edge
+# (2026-10-19) 126-face plates drew 9 times out of 9, back to back. 120 stays
+# below that, since memory per face varies by part.
+MAX_FACES = "120"
 # Offered with every drawing next to draftwright's own source (AGPL s13).
 SERVICE_SOURCE_URL = "https://github.com/zalo/CascadeStudio/tree/master/examples/cloudflare-worker/drafting"
 

@@ -10,16 +10,16 @@
 // draftwright reads the STEP with its own B-rep kernel (no OpenCascade) and
 // plans the whole sheet in one call. Its wasm memory grows with the part
 // (~1.1 MB per face on hole-heavy parts, measured) and never shrinks, so
-// parts over MAX_FACES are refused before they are opened. On the edge an
-// 86-face plate drew and 126-face ones ran out of memory (README.md).
+// every drawing gets an engine instance of its own, dropped when draw()
+// returns (the garbage collector then reclaims its memory), and parts over
+// MAX_FACES are refused before they are opened (README.md).
 import { WorkerEntrypoint } from 'cloudflare:workers';
-import { initSync, Engine } from '../vendor/draftwright_wasm.js';
+import { createDraftwright } from '../vendor/draftwright_factory.js';
 import wasmModule from '../vendor/draftwright_wasm_bg.wasm';
 import VENDOR from '../vendor/VERSION.json';
 
 const MB = 1048576;
 const FORMATS = ['pdf', 'svg'];
-let wasm = null;
 
 /** Where the running code comes from (AGPL section 13: offered with every
  *  result, so whoever gets a drawing can get the source). */
@@ -73,10 +73,16 @@ export async function draw(env, step, opts = {}) {
   }
   const formats = (opts.formats && opts.formats.length ? opts.formats : FORMATS).filter((f) => FORMATS.includes(f));
   const t0 = Date.now();
-  if (!wasm) { wasm = initSync({ module: wasmModule }); }
   let e = null;
   try {
-    e = new Engine(String(opts.name || 'part.step'), bytes);
+    // A fresh copy of the glue and instance per drawing (draftwright_factory.js,
+    // written by fetch-draftwright.mjs). One kept for the isolate's life would
+    // hold the biggest part's memory forever, and a trap can leave it unusable.
+    // Instantiating the precompiled module takes about a millisecond; nothing
+    // here outlives the call, since pdf/svg are copies out of wasm memory.
+    const dw = createDraftwright();
+    const wasm = dw.initSync({ module: wasmModule });
+    e = new dw.Engine(String(opts.name || 'part.step'), bytes);
     if (opts.ops && opts.ops.length) {
       try {
         e.apply(JSON.stringify(opts.ops), true);

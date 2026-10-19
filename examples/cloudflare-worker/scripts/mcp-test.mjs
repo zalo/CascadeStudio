@@ -392,7 +392,7 @@ if (drawing) {
   check('a bad Spec edit is an error that says why', d.isError && /unknown field/.test(text(d)), text(d).slice(0, 120));
   d = await call('make_drawing', { session: dsid, ops: '[{"op": "set", "path": "sheet/title/material", "value": "S235"}]' });
   check('ops sent as JSON text are accepted', !d.isError, text(d).split('\n')[0]);
-  await call('execute', { session: dsid, code: 'big = Box(200, 140, 10) - GridLocations(18, 16, 10, 8) * Cylinder(3, 40)\nshow(big, "big")' });
+  await call('execute', { session: dsid, code: 'big = Box(240, 200, 10) - GridLocations(18, 16, 12, 11) * Cylinder(3, 40)\nshow(big, "big")' });
   d = await call('make_drawing', { session: dsid });
   check('two objects shown: make_drawing asks for object_name', d.isError && /draws one part/.test(text(d)));
   d = await call('make_drawing', { session: dsid, object_name: 'big' });

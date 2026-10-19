@@ -138,8 +138,9 @@ Options for dense parts:
 
 **Deployed 2026-10-18:** `cascade-drafting` (no public URL) and the session Worker with the
 binding. `scripts/mcp-test.mjs` passes 114/114 against the live endpoint. The edge measurements
-(about three times slower than locally; 86 faces always fit, 126 only on a fresh isolate) are in
-[drafting/README.md](drafting/README.md).
+are in [drafting/README.md](drafting/README.md): about three times slower than locally. With one
+shared engine instance, 86 faces always fitted and 126 only on a fresh isolate. Since
+**2026-10-19**, every drawing gets its own instance, freed afterwards, and 126 faces fit every time.
 1. **`drafting/`, the `cascade-drafting` Worker:**
    - `scripts/fetch-draftwright.mjs` downloads the pinned release (`v0.1.0-alpha.5`, whose `.wasm`
      is 15.1 MB, not the 13.6 MB in its docs), checks its SHA-256 and unpacks it into the
@@ -158,17 +159,19 @@ binding. `scripts/mcp-test.mjs` passes 114/114 against the live endpoint. The ed
    - The STEP is written inside the engine queue and the drawing awaited outside it (an `outside`
      continuation in `mcpTool`). Measured locally: another session's `measure` returned in 323 ms
      while a 66-face drawing took 3.2 s.
-4. **A face limit** (`MAX_FACES`, default 80): the Worker counts the STEP's faces before opening
-   it. The calibration table is in the drafting README.
-5. **`scripts/mcp-test.mjs`:** ten drawing checks when the binding is present, all passing locally.
+4. **Memory freed after every drawing:** wasm memory never shrinks, and wasm-bindgen's glue keeps
+   one instance per module. So the fetch script wraps the glue in a factory, and `draw()` makes an
+   instance per drawing and drops it on return, which lets the garbage collector reclaim it.
+   Instantiating takes about 0.5 ms.
+5. **A face limit** (`MAX_FACES`, default 120, 80 before the per-drawing instances): the Worker
+   counts the STEP's faces before opening it. The calibration tables are in the drafting README.
+6. **`scripts/mcp-test.mjs`:** ten drawing checks when the binding is present, all passing locally.
    They cover the sheet line, the PDF magic, the title block fields, a problem's fix, a bad edit,
    JSON-text `ops`, the one-part rule and the face limit.
 
 **Still open:**
 - **Persisting the Spec between calls:** each call starts from the defaults plus its own ops.
 - **A container for parts over the limit,** or a pointer to pzfreo's hosted service for them.
-- **Re-instantiating the engine after a big drawing:** the wasm-bindgen glue initialises once, so
-  a warm isolate keeps its high-water mark.
 
 The author was asked, and agreed (§4).
 

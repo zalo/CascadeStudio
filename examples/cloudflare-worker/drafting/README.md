@@ -62,7 +62,7 @@ npm run deploy:session
     bad ops) or `failed`.
 - **`info()`:** the face limit, the formats and the source information.
 
-## Memory: the face limit
+## Memory: an instance per drawing, and the face limit
 
 draftwright's wasm memory grows with the part and never shrinks. Measured in Node, one fresh
 process per part, on parts exported by build123d-lite:
@@ -79,12 +79,43 @@ process per part, on parts exported by build123d-lite:
 | plate, 10×8 holes | 86 | 4.7 s | 95 MB |
 | plate, 8×5 counterbored holes | 126 | 4.9 s | 112 MB |
 
+**Freed after every drawing.** wasm-bindgen's glue keeps one instance per module, so a shared
+instance would hold the biggest part's memory for the isolate's whole life. In Node, a 126-face,
+86-face, 126-face sequence left one at 129 MB, over an isolate's 128. So:
+- **The factory:** `scripts/fetch-draftwright.mjs` writes `vendor/draftwright_factory.js`. It is
+  the glue, unchanged, wrapped in a function, so each call returns an independent copy, with its
+  own instance, memory and FinalizationRegistry.
+- **One copy per drawing:** `draw()` makes one and drops it on return. Nothing outlives the call,
+  since `pdf`/`svg` are copies out of wasm memory, so the garbage collector reclaims the copy's
+  memory. An engine that trapped is thrown away with it, rather than reused.
+- **Cost:** instantiating the precompiled module takes about 0.5 ms. Compiled code belongs to the
+  module, so a cold isolate warms up across drawings as before.
+  - Locally, a fresh instance drew as fast as a warm shared one: 4.2 s against 4.1 s at 86 faces,
+    0.58 s against 0.53 s at 22.
+  - On the edge, a 7-face part settles at 0.3–0.4 s of CPU, as it did before.
+- **Checked:**
+  - In Node (`--expose-gc`, a FinalizationRegistry on each copy's `WebAssembly.Memory`), every
+    dropped copy's memory was collected.
+  - In local workerd, the `memoryMB` reported per drawing went 112, 95, 112, then 23 for a
+    22-face part.
+
 A Worker isolate has 128 MB, which counts V8's heap and the 15 MB module's compiled code as well.
-So `MAX_FACES` (wrangler.toml, default 80) refuses bigger parts before opening them, counting the
+So `MAX_FACES` (wrangler.toml, default 120) refuses bigger parts before opening them, counting the
 STEP's `ADVANCED_FACE` entities.
 
-**On the edge** (deployed 2026-10-18, through the live MCP `make_drawing`, with the limit lifted
-for the test):
+**On the edge**, through the live MCP `make_drawing`, with the limit lifted for the test.
+
+With one instance per drawing (2026-10-19), all 22 drawings succeeded:
+
+| part | faces | `make_drawing` wall time | drafting CPU (`wrangler tail`) | result |
+|---|---:|---:|---:|---|
+| plate with a bore | 7 | 0.7–2.1 s | 0.3–1.5 s (0.3–0.4 s warm) | drawn, 7 of 7 |
+| plate, 4×4 holes | 22 | 2.4–13.9 s | 1.8 s; 9.6, 5.2, 2.8 s on a cold isolate | drawn, 4 of 4 |
+| plate, 10×8 holes | 86 | 17.9–19.1 s | 14.3–15.5 s | drawn, 2 of 2 |
+| plate, 8×5 counterbored | 126 | 16.9–28.5 s | 14.1–22.6 s | drawn, 7 of 7, back to back too |
+| plate, 12×10 holes | 126 | 37.0–40.4 s | 28.0–31.4 s | drawn, 2 of 2 |
+
+With the shared instance (2026-10-18):
 
 | part | faces | `make_drawing` wall time | drafting CPU (`wrangler tail`) | result |
 |---|---:|---:|---:|---|
@@ -96,9 +127,11 @@ for the test):
 | plate, 8×5 counterbored | 126 | 12.9–19.2 s | 13.1 s | drawn on a fresh isolate or after the 86; out of memory once |
 | plate, 12×10 holes | 126 | 22–30 s | 24.0 s | out of memory, twice |
 
-- **Speed:** the edge runs about three times slower than a local machine.
-- **The ceiling depends on the isolate's history.** wasm memory never shrinks, so a part that fits
-  a fresh isolate can fail after a big one.
+- **Speed:** the edge runs about three times slower than a local machine, and its timings vary by
+  tens of percent between runs.
+- **The ceiling no longer depends on the isolate's history.** With the shared instance, a part
+  that fitted a fresh isolate could fail after a big one. Now 126-face parts drew back to back, 9
+  times out of 9.
 - **Failures are clean, in two forms:**
   - `memory.grow` refused: the glue throws "Invalid array buffer length", and `draw()` returns
     `code: 'out_of_memory'`;
@@ -106,8 +139,11 @@ for the test):
 
   `make_drawing` reports both as "ran out of memory", and the next request gets a working (or
   fresh) isolate; a 7-face part drew in 0.3–0.5 s right after each failure.
-- **Why 80:** it stays below the largest part that drew every time (86), because memory per face
-  varies. A NIST FTC-10 part needs ~1.9 MB per face.
+- **Why 120:** it stays below the largest parts that drew every time (126), because memory per face
+  varies. A NIST FTC-10 part needs ~1.9 MB per face, so a dense part can still run out of memory
+  under the limit, with the clean error above.
+- **Calibrating:** `scripts/drawing-ladder.mjs` draws a sequence of parts through a live
+  `make_drawing`. Deploy with `-- --var MAX_FACES:1000` first, and redeploy without it after.
 
 To move to a newer draftwright-rust release, change `VERSION` and `SHA256` in
 `scripts/fetch-draftwright.mjs` and run it with `--force`.
