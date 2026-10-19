@@ -26,14 +26,19 @@
 //  * Unsupported (raise NotImplementedError rather than fake geometry):
 //    the drafting module beyond ArrowHead, partial cones,
 //    split(keep=Keep.BOTH), offset(min_edge_length=) (no
-//    fix_degenerate_edges), Kind.TANGENT offsets, 3MF export, imports.
+//    fix_degenerate_edges), Kind.TANGENT offsets, mesh imports.
 //  * Boolean results are cleaned with ShapeUpgrade_UnifySameDomain (the
 //    standard library always does); face/edge COUNTS can therefore differ
 //    from build123d even when the geometry (volume/bbox) matches.
 //  * Every remaining deliberate deviation is marked in source with a
 //    grep-able COMPROMISE(<topic>) comment; CLAUDE.md indexes them.
 
-export const BUILD123D_LITE_PY = `
+import { CS_OCP_PY } from './CsOcpShim.js';
+import { BUILD123D_DRAFTING_PY, CS_MCP_FEATURES_PY, AUGURA_PY } from './Build123dDrafting.js';
+import { DRAFTING_PY } from './Build123dDraftingPort.js';
+import { CS_PARTS_PY } from './CsParts.js';
+
+const LITE_CORE_PY = `
 # build123d-lite: a subset of build123d (algebra + builder mode) for
 # CascadeStudio. Runs under Brython inside the CAD worker; every CAD op
 # delegates to the CascadeStudio standard library exposed as JS globals.
@@ -57,6 +62,7 @@ LB = 453.59237   # G_PER_LB * G
 
 _TOL = 1e-9
 _TOL_1E6 = 1e-6      # build123d's TOLERANCE
+TOLERANCE = 1e-6      # build123d geometry.TOLERANCE
 
 
 # ---------------------------------------------------------------- enums ---
@@ -920,6 +926,23 @@ class Vector:
         if ln < 1e-14:
             raise ValueError('cannot normalize a zero-length Vector')
         return self / ln
+
+    def get_angle(self, vec):
+        """Unsigned angle in DEGREES (0..180) between this vector and vec
+        (build123d Vector.get_angle: gp_Vec::Angle)."""
+        b = Vector(vec)
+        n = self.length * b.length
+        if n <= 0:
+            raise ValueError('get_angle of a zero vector')
+        c = max(-1.0, min(1.0, self.dot(b) / n))
+        s_ = self.cross(b).length / n
+        return math.degrees(math.atan2(s_, c))
+
+    def project_to_line(self, line):
+        """This vector projected onto the direction line (build123d
+        Vector.project_to_line)."""
+        line = Vector(line)
+        return line * (self.dot(line) / (line.length * line.length))
 
     def get_signed_angle(self, vec, normal=None):
         """Signed angle in DEGREES between this vector and vec about normal
@@ -2843,14 +2866,21 @@ class Shape:
         return projected
 
     def project_to_viewport(self, viewport_origin, viewport_up=(0, 0, 1),
-                            look_at=None):
+                            look_at=None, focus=None):
         """Hidden-line projection (HLRBRep): returns (visible, hidden)
-        edge compounds like build123d."""
+        edges like build123d — upstream's camera frame exactly: at
+        viewport_origin, main direction towards the viewer
+        (viewport_origin - look_at), Y along viewport_up, look_at
+        defaulting to center(); focus gives a perspective projection."""
         vo = Vector(viewport_origin)
-        target = Vector(look_at) if look_at is not None else \
-            self.bounding_box().center()
-        view_dir = (target - vo).normalized()
-        vis, hid = w.HLRProject(self.topo, list(view_dir))
+        target = Vector(look_at) if look_at is not None else self.center()
+        projection_dir = (vo - target).normalized()
+        up = Vector(viewport_up).normalized()
+        # no focus = 0 (a Python None reaching the op cache's argument hash
+        # is a circular Brython object there, not a null)
+        vis, hid = w.HLRProject(self.topo, list(projection_dir), False,
+                                list(vo), list(up),
+                                float(focus) if focus is not None else 0)
         return (Curve(vis).edges(), Curve(hid).edges())
 
     def show_topology(self, limit_class='Vertex', show_center=None):
@@ -2982,6 +3012,20 @@ class Shape:
         return self
 
     # --- shape equality (upstream Shape.__eq__/__hash__) ---
+    def is_same(self, other):
+        """build123d Shape.is_same: TopoDS IsSame (same TShape and
+        location, orientation ignored)."""
+        if self.topo is None or getattr(other, 'topo', None) is None:
+            return False
+        return bool(w._sameShape(self.topo, _topo(other)))
+
+    def is_equal(self, other):
+        """build123d Shape.is_equal: TopoDS IsEqual (same TShape,
+        location AND orientation)."""
+        if self.topo is None or getattr(other, 'topo', None) is None:
+            return False
+        return bool(self.topo.IsEqual(_topo(other)))
+
     def __eq__(self, other):
         """Topological same-ness like upstream Shape.__eq__ (TopoDS IsSame:
         same underlying TShape + location; orientation ignored). Lite's
@@ -3033,6 +3077,13 @@ class Compound(Shape):
     """A Shape made of other shapes (upstream identity: Part/Sketch/Curve are
     Compound subclasses; builder transfers classify through Compound and
     extract base objects with get_type)."""
+
+    def is_inside(self, point, tolerance=1.0e-6):
+        """build123d Mixin3D.is_inside: the point is IN the solid or ON one
+        of its faces (BRepClass3d_SolidClassifier)."""
+        v = Vector(point)
+        st, on = w._csClassify(self.topo, v.X, v.Y, v.Z, tolerance)
+        return str(st) == 'IN' or bool(on)
 
     @property
     def volume(self):
@@ -3253,6 +3304,16 @@ def _adopt_solid_topo(topo):
     return topo
 
 
+def _children_topo(children):
+    """upstream Compound(children=...) with no obj: the geometry IS the
+    children (one compound of them)."""
+    topos = [_topo(c) for c in _tolist(children)
+             if isinstance(c, Shape) and c.topo is not None]
+    if not topos:
+        return None
+    return topos[0] if len(topos) == 1 else w.MakeCompound(topos)
+
+
 def _apply_compound_kwargs(self, label, color, material, joints, parent,
                            children):
     """The tail of upstream Compound.__init__'s kwargs surface, shared by
@@ -3286,6 +3347,8 @@ class Part(Compound):
                  **kwargs):
         if topo is None and obj is not None:
             topo = obj
+        if topo is None and children:
+            topo = _children_topo(children)
         Shape.__init__(self, _adopt_solid_topo(topo))
         _apply_compound_kwargs(self, label, color, material, joints, parent,
                                children)
@@ -3294,6 +3357,13 @@ class Part(Compound):
 class Solid(Shape):
     """A SINGLE solid (upstream identity: Solid is NOT a Compound; .solids()
     returns these, and the make_* classmethods build them)."""
+
+    def is_inside(self, point, tolerance=1.0e-6):
+        """build123d Mixin3D.is_inside: the point is IN the solid or ON one
+        of its faces (BRepClass3d_SolidClassifier)."""
+        v = Vector(point)
+        st, on = w._csClassify(self.topo, v.X, v.Y, v.Z, tolerance)
+        return str(st) == 'IN' or bool(on)
 
     _dim = 3
 
@@ -3433,6 +3503,8 @@ class Sketch(Compound):
                  **kwargs):
         if topo is None and obj is not None:
             topo = obj
+        if topo is None and children:
+            topo = _children_topo(children)
         Shape.__init__(self, topo)
         _apply_compound_kwargs(self, label, color, material, joints, parent,
                                children)
@@ -3443,6 +3515,25 @@ class Mixin1D(Shape):
     Curves answer — position_at/tangent_at/@/%/^, param_at_point, offset_2d,
     canonical(), segment-spec bookkeeping (_specs). Edge, Wire and Curve all
     subclass this; isinstance(x, Mixin1D) is lite's "any 1-D shape" test."""
+
+    def tangent_angle_at(self, location_param=0.5, position_mode=None, plane=None):
+        """The tangent's angle in degrees (0..360) in plane (default
+        Plane.XY) at a parameter (build123d Mixin1D.tangent_angle_at)."""
+        plane = Plane.XY if plane is None else plane
+        if position_mode is None or position_mode == PositionMode.PARAMETER:
+            tan_vector = self.tangent_at(location_param)
+        else:
+            tan_vector = self.tangent_at(location_param, position_mode)
+        return (plane.x_dir.get_signed_angle(tan_vector, plane.z_dir) + 360) % 360.0
+
+    def perpendicular_line(self, length, u_value, plane=None):
+        """A line of length centred on the curve at u_value, perpendicular
+        to it in plane (build123d Mixin1D.perpendicular_line)."""
+        plane = Plane.XY if plane is None else plane
+        start = self.position_at(u_value)
+        local_plane = Plane(origin=start, x_dir=self.tangent_at(u_value), z_dir=plane.z_dir)
+        return Edge.make_line(start + local_plane.y_dir * length / 2,
+                              start - local_plane.y_dir * length / 2)
 
     _dim = 1
     # A single-segment Curve (what the 1-D object constructors return) answers
@@ -3966,6 +4057,40 @@ class Wire(Mixin1D):
     class distinct from Edge and from Curve). Wire(edges) chains them into a
     single wire; Wire(topo) wraps a TopoDS wire; Wire([]) is empty."""
 
+    def trim(self, start, end):
+        """The section between two normalized arc-length positions (or
+        points), across edges (build123d Wire.trim, statement for
+        statement): whole edges inside the range are kept, the end edges
+        trimmed."""
+        start_u = self._to_param(start)
+        end_u = self._to_param(end)
+        start_u, end_u = sorted([start_u, end_u])
+        ordered_edges = self.edges().sort_by(self)
+        if len(ordered_edges) == 1:
+            return Wire([ordered_edges[0].trim(start_u, end_u)])
+        total_length = self.length
+        start_len = start_u * total_length
+        end_len = end_u * total_length
+        trimmed_edges = []
+        cur_length = 0.0
+        for edge in ordered_edges:
+            edge_len = edge.length
+            edge_start = cur_length
+            edge_end = cur_length + edge_len
+            cur_length = edge_end
+            if edge_end <= start_len or edge_start >= end_len:
+                continue
+            if edge_start >= start_len and edge_end <= end_len:
+                trimmed_edges.append(edge)
+            else:
+                trim_start_len = max(start_len, edge_start)
+                trim_end_len = min(end_len, edge_end)
+                u0 = (trim_start_len - edge_start) / edge_len
+                u1 = (trim_end_len - edge_start) / edge_len
+                if abs(u1 - u0) > TOLERANCE:
+                    trimmed_edges.append(edge.trim(u0, u1))
+        return Wire(trimmed_edges)
+
     @classmethod
     def make_circle(cls, radius, plane=None):
         """A closed circular wire (build123d Wire.make_circle); the worker's
@@ -4472,6 +4597,12 @@ def _concatenate_edges(edges):
 
 
 class Face(Shape):
+    def is_inside(self, point, tolerance=1.0e-6):
+        """build123d Face.is_inside: the point lies on the face
+        (BRepClass3d_SolidClassifier.IsOnAFace)."""
+        v = Vector(point)
+        return bool(w._csClassify(self.topo, v.X, v.Y, v.Z, tolerance)[1])
+
     def __init__(self, topo, parent=None, index=None):
         # Face(outer_wire, [hole_wires]) like build123d
         inner = None
@@ -6364,6 +6495,12 @@ class Builder:
     enclosing Locations context (so an enclosing Locations now positions a
     builder), handing the placed result to the builder it is nested in."""
 
+    @classmethod
+    def _get_context(cls, caller=None, log=True):
+        """The innermost active builder of this kind, or None (build123d
+        Builder._get_context)."""
+        return _active_builder(cls)
+
     _shape_cls = Part
     _tag = 'part'
     _obj_name = 'None'
@@ -7569,9 +7706,10 @@ def Trapezoid(width, height, left_side_angle, right_side_angle=None,
 
 
 class HeadType:
-    STRAIGHT = 'STRAIGHT'
-    CURVED = 'CURVED'
-    FILLETED = 'FILLETED'
+    # an Enum upstream (auto() values): members carry .name/.value
+    STRAIGHT = _EnumMember('HeadType', 'STRAIGHT', 1)
+    CURVED = _EnumMember('HeadType', 'CURVED', 2)
+    FILLETED = _EnumMember('HeadType', 'FILLETED', 3)
 
 
 def ArrowHead(size, head_type=HeadType.CURVED, rotation=0, mode=Mode.ADD):
@@ -7592,8 +7730,12 @@ def ArrowHead(size, head_type=HeadType.CURVED, rotation=0, mode=Mode.ADD):
         if head_type == HeadType.FILLETED:
             fillet(arrow_head.vertices().filter_by_position(
                 Axis.X, -2 * size, -size / 5), radius=size / 20)
-    return add(arrow_head.sketch, rotation=rotation, mode=mode) \
-        if _active_builder() is not None else arrow_head.sketch
+    # BaseSketchObject rotates about the object's origin (the tip) whether
+    # or not a builder is active, Mode.PRIVATE included
+    head = arrow_head.sketch
+    if rotation:
+        head = Rot(0, 0, rotation) * head
+    return add(head, mode=mode) if _active_builder() is not None else head
 
 
 # --------------------------------------------------------------- Triangle ---
@@ -9412,6 +9554,24 @@ def topo_explore_common_vertex(edge1, edge2):
     return None  # No common vertex found
 
 
+def topo_explore_connected_faces(edge, parent=None):
+    """The faces of parent that contain edge, as raw TopoDS faces, unique
+    (build123d topology.one_d.topo_explore_connected_faces). A moved copy
+    of a parent edge is not relocated (upstream returns the faces in the
+    moved edge's frame)."""
+    if edge is None or edge.wrapped is None:
+        raise ValueError("Can't explore from an empty edge")
+    parent = parent if parent is not None else edge.topo_parent
+    if parent is None:
+        raise ValueError('edge has no valid parent')
+    out = []
+    for f in parent.faces():
+        if any(w._sameShape(edge.wrapped, e.wrapped) for e in f.edges()):
+            if not any(w._sameShape(f.wrapped, o) for o in out):
+                out.append(f.wrapped)
+    return out
+
+
 def topo_explore_connected_edges(edge, parent=None,
                                  continuity=ContinuityLevel.C0):
     """Find edges connected to the given edge with at least the requested
@@ -9811,6 +9971,9 @@ def sweep(sections=None, path=None, multisection=False, is_frenet=False,
         # multi-segment curves: build ONE chained wire (their topo may be a
         # compound of separate wires, of which GetWire would take only one)
         path_topo = w.WireFromSegments(_chain_segments(path._specs))
+    elif isinstance(path, Mixin1D) and path.topo is not None and path.topo.ShapeType().value == 6:
+        # a bare edge (e.g. a moved copy, no segment specs): wire it
+        path_topo = _topo(Wire([path]))
     else:
         path_topo = _topo(path)
         if not hasattr(path_topo, 'ShapeType') or path_topo.ShapeType().value != 5:
@@ -9828,6 +9991,23 @@ def sweep(sections=None, path=None, multisection=False, is_frenet=False,
             aux_spine = _topo(binormal)
     elif normal is not None:
         binormal_vec = list(Vector(normal))
+    one_d = [s for s in _tolist(sections)] if sections is not None else []
+    if one_d and all(isinstance(s, Mixin1D) for s in one_d):
+        # build123d Face.sweep: an edge/wire profile sweeps into a FACE
+        faces = []
+        for prof in one_d:
+            if prof._specs:
+                ptopo = w.WireFromSegments(_chain_segments(prof._specs))
+            elif _topo(prof).ShapeType().value == 6:
+                ptopo = _topo(Wire([prof]))
+            else:
+                ptopo = _topo(prof)
+                if ptopo.ShapeType().value != 5:
+                    ptopo = w.GetWire(ptopo, 0, True)
+            faces.append(w.PipeShellSweep([ptopo], path_topo, is_frenet, trans,
+                                          binormal_vec, aux_spine, True, True))
+        sk = Sketch(faces[0]) if len(faces) == 1 else Sketch([Sketch(f) for f in faces])
+        return _combine(_active_builder(BuildSketch), sk, mode)
     profs = _pending_or_given(sections)
     if multisection:
         wires = [w._faceOuterWire(face) for (face, plane) in profs]
@@ -10461,6 +10641,27 @@ def make_face(edges=None, mode=Mode.ADD):
     if n[2] < -0.5 and bb and abs(bb[5] - bb[2]) < 1e-6:
         face = w.ReverseFace(face)
     return _combine(builder, Sketch(face), mode)
+
+
+def trace(lines=None, line_width=1, mode=Mode.ADD):
+    """Thin faces along lines (build123d operations_sketch.trace): each
+    chain of edges is swept by a perpendicular pen of line_width with sharp
+    (RIGHT) corner transitions, and the faces are fused."""
+    builder = _active_builder(BuildSketch)
+    if lines is not None:
+        edges = [e for l in _tolist(lines) for e in l.edges()]
+    elif builder is not None and builder.pending_edge_specs:
+        edges = Curve(w.WireFromSegments(_chain_segments(builder.pending_edge_specs))).edges()
+        builder.pending_edge_specs = []
+    else:
+        raise ValueError('No objects to trace')
+    faces = []
+    for wire in edges_to_wires(edges):
+        pen = wire.perpendicular_line(line_width, 0)
+        faces.extend(sweep(pen, wire, transition=Transition.RIGHT, mode=Mode.PRIVATE).faces())
+    result = faces[0] if len(faces) == 1 else faces[0].fuse(*faces[1:])
+    sk = result if isinstance(result, Sketch) else Sketch(_topo(result))
+    return _combine(builder, sk, mode)
 
 
 def bounding_box(objects=None, mode=Mode.PRIVATE):
@@ -11226,10 +11427,11 @@ class BallJoint(Joint):
 
 
 class Mesher:
-    """STL-only mesher (build123d's Mesher writes 3MF/STL via lib3mf).
-    COMPROMISE(mesher): only STL export is supported, via the JS engine's
-    StlAPI_Writer into the worker's Emscripten MEMFS — there is no lib3mf in
-    the WASM build, so .3mf paths raise; read() is not supported."""
+    """STL and 3MF mesher (build123d's Mesher writes both via lib3mf).
+    COMPROMISE(mesher): files go into the worker's Emscripten MEMFS (no
+    disk); 3MF is written without lib3mf (ThreeMF.js: one welded mesh object
+    per added shape, names from labels, colours from shape.color, STORED zip
+    entries); read() is not supported."""
 
     def __init__(self, unit=Unit.MM, **kwargs):
         self.unit = unit
@@ -11256,13 +11458,23 @@ class Mesher:
 
     def write(self, file_name):
         name = str(file_name)
-        if not name.lower().endswith('.stl'):
-            raise NotImplementedError(
-                'build123d-lite Mesher writes STL only (no lib3mf in the '
-                'WASM build); got ' + name)
+        low = name.lower()
         if not self._shapes:
             raise ValueError('Mesher: no shapes added')
         topos = [_topo(s) for s in self._shapes]
+        if low.endswith('.3mf'):
+            names = [str(getattr(s, 'label', '') or '') for s in self._shapes]
+            colors = [_cs_color_rgb(getattr(s, 'color', None)) or [] for s in self._shapes]
+            unit = {Unit.MM: 'millimeter', Unit.CM: 'centimeter', Unit.M: 'meter',
+                    Unit.IN: 'inch', Unit.FT: 'foot', Unit.MC: 'micron'}.get(self.unit, 'millimeter')
+            n = w.Export3MF(topos, name.replace('/', '_'), names, colors,
+                            self.linear_deflection, unit)
+            if not n:
+                raise RuntimeError('3MF export failed')
+            return True
+        if not low.endswith('.stl'):
+            raise NotImplementedError(
+                'build123d-lite Mesher writes STL and 3MF; got ' + name)
         topo = topos[0] if len(topos) == 1 else w.MakeCompound(topos, True)
         text = w.ExportSTL(topo, name.replace('/', '_'),
                            self.linear_deflection, self.angular_deflection)
@@ -11276,6 +11488,40 @@ class Mesher:
 
 
 ExportDXF = _unsupported('ExportDXF')
+
+
+_CS_NAMED_RGB = {'red': (1.0, 0.0, 0.0), 'green': (0.0, 0.5, 0.0), 'lime': (0.0, 1.0, 0.0),
+                 'blue': (0.0, 0.0, 1.0), 'yellow': (1.0, 1.0, 0.0), 'orange': (1.0, 0.647, 0.0),
+                 'purple': (0.5, 0.0, 0.5), 'black': (0.0, 0.0, 0.0), 'white': (1.0, 1.0, 1.0),
+                 'gray': (0.5, 0.5, 0.5), 'grey': (0.5, 0.5, 0.5), 'cyan': (0.0, 1.0, 1.0),
+                 'magenta': (1.0, 0.0, 1.0), 'brown': (0.647, 0.165, 0.165), 'pink': (1.0, 0.753, 0.796),
+                 'silver': (0.753, 0.753, 0.753), 'gold': (1.0, 0.843, 0.0), 'navy': (0.0, 0.0, 0.5)}
+
+
+def _cs_color_rgb(c):
+    """[r, g, b] in 0..1 from a lite Color (a stub keeping its arguments:
+    Color(r, g, b[, a]), Color(name[, a]), Color(0xRRGGBB)) or a tuple;
+    None when it cannot be read."""
+    if c is None:
+        return None
+    args = tuple(getattr(c, 'args', ())) if isinstance(c, Color) else (tuple(c) if isinstance(c, (list, tuple)) else (c,))
+    if not args:
+        return None
+    a0 = args[0]
+    if isinstance(a0, str):
+        key = a0.strip().lower()
+        if key.startswith('#') and len(key) in (7, 9):
+            return [int(key[1:3], 16) / 255.0, int(key[3:5], 16) / 255.0, int(key[5:7], 16) / 255.0]
+        rgb = _CS_NAMED_RGB.get(key)
+        return list(rgb) if rgb else None
+    if isinstance(a0, int) and len(args) <= 2 and a0 > 255:
+        return [((a0 >> 16) & 255) / 255.0, ((a0 >> 8) & 255) / 255.0, (a0 & 255) / 255.0]
+    if len(args) >= 3 and all(isinstance(x, (int, float)) for x in args[:3]):
+        vals = [float(x) for x in args[:3]]
+        if max(vals) > 1.0:
+            vals = [v / 255.0 for v in vals]
+        return vals
+    return None
 
 
 def import_step(file_name):
@@ -11523,6 +11769,11 @@ def volume(shape):
     return w.SolidsVolume(_topo(shape))
 
 
+# name -> the object show(obj, "name") registered in THIS evaluation (the
+# MCP harness's resolve() probes read it); emptied by the run's first show()
+_SHOWN = {}
+
+
 def show(*shapes, **kwargs):
     """Define the render scene (build123d-sandbox / ocp_vscode compat).
     The FIRST show() of an evaluation replaces the auto-added scene with
@@ -11531,41 +11782,347 @@ def show(*shapes, **kwargs):
     # COMPROMISE(show-semantics): ocp_vscode's show() replaces the view on
     # every call (last-wins); appending on subsequent calls preserves the
     # intent of scripts that show several results separately.
-    Extra viewer kwargs (names=, colors=, ...) are accepted and ignored.
-    Membership is tested with 'is' — Brython compares the underlying JS
+    Names: a string names the shape before it -- build123d-mcp's
+    show(shape, "name") -- and names=[...] names them in order (ocp_vscode).
+    A named list or ShapeList shows its members as name[0], name[1], ...
+    A name shown again in the same evaluation REPLACES its shape in place,
+    as build123d-mcp's registry does, so a model re-shown under its name
+    after an edit is not shown twice. Other viewer kwargs (colors=, ...)
+    are accepted and ignored.
+    Membership is tested with 'is' -- Brython compares the underlying JS
     objects, so it works across wrapper instances."""
     if not getattr(w, '_b123dSceneDefined', False):
         # len() works on Brython/Pyodide array views but MicroPython's
-        # JsProxy has no __len__ (its .length attribute works instead —
+        # JsProxy has no __len__ (its .length attribute works instead --
         # which Pyodide's JsList in turn does NOT expose).
-        def _scene_len():
-            try:
-                return len(w.sceneShapes)
-            except TypeError:
-                return int(w.sceneShapes.length)
         while _scene_len() > 0:
             w.sceneShapes.pop()
+        _SHOWN.clear()
         w._b123dSceneDefined = True
-    flat = []
+    groups = []          # [objects, name or None]
     for s in shapes:
-        if isinstance(s, (list, tuple, ShapeList)):
-            flat.extend(s)
-        else:
-            flat.append(s)
-    for s in flat:
-        if isinstance(s, Builder):
-            s = s._obj
-        try:
-            topo = _topo(s)
-        except (TypeError, ValueError):
+        if isinstance(s, str):
+            if groups and groups[-1][1] is None:
+                groups[-1][1] = s
             continue
-        if not any(existing is topo for existing in w.sceneShapes):
-            w.sceneShapes.push(topo)
+        if isinstance(s, (list, tuple, ShapeList)):
+            groups.append([list(s), None])
+        else:
+            groups.append([[s], None])
+    names = kwargs.get('names')
+    if names:
+        pending = [g for g in groups if g[1] is None]
+        for g, n in zip(pending, list(names)):
+            if n is not None:
+                g[1] = str(n)
+    for objs, name in groups:
+        if name is not None:
+            _SHOWN[name] = objs[0] if len(objs) == 1 else ShapeList(objs)
+        for k, s in enumerate(objs):
+            if isinstance(s, Builder):
+                s = s._obj
+            try:
+                topo = _topo(s)
+            except (TypeError, ValueError):
+                continue
+            label = None
+            if name is not None:
+                label = name if len(objs) == 1 else name + '[' + str(k) + ']'
+            _show_topo(topo, label)
+
+
+def _scene_len():
+    try:
+        return len(w.sceneShapes)
+    except TypeError:
+        return int(w.sceneShapes.length)
+
+
+def _show_topo(topo, label):
+    """Add one shape to the scene. A label shown before keeps its place
+    and gets the new shape (which may already be in the scene: shapes
+    made after the first show() are auto-added)."""
+    names = getattr(w, 'sceneShapeNames', None)
+    n = _scene_len()
+    at = -1
+    for i in range(n):
+        if w.sceneShapes[i] is topo:
+            at = i
+            break
+    if label is not None and names is not None:
+        for i in range(n):
+            old = w.sceneShapes[i]
+            if old is not topo and names.get(old) == label:
+                names.delete(old)
+                if at >= 0:
+                    w.sceneShapes.splice(at, 1)
+                    if at < i:
+                        i -= 1
+                w.sceneShapes.splice(i, 1, topo)
+                names.set(topo, label)
+                return
+    if at < 0:
+        w.sceneShapes.push(topo)
+    if label is not None and names is not None:
+        names.set(topo, label)
+        order = getattr(w, 'sceneNameOrder', None)
+        if order is not None and order.indexOf(label) < 0:
+            order.push(label)
+
+
+def _cs_scene_mark():
+    """The scene as it is now (cs_parts.load keeps a part's intermediates out
+    of it: shapes made after the first show() would otherwise join it)."""
+    return [w.sceneShapes[i] for i in range(_scene_len())]
+
+
+def _cs_scene_restore(mark):
+    """Drop every scene shape added since _cs_scene_mark()."""
+    for i in range(_scene_len() - 1, -1, -1):
+        t = w.sceneShapes[i]
+        if not any(t is k for k in mark):
+            w.sceneShapes.splice(i, 1)
+
+
+def _cs_shown_object(name):
+    """The object show() registered under this name in this evaluation."""
+    if not getattr(w, '_b123dSceneDefined', False):
+        _SHOWN.clear()      # this evaluation never called show()
+    if name not in _SHOWN:
+        raise KeyError('no shape was shown as ' + repr(name)
+                       + (' (shown: ' + ', '.join(sorted(_SHOWN)) + ')' if _SHOWN
+                          else ' (name it: show(part, "part"))'))
+    return _SHOWN[name]
+
+
+def named_face(shape, name):
+    """The face of a shape on one side: top/bottom (Z), right/left (X),
+    back/front (Y). A build123d-mcp session helper, not part of build123d.
+    front is the -Y face, as in build123d's Plane.FRONT and the front view
+    (build123d-mcp's own helper takes +Y)."""
+    key = str(name).lower()
+    pick = {'top': (Axis.Z, -1), 'bottom': (Axis.Z, 0), 'right': (Axis.X, -1),
+            'left': (Axis.X, 0), 'back': (Axis.Y, -1), 'front': (Axis.Y, 0)}
+    if key not in pick:
+        raise ValueError("unknown face name '" + str(name)
+                         + "': use top, bottom, front, back, left, right")
+    axis, k = pick[key]
+    return shape.faces().sort_by(axis)[k]
+
+
+def find_edges(shape, geom=None, radius=None, at_z=None, length=None, tol=0.05):
+    """Edges of a shape filtered by geometry type ('circle', 'line', ...),
+    radius, the Z of their centre and/or length, each within tol; prints
+    the count, radii and Z levels found so a wrong selection shows at once.
+    A build123d-mcp session helper, not part of build123d."""
+    edges = shape.edges()
+    if geom is not None:
+        key = str(geom).upper()
+        if key not in _CS_GEOM_NAMES:
+            raise ValueError("unknown geom '" + str(geom) + "': use one of "
+                             + ', '.join(n.lower() for n in _CS_GEOM_NAMES))
+        edges = edges.filter_by(getattr(GeomType, key))
+
+    def _radius(e):
+        try:
+            return e.radius
+        except Exception:
+            return None
+    out = []
+    for e in edges:
+        r = _radius(e)
+        if radius is not None and (r is None or abs(r - radius) > tol):
+            continue
+        if at_z is not None and abs(e.center().Z - at_z) > tol:
+            continue
+        if length is not None and abs(e.length - length) > tol:
+            continue
+        out.append(e)
+    result = ShapeList(out)
+    radii = sorted(set(round(r, 3) for r in [_radius(e) for e in out] if r is not None))
+    zs = sorted(set(round(e.center().Z, 3) for e in out))
+
+    def _fmt(vals):
+        return str(vals[:8])[:-1] + ', ...]' if len(vals) > 8 else str(vals)
+    desc = 'find_edges: ' + str(len(out)) + ' edge(s) matched'
+    if radii:
+        desc += ', radii ' + _fmt(radii)
+    if zs:
+        desc += ', Z levels ' + _fmt(zs)
+    print(desc)
+    return result
+
+
+def _cs_wrap_topo(t):
+    """A raw TopoDS shape as the lite class of its type."""
+    v = int(t.ShapeType().value)
+    cls = {0: Compound, 1: Compound, 2: Solid, 3: Shell, 4: Face, 5: Wire,
+           6: Edge, 7: Vertex}.get(v, Compound)
+    res = object.__new__(cls)
+    Shape.__init__(res, t)
+    return res
+
+
+def _cs_final_scene():
+    """The scene in the order the evaluation will end with (CascadeWorker
+    _orderNamedScene: named shapes by first show, then the rest)."""
+    n = _scene_len()
+    topos = [w.sceneShapes[i] for i in range(n)]
+    names = getattr(w, 'sceneShapeNames', None)
+    order = getattr(w, 'sceneNameOrder', None)
+    if names is None or order is None:
+        return topos
+    try:
+        count = len(order)
+    except TypeError:
+        count = int(order.length)
+    if count == 0:
+        return topos
+
+    def rank(i):
+        k = int(order.indexOf(names.get(topos[i])))
+        return k if k >= 0 else count
+    return [topos[i] for i in sorted(range(n), key=lambda i: (rank(i), i))]
+
+
+def _cs_scene_object(indices=None):
+    """Scene shapes by final index (all when None), as one lite shape:
+    the shape itself, or a Compound of several (MCP harness probes)."""
+    topos = _cs_final_scene()
+    if indices is not None:
+        topos = [topos[i] for i in indices]
+    shapes = [_cs_wrap_topo(t) for t in topos]
+    if len(shapes) == 1:
+        return shapes[0]
+    return Compound(shapes)
+
+
+_CS_GEOM_NAMES = ('LINE', 'CIRCLE', 'ELLIPSE', 'HYPERBOLA', 'PARABOLA',
+                  'BEZIER', 'BSPLINE', 'PLANE', 'CYLINDER', 'CONE', 'SPHERE',
+                  'TORUS', 'OTHER')
+
+
+def _cs_json(o):
+    """A tiny JSON writer (one serializer for every Python runtime)."""
+    if o is None:
+        return 'null'
+    if o is True:
+        return 'true'
+    if o is False:
+        return 'false'
+    if isinstance(o, int):
+        return str(o)
+    if isinstance(o, float):
+        return _json_num(o)
+    if isinstance(o, str):
+        out = []
+        for ch in o:
+            if ch == '"' or ch == chr(92):
+                out.append(chr(92) + ch)
+            elif ord(ch) < 32:
+                out.append(chr(92) + 'u' + ('0000' + hex(ord(ch))[2:])[-4:])
+            else:
+                out.append(ch)
+        return '"' + ''.join(out) + '"'
+    if isinstance(o, dict):
+        return '{' + ','.join(_cs_json(str(k)) + ':' + _cs_json(v)
+                              for k, v in o.items()) + '}'
+    return '[' + ','.join(_cs_json(v) for v in o) + ']'
+
+
+def _cs_r(v):
+    return round(float(v), 6) + 0.0
+
+
+def _cs_xyz(v):
+    return [_cs_r(v.X), _cs_r(v.Y), _cs_r(v.Z)]
+
+
+def _cs_describe_one(x):
+    """build123d-mcp resolve()'s descriptor of one selected entity: its
+    type, geometry type, size, TRUE centre (the arc centre of a circular
+    edge, the area centroid of a face), a planar face's normal, a curved
+    face's axis and radius."""
+    if isinstance(x, Builder):
+        x = x._obj
+    d = {'type': type(x).__name__}
+    gt = None
+    try:
+        g = x.geom_type
+        for k in _CS_GEOM_NAMES:
+            if g is getattr(GeomType, k):
+                gt = k
+        d['geom_type'] = gt
+    except Exception:
+        pass
+    try:
+        if isinstance(x, Vertex):
+            d['center'] = [_cs_r(x.X), _cs_r(x.Y), _cs_r(x.Z)]
+        elif isinstance(x, Mixin1D):
+            d['length'] = _cs_r(x.length)
+            if gt in ('CIRCLE', 'ELLIPSE'):
+                d['center'] = _cs_xyz(x.arc_center)
+                if gt == 'CIRCLE':
+                    d['radius'] = _cs_r(x.radius)
+            else:
+                d['center'] = _cs_xyz(x.center())
+            d['start'] = _cs_xyz(x @ 0)
+            d['end'] = _cs_xyz(x @ 1)
+        elif isinstance(x, Face):
+            d['area'] = _cs_r(x.area)
+            if gt == 'SPHERE':
+                ax = x.axis_of_rotation
+                d['center'] = _cs_xyz(ax.position) if ax is not None else _cs_xyz(x.center())
+            else:
+                d['center'] = _cs_xyz(x.center())
+            if gt == 'PLANE':
+                d['normal'] = _cs_xyz(x.normal_at())
+            else:
+                ax = x.axis_of_rotation
+                if ax is not None and gt != 'SPHERE':
+                    d['axis'] = {'origin': _cs_xyz(ax.position),
+                                 'direction': _cs_xyz(ax.direction)}
+            if gt in ('CYLINDER', 'SPHERE'):
+                r = x.radius
+                if r is not None:
+                    d['radius'] = _cs_r(r)
+        elif isinstance(x, Shape):
+            d['volume'] = _cs_r(x.volume)
+            d['center'] = _cs_xyz(x.center())
+            bb = x.bounding_box()
+            d['bbox'] = {'min': _cs_xyz(bb.min), 'max': _cs_xyz(bb.max)}
+        elif isinstance(x, Vector):
+            d['type'] = 'Vector'
+            d['center'] = _cs_xyz(x)
+        else:
+            d['value'] = str(x)
+    except Exception as exc:
+        d['error'] = str(exc)
+    return d
+
+
+def _cs_describe(sel):
+    """resolve()'s answer for a selector result, as JSON: one entity, or a
+    list with its count, the average centre and the first 50 entities."""
+    if isinstance(sel, (list, tuple, ShapeList)):
+        items = [_cs_describe_one(x) for x in list(sel)]
+        out = {'type': 'ShapeList', 'count': len(items)}
+        cs = [i['center'] for i in items if 'center' in i]
+        if cs:
+            out['center'] = [_cs_r(sum(c[k] for c in cs) / len(cs)) for k in range(3)]
+        out['entities'] = items[:50]
+        if len(items) > 50:
+            out['entities_truncated'] = True
+        return _cs_json(out)
+    return _cs_json(_cs_describe_one(sel))
 
 
 def show_object(shape, name=None, options=None, **kwargs):
     """CQ-editor style alias for show()."""
-    show(shape)
+    if name is None:
+        show(shape)
+    else:
+        show(shape, str(name))
 
 
 def show_all(*args, **kwargs):
@@ -11696,11 +12253,31 @@ def _measure_globals_json(g):
     return '{' + ','.join(entries) + '}'
 `;
 
+// build123d's drafting module, ported (scripts/port-drafting.py)
+export const BUILD123D_LITE_PY = LITE_CORE_PY + DRAFTING_PY;
+
 // Small stdlib shims registered as importable Brython modules. brython.js
 // ships `math` as a built-in JS module but the import machinery cannot load
 // it inside a module worker, and brython_stdlib.js (pure-Python stdlib) is
 // deliberately not shipped — these cover what the build123d examples use.
+/** Shim modules registered on first mention, not at boot, by the runtimes
+ *  that execute every shim eagerly (Brython, Pyodide): a large module only
+ *  MCP harness probes import should not cost every Python boot. In
+ *  dependency order: mentioning one registers it and those before it. */
+export const LAZY_PY_MODULES = ['build123d_drafting', 'augura', '_cs_mcp_features', 'cs_parts'];
+
 export const PY_SHIM_MODULES = {
+  // MicroPython has no __future__ module (a compiler directive in CPython;
+  // annotations are ignored by MicroPython anyway): modern code's
+  // 'from __future__ import annotations' must not be an ImportError
+  __future__: `
+annotations = None
+division = None
+absolute_import = None
+print_function = None
+unicode_literals = None
+generator_stop = None
+`,
   math: `
 # math shim delegating to the JS Math object (build123d-lite worker)
 from browser import self as _w
@@ -13352,4 +13929,15 @@ def critical(*a, **k):
 def exception(*a, **k):
     pass
 `,
+  // LAST (they import the shims above): build123d-drafting-helpers' feature
+  // finders (find_holes, find_bosses, find_hole_patterns) + build123d-mcp's
+  // recognise_countersinks, vendored by scripts/vendor-drafting.py, over the
+  // _cs_ocp shim
+  _cs_ocp: CS_OCP_PY,
+  build123d_drafting: BUILD123D_DRAFTING_PY,
+  // augura's BREP printability checks (github.com/pzfreo/augura, Apache-2.0)
+  augura: AUGURA_PY,
+  _cs_mcp_features: CS_MCP_FEATURES_PY,
+  // the part library (CsParts.js): cs_parts.load("hex_nut", size="M4")
+  cs_parts: CS_PARTS_PY,
 };

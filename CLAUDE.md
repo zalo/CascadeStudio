@@ -445,9 +445,12 @@ the same OCCT version as the wasm kernel — validated by running EVERY runnable
 script in the upstream `examples/` and `docs/` trees through both, see
 `test/b123d-validation/`: the examples, the docs' own `.py` scripts, the 13
 Too Tall Toby challenge parts (mass asserts kept) and every docs `.rst`
-code-block; currently **223/239 scripts PASS** (volume within 0.5%, bbox within
-1e-3/axis), 9 MISMATCH, 6 ERROR, 1 TIMEOUT, 8 SKIP (real build123d fails
+code-block; currently **224/239 scripts PASS** (volume within 0.5%, bbox within
+1e-3/axis), 10 MISMATCH, 4 ERROR, 1 TIMEOUT, 8 SKIP (real build123d fails
 natively), **identically on the Brython and the MicroPython lite legs**
+(2026-10-18: dual_color_3mf joined the PASS set when Mesher learned 3MF, and
+docs/objects_2d moved from ERROR to MISMATCH with the drafting port — one 25 µm
+text-metric residual; the results files below predate both)
 (`results-013-lite.json`, `results-013-lite-micropython.json`; the unmodified
 pre-0.13 lite scored 191/13/34/1/8 on both — `baseline-013-lite*.json`) —
 full breakdown with per-script reasons AND a hand-maintained
@@ -529,7 +532,7 @@ reads assets handed to the worker up front (`CascadeAPI.loadExternalFiles`);
 `Shape.show_topology` and `Compound.do_children_intersect`. Since the
 upstream-exports round: lite exposes 204 of upstream's effective 200-name
 `__all__` surface (only the 12 deliberate skips are absent — drafting beyond
-`ArrowHead`, `Export2D`/`DotLength`, `import_dxf`,
+`ArrowHead` (ported since the MCP wave-3 round, so no longer a skip), `Export2D`/`DotLength`, `import_dxf`,
 `import_svg_as_buildline_code`, `detect_primitives`, `export_to_pcbway`) —
 newly: `MC`/`UNITS_PER_METER`, the seven remaining enums, `polar`/`delta`/
 `topo_explore_common_vertex`/`topo_explore_connected_edges`, singular
@@ -568,7 +571,7 @@ parent, children)` assemblies with `global_location` and upstream's assembly
 |---|---|---|
 | Builders | `with BuildPart/BuildSketch/BuildLine(...)` as plain context managers over a module-level stack (nesting, `mode=`, multiple placements, pending faces/edges/path) with 0.12's unified **BuildScope**: a builder constructs LOCALLY on Plane.XY (selectors, `_obj`, `part_local`/`sketch_local`/`line_local` are local) and on exit PUBLISHES through its placement(s) and the locations of an ENCLOSING `Locations` (so `Locations` now positions/replicates a builder; `.part`/`.sketch`/`.line` are the placed results), `Builder.label`, `Mode.ADD/SUBTRACT/INTERSECT/REPLACE/PRIVATE`, `insert()` (`add()` = deprecated wrapper; Locations replicate into BuildLine too), custom `Base*Object`s built behind a metaclass firewall (nothing their `__init__` makes leaks into the caller's builder), **`Select.LAST`/`Select.NEW` from the kernel's own record** for vertices/edges/faces/solids on builders AND algebra results (BRepTools_History from BRepAlgoAPI + UnifySameDomain + BRepFilletAPI, upstream's Trace/`is_last`/`is_new`; `Builder.new_edges` deprecated) | `Workplanes` (removed upstream in 0.12) |
 | 3D objects | `Box`, `Cylinder` (incl. `arc_size`), `Sphere`, `Cone`, `Torus`, `Wedge`, `ConvexPolyhedron`, `Hole`, `CounterBoreHole`, `CounterSinkHole` — all with `rotation=`/`align=`/`mode=`; partial `Sphere(r, a1, a2, a3)`; `Solid.extrude_linear_with_rotation` | partial cones |
-| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Superellipse` (0.12: line/ellipse/spline quadrant mirrored), `Triangle` (ported trianglesolver), `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotCenterPoint`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning, incl. `path=`/`position_on_path=`), `ArrowHead`/`HeadType`, `BaseSketchObject`/`BasePartObject` subclassing (joints of the input part follow it), `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points`, `Face.radius`/`Face.axis_of_rotation` | `Text(font_path=)`, the rest of `drafting` (`Draft`, `ExtensionLine`, `DimensionLine`, `TechnicalDrawing`) |
+| 2D objects | `Rectangle`, `RectangleRounded`, `Circle`, `Ellipse`, `Polygon`, `RegularPolygon`, `Superellipse` (0.12: line/ellipse/spline quadrant mirrored), `Triangle` (ported trianglesolver), `Trapezoid`, `SlotOverall`, `SlotCenterToCenter`, `SlotCenterPoint`, `SlotArc`, `Text` (opentype.js/FreeSans, FreeType-parity kerning, incl. `path=`/`position_on_path=`), `ArrowHead`/`HeadType` (an Enum: members have `.name`), the `drafting` module (`Draft`, `Arrow`, `DimensionLine`, `ExtensionLine`, `TechnicalDrawing` — build123d 0.13's drafting.py ported by `packages/cascade-core/scripts/port-drafting.py` and appended to the lite source; docs/objects_2d matches on 41 of 42 shapes, the 42nd is the 25 µm text-metric residual), `BaseSketchObject`/`BasePartObject` subclassing (joints of the input part follow it), `Face(outer_wire, [hole_wires])`, `Face.make_rect`, `Face.make_surface_from_array_of_points`, `Face.radius`/`Face.axis_of_rotation` | `Text(font_path=)` |
 | 1D objects | `Line`, `Polyline`, `PolarLine` (incl. `length_mode=` and a limit shape as `length=`), `FilletPolyline`, `IntersectingLine`, `ThreePointArc`, `RadiusArc`, `SagittaArc`, `CenterArc` (a full one is ONE closed edge, like upstream), `TangentArc`, `JernArc`, `Bezier` (incl. weights), `Spline` (EXACT GeomAPI_Interpolate incl. `tangents=`/`tangent_scalars=`/per-point/periodic), `BSpline` (EXACT poles/knots/multiplicities/weights), `BlendCurve` (C0/C1/C2), `Helix`, `EllipticalCenterArc`/`ParabolicCenterArc`/`HyperbolicCenterArc` (0.12: keyword-only `arc_size` — signed, or a LIMIT shape; `end_angle`/`angular_direction` are gone), `EllipticalStartArc`, `BaseCurveObject`/`BaseLineObject`/`BaseEdgeObject` subclassing, `DoubleTangentArc` picks TOP/BOTTOM off upstream's exact `common_plane` (incl. CPython's set iteration order), `Airfoil` (NACA 4-digit), `ConstrainedArcs`/`ConstrainedLines` (ALL upstream overloads on OCCT's real Geom2dGcc solvers: `radius=`, `center_on=`, three-tangency, `center=`, `radius=`+`center_on=`, two-tangent lines, tangent+point, oriented lines — Tangency qualifiers, trim-range rejection and Sagitta selection), `curve @ u / % u / ^ u` (incl. multi-edge curves and EXTRAPOLATION outside [0, 1]), `Edge.make_line/make_circle/make_mid_way/make_spline/make_bspline/param_at/param_at_point/trim (by point)/trim_to_other`, `derivative_at`, `curvature_comb`, `Mixin1D.normal`, `Wire(edges)`, `Wire.order_edges`/`is_closed`/`param_at_point`, `Edge.arc_center`/`radius`/`is_interior`/`find_tangent`/`find_intersection_points` | conical `Helix` |
 | Ops | `extrude` (dir/both/`taper=` — both of upstream's algorithms: LocOpe_DPrism for a positive taper along the normal, otherwise the offset loft — /`until=Until.NEXT/LAST`), `revolve` (arbitrary Axis), `loft` (0.12: sections with ANY number of matched inner wires; `ruled=`), `sweep` (MakePipeShell: `is_frenet`, `transition=`, `normal=`, `binormal=`, `multisection=True`), `fillet`/`chamfer` (3D edges), `fillet` (2D sketch vertices), `offset` (2D + solid, `openings=`, Kind.ARC/INTERSECTION), `mirror`, `split` (Keep.TOP/BOTTOM), `scale` (uniform about location + non-uniform gp_GTrsf; spec-level inside BuildLine), `make_face`, `make_hull`, `section()`, `draft()`, `project()` (BuildPart pending-faces form; each projected piece keeps its own plane, 0.12), `project_to_shape`, `project_to_viewport` (HLR), `project_faces` (path-on-shape), `find_intersection_points`, `thicken` (see COMPROMISE(thicken)), `bounding_box()`, `pack()`, `offset` (2-D FACE offsets follow upstream's outer/inner-wire branch), `offset(side=Side.LEFT/RIGHT, closed=)` on open lines, `Face.wrap`/`Shape.wrap_faces`, `Face.make_surface`, `Face.make_gordon_surface`, `Face.location_at`/`normal_at`, `Wire`/`Edge.project_to_shape`, `Wire.offset_2d`, `Wire.fillet_2d` (1-D corner fillets, ChFi2d_FilletAlgo), `make_brake_formed`, `full_round`, `edges_to_wires`, `tessellate`/`tessellate_with_uvs` (0.12) | `offset(min_edge_length=)` (no `fix_degenerate_edges`), `split(Keep.BOTH)`, screen-projection `project()` forms |
 | Locations | full `Location` (matrix-based; 1/2/3-arg incl. axis-angle; `tuple(loc)`; settable `.position`/`.orientation`), `.x_axis/.y_axis/.z_axis`, `Axis(Location)`/`Axis(Plane)`, `Pos`, `Rot`/`Rotation` (0.12: `Rotation(Axis, angle)` about the axis LINE, RotationLike + `ordering=`), `Plane` (named planes, `Plane(face)` with the exact gp_Ax3/D1 x_dir rule, `offset()`, `rotated()`), `Locations` (flattens lists/generators/map), `GridLocations`, `PolarLocations` (`endpoint=`), `HexLocations` (`major_radius=`, upstream's exact layout) (context managers AND iterables, `append()`), `planes * shape`, `locs * shape`, `loc * [shapes]`/`loc * <generator>` (0.12); shapes track a composed `.location` (a copy; `locate()/located()` are absolute; `.position` settable), `global_location` | `Location.orientation` edge cases |
@@ -578,19 +581,11 @@ parent, children)` assemblies with `global_location` and upstream's assembly
 | Algebra | `+ - &` (incl. lists; multi-tool cuts fuse tools first; fuse guarded against the known 8.0.1 drop fault; every result carries its operation record for `Select.LAST/NEW`), `Part()/Sketch()/Curve()` empty starters, `Compound(obj, ..., children=)` (children = an assembly, `child.parent` set), `copy.copy`, `Shape.__iter__` | — |
 | Measure | `volume/area/length` (volume = per-solid sum; an ASSEMBLY counts its plain children like upstream's Compound.volume), `center()`, `bounding_box()`/`BoundBox(shape)` with 0.12's predicates (`covers`, `contains`/`within`, `contains_properly`, `intersects`/`disjoint`, `touches`, `overlaps`, degenerate axes), **materials** (`Shape.material` = bd_materials name/FinishedMaterial, `mass()`/`compute_mass()`/`compute_volume()`, `Compound.mass` over children, `Unit` G/KG/LB, `UNITS_PER_KILOGRAM`; `bd_materials` shim — COMPROMISE(materials)), `.wrapped`, `.is_forward` | mass properties beyond density × volume |
 | Stdlib | `math`, `copy` (incl. `copy.copy(<Builder>)` snapshots), `typing`, `functools`, `itertools`, `operator`, `logging`, `random`/`timeit` (CPython-exact), `os` (PATH ARITHMETIC ONLY — `os.path.join/dirname/abspath/...`, `getcwd`; no filesystem is faked, `os.path.exists` is always False), `scipy.optimize.minimize`/`minimize_scalar` (pure-Python Nelder-Mead / bounded golden-section), `scipy.spatial.ConvexHull` (3-D, bundled quickhull3d), `scipy.spatial.Voronoi` (2-D, Bowyer-Watson Delaunay circumcentres — `.vertices` only, verified vertex-set-identical to scipy on full_round's inputs), `pytest.approx` (real, documented tolerances) | `numpy`, `sympy`, the rest of `pytest`, 2-D `ConvexHull`, Voronoi ridges/regions (raise loudly), everything else |
-| Export/import | `Mesher` (STL into worker MEMFS), `export_stl` (MEMFS), `export_obj` (0.12, MEMFS, UVs — COMPROMISE(obj-atlas)), `export_step` (REAL — STEPControl_Writer into MEMFS, incl. `unit=`; `write_pcurves`/`precision_mode` accepted and ignored), `export_brep`/`import_brep`, `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | 3MF (no lib3mf — raises), `export_gltf` (no-op), `ExportDXF`, `import_stl`/`import_svg` |
+| Export/import | `Mesher` (STL and 3MF into worker MEMFS; 3MF written without lib3mf by `ThreeMF.js` — one welded mesh object per shape, labels and colours), `export_stl` (MEMFS), `export_obj` (0.12, MEMFS, UVs — COMPROMISE(obj-atlas)), `export_step` (REAL — STEPControl_Writer into MEMFS, incl. `unit=`; `write_pcurves`/`precision_mode` accepted and ignored), `export_brep`/`import_brep`, `import_step` (assets handed to the worker up front — `CascadeAPI.loadExternalFiles({name: text})`; resolved by base name) | `export_gltf` (no-op), `ExportDXF`, `import_stl`/`import_svg` |
 
 **Known honest gaps** (kept as ERRORs rather than fake geometry — see the
 defaults-audit table in report.md for per-script root causes and
-upstream-vs-lite defaults comparisons): the `drafting` module beyond
-`ArrowHead` (`Draft`, `ExtensionLine`, `DimensionLine`, `TechnicalDrawing` —
-`Draft` in docs/objects_2d is the dimension-styling dataclass, NOT the
-draft-angle operation, which lite has had for rounds; the port is ~450 code
-lines whose accuracy rides entirely on `Compound.make_text` glyph metrics,
-since `Text(...).bounding_box().size.X` feeds every arrow position and
-`DimensionLine`'s 3-candidate label placement), `sympy`, 3MF export (no lib3mf
-in this wasm build — dual_color_3mf builds all six of its shapes correctly and
-then fails on `Mesher.write`), `Mesher.read` (the STL round trip through
+upstream-vs-lite defaults comparisons): `sympy`, `Mesher.read` (the STL round trip through
 `pathlib`/`tempfile` in docs-rst/topology_selection/b10 — no mesh reader, and
 its measured faces are individual BRepMesh triangles),
 `fix_degenerate_edges`/`offset(min_edge_length=)` and `split(Keep.BOTH)`.
@@ -636,7 +631,7 @@ rest needs the examples to opt into `sort_by(..., tie_break=True)` /
 authoritative list):
 - `scipy-shim` — pure-Python Nelder-Mead/golden-section instead of scipy; all other scipy APIs raise.
 - `joints` — location algebra on lite shapes; no assembly tree/XCAF (roadmap).
-- `mesher` — STL only, written into the worker's in-memory Emscripten FS (no lib3mf, no disk).
+- `mesher` — STL and 3MF, written into the worker's in-memory Emscripten FS (no disk); 3MF without lib3mf (ThreeMF.js: STORED zip entries, welded mesh objects, base-material colours); no `Mesher.read`.
 - `double-tangent-arc` — scan+bisection root solve over a sampled/refined curve distance; trims the over-extended target segment where upstream relies on wire fixing.
 - `kernel-guard` — fuse results smaller than the largest input are rebuilt from the (correct) General-Fuse partition; the partition keeps internal contact faces, so selectors see the contact topology.
 - `helix` — exact interpolation through dense samples with analytic tangents (no surface-curve segment type).
@@ -1051,6 +1046,22 @@ in remote-session mode** at `/` (EDITOR.md):
   - Renders are software-rasterized in cascade-core (`src/headless/MeshRaster.js` → PNG). Exported files live in DO SQLite.
   - The editor opens on, and follows, the session script (`GET /session/<id>/script`).
   - Test with `BASE=… node examples/cloudflare-worker/scripts/mcp-test.mjs`.
+  - build123d-mcp's harness is ported (BUILD123D-MCP-PORT.md; attribution in `third_party/build123d-mcp/`):
+    - the reference resources (`src/knowledge.js`, every runnable section run by the test) and repair hints (`src/repair-hints.js`);
+    - execute's change line, `compare`, `resolve`, `design_audit`, the validity gate and `locate_gate_defects`;
+    - the exact checks are in cascade-core `src/headless/ShapeAnalysis.js` and `engine.gate()`.
+  - **Named objects.** In lite, `show(part, "part")` names a scene shape (`names=[...]` too).
+    - The names go into `self.sceneShapeNames`, a per-evaluation Map read by identity; `engine.sceneNames()` and `inspectShapes()` report them.
+    - A name shown again replaces its shape. At the end of a Python evaluation named shapes are ordered by first show (`_orderNamedScene`), so an object keeps its index after a boolean consumed it.
+    - With no `show()`, the session appends `show(result, "result")` for a top-level `result`.
+    - `named_face`/`find_edges` are build123d-mcp helpers in lite; `named_face`'s front is −Y.
+  - **Vendored upstream Python** (wave 2): `packages/cascade-core/scripts/vendor-drafting.py` generates `src/worker/Build123dDrafting.js`.
+    - **Modules:** `build123d_drafting` (build123d-drafting-helpers' finders + the countersink recognizer), `augura` (printability) and `_cs_mcp_features` (serializers), all Apache-2.0 (`packages/cascade-core/third_party/`).
+    - **OCP access:** the `_cs_ocp` shim (`CsOcpShim.js`, with `_csSurfaceInfo`/`_csClassify`/`_csShellClosed` in StandardLibrary) stands in for OCP.
+    - **Registration:** they are `LAZY_PY_MODULES` — Brython/Pyodide register them when the code mentions them (in dependency order), MicroPython writes them to MEMFS without importing.
+    - **Edits:** re-run the script rather than edit the output. The edits are mechanical MicroPython portability: dataclasses → `Record`, starred tuples, `zip(strict=)`.
+  - Lite also gained `Shape.is_same`/`is_equal`, `is_inside`, `topo_explore_connected_faces`, a MicroPython `__future__` shim, and cone-face `axis_of_rotation` (gp_Cone is unbound: ring centres).
+  - **The MCP tools' probes:** they run the script plus appended lines and read a marked print (`runProbe`/`probeObject` in session.js), then invalidate the run.
 
 ## Playwright Testing
 

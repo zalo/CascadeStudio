@@ -122,6 +122,93 @@ test.describe('Python (build123d) mode', () => {
     expect(grab('diff_volume')).toBeCloseTo(8000 - Math.PI * 25 * 20, 0);
   });
 
+  test('show(obj, "name"): a re-shown name replaces its shape and keeps its place; harness helpers', async ({ page }) => {
+    await gotoAndReady(page);
+    await page.evaluate(() => window.CascadeAPI.setMode('python'));
+    const code = [
+      'from build123d import *',
+      'base = Box(40, 30, 6)',
+      'show(base, "base")',
+      'pin = Pos(0, 0, 8) * Cylinder(3, 10)',
+      'show(pin, "pin")',
+      'base = base - Cylinder(3, 20)',
+      'show(base, "base")',
+      'show([Pos(30, 0, 0) * Box(2, 2, 2), Pos(35, 0, 0) * Box(2, 2, 2)], "cubes")',
+      'print("top_z", named_face(base, "top").center().Z)',
+      'find_edges(base, geom="circle", radius=3)',
+      'import build123d as b',
+      'print("described", b._cs_describe(b._cs_shown_object("pin").faces().filter_by(GeomType.CYLINDER)[0]))',
+    ].join('\n');
+    // base (re-shown, not doubled), pin, cubes[0], cubes[1]
+    const result = await runCodeAndRender(page, code, 4);
+    expect(result.errors).toEqual([]);
+    // the cut base (line 6) keeps index 0, ahead of the pin (line 4)
+    const lines = await page.evaluate(() => window.threejsViewport._shapeLines.slice());
+    expect(lines.slice(0, 2)).toEqual([6, 4]);
+    const logs = await waitForConsole(page, 'logs', 'items.some(l => l.startsWith("described"))');
+    expect(logs).toContain('top_z 3.0');
+    expect(logs.some((l) => /^find_edges: 2 edge\(s\) matched, radii \[3(\.0)?\]/.test(l))).toBe(true);
+    // the console log keeps quotes backslash-escaped
+    const d = JSON.parse(logs.find((l) => l.startsWith('described')).slice('described '.length).replace(/\\"/g, '"'));
+    expect(d.geom_type).toBe('CYLINDER');
+    expect(d.radius).toBe(3);
+  });
+
+  test('vendored build123d_drafting and augura import on first mention (Brython lazy modules)', async ({ page }) => {
+    await gotoAndReady(page);
+    await page.evaluate(() => window.CascadeAPI.setMode('python'));
+    const code = [
+      'from build123d import *',
+      'from build123d_drafting import find_holes, find_hole_patterns, recognise_countersinks',
+      'import augura',
+      'with BuildPart() as p:',
+      '    Box(60, 40, 8)',
+      '    with PolarLocations(12, 4):',
+      '        Hole(radius=2)',
+      '    with Locations((22, 12, 4)):',
+      '        CounterSinkHole(radius=2, counter_sink_radius=4)',
+      'holes = find_holes(p.part)',
+      'print("holes", len(holes))',
+      'print("patterns", [type(x).__name__ for x in find_hole_patterns(holes)])',
+      'print("csink", [c["included_angle"] for c in recognise_countersinks(p.part)])',
+      'wall = Box(40, 30, 5) + Pos(0, 0, 10) * Box(0.5, 20, 15)',
+      'print("augura", [f.kind for f in augura.analyze(wall).findings])',
+      'show(p.part, "plate")',
+    ].join('\n');
+    const result = await runCodeAndRender(page, code, 1);
+    expect(result.errors).toEqual([]);
+    const logs = await waitForConsole(page, 'logs', 'items.some(l => l.startsWith("augura"))');
+    expect(logs).toContain('holes 5');
+    expect(logs.some((l) => /^patterns .*BoltCircle/.test(l))).toBe(true);
+    expect(logs.some((l) => /^csink \[82(\.0)?\]/.test(l))).toBe(true);
+    expect(logs.some((l) => /^augura .*thin_wall/.test(l))).toBe(true);
+  });
+
+  test('the part library (cs_parts) and the drafting module run in the browser', async ({ page }) => {
+    await gotoAndReady(page);
+    await page.evaluate(() => window.CascadeAPI.setMode('python'));
+    const code = [
+      'from build123d import *',
+      'import cs_parts',
+      'nut = cs_parts.load("hex_nut", size="M8")',
+      'gear = Pos(40, 0, 0) * cs_parts.load("spur_gear", module=2, teeth=12)',
+      'print("parts", len(cs_parts.search("bearing")), round(nut.volume, 1))',
+      'd = Draft(font_size=3.0)',
+      'with BuildSketch() as sk:',
+      '    Rectangle(40, 20)',
+      '    e = ExtensionLine([(-20, 10), (20, 10)], -6, d)',
+      'print("dims", round(e.dimension, 2), len(sk.sketch.faces()) > 1, round(sk.sketch.bounding_box().max.Y, 1) >= 16)',
+      'show(nut, "nut", gear, "gear")',
+    ].join('\n');
+    const result = await runCodeAndRender(page, code, 2);
+    expect(result.errors).toEqual([]);
+    const logs = await waitForConsole(page, 'logs', 'items.some(l => l.startsWith("dims"))');
+    // M8 ISO 4032 nut: 641.1 mm^3 (13 across flats, 6.8 high, 30 deg chamfers, 8 mm bore)
+    expect(logs.some((l) => /^parts 1 641\.1$/.test(l))).toBe(true);
+    // a 40 mm dimension, drawn 6 mm above the rectangle's top edge (offset < 0 = left of a +X path)
+    expect(logs.some((l) => /^dims 40(\.0)? True True$/.test(l))).toBe(true);   // Brython prints round(40.0, 2) as 40
+  });
+
   test('Python errors surface as console errors with the traceback', async ({ page }) => {
     await gotoAndReady(page);
     await page.evaluate(() => window.CascadeAPI.setMode('python'));

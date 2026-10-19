@@ -19,7 +19,7 @@ Four entries, one codebase — see [Source flavors](#source-flavors):
 
 | | build123d | corpus | live |
 |---|---|---|---|
-| default | **build123d-lite** (embedded) | 223/239 (0.13.0 reference) | `cascade-headless.makeshifted.workers.dev` |
+| default | **build123d-lite** (embedded) | 224/239 (0.13.0 reference) | `cascade-headless.makeshifted.workers.dev` |
 | `--env warm` | lite, engine booted + warmed at global scope (`BOOT=warm`) | as lite | `cascade-headless-warm.makeshifted.workers.dev` |
 | `--env upstream` | **verbatim upstream 0.13.0** over the OCP shim | 233/239 (0.13.0 reference) | `cascade-headless-upstream.makeshifted.workers.dev` |
 | `--env real` | **the PyPI build123d 0.13.0 wheel + numpy** on Pyodide 314, same shim | 232/239 (0.13.0 reference) | `cascade-headless-real.makeshifted.workers.dev` |
@@ -136,7 +136,7 @@ so this is a wrangler environment, not a query parameter.
 | | `lite` (default) | `upstream` |
 |---|---|---|
 | what runs | `Build123dLite.js` — a re-implementation, embedded in the bundle as a Python string | build123d 0.13.0's OWN `geometry.py` + `topology/*.py` + object/builder layers, **verbatim**, over an OCP-over-embind shim |
-| validation corpus (build123d 0.13.0 reference) | 223 PASS / 9 MISMATCH / 6 ERROR / 1 TIMEOUT | **233 PASS** / 2 / 3 / 1 (real: 232 / 3 / 3 / 1) |
+| validation corpus (build123d 0.13.0 reference) | 224 PASS / 9 MISMATCH / 5 ERROR / 1 TIMEOUT | **233 PASS** / 2 / 3 / 1 (real: 232 / 3 / 3 / 1) |
 | cold first request (edge, 2026-08, static-assets layout) | **3.0 s** | **5.6 s** |
 | warm trivial model | **44-57 ms** | **61-89 ms** |
 | extra modules in the script | 4.11 MB of fonts | 4.11 MB of fonts + 3.25 MB of Python (one JSON map, build123d 0.13.0) |

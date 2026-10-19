@@ -36,7 +36,7 @@
 //    (scipy's Nelder-Mead/quickhull stand-ins, the pytest.approx subset, and
 //    the logging swallower).
 
-import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
+import { BUILD123D_LITE_PY, PY_SHIM_MODULES, LAZY_PY_MODULES } from './Build123dLite.js';
 import { bootstrapPyodideRealB123d } from './PyodideRealB123d.js';
 
 /** The module name user scripts execute under (frame walks look for it). */
@@ -48,7 +48,7 @@ const PY_USER_MODULE = 'main';
  *  replaced by the real CPython module. */
 const PYODIDE_SHIMS = ['logging', '_scipy_shim', 'scipy', 'scipy.optimize',
   'scipy.spatial', 'pytest', '_bd_materials_shim', 'bd_materials',
-  'bd_materials.core', 'bd_materials.finishes'];
+  'bd_materials.core', 'bd_materials.finishes', '_cs_ocp'];
 
 /** pysrc=real (REAL build123d 0.13.0 over the OCP shim) drops the logging
  *  swallower: real CPython logging runs for real — build123d's module
@@ -363,6 +363,7 @@ async function _bootstrap(srcKind) {
   for (const name of (isReal ? PYODIDE_REAL_SHIMS : PYODIDE_SHIMS)) {
     if (PY_SHIM_MODULES[name]) { registerModule(name, PY_SHIM_MODULES[name]); }
   }
+  const lazyDone = new Set();   // LAZY_PY_MODULES registered so far
   if (isReal) {
     // REAL build123d 0.13.0 over the OCP shim (wheels + OCP proxies +
     // third-party stubs + worker glue) — see PyodideRealB123d.js.
@@ -396,6 +397,12 @@ async function _bootstrap(srcKind) {
     /** Execute user Python source. Throws a JS Error whose message starts
      *  with the one-line Python summary followed by the full traceback. */
     run(code) {
+      if (!isReal) {
+        const lastLazy = LAZY_PY_MODULES.reduce((k, name, i) => (code.indexOf(name) !== -1 ? i : k), -1);
+        for (const name of LAZY_PY_MODULES.slice(0, lastLazy + 1)) {
+          if (!lazyDone.has(name)) { lazyDone.add(name); registerModule(name, PY_SHIM_MODULES[name]); }
+        }
+      }
       // Emptied per run unless the host opted into the stable cross-run
       // cache, whose keys cannot collide across evaluations (StandardUtils
       // _stableHash) — see the Brython runtime for why it is emptied.

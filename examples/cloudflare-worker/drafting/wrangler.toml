@@ -1,0 +1,30 @@
+# cascade-drafting: engineering drawings from STEP (draftwright-rust's wasm
+# package). The session Worker calls it over a service binding; see
+# README.md. AGPL-3.0-only (LICENSE), unlike the rest of the repository.
+#
+#   npm run dev:drafting       # fetches the package, then wrangler dev on :8788
+#   npm run deploy:drafting    # deploy this BEFORE the session Worker binds it
+name = "cascade-drafting"
+main = "src/index.js"
+compatibility_date = "2025-08-01"
+keep_names = false
+# reachable only through service bindings, never as a public URL
+workers_dev = false
+
+[vars]
+# Parts with more faces are refused before they are opened: draftwright's
+# wasm memory grows ~1.1 MB per face on hole-heavy parts (measured: 54 faces
+# 65 MB, 86 faces 95 MB, 126 faces 112 MB) and a Worker isolate has 128 MB in
+# all. Each drawing gets an engine instance of its own, dropped afterwards, so
+# the ceiling no longer depends on what the isolate drew before: on the edge
+# (2026-10-19) 126-face plates drew 9 times out of 9, back to back. 120 stays
+# below that, since memory per face varies by part.
+MAX_FACES = "120"
+# Offered with every drawing next to draftwright's own source (AGPL s13).
+SERVICE_SOURCE_URL = "https://github.com/zalo/CascadeStudio/tree/master/examples/cloudflare-worker/drafting"
+
+[limits]
+cpu_ms = 300000
+
+[observability]
+enabled = true

@@ -59,6 +59,37 @@ export function viewBasis(azimuth, elevation) {
 const PALETTE = [[0.74, 0.77, 0.82], [0.62, 0.74, 0.86], [0.80, 0.74, 0.62], [0.66, 0.80, 0.68],
   [0.80, 0.68, 0.76], [0.70, 0.70, 0.86]];
 const HIGHLIGHT = [1.0, 0.56, 0.18];
+const CAP = [0.84, 0.36, 0.36];
+
+/** 5x7 bitmap text into an RGB buffer (upper-cased; `fpx` px per font
+ *  pixel). `halo` draws a 1-font-pixel background-coloured outline first. */
+function drawText(rgb, w, h, str, x, y, col, fpx, halo) {
+  const put = (X, Y, c) => {
+    if (X < 0 || Y < 0 || X >= w || Y >= h) { return; }
+    const i = Y * w + X;
+    rgb[i * 3] = c[0]; rgb[i * 3 + 1] = c[1]; rgb[i * 3 + 2] = c[2];
+  };
+  const glyphs = (fn) => {
+    let cxp = x;
+    for (const ch0 of String(str)) {
+      const g = FONT[ch0.toUpperCase()] || FONT[' '];
+      for (let row = 0; row < 7; row++) {
+        for (let colI = 0; colI < 5; colI++) {
+          if (g[row] & (16 >> colI)) { fn(cxp + colI * fpx, y + row * fpx); }
+        }
+      }
+      cxp += 6 * fpx;
+    }
+  };
+  if (halo) {
+    glyphs((X0, Y0) => {
+      for (let yy = -fpx; yy < 2 * fpx; yy++) { for (let xx = -fpx; xx < 2 * fpx; xx++) { put(X0 + xx, Y0 + yy, halo); } }
+    });
+  }
+  glyphs((X0, Y0) => {
+    for (let yy = 0; yy < fpx; yy++) { for (let xx = 0; xx < fpx; xx++) { put(X0 + xx, Y0 + yy, col); } }
+  });
+}
 
 /** Render a mesh. Options:
  *    width, height (px, default 800x600), supersample (default 2),
@@ -68,6 +99,11 @@ const HIGHLIGHT = [1.0, 0.56, 0.18];
  *    edges       draw the model's edges (default true)
  *    labels      text lines for the bottom-left corner
  *    background  [r, g, b] (0-255, default white)
+ *    colors      {shapeIndex: [r, g, b] (0-1)} per-object base colours
+ *    clip        {axis: 0|1|2, at, keep: 'below'|'above'}: cut the model at
+ *                a plane; what lies inside the solids shows as a flat cap
+ *                colour (back faces seen through the cut)
+ *    objectLabels {shapeIndex: text} drawn at each object's centre
  *  Returns {width, height, rgb, scale (px per model unit), view}. */
 export function renderMeshImage(mesh, o = {}) {
   const W = Math.max(64, Math.min(2048, Math.round(o.width || 800)));
@@ -83,6 +119,9 @@ export function renderMeshImage(mesh, o = {}) {
   const keep = (si) => !only || only.has(si);
   const faces = (mesh.faces || []).filter((f) => keep(f.shape_index));
   const edges = (mesh.edges || []).filter((e) => keep(e.shape_index));
+  const clip = o.clip && [0, 1, 2].includes(o.clip.axis) && Number.isFinite(o.clip.at) ? o.clip : null;
+  const clipSign = clip && clip.keep === 'above' ? -1 : 1;   // keep v*sign <= at*sign
+  const cut = (wv) => clip !== null && (wv - clip.at) * clipSign > 0;
 
   // ---- fit the scene ----
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -116,15 +155,17 @@ export function renderMeshImage(mesh, o = {}) {
   // ---- triangles (Gouraud: two lights evaluated per vertex) ----
   const key = norm([toEye[0] + 0.5 * up[0] - 0.4 * right[0], toEye[1] + 0.5 * up[1] - 0.4 * right[1],
     toEye[2] + 0.5 * up[2] - 0.4 * right[2]]);
-  let sx = new Float32Array(0), sy = sx, sz = sx, sr = sx, sg = sx, sb = sx;
+  let sx = new Float32Array(0), sy = sx, sz = sx, sr = sx, sg = sx, sb = sx, sw = sx, sf = sx;
   for (const f of faces) {
     const v = f.vertex_coord; const n = f.normal_coord; const t = f.tri_indexes;
     const nv = v.length / 3;
     if (sx.length < nv) {
       sx = new Float32Array(nv * 2); sy = new Float32Array(nv * 2); sz = new Float32Array(nv * 2);
       sr = new Float32Array(nv * 2); sg = new Float32Array(nv * 2); sb = new Float32Array(nv * 2);
+      sw = new Float32Array(nv * 2); sf = new Float32Array(nv * 2);
     }
-    const base = hi.has(f.shape_index) ? HIGHLIGHT : PALETTE[((f.shape_index | 0) % PALETTE.length + PALETTE.length) % PALETTE.length];
+    const base = hi.has(f.shape_index) ? HIGHLIGHT : (o.colors && o.colors[f.shape_index])
+      || PALETTE[((f.shape_index | 0) % PALETTE.length + PALETTE.length) % PALETTE.length];
     for (let i = 0; i < nv; i++) {
       const px = v[i * 3], py = v[i * 3 + 1], pz = v[i * 3 + 2];
       sx[i] = ((px * right[0] + py * right[1] + pz * right[2]) - cx) * scale + ox;
@@ -132,6 +173,8 @@ export function renderMeshImage(mesh, o = {}) {
       sz[i] = px * toEye[0] + py * toEye[1] + pz * toEye[2];
       let nx = n.length ? n[i * 3] : 0, ny = n.length ? n[i * 3 + 1] : 0, nz = n.length ? n[i * 3 + 2] : 1;
       let nd = nx * toEye[0] + ny * toEye[1] + nz * toEye[2];
+      sf[i] = nd;                                               // raw facing (caps)
+      if (clip) { sw[i] = v[i * 3 + clip.axis]; }
       if (nd < 0) { nx = -nx; ny = -ny; nz = -nz; nd = -nd; }   // two-sided
       const nk = Math.max(0, nx * key[0] + ny * key[1] + nz * key[2]);
       const spec = 0.08 * Math.pow(nd, 40);
@@ -158,7 +201,13 @@ export function renderMeshImage(mesh, o = {}) {
           const z = w0 * sz[a] + w1 * sz[b] + w2 * sz[c];
           const idx = y * w + x;
           if (z <= zbuf[idx]) { continue; }
+          if (clip && cut(w0 * sw[a] + w1 * sw[b] + w2 * sw[c])) { continue; }
           zbuf[idx] = z;
+          if (clip && w0 * sf[a] + w1 * sf[b] + w2 * sf[c] < 0) {
+            // a back face seen through the cut: the solid's inside -> cap
+            rgb[idx * 3] = 255 * CAP[0]; rgb[idx * 3 + 1] = 255 * CAP[1]; rgb[idx * 3 + 2] = 255 * CAP[2];
+            continue;
+          }
           rgb[idx * 3] = 255 * (w0 * sr[a] + w1 * sr[b] + w2 * sr[c]);
           rgb[idx * 3 + 1] = 255 * (w0 * sg[a] + w1 * sg[b] + w2 * sg[c]);
           rgb[idx * 3 + 2] = 255 * (w0 * sb[a] + w1 * sb[b] + w2 * sb[c]);
@@ -217,6 +266,7 @@ export function renderMeshImage(mesh, o = {}) {
         const p = (j) => [((v[j] * right[0] + v[j + 1] * right[1] + v[j + 2] * right[2]) - cx) * scale + ox,
           oy - ((v[j] * up[0] + v[j + 1] * up[1] + v[j + 2] * up[2]) - cy) * scale,
           v[j] * toEye[0] + v[j + 1] * toEye[1] + v[j + 2] * toEye[2]];
+        if (clip && (cut(v[i + clip.axis]) || cut(v[i + 3 + clip.axis]))) { continue; }
         const A = p(i); const B = p(i + 3);
         line(A[0], A[1], A[2], B[0], B[1], B[2], ec);
       }
@@ -224,27 +274,27 @@ export function renderMeshImage(mesh, o = {}) {
   }
 
   // ---- axis triad and labels ----
-  const text = (str, x, y, col) => {
-    let cxp = x;
-    for (const ch0 of String(str)) {
-      const ch = ch0.toUpperCase();
-      const g = FONT[ch] || FONT[' '];
-      for (let row = 0; row < 7; row++) {
-        for (let colI = 0; colI < 5; colI++) {
-          if (!(g[row] & (16 >> colI))) { continue; }
-          for (let yy = 0; yy < fpx; yy++) {
-            for (let xx = 0; xx < fpx; xx++) {
-              const X = cxp + colI * fpx + xx; const Y = y + row * fpx + yy;
-              if (X < 0 || Y < 0 || X >= w || Y >= h) { continue; }
-              const i = Y * w + X;
-              rgb[i * 3] = col[0]; rgb[i * 3 + 1] = col[1]; rgb[i * 3 + 2] = col[2];
-            }
-          }
-        }
+  const text = (str, x, y, col, halo) => drawText(rgb, w, h, str, x, y, col, fpx, halo);
+  if (o.objectLabels) {
+    // each object's name at the centre of its projected vertices
+    const acc = new Map();
+    for (const f of faces) {
+      const v = f.vertex_coord;
+      const a = acc.get(f.shape_index) || [0, 0, 0];
+      for (let i = 0; i < v.length; i += 3) {
+        a[0] += ((v[i] * right[0] + v[i + 1] * right[1] + v[i + 2] * right[2]) - cx) * scale + ox;
+        a[1] += oy - ((v[i] * up[0] + v[i + 1] * up[1] + v[i + 2] * up[2]) - cy) * scale;
+        a[2]++;
       }
-      cxp += 6 * fpx;
+      acc.set(f.shape_index, a);
     }
-  };
+    for (const [si, a] of acc) {
+      const name = o.objectLabels[si];
+      if (!name || !a[2]) { continue; }
+      const str = String(name).slice(0, 24);
+      text(str, Math.round(a[0] / a[2] - str.length * 3 * fpx), Math.round(a[1] / a[2] - 3.5 * fpx), [20, 24, 28], bg);
+    }
+  }
   const tx = 34 * ss; const ty = h - labelH - 34 * ss;
   const axes = [[[1, 0, 0], [205, 45, 45], 'X'], [[0, 1, 0], [40, 150, 60], 'Y'], [[0, 0, 1], [45, 85, 215], 'Z']];
   for (const [a, col, name] of axes) {
@@ -275,4 +325,75 @@ export function renderMeshImage(mesh, o = {}) {
     }
   }
   return { width: W, height: H, rgb: out, scale: scale / ss, view: { azimuth, elevation }, empty };
+}
+
+/** A 2-D line drawing (the exact hidden-line projection's polylines, in
+ *  view-plane mm): visible lines solid, hidden ones dashed grey, fitted to
+ *  the canvas, with the same label strip as renderMeshImage. Returns
+ *  {width, height, rgb, scale}. */
+export function renderLineImage(lines, o = {}) {
+  const W = Math.max(64, Math.min(2048, Math.round(o.width || 800)));
+  const H = Math.max(64, Math.min(2048, Math.round(o.height || 600)));
+  const ss = Math.max(1, Math.min(3, Math.round(o.supersample || 2)));
+  const w = W * ss; const h = H * ss;
+  const rgb = new Uint8Array(w * h * 3).fill(255);
+  const visible = lines.visible || []; const hidden = lines.hidden || [];
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const l of visible.concat(hidden)) {
+    for (const [x, y] of l) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  }
+  const labels = (o.labels || []).filter(Boolean);
+  const fpx = 2 * ss;
+  const labelH = labels.length ? labels.length * 9 * fpx + 6 * ss : 0;
+  const margin = 24 * ss;
+  const empty = !(x1 >= x0);
+  const scale = empty ? 1 : Math.min((w - 2 * margin) / Math.max(x1 - x0, 1e-9), (h - 2 * margin - labelH) / Math.max(y1 - y0, 1e-9));
+  const X = (x) => (x - (x0 + x1) / 2) * scale + w / 2;
+  const Y = (y) => (h - labelH) / 2 - (y - (y0 + y1) / 2) * scale;
+  const plot = (x, y, r, col) => {
+    for (let yy = Math.floor(y - r); yy <= Math.ceil(y + r); yy++) {
+      for (let xx = Math.floor(x - r); xx <= Math.ceil(x + r); xx++) {
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) { continue; }
+        const dx = xx + 0.5 - x, dy = yy + 0.5 - y;
+        if (dx * dx + dy * dy > r * r + 0.25) { continue; }
+        const i = yy * w + xx;
+        rgb[i * 3] = col[0]; rgb[i * 3 + 1] = col[1]; rgb[i * 3 + 2] = col[2];
+      }
+    }
+  };
+  const draw = (l, r, col, dash) => {
+    let run = 0;
+    for (let i = 0; i + 1 < l.length; i++) {
+      const ax = X(l[i][0]), ay = Y(l[i][1]), bx = X(l[i + 1][0]), by = Y(l[i + 1][1]);
+      const len = Math.hypot(bx - ax, by - ay);
+      const steps = Math.max(1, Math.ceil(len / (0.5 * ss)));
+      for (let s2 = 0; s2 <= steps; s2++) {
+        const u = s2 / steps;
+        const d = run + len * u;
+        if (dash && (d % (dash[0] + dash[1])) > dash[0]) { continue; }
+        plot(ax + (bx - ax) * u, ay + (by - ay) * u, r, col);
+      }
+      run += len;
+    }
+  };
+  for (const l of hidden) { draw(l, 0.5 * ss, [150, 156, 162], [6 * ss, 4 * ss]); }
+  for (const l of visible) { draw(l, 0.8 * ss, [29, 33, 37], null); }
+  labels.forEach((s2, k) => drawText(rgb, w, h, s2, 70 * ss, h - labelH + k * 9 * fpx, [70, 74, 80], fpx));
+  let out = rgb;
+  if (ss > 1) {
+    out = new Uint8Array(W * H * 3);
+    const n = ss * ss;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let R = 0, G = 0, B = 0;
+        for (let yy = 0; yy < ss; yy++) {
+          let i = ((y * ss + yy) * w + x * ss) * 3;
+          for (let xx = 0; xx < ss; xx++, i += 3) { R += rgb[i]; G += rgb[i + 1]; B += rgb[i + 2]; }
+        }
+        const j = (y * W + x) * 3;
+        out[j] = R / n; out[j + 1] = G / n; out[j + 2] = B / n;
+      }
+    }
+  }
+  return { width: W, height: H, rgb: out, scale: scale / ss, empty };
 }

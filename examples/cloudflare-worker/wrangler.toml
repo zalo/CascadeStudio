@@ -207,6 +207,16 @@ class_name = "EditSession"
 tag = "v1"
 new_sqlite_classes = ["EditSession"]
 
+# Engineering drawings (MCP make_drawing): the drafting Worker (drafting/,
+# draftwright-rust, AGPL-3.0) called over Workers RPC. Deploy it first
+# (`npm run deploy:drafting`); locally run `npm run dev:drafting` beside
+# dev:session and wrangler's dev registry connects the two. Without the
+# binding the tool is simply not listed.
+[[env.session.services]]
+binding = "DRAFTING"
+service = "cascade-drafting"
+entrypoint = "Drafting"
+
 [env.session.limits]
 cpu_ms = 300000
 

@@ -14,8 +14,15 @@
 // prompts, resources. test/mcp-session.mjs drives it with the official SDK
 // client.
 
-import { SERVER_INFO, TOOLS, INSTRUCTIONS, WORKFLOW, QUICKREF, PROMPTS, RESOURCES, promptMessages }
-  from './mcp-tools.js';
+import { SERVER_INFO, TOOLS, coerceArgs, INSTRUCTIONS, WORKFLOW, QUICKREF, SELECTORS, STARTER, PROMPTS, RESOURCES,
+  promptMessages } from './mcp-tools.js';
+import { repairHints } from './repair-hints.js';
+import { UPSTREAM_SKILLS } from './skills-upstream.js';
+import { searchParts } from '../../../packages/cascade-core/src/worker/CsParts.js';
+
+const RESOURCE_TEXT = { 'build123d://workflow': WORKFLOW, 'build123d://quickref': QUICKREF,
+  'build123d://selectors': SELECTORS, 'build123d://starter': STARTER,
+  'build123d://skill/modeling': UPSTREAM_SKILLS.modeling, 'build123d://skill/edit': UPSTREAM_SKILLS.edit };
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
@@ -39,20 +46,31 @@ const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)),
  *  @param {(env, name, args, meta) => Promise<object>} o.callSessionTool
  *         runs a tool in a session object; returns an MCP tool result */
 export function createMcpHandler(o) {
-  const toolNames = new Set(TOOLS.map((t) => t.name));
+  const toolsByName = new Map(TOOLS.map((t) => [t.name, t]));
 
   async function callTool(params, env, origin) {
     const name = params && params.name;
-    const args = (params && params.arguments) || {};
-    if (!toolNames.has(name)) { return textResult('unknown tool: ' + name, true); }
+    if (!toolsByName.has(name)) { return textResult('unknown tool: ' + name, true); }
+    const args = coerceArgs(toolsByName.get(name), (params && params.arguments) || {});
     if (name === 'workflow_hints') { return textResult(WORKFLOW); }
+    if (name === 'make_drawing' && !(env && env.DRAFTING)) {
+      return textResult('drawings are not available on this deployment (no drafting service is bound)', true);
+    }
+    if (name === 'search_library') {
+      const parts = searchParts(args.query || '');
+      return textResult(JSON.stringify({ count: parts.length, parts,
+        note: 'load one with load_part(name, params); scripts can also call cs_parts.load(name, **params)' }, null, 1));
+    }
+    if (name === 'repair_hints') {
+      return textResult(JSON.stringify({ hints: repairHints(args.error_text, true) }, null, 1));
+    }
     if (name === 'new_session') {
       const id = randomId();
       return textResult('session: ' + id + '\neditor: ' + origin + '/?session=' + id
         + '\nPass "session": "' + id + '" to every call. Open the editor link to watch and edit the model.');
     }
     let sid = args.session;
-    if (sid === undefined && (name === 'execute' || name === 'set_script')) { sid = randomId(); }
+    if (sid === undefined && ['execute', 'set_script', 'import_cad_file', 'load_part'].includes(name)) { sid = randomId(); }
     if (typeof sid !== 'string' || !/^[A-Za-z0-9_.-]{1,64}$/.test(sid)) {
       return textResult('a "session" id is needed (letters, digits, _ . -; up to 64): start one with new_session', true);
     }
@@ -83,7 +101,8 @@ export function createMcpHandler(o) {
         break;
       }
       case 'ping': result = {}; break;
-      case 'tools/list': result = { tools: TOOLS }; break;
+      // make_drawing needs the drafting Worker's service binding (drafting/)
+      case 'tools/list': result = { tools: env && env.DRAFTING ? TOOLS : TOOLS.filter((t) => t.name !== 'make_drawing') }; break;
       case 'tools/call': result = await callTool(p, env, origin); break;
       case 'prompts/list': result = { prompts: PROMPTS }; break;
       case 'prompts/get': {
@@ -95,9 +114,10 @@ export function createMcpHandler(o) {
       case 'resources/list': result = { resources: RESOURCES }; break;
       case 'resources/templates/list': result = { resourceTemplates: [] }; break;
       case 'resources/read': {
-        const text = p.uri === 'build123d://workflow' ? WORKFLOW : p.uri === 'build123d://quickref' ? QUICKREF : null;
-        if (text === null) { return rpcError(msg.id, -32002, 'resource not found: ' + p.uri); }
-        result = { contents: [{ uri: p.uri, mimeType: 'text/markdown', text }] };
+        const text = RESOURCE_TEXT[p.uri];
+        if (text === undefined) { return rpcError(msg.id, -32002, 'resource not found: ' + p.uri); }
+        const res = RESOURCES.find((r) => r.uri === p.uri);
+        result = { contents: [{ uri: p.uri, mimeType: res.mimeType, text }] };
         break;
       }
       case 'logging/setLevel': result = {}; break;

@@ -21,7 +21,7 @@
 //     numbers refer 1:1 to the user's editor lines (the library is a
 //     separate module, nothing is prepended to user code).
 
-import { BUILD123D_LITE_PY, PY_SHIM_MODULES } from './Build123dLite.js';
+import { BUILD123D_LITE_PY, PY_SHIM_MODULES, LAZY_PY_MODULES } from './Build123dLite.js';
 import { ensurePyodideRuntime } from './PyodideRuntime.js';
 import { ensureMicroPythonRuntime } from './MicroPythonRuntime.js';
 
@@ -130,6 +130,7 @@ async function _bootstrap() {
   // shipped), then build123d-lite — executing a source under a module name
   // caches it in $B.imported for subsequent imports.
   for (const name of Object.keys(PY_SHIM_MODULES)) {
+    if (LAZY_PY_MODULES.includes(name)) { continue; }   // on first mention (run())
     _runGuarded(B, PY_SHIM_MODULES[name], name);
     if (name.indexOf('.') !== -1 && !B.imported[name]) {
       // run_script sanitizes dots out of script ids ('scipy.optimize' is
@@ -167,6 +168,10 @@ async function _bootstrap() {
      *  message starts with the one-line Python summary followed by the full
      *  traceback (line numbers = the user's editor lines). */
     run(code) {
+      const lastLazy = LAZY_PY_MODULES.reduce((k, name, i) => (code.indexOf(name) !== -1 ? i : k), -1);
+      for (const name of LAZY_PY_MODULES.slice(0, lastLazy + 1)) {
+        if (!B.imported[name]) { _runGuarded(B, PY_SHIM_MODULES[name], name); }
+      }
       // The build123d module persists across evaluations — clear its
       // builder-context stacks in case a previous run aborted inside a
       // `with BuildPart():` block without unwinding. The op cache is also

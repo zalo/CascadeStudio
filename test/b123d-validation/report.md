@@ -1,12 +1,12 @@
 # build123d-lite validation report
 
-Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because real build123d fails natively).
+Generated 2026-10-18T09:03:28.011Z - 247 scripts (239 scored, 8 excluded because real build123d fails natively).
 
 | Status | Count |
 |---|---|
-| PASS | 223 |
-| MISMATCH | 9 |
-| ERROR | 6 |
+| PASS | 224 |
+| MISMATCH | 10 |
+| ERROR | 4 |
 | TIMEOUT | 1 |
 | SKIP | 8 |
 
@@ -15,9 +15,7 @@ Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because
 | Gap | Scripts |
 |---|---|
 | `ImportError: undefined` | 2 |
-| `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf` | 1 |
-| `other: Line 13712: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O` | 1 |
-| `NameError: Draft` | 1 |
+| `other: Line 18258: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O` | 1 |
 | `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l` | 1 |
 
 ## Mismatches (runs, but geometry differs)
@@ -36,82 +34,84 @@ Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because
   - 'projected_text' bbox[0] -49.7713 vs -49.6470 (d=0.1243)
 - **docs/objects_1d**
   - 'scene' bbox[0] -0.1000 vs -0.1700 (d=0.0700)
-- **docs/tutorial_joints**
-  - 'm6_screw' bbox[0] -155.1818 vs -157.0000 (d=1.8182)
 - **docs-selectors/filter_all_edges_circle**
   - 'f' bbox[1] 21.0000 vs -21.0000 (d=42.0000)
+- **docs/tutorial_joints**
+  - 'm6_screw' bbox[0] -155.1818 vs -157.0000 (d=1.8182)
 - **docs-selectors/sort_axis**
   - 'part' volume 4765.102 vs 5585.161 (-14.68%)
   - 'part' bbox[3] 34.0000 vs 50.0000 (d=16.0000)
+- **docs/objects_2d**
+  - 't2' bbox[0] 6.8193 vs 6.7942 (d=0.0250)
 - **docs-rst/tips/b04**
   - 'vertical_sketch' bbox[1] -0.5000 vs -0.7000 (d=0.2000)
 
 ## Passing scripts
 
-- examples/boxes_on_faces (1 shapes)
 - examples/boxes_on_faces_algebra (2 shapes)
-- examples/bicycle_tire (102 shapes)
-- examples/build123d_customizable_logo (14 shapes)
+- examples/boxes_on_faces (1 shapes)
 - examples/build123d_customizable_logo_algebra (13 shapes)
-- examples/build123d_logo (13 shapes)
+- examples/build123d_customizable_logo (14 shapes)
 - examples/build123d_logo_algebra (12 shapes)
-- examples/canadian_flag (20 shapes)
+- examples/build123d_logo (13 shapes)
 - examples/canadian_flag_algebra (25 shapes)
-- examples/cast_bearing_unit (10 shapes)
+- examples/canadian_flag (20 shapes)
 - examples/circuit_board (1 shapes)
 - examples/circuit_board_algebra (1 shapes)
+- examples/cast_bearing_unit (10 shapes)
 - examples/clock (5 shapes)
 - examples/clock_algebra (6 shapes)
 - examples/custom_sketch_objects (9 shapes)
-- examples/bracelet (16 shapes)
 - examples/custom_sketch_objects_algebra (9 shapes)
 - examples/din_rail (3 shapes)
 - examples/din_rail_algebra (41 shapes)
+- examples/dual_color_3mf (6 shapes)
 - examples/extrude_algebra (35 shapes)
 - examples/extrude (10 shapes)
 - examples/handle (10 shapes)
 - examples/handle_algebra (4 shapes)
 - examples/fast_grid_holes (4 shapes)
-- examples/heat_exchanger (3 shapes)
+- examples/bracelet (16 shapes)
 - examples/holes (4 shapes)
 - examples/holes_algebra (4 shapes)
 - examples/intersecting_chamfers (1 shapes)
 - examples/intersecting_chamfers_algebra (2 shapes)
-- examples/heat_exchanger_algebra (4 shapes)
 - examples/intersecting_pipes (3 shapes)
+- examples/bicycle_tire (102 shapes)
 - examples/key_cap (5 shapes)
-- examples/key_cap_algebra (5 shapes)
 - examples/lego (3 shapes)
 - examples/lego_algebra (3 shapes)
+- examples/key_cap_algebra (5 shapes)
+- examples/heat_exchanger (3 shapes)
 - examples/loft (4 shapes)
-- examples/loft_algebra (3 shapes)
 - examples/mixed_algebra_context (9 shapes)
 - examples/multiple_workplanes (1 shapes)
 - examples/multiple_workplanes_algebra (1 shapes)
-- examples/packed_boxes (100 shapes)
+- examples/loft_algebra (3 shapes)
+- examples/heat_exchanger_algebra (4 shapes)
 - examples/pegboard_j_hook (10 shapes)
 - examples/pegboard_j_hook_algebra (11 shapes)
 - examples/pillow_block (2 shapes)
 - examples/pillow_block_algebra (2 shapes)
 - examples/platonic_solids (5 shapes)
 - examples/playing_cards (14 shapes)
-- examples/maker_coin (8 shapes)
+- examples/packed_boxes (100 shapes)
 - examples/roller_coaster (4 shapes)
 - examples/roller_coaster_algebra (4 shapes)
 - examples/shamrock (1 shapes)
 - examples/spring (3 shapes)
 - examples/stud_wall (2 shapes)
+- examples/maker_coin (8 shapes)
 - examples/tea_cup (5 shapes)
-- examples/tea_cup_algebra (5 shapes)
 - examples/twist_extrude (2 shapes)
-- examples/vase (8 shapes)
 - general_examples/ex01 (1 shapes)
 - general_examples/ex02 (1 shapes)
 - general_examples/ex03 (2 shapes)
 - general_examples/ex08 (3 shapes)
+- examples/vase (8 shapes)
+- examples/vase_algebra (8 shapes)
 - general_examples/ex09 (1 shapes)
 - general_examples/ex10 (1 shapes)
-- examples/vase_algebra (8 shapes)
 - general_examples/ex12 (7 shapes)
 - general_examples/ex11 (2 shapes)
 - general_examples/ex14 (6 shapes)
@@ -119,107 +119,108 @@ Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because
 - general_examples/ex13 (1 shapes)
 - general_examples/ex17 (2 shapes)
 - general_examples/ex18 (1 shapes)
+- general_examples/ex19 (6 shapes)
 - general_examples/ex16 (3 shapes)
 - general_examples/ex20 (1 shapes)
-- general_examples/ex19 (6 shapes)
 - general_examples/ex21 (2 shapes)
-- general_examples/ex22 (2 shapes)
 - general_examples/ex23 (5 shapes)
-- general_examples/ex25 (4 shapes)
-- general_examples/ex24 (3 shapes)
+- general_examples/ex22 (2 shapes)
 - general_examples/ex26 (2 shapes)
+- general_examples/ex24 (3 shapes)
+- general_examples/ex25 (4 shapes)
 - general_examples/ex27 (2 shapes)
-- general_examples/ex29 (7 shapes)
-- general_examples/ex28 (7 shapes)
 - general_examples/ex30 (5 shapes)
+- general_examples/ex28 (7 shapes)
+- general_examples/ex29 (7 shapes)
 - general_examples/ex32 (3 shapes)
 - general_examples/ex33 (3 shapes)
-- general_examples/ex31 (2 shapes)
 - general_examples/ex35 (5 shapes)
-- general_examples/ex36 (3 shapes)
+- examples/tea_cup_algebra (5 shapes)
+- general_examples/ex31 (2 shapes)
 - general_examples/ex37 (2 shapes)
 - general_examples/ex38 (2 shapes)
-- general_examples/ex34 (4 shapes)
+- general_examples/ex36 (3 shapes)
 - general_examples_algebra/ex01 (1 shapes)
 - general_examples_algebra/ex02 (1 shapes)
 - general_examples_algebra/ex03 (2 shapes)
 - general_examples_algebra/ex08 (3 shapes)
 - general_examples_algebra/ex09 (1 shapes)
 - general_examples_algebra/ex12 (6 shapes)
-- general_examples_algebra/ex11 (2 shapes)
-- general_examples_algebra/ex13 (1 shapes)
 - general_examples_algebra/ex14 (6 shapes)
+- general_examples_algebra/ex11 (2 shapes)
+- general_examples/ex34 (4 shapes)
 - general_examples_algebra/ex15 (8 shapes)
+- general_examples_algebra/ex13 (1 shapes)
 - general_examples_algebra/ex17 (2 shapes)
 - general_examples_algebra/ex18 (2 shapes)
-- general_examples_algebra/ex16 (10 shapes)
-- general_examples_algebra/ex20 (2 shapes)
 - general_examples_algebra/ex19 (6 shapes)
+- general_examples_algebra/ex20 (2 shapes)
 - general_examples_algebra/ex21 (1 shapes)
+- general_examples_algebra/ex16 (10 shapes)
 - general_examples_algebra/ex22 (2 shapes)
 - general_examples_algebra/ex23 (4 shapes)
-- general_examples_algebra/ex24 (2 shapes)
 - general_examples_algebra/ex25 (5 shapes)
+- general_examples_algebra/ex24 (2 shapes)
 - general_examples_algebra/ex26 (2 shapes)
 - general_examples_algebra/ex27 (2 shapes)
-- general_examples_algebra/ex29 (8 shapes)
-- general_examples_algebra/ex28 (3 shapes)
 - general_examples_algebra/ex30 (3 shapes)
+- general_examples_algebra/ex29 (8 shapes)
 - general_examples_algebra/ex32 (2 shapes)
-- general_examples_algebra/ex33 (1 shapes)
+- general_examples_algebra/ex28 (3 shapes)
 - general_examples_algebra/ex31 (1 shapes)
+- general_examples_algebra/ex33 (1 shapes)
 - general_examples_algebra/ex35 (4 shapes)
-- general_examples_algebra/ex36 (3 shapes)
 - general_examples_algebra/ex38 (4 shapes)
 - docs/center (5 shapes)
-- general_examples_algebra/ex34 (3 shapes)
+- general_examples_algebra/ex36 (3 shapes)
 - docs/objects_1d_airfoil (2 shapes)
 - docs/objects_1d_blend_curve (4 shapes)
-- docs/heart_token (16 shapes)
 - docs/objects_1d_bspline (2 shapes)
+- general_examples_algebra/ex34 (3 shapes)
 - docs/objects_1d_constrained (7 shapes)
 - docs/objects_1d_ellipticalstartarc (4 shapes)
 - docs/objects_1d_parabolic_hyperbolic (3 shapes)
 - docs/objects_3d (10 shapes)
 - docs/pack_demo (12 shapes)
 - docs/selector_example (1 shapes)
+- docs/heart_token (16 shapes)
 - docs/slide_latch (7 shapes)
 - docs-selectors/filter_axisplane (13 shapes)
 - docs-selectors/filter_geomtype (1 shapes)
 - docs-selectors/filter_inner_wire_count (53 shapes)
 - docs-selectors/filter_nested (7 shapes)
 - docs-selectors/filter_shape_properties (4 shapes)
-- docs-selectors/group_axis (3 shapes)
 - docs-selectors/group_hole_area (3 shapes)
+- docs-selectors/group_axis (3 shapes)
 - docs-selectors/group_properties_with_keys (10 shapes)
-- docs-selectors/selectors_operators (9 shapes)
 - docs-selectors/sort_along_wire (2 shapes)
-- docs-selectors/sort_distance_from (49 shapes)
+- docs-selectors/selectors_operators (9 shapes)
 - docs-selectors/sort_sortby (6 shapes)
-- ttt/ttt-23-02-02-sm_hanger (14 shapes)
-- ttt/ttt-24-SPO-06-Buffer_Stand (9 shapes)
+- docs-selectors/sort_distance_from (49 shapes)
 - ttt/ttt-ppp0101 (9 shapes)
+- ttt/ttt-ppp0102 (6 shapes)
 - ttt/ttt-ppp0103 (4 shapes)
+- ttt/ttt-23-02-02-sm_hanger (14 shapes)
 - ttt/ttt-ppp0104 (9 shapes)
-- ttt/ttt-ppp0105 (5 shapes)
 - ttt/ttt-ppp0106 (9 shapes)
-- ttt/ttt-ppp0107 (11 shapes)
+- ttt/ttt-ppp0105 (5 shapes)
 - ttt/ttt-ppp0108 (6 shapes)
 - ttt/ttt-ppp0109 (8 shapes)
-- docs-readme/readme (15 shapes)
+- ttt/ttt-ppp0107 (11 shapes)
 - docs-rst/OpenSCAD/b01 (2 shapes)
 - docs-rst/OpenSCAD/b02 (2 shapes)
 - docs-rst/OpenSCAD/all (2 shapes)
-- docs-rst/algebra_performance/b01 (3 shapes)
+- docs-readme/readme (15 shapes)
 - docs-rst/algebra_performance/b03 (1 shapes)
 - docs-rst/algebra_performance/b04 (1 shapes)
-- docs-rst/algebra_performance/all (67 shapes)
+- docs-rst/algebra_performance/b01 (3 shapes)
 - docs-rst/build_line/b01 (1 shapes)
 - docs-rst/build_sketch/b03 (1 shapes)
 - docs-rst/import_export/b01 (1 shapes)
 - docs-rst/import_export/b02 (1 shapes)
 - docs-rst/key_concepts_algebra/b01 (2 shapes)
 - docs-rst/key_concepts_algebra/b02 (1 shapes)
+- ttt/ttt-24-SPO-06-Buffer_Stand (9 shapes)
 - docs-rst/key_concepts_algebra/b03 (1 shapes)
 - docs-rst/key_concepts_algebra/b04 (1 shapes)
 - docs-rst/key_concepts_algebra/b13 (3 shapes)
@@ -231,52 +232,50 @@ Generated 2026-10-15T16:50:41.691Z - 247 scripts (239 scored, 8 excluded because
 - docs-rst/key_concepts_builder/b06 (1 shapes)
 - docs-rst/key_concepts_builder/b12 (2 shapes)
 - docs-rst/key_concepts_builder/b13 (1 shapes)
-- docs-rst/key_concepts_builder/b14 (1 shapes)
 - docs-rst/key_concepts_builder/b16 (2 shapes)
+- docs-rst/key_concepts_builder/b14 (1 shapes)
 - docs-rst/key_concepts_builder/b17 (1 shapes)
 - docs-rst/key_concepts_builder/b20 (1 shapes)
 - docs-rst/key_concepts_builder/b22 (1 shapes)
 - docs-rst/key_concepts_builder/b23 (1 shapes)
 - docs-rst/key_concepts_builder/b24 (2 shapes)
-- docs-rst/location_arithmetic/all (2 shapes)
 - docs-rst/selectors/b02 (3 shapes)
 - docs-rst/selectors/all (3 shapes)
+- docs-rst/location_arithmetic/all (2 shapes)
 - docs-rst/tips/b01 (2 shapes)
 - docs-rst/tips/b05 (1 shapes)
 - docs-rst/topology_selection/b01 (1 shapes)
 - docs-rst/topology_selection/b05 (3 shapes)
-- docs-rst/topology_selection/b08 (13 shapes)
+- docs-rst/algebra_performance/all (67 shapes)
 - docs-rst/topology_selection/b09 (14 shapes)
-- docs-rst/topology_selection/b12 (1 shapes)
 - docs-rst/topology_selection/b13 (1 shapes)
-- docs-rst/topology_selection/b14 (1 shapes)
+- docs-rst/topology_selection/b12 (1 shapes)
 - docs-rst/topology_selection/b15 (2 shapes)
+- docs-rst/topology_selection/b14 (1 shapes)
 - docs-rst/tutorial_constraints/b03 (1 shapes)
-- docs-rst/tutorial_constraints/b05 (4 shapes)
 - docs-rst/tutorial_constraints/b06 (3 shapes)
 - docs-rst/tutorial_constraints/b07 (3 shapes)
+- docs-rst/topology_selection/b08 (13 shapes)
 - docs-rst/tutorial_constraints/b08 (3 shapes)
 - docs-rst/tutorial_constraints/b09 (5 shapes)
-- docs-rst/tutorial_constraints/b10 (2 shapes)
-- docs-rst/tutorial_constraints/b11 (2 shapes)
+- docs-rst/tutorial_constraints/b05 (4 shapes)
 - docs-rst/tutorial_constraints/b13 (7 shapes)
-- docs-rst/tutorial_design/b07 (3 shapes)
+- docs-rst/tutorial_constraints/b11 (2 shapes)
+- docs-rst/tutorial_constraints/b10 (2 shapes)
 - docs-rst/tutorial_stl_reconstruction/b03 (1 shapes)
-- docs-rst/tutorial_stl_reconstruction/b04 (26 shapes)
-- docs-rst/objects-text/b10 (1 shapes)
+- docs-rst/tutorial_design/b07 (3 shapes)
 - docs-rst/topology_selection-filter_examples/b01 (1 shapes)
+- docs-rst/tutorial_stl_reconstruction/b04 (26 shapes)
 - docs-rst/assemblies/c03 (2 shapes)
+- docs-rst/objects-text/b10 (1 shapes)
 - docs-rst/assemblies/c06 (3 shapes)
 - docs-rst/assemblies/c07 (4 shapes)
 - docs-rst/assemblies/call (17 shapes)
 - docs-rst/key_concepts/d01 (1 shapes)
-- ttt/ttt-ppp0102 (6 shapes)
 
 ## Errors by script
 
-- examples/dual_color_3mf: `NotImplemented: build123d-lite Mesher writes STL only (no lib3mf in the WASM build); got dual_color.3mf`
-- examples/toy_truck: `other: Line 13712: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O`
-- docs/objects_2d: `NameError: Draft`
+- examples/toy_truck: `other: Line 18258: Uncaught Error: Python JavascriptError: INTERNAL OPENCASCADE ERROR in FilletEdges: the O`
 - ttt/ttt-23-t-24-curved_support: `ImportError: undefined`
 - ttt/ttt-ppp0110: `RuntimeError: KNOWN OCCT 8.0.1 wasm kernel fault: fuse dropped an operand (result volume 0 < l`
 - docs-rst/topology_selection/b10: `ImportError: undefined`
@@ -308,7 +307,7 @@ never was: native 8.0.1 reproduces native 7.9.3 on every script below).
 Closed-this-round rows are kept where the investigation itself is the record.
 
 The Brython and the MicroPython lite legs classify **identically** on every
-script (223 PASS / 9 MISMATCH / 6 ERROR / 1 TIMEOUT / 8 SKIP of 247).
+script (224 PASS / 10 MISMATCH / 4 ERROR / 1 TIMEOUT / 8 SKIP of 247 since 2026-10-18; 223 / 9 / 6 before the 3MF writer and the drafting port).
 
 | Script(s) | Root cause | Upstream defaults vs lite | Verdict |
 |---|---|---|---|
@@ -320,9 +319,9 @@ script (223 PASS / 9 MISMATCH / 6 ERROR / 1 TIMEOUT / 8 SKIP of 247).
 | docs/objects_1d (MISMATCH, `scene` bbox 0.07 mm) | `scene = Compound(...) + Compound.make_triad(2)`. | The triad's axes and spline arrow heads are built exactly; upstream also draws 'X'/'Y'/'Z' with the **`singleline` STROKE font**, which this build does not ship (only the outline font FreeSans). The `l1`/`l3`/`l4` residuals of earlier rounds are GONE: 0.12 made variables created inside a `BuildLine(<workplane>)` LOCAL natively, and lite's BuildScope does the same. | COMPROMISE(triad-labels). |
 | docs/tutorial_joints (was ERROR `insert`, now MISMATCH on `m6_screw` alone, d=1.82 mm) | The other 7 shapes match to 1e-9. The screw is placed by `CylindricalJoint.relative_to(..., position=5, angle=30)` off `hole2`, and lite's hole-location enumeration puts it on a different hole frame of the imported STEP part. | Joint algebra is upstream's; the difference is which of the part's hole frames the script's selector lands on. | Open, unchanged from the 0.11.1 round apart from the `insert()` blocker in front of it. |
 | examples/toy_truck (ERROR) | `fillet(bumper.edges(), 0.25)` raises "BRep_API: command not done" (caught, decoded via COMPROMISE(failure-decode), no heap corruption). | Upstream `Solid.fillet` = `BRepFilletAPI_MakeFillet(shape)` (ChFi3d_Rational) + `Add(radius, edge)`; lite is identical. Native 0.13.0 on OCCT **8.0.1** fillets the same bumper, so "8.0.1 kernel fault" is not the whole story: either this wasm build misbehaves where native 8.0.1 does not, or lite's bumper topology differs. | Open; not root-caused this round. |
-| examples/dual_color_3mf (ERROR, geometry closed) | All six measured shapes match the reference exactly; the script fails on its last statement, `Mesher.write("dual_color.3mf")`. | — | COMPROMISE(mesher): no lib3mf in this wasm build, so only STL export exists. |
+| examples/dual_color_3mf (PASS since 2026-10-18) | All six measured shapes match the reference exactly; `Mesher.write("dual_color.3mf")` now writes a real 3MF (ThreeMF.js, no lib3mf). | — | Was COMPROMISE(mesher)'s STL-only gap. |
 | ttt/ttt-ppp0110 (ERROR) | The coplanar-BSpline fuse drop, in the one shape where the General-Fuse rebuild cannot recover the dropped operand (result volume 0). | Upstream fuse defaults reproduce the drop on THIS wasm build. Native 0.13.0 on OCCT 8.0.1 fuses it correctly (no geometry change vs 7.9.3 anywhere in the corpus), so the fault is specific to this wasm build, not to OCCT 8.0.1 itself. | Wasm-build kernel fault, detected and raised (COMPROMISE(kernel-guard) cannot recover this one). |
-| docs/objects_2d (ERROR, `Draft`) | `drafting.Draft` (the dimension-styling dataclass) + `ExtensionLine`/`DimensionLine`/`TechnicalDrawing`. | ~450 code lines whose accuracy rides on `Compound.make_text` glyph metrics. No OCCT binding is missing. | Deliberate gap (the real-build123d leg runs it). |
+| docs/objects_2d (MISMATCH since 2026-10-18, `t2` alone, d=0.025 mm) | The drafting module is ported (scripts/port-drafting.py: build123d 0.13's drafting.py appended to lite). 41 of 42 shapes match, including every dimension line, extension line, arrow and the drawing frame; `t2` is a `Text` whose box is 25 µm wider — the opentype.js-vs-FreeType metric residual the upstream leg shows too. | Upstream's own code; on the way lite gained Wire.trim across edges, 1-D-profile sweep, trace, tangent_angle_at, perpendicular_line, get_angle, project_to_line, Builder._get_context, Compound(children=) geometry, an Enum HeadType, and ArrowHead rotating outside a builder (it ignored rotation=). | Text-metric residual, shared with the upstream leg. |
 | ttt/ttt-23-t-24-curved_support (ERROR, `sympy`) | The part's dimensions are derived with sympy's symbolic solver. | n/a | Deliberate gap. |
 | docs-rst/topology_selection/b10 (ERROR, new in the 0.13.0 corpus) | `Mesher().read(<stl>)` round-trip through `pathlib.Path` + `tempfile.TemporaryDirectory`, then `group_by(topo_distance_to(ring))` over the 218 triangle faces of the re-read mesh. | Upstream's Mesher reads and writes through lib3mf; lite writes STL into MEMFS but has no mesh reader, and the measured faces are individual BRepMesh triangles, so parity would also need triangulation-identical meshing. | Deliberate gap (COMPROMISE(mesher)). `topo_distance_to` itself is implemented. |
 | docs/spitfire_wing_gordon (TIMEOUT or ERROR, load-dependent) | Was ~390 s then a null surface on the 64 KB-stack JS-EH kernel; on the pinned native-EH/512 KB-stack build ~60 s (the harness budget) to a valid wing 10.2% under the reference volume (1.7852 vs 1.9880 e9 mm³, lite = upstream), so the script's volume assert fails. | — | Cost/robustness of COMPROMISE(gordon-surface-realization) at wing scale. |
